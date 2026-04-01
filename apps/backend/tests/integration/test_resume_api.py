@@ -25,12 +25,22 @@ def mock_resume_record(sample_resume):
         "filename": "resume.pdf",
         "is_master": True,
         "parent_id": None,
+        "application_pack_id": "pack-123",
         "processed_data": sample_resume,
         "processing_status": "ready",
         "cover_letter": None,
         "outreach_message": None,
         "title": None,
         "original_markdown": "# Jane Doe\nSenior Backend Engineer",
+        "theme_settings": {
+            "theme_id": "classic",
+            "page_size": "A4",
+            "density_profile": "balanced",
+            "bold_keywords": False,
+            "accent_color": "blue",
+            "show_contact_icons": False,
+            "margins_mm": {"top": 10, "bottom": 10, "left": 10, "right": 10},
+        },
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
     }
@@ -49,6 +59,8 @@ class TestGetResume:
         assert data["resume_id"] == "res-123"
         assert data["processed_resume"] is not None
         assert data["processed_resume"]["summary"] != ""
+        assert data["application_pack_id"] == "pack-123"
+        assert data["theme_settings"]["theme_id"] == "classic"
 
     @patch("app.routers.resumes.db")
     async def test_fetch_nonexistent_returns_404(self, mock_db, client):
@@ -56,6 +68,58 @@ class TestGetResume:
         async with client:
             resp = await client.get("/api/v1/resumes", params={"resume_id": "nonexistent"})
         assert resp.status_code == 404
+
+
+class TestUploadResume:
+    @patch("app.routers.resumes.parse_resume_to_json", new_callable=AsyncMock)
+    @patch("app.routers.resumes.parse_document", new_callable=AsyncMock)
+    @patch("app.routers.resumes.db")
+    async def test_upload_resume_parses_and_marks_ready(
+        self, mock_db, mock_parse_document, mock_parse_resume, client, sample_resume
+    ):
+        mock_parse_document.return_value = "# Jane Doe\nSenior Backend Engineer"
+        mock_parse_resume.return_value = sample_resume
+        mock_db.create_resume_atomic_master = AsyncMock(return_value={
+            "resume_id": "res-123",
+            "processing_status": "processing",
+            "is_master": True,
+        })
+        mock_db.update_resume.return_value = {
+            "resume_id": "res-123",
+            "processing_status": "ready",
+            "is_master": True,
+        }
+
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/upload",
+                files={"file": ("resume.pdf", b"fake-pdf", "application/pdf")},
+            )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["resume_id"] == "res-123"
+        assert payload["processing_status"] == "ready"
+
+
+class TestUpdateResume:
+    @patch("app.routers.resumes.db")
+    async def test_update_resume_persists_processed_data(self, mock_db, client, mock_resume_record, sample_resume):
+        mock_db.get_resume.return_value = mock_resume_record
+        mock_db.update_resume.return_value = {
+            **mock_resume_record,
+            "content": "{}",
+            "content_type": "json",
+            "processed_data": sample_resume,
+        }
+
+        async with client:
+            resp = await client.patch("/api/v1/resumes/res-123", json=sample_resume)
+
+        assert resp.status_code == 200
+        payload = resp.json()["data"]
+        assert payload["resume_id"] == "res-123"
+        assert payload["processed_resume"]["summary"] == sample_resume["summary"]
 
 
 class TestListResumes:

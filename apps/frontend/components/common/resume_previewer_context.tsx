@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import type { ArtifactSummary, RenderThemeSettings } from '@/lib/types/render-theme';
 
 export interface PersonalInfo {
   name: string;
@@ -82,6 +83,8 @@ export interface ResumePreview {
 export interface Data {
   request_id: string;
   resume_id: string | null;
+  application_pack_id?: string | null;
+  generation_run_id?: string | null;
   job_id: string;
   resume_preview: ResumePreview;
   details?: string;
@@ -96,6 +99,9 @@ export interface Data {
   job_keywords?: string;
   cover_letter?: string;
   outreach_message?: string;
+  artifacts?: ArtifactSummary[];
+  theme_settings?: RenderThemeSettings | null;
+  warnings?: string[];
   diff_summary?: ResumeDiffSummary;
   detailed_changes?: ResumeFieldDiff[];
 }

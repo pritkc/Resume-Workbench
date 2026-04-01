@@ -178,11 +178,23 @@ class Settings(BaseSettings):
 
     # Paths
     data_dir: Path = Path(__file__).parent.parent / "data"
+    database_url: str | None = None
+    artifact_dir: Path = Path(__file__).parent.parent / "data" / "artifacts"
+    rendercv_work_dir: Path = Path(__file__).parent.parent / "data" / "rendercv"
+    rendercv_cli: str = "rendercv"
+    rendercv_timeout_seconds: int = 120
 
     @property
     def db_path(self) -> Path:
         """Path to TinyDB database file."""
         return self.data_dir / "database.json"
+
+    @property
+    def effective_database_url(self) -> str:
+        """Database URL with a local SQLite fallback for tests/bootstrap."""
+        if self.database_url:
+            return self.database_url
+        return f"sqlite:///{(self.data_dir / 'resume_matcher.db').resolve()}"
 
     @property
     def config_path(self) -> Path:

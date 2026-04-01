@@ -1,6 +1,12 @@
 import { ImprovedResult } from '@/components/common/resume_previewer_context';
 import type { ResumeData } from '@/components/dashboard/resume-component';
-import { type TemplateSettings } from '@/lib/types/template-settings';
+import {
+  type RenderThemeSettings,
+  type RenderPreviewResponse,
+  DEFAULT_RENDER_THEME_SETTINGS,
+  normalizeRenderThemeSettings,
+  renderThemeSettingsToQuery,
+} from '@/lib/types/render-theme';
 import { type Locale } from '@/i18n/config';
 import { API_BASE, apiPost, apiPatch, apiDelete, apiFetch } from './client';
 
@@ -65,6 +71,8 @@ interface ResumeResponse {
     outreach_message?: string | null;
     parent_id?: string | null; // For determining if resume is tailored
     title?: string | null;
+    application_pack_id?: string | null;
+    theme_settings?: RenderThemeSettings | null;
   };
 }
 
@@ -85,6 +93,9 @@ interface ImproveResumeConfirmRequest {
     suggestion: string;
     lineNumber?: number | null;
   }>;
+  application_pack_id?: string | null;
+  generation_run_id?: string | null;
+  theme_settings?: RenderThemeSettings | null;
 }
 
 function normalizeResumeId(resumeId: string): string {
@@ -165,12 +176,14 @@ export async function improveResume(
 export async function previewImproveResume(
   resumeId: string,
   jobId: string,
-  promptId?: string
+  promptId?: string,
+  themeSettings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS
 ): Promise<ImprovedResult> {
-  return postImprove('/resumes/improve/preview', {
+  return postImprove('/application-packs/preview', {
     resume_id: resumeId,
     job_id: jobId,
     prompt_id: promptId ?? null,
+    theme_settings: normalizeRenderThemeSettings(themeSettings),
   });
 }
 
@@ -178,7 +191,7 @@ export async function previewImproveResume(
 export async function confirmImproveResume(
   payload: ImproveResumeConfirmRequest
 ): Promise<ImprovedResult> {
-  return postImprove('/resumes/improve/confirm', payload as unknown as Record<string, unknown>);
+  return postImprove('/application-packs/confirm', payload as unknown as Record<string, unknown>);
 }
 
 /** Fetches a raw resume record for previewing the original upload */
@@ -217,33 +230,11 @@ export async function updateResume(
 
 export function getResumePdfUrl(
   resumeId: string,
-  settings?: TemplateSettings,
+  settings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS,
   locale?: Locale
 ): string {
   const normalizedId = normalizeResumeId(resumeId);
-  const params = new URLSearchParams();
-
-  if (settings) {
-    params.set('template', settings.template);
-    params.set('pageSize', settings.pageSize);
-    params.set('marginTop', String(settings.margins.top));
-    params.set('marginBottom', String(settings.margins.bottom));
-    params.set('marginLeft', String(settings.margins.left));
-    params.set('marginRight', String(settings.margins.right));
-    params.set('sectionSpacing', String(settings.spacing.section));
-    params.set('itemSpacing', String(settings.spacing.item));
-    params.set('lineHeight', String(settings.spacing.lineHeight));
-    params.set('fontSize', String(settings.fontSize.base));
-    params.set('headerScale', String(settings.fontSize.headerScale));
-    params.set('headerFont', settings.fontSize.headerFont);
-    params.set('bodyFont', settings.fontSize.bodyFont);
-    params.set('compactMode', String(settings.compactMode));
-    params.set('showContactIcons', String(settings.showContactIcons));
-    params.set('accentColor', settings.accentColor);
-  } else {
-    params.set('template', 'swiss-single');
-    params.set('pageSize', 'A4');
-  }
+  const params = renderThemeSettingsToQuery(settings);
   if (locale) {
     params.set('lang', locale);
   }
@@ -253,7 +244,7 @@ export function getResumePdfUrl(
 
 export async function downloadResumePdf(
   resumeId: string,
-  settings?: TemplateSettings,
+  settings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS,
   locale?: Locale
 ): Promise<Blob> {
   const url = getResumePdfUrl(resumeId, settings, locale);
@@ -371,6 +362,21 @@ export async function fetchJobDescription(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Failed to fetch job description (status ${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+export async function fetchResumeRenderPreview(
+  resumeId: string,
+  settings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS
+): Promise<RenderPreviewResponse> {
+  const params = renderThemeSettingsToQuery(settings);
+  const res = await apiFetch(
+    `/resumes/${encodeURIComponent(resumeId)}/render-preview?${params.toString()}`
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch render preview (status ${res.status}): ${text}`);
   }
   return res.json();
 }

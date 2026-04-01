@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import Resume, { ResumeData } from '@/components/dashboard/resume-component';
+import { ResumeData } from '@/components/dashboard/resume-component';
 import {
   fetchResume,
   downloadResumePdf,
@@ -17,9 +17,14 @@ import { useStatusCache } from '@/lib/context/status-cache';
 import { ArrowLeft, Edit, Download, Loader2, AlertCircle, Sparkles, Pencil } from 'lucide-react';
 import { EnrichmentModal } from '@/components/enrichment/enrichment-modal';
 import { useTranslations } from '@/lib/i18n';
-import { withLocalizedDefaultSections } from '@/lib/utils/section-helpers';
 import { useLanguage } from '@/lib/context/language-context';
 import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/utils/download';
+import { RenderPreviewPanel } from '@/components/rendercv/render-preview-panel';
+import {
+  DEFAULT_RENDER_THEME_SETTINGS,
+  normalizeRenderThemeSettings,
+  type RenderThemeSettings,
+} from '@/lib/types/render-theme';
 
 type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed';
 
@@ -44,13 +49,11 @@ export default function ResumeViewerPage() {
   const [resumeTitle, setResumeTitle] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitleValue, setEditingTitleValue] = useState('');
+  const [themeSettings, setThemeSettings] = useState<RenderThemeSettings>(
+    DEFAULT_RENDER_THEME_SETTINGS
+  );
 
   const resumeId = params?.id as string;
-
-  const localizedResumeData = useMemo(() => {
-    if (!resumeData) return null;
-    return withLocalizedDefaultSections(resumeData, t);
-  }, [resumeData, t]);
 
   useEffect(() => {
     if (!resumeId) return;
@@ -67,6 +70,7 @@ export default function ResumeViewerPage() {
 
         // Capture title for editable display (always set to clear stale state)
         setResumeTitle(data.title ?? null);
+        setThemeSettings(normalizeRenderThemeSettings(data.theme_settings));
 
         // Prioritize processed_resume if available (structured JSON)
         if (data.processed_resume) {
@@ -166,14 +170,14 @@ export default function ResumeViewerPage() {
   const handleDownload = async () => {
     setIsDownloading(true);
     try {
-      const blob = await downloadResumePdf(resumeId, undefined, uiLanguage);
+      const blob = await downloadResumePdf(resumeId, themeSettings, uiLanguage);
       const filename = sanitizeFilename(resumeTitle, resumeId, 'resume');
       downloadBlobAsFile(blob, filename);
       setShowDownloadSuccessDialog(true);
     } catch (err) {
       console.error('Failed to download resume:', err);
       if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
-        const fallbackUrl = getResumePdfUrl(resumeId, undefined, uiLanguage);
+        const fallbackUrl = getResumePdfUrl(resumeId, themeSettings, uiLanguage);
         const didOpen = openUrlInNewTab(fallbackUrl);
         if (!didOpen) {
           alert(t('common.popupBlocked', { url: fallbackUrl }));
@@ -346,30 +350,30 @@ export default function ResumeViewerPage() {
           </div>
         )}
 
-        {/* Resume Viewer */}
-        <div className="flex justify-center pb-4">
-          <div className="resume-print w-full max-w-[250mm] shadow-[8px_8px_0px_0px_#000000] border-2 border-black bg-white">
-            <Resume
-              resumeData={localizedResumeData || resumeData}
-              additionalSectionLabels={{
-                technicalSkills: t('resume.additionalLabels.technicalSkills'),
-                languages: t('resume.additionalLabels.languages'),
-                certifications: t('resume.additionalLabels.certifications'),
-                awards: t('resume.additionalLabels.awards'),
-              }}
-              sectionHeadings={{
-                summary: t('resume.sections.summary'),
-                experience: t('resume.sections.experience'),
-                education: t('resume.sections.education'),
-                projects: t('resume.sections.projects'),
-                certifications: t('resume.sections.certifications'),
-                skills: t('resume.sections.skillsOnly'),
-                languages: t('resume.sections.languages'),
-                awards: t('resume.sections.awards'),
-                links: t('resume.sections.links'),
-              }}
-              fallbackLabels={{ name: t('resume.defaults.name') }}
-            />
+        <div className="pb-4">
+          <div className="mb-4 grid gap-4 md:grid-cols-3 no-print">
+            <div className="border border-black bg-white p-4">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                Theme
+              </p>
+              <p className="mt-2 font-mono text-sm uppercase">{themeSettings.theme_id}</p>
+            </div>
+            <div className="border border-black bg-white p-4">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                Density
+              </p>
+              <p className="mt-2 font-mono text-sm uppercase">{themeSettings.density_profile}</p>
+            </div>
+            <div className="border border-black bg-white p-4">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                Page
+              </p>
+              <p className="mt-2 font-mono text-sm uppercase">{themeSettings.page_size}</p>
+            </div>
+          </div>
+
+          <div className="resume-print border-2 border-black bg-[#E5E5E0] shadow-[8px_8px_0px_0px_#000000]">
+            <RenderPreviewPanel resumeId={resumeId} settings={themeSettings} />
           </div>
         </div>
 

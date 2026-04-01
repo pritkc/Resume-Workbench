@@ -16,6 +16,8 @@ import type {
   ResumeDiffSummary,
   ResumeFieldDiff,
 } from '@/components/common/resume_previewer_context';
+import type { ArtifactSummary } from '@/lib/types/render-theme';
+import { ArtifactGallery } from '@/components/rendercv/artifact-gallery';
 
 interface DiffPreviewModalProps {
   isOpen: boolean;
@@ -25,6 +27,7 @@ interface DiffPreviewModalProps {
   onConfirm: () => void;
   diffSummary?: ResumeDiffSummary;
   detailedChanges?: ResumeFieldDiff[];
+  artifacts?: ArtifactSummary[];
   errorMessage?: string;
 }
 
@@ -36,6 +39,7 @@ export function DiffPreviewModal({
   onConfirm,
   diffSummary,
   detailedChanges,
+  artifacts,
   errorMessage,
 }: DiffPreviewModalProps) {
   const { t } = useTranslations();
@@ -206,6 +210,10 @@ export function DiffPreviewModal({
 
         {/* Detailed changes list */}
         <div className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4">
+          {artifacts && artifacts.length > 0 && (
+            <ArtifactGallery artifacts={artifacts} title="Preview Snapshot" />
+          )}
+
           {/* Summary changes */}
           {summaryChanges.length > 0 && (
             <ChangeSection

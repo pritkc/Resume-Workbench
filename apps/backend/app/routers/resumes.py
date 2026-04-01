@@ -18,6 +18,13 @@ from app.config_cache import get_content_language, load_config as _load_config
 from app.database import db
 from app.pdf import render_resume_pdf, PDFRenderError
 from app.config import settings
+from app.rendering.rendercv_engine import RenderCVRenderError, render_resume_bundle
+from app.rendering.theme_profiles import (
+    RenderThemeSettings as RenderThemeProfile,
+    legacy_to_theme_settings,
+)
+from app.services.critic_service import run_critic_pass
+from app.services.artifact_service import store_rendercv_bundle
 
 logger = logging.getLogger(__name__)
 from app.schemas import (
@@ -113,6 +120,16 @@ def _normalize_personal_info_value(value: Any) -> str:
     return json.dumps(
         normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
+
+
+def _resolve_render_theme_settings(theme_settings: Any) -> RenderThemeProfile:
+    if theme_settings is None:
+        return RenderThemeProfile()
+    if hasattr(theme_settings, "model_dump"):
+        return RenderThemeProfile(**theme_settings.model_dump())
+    if isinstance(theme_settings, dict):
+        return RenderThemeProfile(**theme_settings)
+    return RenderThemeProfile()
 
 
 def _raise_improve_error(
@@ -631,6 +648,8 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
             outreach_message=resume.get("outreach_message"),
             parent_id=resume.get("parent_id"),
             title=resume.get("title"),
+            application_pack_id=resume.get("application_pack_id"),
+            theme_settings=resume.get("theme_settings"),
         ),
     )
 
@@ -679,6 +698,9 @@ async def improve_resume_preview_endpoint(
 
     language = get_content_language()
     prompt_id = request.prompt_id or _get_default_prompt_id()
+    feature_config = _load_config()
+    enable_cover_letter = feature_config.get("enable_cover_letter", False)
+    enable_outreach = feature_config.get("enable_outreach_message", False)
 
     stage = "load_job_keywords"
     detail = "Failed to preview resume. Please try again."
@@ -690,6 +712,9 @@ async def improve_resume_preview_endpoint(
                 job=job,
                 language=language,
                 prompt_id=prompt_id,
+                theme_settings=_resolve_render_theme_settings(request.theme_settings),
+                enable_cover_letter=enable_cover_letter,
+                enable_outreach=enable_outreach,
             ),
             timeout=240.0,  # 4-minute hard limit
         )
@@ -714,6 +739,9 @@ async def _improve_preview_flow(
     job: dict[str, Any],
     language: str,
     prompt_id: str,
+    theme_settings: RenderThemeProfile,
+    enable_cover_letter: bool,
+    enable_outreach: bool,
 ) -> ImproveResumeResponse:
     """Inner flow for improve/preview, extracted so it can be wrapped in wait_for."""
     job_keywords = job.get("job_keywords")
@@ -739,6 +767,17 @@ async def _improve_preview_flow(
                 e,
             )
     original_resume_data = _get_original_resume_data(resume)
+    critic_result = await run_critic_pass(
+        resume_data=original_resume_data,
+        job_description=job["content"],
+        language=language,
+    )
+    enriched_job_keywords = (
+        copy.deepcopy(job_keywords) if isinstance(job_keywords, dict) else {"keywords": job_keywords}
+    )
+    enriched_job_keywords["critic_priority_keywords"] = critic_result["priority_keywords"]
+    enriched_job_keywords["critic_gaps"] = critic_result["recruiter_gaps"]
+    enriched_job_keywords["critic_avoid_claims"] = critic_result["avoid_claims"]
     # Collect warnings throughout the process
     response_warnings: list[str] = []
 
@@ -747,7 +786,7 @@ async def _improve_preview_flow(
         diff_result = await generate_resume_diffs(
             original_resume=resume["content"],
             job_description=job["content"],
-            job_keywords=job_keywords,
+            job_keywords=enriched_job_keywords,
             language=language,
             prompt_id=prompt_id,
             original_resume_data=original_resume_data,
@@ -762,7 +801,7 @@ async def _improve_preview_flow(
             original=original_resume_data,
             result=improved_data,
             applied_changes=applied_changes,
-            job_keywords=job_keywords,
+            job_keywords=enriched_job_keywords,
         )
         response_warnings.extend(diff_warnings)
 
@@ -782,7 +821,7 @@ async def _improve_preview_flow(
         improved_data = await improve_resume(
             original_resume=resume["content"],
             job_description=job["content"],
-            job_keywords=job_keywords,
+            job_keywords=enriched_job_keywords,
             language=language,
             prompt_id=prompt_id,
             original_resume_data=original_resume_data,
@@ -815,13 +854,13 @@ async def _improve_preview_flow(
             else _get_original_resume_data(resume)
         )
         if master_data:
-            initial_match = calculate_keyword_match(improved_data, job_keywords)
+            initial_match = calculate_keyword_match(improved_data, enriched_job_keywords)
             refinement_attempted = True
             refinement_result = await refine_resume(
                 initial_tailored=improved_data,
                 master_resume=master_data,
                 job_description=job["content"],
-                job_keywords=job_keywords,
+                job_keywords=enriched_job_keywords,
                 config=RefinementConfig(),
             )
             improved_data = refinement_result.refined_data
@@ -888,7 +927,81 @@ async def _improve_preview_flow(
     )
     if diff_error:
         response_warnings.append(f"Could not calculate changes: {diff_error}")
-    improvements = generate_improvements(job_keywords)
+    improvements = generate_improvements(enriched_job_keywords)
+
+    (
+        cover_letter,
+        outreach_message,
+        _title,
+        aux_warnings,
+    ) = await _generate_auxiliary_messages(
+        improved_data,
+        job["content"],
+        language,
+        enable_cover_letter,
+        enable_outreach,
+    )
+    response_warnings.extend(aux_warnings)
+
+    application_pack = db.create_application_pack(
+        base_resume_id=request.resume_id,
+        job_id=request.job_id,
+        status="preview_ready",
+        company=job.get("company"),
+        role=job.get("role"),
+        location=job.get("location"),
+        theme_settings=theme_settings.to_dict(),
+    )
+    preview_run = db.create_generation_run(
+        run_kind="application_pack_preview",
+        status="completed",
+        source_resume_id=request.resume_id,
+        job_id=request.job_id,
+        application_pack_id=application_pack["pack_id"],
+        prompt_id=prompt_id,
+        request_payload={
+            "critic": critic_result,
+            "prompt_id": prompt_id,
+        },
+        result_payload={
+            "critic": critic_result,
+            "preview_hash": preview_hash,
+            "diff_summary": diff_summary.model_dump() if diff_summary else None,
+        },
+        warnings=response_warnings,
+    )
+    artifacts: list[dict[str, Any]] = []
+    try:
+        bundle = render_resume_bundle(
+            improved_data,
+            theme_settings,
+            identifier=resume.get("title") or request.resume_id,
+        )
+        artifacts = store_rendercv_bundle(
+            bundle,
+            resume_id=request.resume_id,
+            application_pack_id=application_pack["pack_id"],
+            generation_run_id=preview_run["generation_run_id"],
+        )
+    except RenderCVRenderError as e:
+        response_warnings.append(f"RenderCV preview failed: {str(e)}")
+
+    db.update_application_pack(
+        application_pack["pack_id"],
+        {"generation_run_id": preview_run["generation_run_id"]},
+    )
+    db.update_generation_run(
+        preview_run["generation_run_id"],
+        {
+            "warnings": response_warnings,
+            "result_payload": {
+                "critic": critic_result,
+                "preview_hash": preview_hash,
+                "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
+            },
+        },
+    )
 
     request_id = str(uuid4())
     return ImproveResumeResponse(
@@ -896,6 +1009,8 @@ async def _improve_preview_flow(
         data=ImproveResumeData(
             request_id=request_id,
             resume_id=None,
+            application_pack_id=application_pack["pack_id"],
+            generation_run_id=preview_run["generation_run_id"],
             job_id=request.job_id,
             resume_preview=ResumeData.model_validate(improved_data),
             improvements=[
@@ -907,8 +1022,10 @@ async def _improve_preview_flow(
             ],
             markdownOriginal=resume["content"],
             markdownImproved=improved_text,
-            cover_letter=None,
-            outreach_message=None,
+            cover_letter=cover_letter,
+            outreach_message=outreach_message,
+            artifacts=artifacts,
+            theme_settings=theme_settings.to_dict(),
             diff_summary=diff_summary,
             detailed_changes=detailed_changes,
             refinement_stats=refinement_stats,
@@ -936,6 +1053,7 @@ async def improve_resume_confirm_endpoint(
     enable_cover_letter = feature_config.get("enable_cover_letter", False)
     enable_outreach = feature_config.get("enable_outreach_message", False)
     language = get_content_language()
+    theme_settings = _resolve_render_theme_settings(request.theme_settings)
 
     stage = "serialize_improved_data"
     detail = "Failed to confirm resume. Please try again."
@@ -1019,6 +1137,8 @@ async def improve_resume_confirm_endpoint(
             cover_letter=cover_letter,
             outreach_message=outreach_message,
             title=title,
+            application_pack_id=request.application_pack_id,
+            theme_settings=theme_settings.to_dict(),
         )
 
         improvements_payload = [imp.model_dump() for imp in request.improvements]
@@ -1030,12 +1150,90 @@ async def improve_resume_confirm_endpoint(
             job_id=request.job_id,
             improvements=improvements_payload,
         )
+        application_pack_id = request.application_pack_id
+        if application_pack_id:
+            db.update_application_pack(
+                application_pack_id,
+                {
+                    "tailored_resume_id": tailored_resume["resume_id"],
+                    "status": "confirmed",
+                    "theme_settings": theme_settings.to_dict(),
+                },
+            )
+        else:
+            created_pack = db.create_application_pack(
+                base_resume_id=request.resume_id,
+                job_id=request.job_id,
+                status="confirmed",
+                company=job.get("company"),
+                role=job.get("role"),
+                location=job.get("location"),
+                theme_settings=theme_settings.to_dict(),
+            )
+            application_pack_id = created_pack["pack_id"]
+            db.update_resume(
+                tailored_resume["resume_id"], {"application_pack_id": application_pack_id}
+            )
+
+        confirm_run = db.create_generation_run(
+            run_kind="application_pack_confirm",
+            status="completed",
+            source_resume_id=request.resume_id,
+            tailored_resume_id=tailored_resume["resume_id"],
+            job_id=request.job_id,
+            application_pack_id=application_pack_id,
+            request_payload={
+                "preview_generation_run_id": request.generation_run_id,
+                "application_pack_id": application_pack_id,
+            },
+            result_payload={
+                "diff_summary": diff_summary.model_dump() if diff_summary else None,
+            },
+            warnings=response_warnings,
+        )
+
+        artifacts: list[dict[str, Any]] = []
+        try:
+            bundle = render_resume_bundle(
+                improved_data,
+                theme_settings,
+                identifier=title or tailored_resume["resume_id"],
+            )
+            artifacts = store_rendercv_bundle(
+                bundle,
+                resume_id=tailored_resume["resume_id"],
+                application_pack_id=application_pack_id,
+                generation_run_id=confirm_run["generation_run_id"],
+            )
+        except RenderCVRenderError as e:
+            response_warnings.append(f"RenderCV final render failed: {str(e)}")
+
+        db.update_application_pack(
+            application_pack_id,
+            {
+                "generation_run_id": confirm_run["generation_run_id"],
+                "tailored_resume_id": tailored_resume["resume_id"],
+                "status": "confirmed",
+            },
+        )
+        db.update_generation_run(
+            confirm_run["generation_run_id"],
+            {
+                "warnings": response_warnings,
+                "result_payload": {
+                    "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                    "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
+                },
+            },
+        )
 
         return ImproveResumeResponse(
             request_id=request_id,
             data=ImproveResumeData(
                 request_id=request_id,
                 resume_id=tailored_resume["resume_id"],
+                application_pack_id=application_pack_id,
+                generation_run_id=confirm_run["generation_run_id"],
                 job_id=request.job_id,
                 resume_preview=request.improved_data,
                 improvements=request.improvements,
@@ -1043,6 +1241,8 @@ async def improve_resume_confirm_endpoint(
                 markdownImproved=improved_text,
                 cover_letter=cover_letter,
                 outreach_message=outreach_message,
+                artifacts=artifacts,
+                theme_settings=theme_settings.to_dict(),
                 diff_summary=diff_summary,
                 detailed_changes=detailed_changes,
                 warnings=response_warnings,
@@ -1366,66 +1566,123 @@ async def download_resume_pdf(
     accentColor: str = Query("blue", pattern="^(blue|green|orange|red)$"),
     lang: str | None = Query(None, pattern="^[a-z]{2}(-[A-Z]{2})?$"),
 ) -> Response:
-    """Generate a PDF for a resume using headless Chromium.
-
-    Accepts template settings for customization:
-    - template: swiss-single, swiss-two-column, modern, or modern-two-column
-    - pageSize: A4 or LETTER
-    - marginTop/Bottom/Left/Right: page margins in mm (5-25)
-    - sectionSpacing: gap between sections (1-5)
-    - itemSpacing: gap between items (1-5)
-    - lineHeight: text line height (1-5)
-    - fontSize: base font size (1-5)
-    - headerScale: header size scale (1-5)
-    - headerFont: serif, sans-serif, or mono
-    - bodyFont: serif, sans-serif, or mono
-    - compactMode: enable tighter spacing
-    - showContactIcons: show icons in contact info
-    - lang: locale used for print page translations
-    """
+    """Generate a PDF for a resume using RenderCV."""
     resume = db.get_resume(resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
 
-    # Build print URL with all settings
-    params = (
-        f"template={template}"
-        f"&pageSize={pageSize}"
-        f"&marginTop={marginTop}"
-        f"&marginBottom={marginBottom}"
-        f"&marginLeft={marginLeft}"
-        f"&marginRight={marginRight}"
-        f"&sectionSpacing={sectionSpacing}"
-        f"&itemSpacing={itemSpacing}"
-        f"&lineHeight={lineHeight}"
-        f"&fontSize={fontSize}"
-        f"&headerScale={headerScale}"
-        f"&headerFont={headerFont}"
-        f"&bodyFont={bodyFont}"
-        f"&compactMode={str(compactMode).lower()}"
-        f"&showContactIcons={str(showContactIcons).lower()}"
-        f"&accentColor={accentColor}"
+    resume_data = _get_original_resume_data(resume)
+    if not resume_data:
+        raise HTTPException(
+            status_code=409,
+            detail="Resume has no structured data for RenderCV rendering.",
+        )
+
+    theme_settings = legacy_to_theme_settings(
+        template=template,
+        page_size=pageSize,
+        compact_mode=compactMode,
+        section_spacing=sectionSpacing,
+        item_spacing=itemSpacing,
+        line_height=lineHeight,
+        accent_color=accentColor,
+        show_contact_icons=showContactIcons,
+        margin_top=marginTop,
+        margin_bottom=marginBottom,
+        margin_left=marginLeft,
+        margin_right=marginRight,
     )
-    if lang:
-        params = f"{params}&lang={lang}"
-    url = f"{settings.frontend_base_url}/print/resumes/{resume_id}?{params}"
 
-    # Use the exact margins provided; compact mode only affects spacing.
-    pdf_margins = {
-        "top": marginTop,
-        "right": marginRight,
-        "bottom": marginBottom,
-        "left": marginLeft,
-    }
-
-    # Render PDF with margins applied to every page
     try:
-        pdf_bytes = await render_resume_pdf(url, pageSize, margins=pdf_margins)
-    except PDFRenderError as e:
+        bundle = render_resume_bundle(
+            resume_data,
+            theme_settings,
+            identifier=resume.get("title") or resume_id,
+        )
+        artifacts = store_rendercv_bundle(bundle, resume_id=resume_id)
+        pdf_artifact = next(
+            (artifact for artifact in artifacts if artifact["kind"] == "resume_pdf"),
+            None,
+        )
+        if pdf_artifact is None:
+            raise HTTPException(
+                status_code=500,
+                detail="RenderCV did not produce a PDF artifact.",
+            )
+        pdf_bytes = Path(pdf_artifact["storage_path"]).read_bytes()
+    except RenderCVRenderError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
     headers = {"Content-Disposition": f'attachment; filename="resume_{resume_id}.pdf"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+@router.get("/{resume_id}/render-preview")
+async def render_resume_preview(
+    resume_id: str,
+    template: str = Query("swiss-single"),
+    pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
+    marginTop: int = Query(10, ge=5, le=25),
+    marginBottom: int = Query(10, ge=5, le=25),
+    marginLeft: int = Query(10, ge=5, le=25),
+    marginRight: int = Query(10, ge=5, le=25),
+    sectionSpacing: int = Query(3, ge=1, le=5),
+    itemSpacing: int = Query(2, ge=1, le=5),
+    lineHeight: int = Query(3, ge=1, le=5),
+    compactMode: bool = Query(False),
+    showContactIcons: bool = Query(False),
+    accentColor: str = Query("blue", pattern="^(blue|green|orange|red)$"),
+) -> dict:
+    resume = db.get_resume(resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    resume_data = _get_original_resume_data(resume)
+    if not resume_data:
+        raise HTTPException(
+            status_code=409,
+            detail="Resume has no structured data for RenderCV rendering.",
+        )
+
+    theme_settings = legacy_to_theme_settings(
+        template=template,
+        page_size=pageSize,
+        compact_mode=compactMode,
+        section_spacing=sectionSpacing,
+        item_spacing=itemSpacing,
+        line_height=lineHeight,
+        accent_color=accentColor,
+        show_contact_icons=showContactIcons,
+        margin_top=marginTop,
+        margin_bottom=marginBottom,
+        margin_left=marginLeft,
+        margin_right=marginRight,
+    )
+
+    try:
+        bundle = render_resume_bundle(
+            resume_data,
+            theme_settings,
+            identifier=resume.get("title") or resume_id,
+        )
+        artifacts = store_rendercv_bundle(bundle, resume_id=resume_id)
+    except RenderCVRenderError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    preview_artifacts = [
+        artifact for artifact in artifacts if artifact["kind"] == "resume_preview_png"
+    ]
+
+    return {
+        "resume_id": resume_id,
+        "theme_settings": theme_settings.to_dict(),
+        "artifacts": artifacts,
+        "preview_artifacts": preview_artifacts,
+        "pdf_artifact": next(
+            (artifact for artifact in artifacts if artifact["kind"] == "resume_pdf"),
+            None,
+        ),
+    }
 
 
 @router.delete("/{resume_id}")

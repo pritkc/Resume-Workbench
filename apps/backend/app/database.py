@@ -1,59 +1,143 @@
-"""TinyDB database layer for JSON storage."""
+"""SQLAlchemy-backed compatibility database layer."""
+
+from __future__ import annotations
 
 import asyncio
-import logging
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from tinydb import Query, TinyDB
-from tinydb.table import Table
+from sqlalchemy import delete, select
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
+from app.db.base import Base
+from app.db.models import ApplicationPack, Artifact, GenerationRun, Job, Resume, User, utcnow
+from app.db.repositories import application_packs as application_pack_repo
+from app.db.repositories import artifacts as artifact_repo
+from app.db.repositories import generation_runs as generation_run_repo
+from app.db.repositories import jobs as job_repo
+from app.db.repositories import resumes as resume_repo
+from app.db.session import get_engine, get_session_factory
 
-logger = logging.getLogger(__name__)
+
+def _iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
+def _serialize_resume(record: Resume) -> dict[str, Any]:
+    return {
+        "resume_id": record.resume_id,
+        "content": record.content,
+        "content_type": record.content_type,
+        "filename": record.filename,
+        "is_master": record.is_master,
+        "parent_id": record.parent_id,
+        "application_pack_id": record.application_pack_id,
+        "processed_data": record.processed_data,
+        "processing_status": record.processing_status,
+        "cover_letter": record.cover_letter,
+        "outreach_message": record.outreach_message,
+        "title": record.title,
+        "original_markdown": record.original_markdown,
+        "theme_settings": record.theme_settings,
+        "created_at": _iso(record.created_at),
+        "updated_at": _iso(record.updated_at),
+    }
+
+
+def _serialize_job(record: Job) -> dict[str, Any]:
+    return {
+        "job_id": record.job_id,
+        "resume_id": record.resume_id,
+        "content": record.content,
+        "company": record.company,
+        "role": record.role,
+        "location": record.location,
+        "job_metadata": record.job_metadata,
+        "job_keywords": record.job_keywords,
+        "job_keywords_hash": record.job_keywords_hash,
+        "preview_hash": record.preview_hash,
+        "preview_prompt_id": record.preview_prompt_id,
+        "preview_hashes": record.preview_hashes,
+        "created_at": _iso(record.created_at),
+        "updated_at": _iso(record.updated_at),
+    }
+
+
+def _serialize_generation_run(record: GenerationRun) -> dict[str, Any]:
+    return {
+        "request_id": record.generation_run_id,
+        "generation_run_id": record.generation_run_id,
+        "application_pack_id": record.application_pack_id,
+        "original_resume_id": record.source_resume_id,
+        "tailored_resume_id": record.tailored_resume_id,
+        "job_id": record.job_id,
+        "run_kind": record.run_kind,
+        "status": record.status,
+        "prompt_id": record.prompt_id,
+        "request_payload": record.request_payload,
+        "result_payload": record.result_payload,
+        "warnings": record.warnings or [],
+        "improvements": (record.result_payload or {}).get("improvements", []),
+        "created_at": _iso(record.created_at),
+        "updated_at": _iso(record.updated_at),
+        "completed_at": _iso(record.completed_at),
+    }
+
+
+def _serialize_artifact(record: Artifact) -> dict[str, Any]:
+    return {
+        "artifact_id": record.artifact_id,
+        "application_pack_id": record.application_pack_id,
+        "generation_run_id": record.generation_run_id,
+        "resume_id": record.resume_id,
+        "kind": record.kind,
+        "mime_type": record.mime_type,
+        "file_name": record.file_name,
+        "storage_path": record.storage_path,
+        "metadata": record.artifact_metadata,
+        "created_at": _iso(record.created_at),
+    }
 
 
 class Database:
-    """TinyDB wrapper for resume matcher data."""
+    """Compatibility wrapper exposing the legacy db.* interface."""
 
     _master_resume_lock = asyncio.Lock()
 
-    def __init__(self, db_path: Path | None = None):
-        self.db_path = db_path or settings.db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._db: TinyDB | None = None
+    def __init__(
+        self,
+        *,
+        session_factory: sessionmaker[Session] | None = None,
+        engine: Engine | None = None,
+        data_dir: Path | None = None,
+        artifact_dir: Path | None = None,
+    ):
+        self._session_factory = session_factory
+        self._engine = engine
+        self.data_dir = data_dir or settings.data_dir
+        self.artifact_dir = artifact_dir or settings.artifact_dir
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.artifact_dir.mkdir(parents=True, exist_ok=True)
 
-    @property
-    def db(self) -> TinyDB:
-        """Lazy initialization of TinyDB instance."""
-        if self._db is None:
-            self._db = TinyDB(self.db_path)
-        return self._db
+    def _session(self) -> Session:
+        factory = self._session_factory or get_session_factory()
+        return factory()
 
-    @property
-    def resumes(self) -> Table:
-        """Resumes table."""
-        return self.db.table("resumes")
-
-    @property
-    def jobs(self) -> Table:
-        """Job descriptions table."""
-        return self.db.table("jobs")
-
-    @property
-    def improvements(self) -> Table:
-        """Improvement results table."""
-        return self.db.table("improvements")
+    def _admin_engine(self) -> Engine:
+        return self._engine or get_engine()
 
     def close(self) -> None:
-        """Close database connection."""
-        if self._db is not None:
-            self._db.close()
-            self._db = None
+        return None
 
-    # Resume operations
     def create_resume(
         self,
         content: str,
@@ -67,33 +151,28 @@ class Database:
         outreach_message: str | None = None,
         title: str | None = None,
         original_markdown: str | None = None,
+        application_pack_id: str | None = None,
+        theme_settings: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a new resume entry.
-
-        processing_status: "pending", "processing", "ready", "failed"
-        """
-        resume_id = str(uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-
-        doc: dict[str, Any] = {
-            "resume_id": resume_id,
-            "content": content,
-            "content_type": content_type,
-            "filename": filename,
-            "is_master": is_master,
-            "parent_id": parent_id,
-            "processed_data": processed_data,
-            "processing_status": processing_status,
-            "cover_letter": cover_letter,
-            "outreach_message": outreach_message,
-            "title": title,
-            "created_at": now,
-            "updated_at": now,
-        }
-        if original_markdown is not None:
-            doc["original_markdown"] = original_markdown
-        self.resumes.insert(doc)
-        return doc
+        with self._session() as session:
+            record = resume_repo.create_resume(
+                session,
+                resume_id=str(uuid4()),
+                content=content,
+                content_type=content_type,
+                filename=filename,
+                is_master=is_master,
+                parent_id=parent_id,
+                application_pack_id=application_pack_id,
+                processed_data=processed_data,
+                processing_status=processing_status,
+                cover_letter=cover_letter,
+                outreach_message=outreach_message,
+                title=title,
+                original_markdown=original_markdown,
+                theme_settings=theme_settings,
+            )
+            return _serialize_resume(record)
 
     async def create_resume_atomic_master(
         self,
@@ -106,24 +185,12 @@ class Database:
         outreach_message: str | None = None,
         original_markdown: str | None = None,
     ) -> dict[str, Any]:
-        """Create a new resume with atomic master assignment.
-
-        Uses an asyncio.Lock to prevent race conditions when multiple uploads
-        happen concurrently and both try to become master. This avoids blocking
-        the FastAPI event loop unlike threading.Lock.
-        """
         async with self._master_resume_lock:
             current_master = self.get_master_resume()
             is_master = current_master is None
 
-            # Recovery behavior: if the current master is stuck in failed or
-            # processing state, promote the next upload to become the new master.
             if current_master and current_master.get("processing_status") in ("failed", "processing"):
-                Resume = Query()
-                self.resumes.update(
-                    {"is_master": False},
-                    Resume.resume_id == current_master["resume_id"],
-                )
+                self.update_resume(current_master["resume_id"], {"is_master": False})
                 is_master = True
 
             return self.create_resume(
@@ -139,97 +206,235 @@ class Database:
             )
 
     def get_resume(self, resume_id: str) -> dict[str, Any] | None:
-        """Get resume by ID."""
-        Resume = Query()
-        result = self.resumes.search(Resume.resume_id == resume_id)
-        return result[0] if result else None
+        with self._session() as session:
+            record = resume_repo.get_resume(session, resume_id)
+            return _serialize_resume(record) if record else None
 
     def get_master_resume(self) -> dict[str, Any] | None:
-        """Get the master resume if exists."""
-        Resume = Query()
-        result = self.resumes.search(Resume.is_master == True)
-        return result[0] if result else None
+        with self._session() as session:
+            record = resume_repo.get_master_resume(session)
+            return _serialize_resume(record) if record else None
 
     def update_resume(self, resume_id: str, updates: dict[str, Any]) -> dict[str, Any]:
-        """Update resume by ID.
-
-        Raises:
-            ValueError: If resume not found.
-        """
-        Resume = Query()
-        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-        updated_count = self.resumes.update(updates, Resume.resume_id == resume_id)
-
-        if not updated_count:
-            raise ValueError(f"Resume not found: {resume_id}")
-
-        result = self.get_resume(resume_id)
-        if not result:
-            raise ValueError(f"Resume disappeared after update: {resume_id}")
-
-        return result
+        with self._session() as session:
+            record = resume_repo.update_resume(session, resume_id, updates)
+            if record is None:
+                raise ValueError(f"Resume not found: {resume_id}")
+            return _serialize_resume(record)
 
     def delete_resume(self, resume_id: str) -> bool:
-        """Delete resume by ID."""
-        Resume = Query()
-        removed = self.resumes.remove(Resume.resume_id == resume_id)
-        return len(removed) > 0
+        with self._session() as session:
+            return resume_repo.delete_resume(session, resume_id)
 
     def list_resumes(self) -> list[dict[str, Any]]:
-        """List all resumes."""
-        return list(self.resumes.all())
+        with self._session() as session:
+            return [_serialize_resume(record) for record in resume_repo.list_resumes(session)]
 
     def set_master_resume(self, resume_id: str) -> bool:
-        """Set a resume as the master, unsetting any existing master.
+        with self._session() as session:
+            record = resume_repo.set_master_resume(session, resume_id)
+            return record is not None
 
-        Returns False if the resume doesn't exist.
-        """
-        Resume = Query()
-
-        # First verify the target resume exists
-        target = self.resumes.search(Resume.resume_id == resume_id)
-        if not target:
-            logger.warning("Cannot set master: resume %s not found", resume_id)
-            return False
-
-        # Unset current master
-        self.resumes.update({"is_master": False}, Resume.is_master == True)
-        # Set new master
-        updated = self.resumes.update(
-            {"is_master": True}, Resume.resume_id == resume_id
-        )
-        return len(updated) > 0
-
-    # Job operations
-    def create_job(self, content: str, resume_id: str | None = None) -> dict[str, Any]:
-        """Create a new job description entry."""
-        job_id = str(uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-
-        doc = {
-            "job_id": job_id,
-            "content": content,
-            "resume_id": resume_id,
-            "created_at": now,
-        }
-        self.jobs.insert(doc)
-        return doc
+    def create_job(
+        self,
+        content: str,
+        resume_id: str | None = None,
+        company: str | None = None,
+        role: str | None = None,
+        location: str | None = None,
+        job_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with self._session() as session:
+            record = job_repo.create_job(
+                session,
+                job_id=str(uuid4()),
+                content=content,
+                resume_id=resume_id,
+                company=company,
+                role=role,
+                location=location,
+                job_metadata=job_metadata,
+            )
+            return _serialize_job(record)
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
-        """Get job by ID."""
-        Job = Query()
-        result = self.jobs.search(Job.job_id == job_id)
-        return result[0] if result else None
+        with self._session() as session:
+            record = job_repo.get_job(session, job_id)
+            return _serialize_job(record) if record else None
 
     def update_job(self, job_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
-        """Update a job by ID."""
-        Job = Query()
-        updated = self.jobs.update(updates, Job.job_id == job_id)
-        if not updated:
-            return None
-        return self.get_job(job_id)
+        with self._session() as session:
+            record = job_repo.update_job(session, job_id, updates)
+            return _serialize_job(record) if record else None
 
-    # Improvement operations
+    def create_application_pack(
+        self,
+        base_resume_id: str,
+        job_id: str,
+        status: str,
+        company: str | None = None,
+        role: str | None = None,
+        location: str | None = None,
+        theme_settings: dict[str, Any] | None = None,
+        generation_run_id: str | None = None,
+    ) -> dict[str, Any]:
+        with self._session() as session:
+            record = application_pack_repo.create_application_pack(
+                session,
+                pack_id=str(uuid4()),
+                base_resume_id=base_resume_id,
+                job_id=job_id,
+                status=status,
+                company=company,
+                role=role,
+                location=location,
+                theme_settings=theme_settings,
+                generation_run_id=generation_run_id,
+            )
+            return {
+                "pack_id": record.pack_id,
+                "base_resume_id": record.base_resume_id,
+                "job_id": record.job_id,
+                "tailored_resume_id": record.tailored_resume_id,
+                "generation_run_id": record.generation_run_id,
+                "status": record.status,
+                "company": record.company,
+                "role": record.role,
+                "location": record.location,
+                "theme_settings": record.theme_settings,
+                "created_at": _iso(record.created_at),
+                "updated_at": _iso(record.updated_at),
+                "confirmed_at": _iso(record.confirmed_at),
+            }
+
+    def update_application_pack(
+        self, pack_id: str, updates: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        with self._session() as session:
+            record = application_pack_repo.update_application_pack(session, pack_id, updates)
+            if record is None:
+                return None
+            return {
+                "pack_id": record.pack_id,
+                "base_resume_id": record.base_resume_id,
+                "job_id": record.job_id,
+                "tailored_resume_id": record.tailored_resume_id,
+                "generation_run_id": record.generation_run_id,
+                "status": record.status,
+                "company": record.company,
+                "role": record.role,
+                "location": record.location,
+                "theme_settings": record.theme_settings,
+                "created_at": _iso(record.created_at),
+                "updated_at": _iso(record.updated_at),
+                "confirmed_at": _iso(record.confirmed_at),
+            }
+
+    def list_application_packs(
+        self,
+        *,
+        company: str | None = None,
+        role: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        with self._session() as session:
+            records = application_pack_repo.list_application_packs(
+                session,
+                company=company,
+                role=role,
+                created_from=created_from,
+                created_to=created_to,
+            )
+            return [
+                {
+                    "pack_id": record.pack_id,
+                    "base_resume_id": record.base_resume_id,
+                    "job_id": record.job_id,
+                    "tailored_resume_id": record.tailored_resume_id,
+                    "generation_run_id": record.generation_run_id,
+                    "status": record.status,
+                    "company": record.company,
+                    "role": record.role,
+                    "location": record.location,
+                    "theme_settings": record.theme_settings,
+                    "created_at": _iso(record.created_at),
+                    "updated_at": _iso(record.updated_at),
+                    "confirmed_at": _iso(record.confirmed_at),
+                }
+                for record in records
+            ]
+
+    def create_generation_run(
+        self,
+        run_kind: str,
+        status: str,
+        source_resume_id: str | None = None,
+        tailored_resume_id: str | None = None,
+        job_id: str | None = None,
+        application_pack_id: str | None = None,
+        prompt_id: str | None = None,
+        request_payload: dict[str, Any] | None = None,
+        result_payload: dict[str, Any] | None = None,
+        warnings: list[str] | None = None,
+    ) -> dict[str, Any]:
+        with self._session() as session:
+            record = generation_run_repo.create_generation_run(
+                session,
+                generation_run_id=str(uuid4()),
+                run_kind=run_kind,
+                status=status,
+                source_resume_id=source_resume_id,
+                tailored_resume_id=tailored_resume_id,
+                job_id=job_id,
+                application_pack_id=application_pack_id,
+                prompt_id=prompt_id,
+                request_payload=request_payload,
+                result_payload=result_payload,
+                warnings=warnings,
+                completed_at=utcnow() if status == "completed" else None,
+            )
+            return _serialize_generation_run(record)
+
+    def update_generation_run(
+        self, generation_run_id: str, updates: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        with self._session() as session:
+            record = generation_run_repo.update_generation_run(session, generation_run_id, updates)
+            return _serialize_generation_run(record) if record else None
+
+    def create_artifact(
+        self,
+        *,
+        kind: str,
+        mime_type: str,
+        file_name: str,
+        storage_path: str,
+        application_pack_id: str | None = None,
+        generation_run_id: str | None = None,
+        resume_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with self._session() as session:
+            record = artifact_repo.create_artifact(
+                session,
+                artifact_id=str(uuid4()),
+                kind=kind,
+                mime_type=mime_type,
+                file_name=file_name,
+                storage_path=storage_path,
+                application_pack_id=application_pack_id,
+                generation_run_id=generation_run_id,
+                resume_id=resume_id,
+                artifact_metadata=metadata,
+            )
+            return _serialize_artifact(record)
+
+    def get_artifact(self, artifact_id: str) -> dict[str, Any] | None:
+        with self._session() as session:
+            record = artifact_repo.get_artifact(session, artifact_id)
+            return _serialize_artifact(record) if record else None
+
     def create_improvement(
         self,
         original_resume_id: str,
@@ -237,60 +442,50 @@ class Database:
         job_id: str,
         improvements: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        """Create an improvement result entry."""
-        request_id = str(uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-
-        doc = {
-            "request_id": request_id,
-            "original_resume_id": original_resume_id,
-            "tailored_resume_id": tailored_resume_id,
-            "job_id": job_id,
-            "improvements": improvements,
-            "created_at": now,
-        }
-        self.improvements.insert(doc)
-        return doc
+        return self.create_generation_run(
+            run_kind="legacy_improvement",
+            status="completed",
+            source_resume_id=original_resume_id,
+            tailored_resume_id=tailored_resume_id,
+            job_id=job_id,
+            result_payload={"improvements": improvements},
+        )
 
     def get_improvement_by_tailored_resume(
         self, tailored_resume_id: str
     ) -> dict[str, Any] | None:
-        """Get improvement record by tailored resume ID.
+        with self._session() as session:
+            record = generation_run_repo.get_latest_improvement_for_tailored_resume(
+                session, tailored_resume_id
+            )
+            return _serialize_generation_run(record) if record else None
 
-        This is used to retrieve the job context for on-demand
-        cover letter and outreach message generation.
-        """
-        Improvement = Query()
-        result = self.improvements.search(
-            Improvement.tailored_resume_id == tailored_resume_id
-        )
-        return result[0] if result else None
-
-    # Stats
     def get_stats(self) -> dict[str, Any]:
-        """Get database statistics."""
+        with self._session() as session:
+            total_resumes = len(resume_repo.list_resumes(session))
+            total_jobs = len(job_repo.list_jobs(session))
+            total_improvements = generation_run_repo.count_generation_runs(session)
+            has_master_resume = resume_repo.get_master_resume(session) is not None
         return {
-            "total_resumes": len(self.resumes),
-            "total_jobs": len(self.jobs),
-            "total_improvements": len(self.improvements),
-            "has_master_resume": self.get_master_resume() is not None,
+            "total_resumes": total_resumes,
+            "total_jobs": total_jobs,
+            "total_improvements": total_improvements,
+            "has_master_resume": has_master_resume,
         }
 
     def reset_database(self) -> None:
-        """Reset the database by truncating all tables and clearing uploads."""
-        # Truncate tables
-        self.resumes.truncate()
-        self.jobs.truncate()
-        self.improvements.truncate()
+        engine = self._admin_engine()
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
 
-        # Clear uploads directory
-        uploads_dir = settings.data_dir / "uploads"
+        uploads_dir = self.data_dir / "uploads"
         if uploads_dir.exists():
-            import shutil
-
             shutil.rmtree(uploads_dir)
-            uploads_dir.mkdir(parents=True, exist_ok=True)
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+
+        if self.artifact_dir.exists():
+            shutil.rmtree(self.artifact_dir)
+        self.artifact_dir.mkdir(parents=True, exist_ok=True)
 
 
-# Global database instance
 db = Database()

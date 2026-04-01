@@ -20,6 +20,12 @@ import { Loader2, ArrowLeft, AlertTriangle, Settings } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ApplicationPackPanel } from '@/components/rendercv/application-pack-panel';
+import { RenderThemeControls } from '@/components/rendercv/render-theme-controls';
+import {
+  DEFAULT_RENDER_THEME_SETTINGS,
+  normalizeRenderThemeSettings,
+} from '@/lib/types/render-theme';
 
 export default function TailorPage() {
   const { t } = useTranslations();
@@ -30,6 +36,7 @@ export default function TailorPage() {
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('keywords');
   const [promptLoading, setPromptLoading] = useState(false);
+  const [themeSettings, setThemeSettings] = useState(DEFAULT_RENDER_THEME_SETTINGS);
   const hasUserSelectedPrompt = useRef(false);
   const missingDiffConfirmInFlight = useRef(false);
 
@@ -144,6 +151,9 @@ export default function TailorPage() {
           suggestion: item.suggestion,
           lineNumber: typeof item.lineNumber === 'number' ? item.lineNumber : null,
         })) ?? [],
+      application_pack_id: result.data.application_pack_id ?? null,
+      generation_run_id: result.data.generation_run_id ?? null,
+      theme_settings: normalizeRenderThemeSettings(result.data.theme_settings ?? themeSettings),
     };
   };
 
@@ -177,7 +187,7 @@ export default function TailorPage() {
       incrementJobs(); // Update cached counter
 
       // 2. Preview Resume
-      const result = await previewImproveResume(resumeId, jobId, selectedPromptId);
+      const result = await previewImproveResume(resumeId, jobId, selectedPromptId, themeSettings);
 
       if (!result?.data?.diff_summary || !result?.data?.detailed_changes) {
         console.warn('Diff data missing for tailor preview; requesting user confirmation.');
@@ -321,6 +331,8 @@ export default function TailorPage() {
     }
   };
 
+  const latestPackResult = pendingResult ?? missingDiffResult;
+
   return (
     <div
       className="min-h-screen w-full bg-[#F6F5EE] flex flex-col items-center justify-center p-4 md:p-8 font-sans"
@@ -424,6 +436,14 @@ export default function TailorPage() {
             </div>
           </div>
 
+          <RenderThemeControls settings={themeSettings} onChange={setThemeSettings} />
+
+          <ApplicationPackPanel
+            pendingResult={latestPackResult}
+            themeSettings={themeSettings}
+            selectedPromptId={selectedPromptId}
+          />
+
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-sm font-mono flex items-center gap-2">
               <span>!</span> {error}
@@ -468,6 +488,7 @@ export default function TailorPage() {
           onConfirm={handleConfirmChanges}
           diffSummary={pendingResult?.data?.diff_summary}
           detailedChanges={pendingResult?.data?.detailed_changes}
+          artifacts={pendingResult?.data?.artifacts}
           errorMessage={diffConfirmError ?? undefined}
         />
       )}

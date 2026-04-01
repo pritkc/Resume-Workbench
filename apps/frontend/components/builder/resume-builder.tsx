@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { ResumeForm } from './resume-form';
-import { FormattingControls } from './formatting-controls';
 import { CoverLetterEditor } from './cover-letter-editor';
 import { OutreachEditor } from './outreach-editor';
 import { CoverLetterPreview } from './cover-letter-preview';
@@ -26,7 +25,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
-import { PaginatedPreview } from '@/components/preview';
+import { RenderThemeControls } from '@/components/rendercv/render-theme-controls';
+import { RenderPreviewPanel } from '@/components/rendercv/render-preview-panel';
 import {
   downloadResumePdf,
   downloadCoverLetterPdf,
@@ -44,8 +44,11 @@ import { JDComparisonView } from './jd-comparison-view';
 import { RegenerateWizard } from './regenerate-wizard';
 import { useRegenerateWizard } from '@/hooks/use-regenerate-wizard';
 import { useTranslations } from '@/lib/i18n';
-import { type TemplateSettings, DEFAULT_TEMPLATE_SETTINGS } from '@/lib/types/template-settings';
-import { withLocalizedDefaultSections } from '@/lib/utils/section-helpers';
+import {
+  DEFAULT_RENDER_THEME_SETTINGS,
+  normalizeRenderThemeSettings,
+  type RenderThemeSettings,
+} from '@/lib/types/render-theme';
 import { useLanguage } from '@/lib/context/language-context';
 import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/utils/download';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
@@ -112,12 +115,18 @@ const ResumeBuilderContent = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [, setLoadingState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
-  const [templateSettings, setTemplateSettings] =
-    useState<TemplateSettings>(DEFAULT_TEMPLATE_SETTINGS);
+  const [themeSettings, setThemeSettings] = useState<RenderThemeSettings>(
+    DEFAULT_RENDER_THEME_SETTINGS
+  );
   const { improvedData } = useResumePreview();
   const improvedPreview = improvedData?.data?.resume_preview;
   const improvedCoverLetter = improvedData?.data?.cover_letter;
   const improvedOutreach = improvedData?.data?.outreach_message;
+  const improvedArtifacts = improvedData?.data?.artifacts ?? [];
+  const improvedThemeSettings = useMemo(
+    () => normalizeRenderThemeSettings(improvedData?.data?.theme_settings),
+    [improvedData?.data?.theme_settings]
+  );
   const searchParams = useSearchParams();
   const router = useRouter();
   const resumeId = searchParams.get('id');
@@ -237,34 +246,29 @@ const ResumeBuilderContent = () => {
     return null;
   }, [resumeData.additional?.technicalSkills, t]);
 
-  const localizedResumeDataForPreview = useMemo(
-    () => withLocalizedDefaultSections(resumeData, t),
-    [resumeData, t]
-  );
-
   // Load template settings from localStorage on mount
   useEffect(() => {
     const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
-        setTemplateSettings({
-          ...DEFAULT_TEMPLATE_SETTINGS,
-          ...parsed,
-          margins: { ...DEFAULT_TEMPLATE_SETTINGS.margins, ...parsed.margins },
-          spacing: { ...DEFAULT_TEMPLATE_SETTINGS.spacing, ...parsed.spacing },
-          fontSize: { ...DEFAULT_TEMPLATE_SETTINGS.fontSize, ...parsed.fontSize },
-        });
+        setThemeSettings(normalizeRenderThemeSettings(parsed));
       } catch {
-        // Use defaults
+        setThemeSettings(DEFAULT_RENDER_THEME_SETTINGS);
       }
     }
   }, []);
 
-  // Save template settings to localStorage when they change
   useEffect(() => {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(templateSettings));
-  }, [templateSettings]);
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(themeSettings));
+  }, [themeSettings]);
+
+  useEffect(() => {
+    if (!improvedData?.data?.theme_settings) {
+      return;
+    }
+    setThemeSettings(improvedThemeSettings);
+  }, [improvedData?.data?.theme_settings, improvedThemeSettings]);
 
   // Warn user before leaving with unsaved changes
   useEffect(() => {
@@ -397,8 +401,8 @@ const ResumeBuilderContent = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
   }, []);
 
-  const handleSettingsChange = useCallback((newSettings: TemplateSettings) => {
-    setTemplateSettings(newSettings);
+  const handleSettingsChange = useCallback((newSettings: RenderThemeSettings) => {
+    setThemeSettings(newSettings);
   }, []);
 
   const handleSave = async () => {
@@ -435,14 +439,14 @@ const ResumeBuilderContent = () => {
     }
     try {
       setIsDownloading(true);
-      const blob = await downloadResumePdf(resumeId, templateSettings, uiLanguage);
+      const blob = await downloadResumePdf(resumeId, themeSettings, uiLanguage);
       const filename = sanitizeFilename(resumeTitle, resumeId, 'resume');
       downloadBlobAsFile(blob, filename);
       showNotification(t('builder.alerts.downloadSuccess'), 'success');
     } catch (error) {
       console.error('Failed to download resume:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        const fallbackUrl = getResumePdfUrl(resumeId, templateSettings, uiLanguage);
+        const fallbackUrl = getResumePdfUrl(resumeId, themeSettings, uiLanguage);
         const didOpen = openUrlInNewTab(fallbackUrl);
         if (!didOpen) {
           showNotification(t('common.popupBlocked', { url: fallbackUrl }), 'warning');
@@ -485,13 +489,13 @@ const ResumeBuilderContent = () => {
     }
     try {
       setIsDownloading(true);
-      const blob = await downloadCoverLetterPdf(resumeId, templateSettings.pageSize, uiLanguage);
+      const blob = await downloadCoverLetterPdf(resumeId, themeSettings.page_size, uiLanguage);
       const filename = sanitizeFilename(resumeTitle, resumeId, 'cover-letter');
       downloadBlobAsFile(blob, filename);
     } catch (error) {
       console.error('Failed to download cover letter:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        const fallbackUrl = getCoverLetterPdfUrl(resumeId, templateSettings.pageSize, uiLanguage);
+        const fallbackUrl = getCoverLetterPdfUrl(resumeId, themeSettings.page_size, uiLanguage);
         const didOpen = openUrlInNewTab(fallbackUrl);
         if (!didOpen) {
           showNotification(t('common.popupBlocked', { url: fallbackUrl }), 'warning');
@@ -752,7 +756,7 @@ const ResumeBuilderContent = () => {
               {/* Resume Editor */}
               {activeTab === 'resume' && (
                 <>
-                  <FormattingControls settings={templateSettings} onChange={handleSettingsChange} />
+                  <RenderThemeControls settings={themeSettings} onChange={handleSettingsChange} />
                   <ResumeForm resumeData={resumeData} onUpdate={handleUpdate} />
                 </>
               )}
@@ -876,10 +880,23 @@ const ResumeBuilderContent = () => {
             <div className="flex-1 overflow-y-auto">
               {/* Resume Preview */}
               {activeTab === 'resume' && (
-                <PaginatedPreview
-                  resumeData={localizedResumeDataForPreview}
-                  settings={templateSettings}
-                />
+                <>
+                  {resumeId ? (
+                    <RenderPreviewPanel
+                      resumeId={resumeId}
+                      settings={themeSettings}
+                      initialArtifacts={improvedArtifacts}
+                      refreshKey={`${resumeId}:${themeSettings.theme_id}:${themeSettings.density_profile}:${themeSettings.page_size}:${hasUnsavedChanges}`}
+                      stale={hasUnsavedChanges}
+                    />
+                  ) : (
+                    <div className="p-6">
+                      <div className="border border-black bg-white px-4 py-3 font-mono text-xs text-gray-700">
+                        Save the resume once to generate a RenderCV preview.
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Cover Letter Preview */}
@@ -889,7 +906,7 @@ const ResumeBuilderContent = () => {
                     <CoverLetterPreview
                       content={coverLetter}
                       personalInfo={resumeData.personalInfo}
-                      pageSize={templateSettings.pageSize}
+                      pageSize={themeSettings.page_size}
                     />
                   </div>
                 ) : (
@@ -940,15 +957,14 @@ const ResumeBuilderContent = () => {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-700"></div>
               <span className="uppercase">
-                {templateSettings.template === 'swiss-single' ||
-                templateSettings.template === 'modern'
+                {themeSettings.theme_id === 'classic'
                   ? t('builder.footer.singleColumn')
                   : t('builder.footer.twoColumn')}
               </span>
             </div>
             <span className="text-gray-400">|</span>
             <span className="uppercase">
-              {templateSettings.pageSize === 'A4' ? 'A4' : t('builder.pageSize.usLetter')}
+              {themeSettings.page_size === 'A4' ? 'A4' : t('builder.pageSize.usLetter')}
             </span>
           </div>
         </div>

@@ -1,5 +1,7 @@
 """Pydantic models matching frontend expectations."""
 
+from __future__ import annotations
+
 import copy
 import re
 from enum import Enum
@@ -390,6 +392,8 @@ class ResumeFetchData(BaseModel):
     outreach_message: str | None = None
     parent_id: str | None = None  # For determining if resume is tailored
     title: str | None = None
+    application_pack_id: str | None = None
+    theme_settings: RenderThemeSettings | None = None
 
 
 class ResumeFetchResponse(BaseModel):
@@ -419,6 +423,27 @@ class ResumeListResponse(BaseModel):
     data: list[ResumeSummary]
 
 
+class ApplicationPackSummary(BaseModel):
+    pack_id: str
+    base_resume_id: str
+    job_id: str
+    tailored_resume_id: str | None = None
+    generation_run_id: str | None = None
+    status: str
+    company: str | None = None
+    role: str | None = None
+    location: str | None = None
+    theme_settings: RenderThemeSettings | None = None
+    created_at: str
+    updated_at: str
+    confirmed_at: str | None = None
+
+
+class ApplicationPackListResponse(BaseModel):
+    request_id: str
+    data: list[ApplicationPackSummary]
+
+
 # Job Description Models
 class JobUploadRequest(BaseModel):
     """Request to upload job descriptions."""
@@ -442,6 +467,7 @@ class ImproveResumeRequest(BaseModel):
     resume_id: str
     job_id: str
     prompt_id: str | None = None
+    theme_settings: RenderThemeSettings | None = None
 
 
 class ImprovementSuggestion(BaseModel):
@@ -481,6 +507,39 @@ class ResumeDiffSummary(BaseModel):
     high_risk_changes: int  # High-risk additions
 
 
+class ArtifactSummary(BaseModel):
+    """Stored artifact returned to the frontend."""
+
+    artifact_id: str
+    kind: str
+    mime_type: str
+    file_name: str
+    url: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class RenderThemeSettings(BaseModel):
+    """Curated render theme settings exposed by the API."""
+
+    theme_id: Literal["classic", "moderncv"] = "classic"
+    page_size: Literal["A4", "LETTER"] = "A4"
+    density_profile: Literal["compact", "balanced", "spacious"] = "balanced"
+    bold_keywords: bool = False
+    accent_color: Literal["blue", "green", "orange", "red"] = "blue"
+    show_contact_icons: bool = False
+    margins_mm: dict[str, int] = Field(
+        default_factory=lambda: {"top": 10, "bottom": 10, "left": 10, "right": 10}
+    )
+
+
+class RenderThemeOption(BaseModel):
+    """Theme option returned from the themes endpoint."""
+
+    id: str
+    label: str
+    description: str
+
+
 class RefinementStats(BaseModel):
     """Statistics from the multi-pass refinement process."""
 
@@ -513,6 +572,8 @@ class ImproveResumeData(BaseModel):
         default=None,
         description="Null for preview responses; populated when the tailored resume is persisted.",
     )
+    application_pack_id: str | None = None
+    generation_run_id: str | None = None
     job_id: str
     resume_preview: ResumeData
     improvements: list[ImprovementSuggestion]
@@ -520,6 +581,8 @@ class ImproveResumeData(BaseModel):
     markdownImproved: str | None = None
     cover_letter: str | None = None
     outreach_message: str | None = None
+    artifacts: list[ArtifactSummary] = Field(default_factory=list)
+    theme_settings: RenderThemeSettings | None = None
 
     # Diff metadata
     diff_summary: ResumeDiffSummary | None = None
@@ -548,6 +611,9 @@ class ImproveResumeConfirmRequest(BaseModel):
     job_id: str
     improved_data: ResumeData
     improvements: list[ImprovementSuggestion]
+    application_pack_id: str | None = None
+    generation_run_id: str | None = None
+    theme_settings: RenderThemeSettings | None = None
 
 
 # Config Models
