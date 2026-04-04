@@ -20,6 +20,10 @@ import {
   Save,
   AlertTriangle,
   ArrowLeft,
+  Columns2,
+  Eye,
+  GripVertical,
+  Pencil,
   RotateCcw,
   Undo2,
   Redo2,
@@ -64,11 +68,13 @@ import {
 } from '@/lib/types/render-theme';
 import { useLanguage } from '@/lib/context/language-context';
 import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/utils/download';
+import { cn } from '@/lib/utils';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
 
 type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match';
 type EditorSection = 'cv' | 'design' | 'locale' | 'settings';
 type EditorMode = 'visual' | 'raw';
+type PaneMode = 'editor' | 'split' | 'preview';
 type AutosaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'invalid';
 type DraftSnapshot = {
   resumeData: ResumeData;
@@ -82,6 +88,7 @@ type DraftSnapshot = {
 const STORAGE_KEY = 'resume_builder_draft';
 const SETTINGS_STORAGE_KEY = 'resume_builder_settings';
 const YAML_STORAGE_KEY = 'resume_builder_raw_yaml';
+const UI_LAYOUT_STORAGE_KEY = 'resume_builder_ui_layout';
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 const HISTORY_COMMIT_DEBOUNCE_MS = 350;
 
@@ -143,6 +150,10 @@ function serializeDraftSnapshot(snapshot: DraftSnapshot): string {
     yamlNeedsSync: snapshot.yamlNeedsSync,
     rawYamlSections: snapshot.yamlNeedsSync ? null : snapshot.rawYamlSections,
   });
+}
+
+function clampPaneRatio(value: number): number {
+  return Math.min(72, Math.max(28, Math.round(value)));
 }
 
 const ResumeBuilderContent = () => {
@@ -220,6 +231,11 @@ const ResumeBuilderContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const resumeId = searchParams.get('id');
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const [paneMode, setPaneMode] = useState<PaneMode>('split');
+  const [paneRatio, setPaneRatio] = useState(52);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [isResizingPane, setIsResizingPane] = useState(false);
   const currentDraftSnapshot = useMemo<DraftSnapshot>(
     () => ({
       resumeData,
@@ -267,6 +283,52 @@ const ResumeBuilderContent = () => {
   useEffect(() => {
     lastSavedThemeSettingsRef.current = lastSavedThemeSettings;
   }, [lastSavedThemeSettings]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const syncViewport = () => setIsDesktop(mediaQuery.matches);
+
+    syncViewport();
+    mediaQuery.addEventListener('change', syncViewport);
+    return () => mediaQuery.removeEventListener('change', syncViewport);
+  }, []);
+
+  useEffect(() => {
+    const savedLayout = localStorage.getItem(UI_LAYOUT_STORAGE_KEY);
+    if (!savedLayout) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedLayout) as {
+        paneMode?: PaneMode;
+        paneRatio?: number;
+      };
+
+      if (
+        parsed.paneMode === 'editor' ||
+        parsed.paneMode === 'split' ||
+        parsed.paneMode === 'preview'
+      ) {
+        setPaneMode(parsed.paneMode);
+      }
+      if (typeof parsed.paneRatio === 'number') {
+        setPaneRatio(clampPaneRatio(parsed.paneRatio));
+      }
+    } catch {
+      localStorage.removeItem(UI_LAYOUT_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      UI_LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        paneMode,
+        paneRatio,
+      })
+    );
+  }, [paneMode, paneRatio]);
 
   const buildDraftSnapshot = useCallback(
     (overrides: Partial<DraftSnapshot> = {}): DraftSnapshot => ({
@@ -453,6 +515,37 @@ const ResumeBuilderContent = () => {
     void historyNonce;
     return historyFutureRef.current.length > 0;
   }, [historyNonce]);
+
+  useEffect(() => {
+    if (!isResizingPane) {
+      return;
+    }
+
+    const handlePointerMove = (event: MouseEvent) => {
+      const container = workspaceRef.current;
+      if (!container) {
+        return;
+      }
+
+      const rect = container.getBoundingClientRect();
+      const nextRatio = ((event.clientX - rect.left) / rect.width) * 100;
+      setPaneRatio(clampPaneRatio(nextRatio));
+    };
+
+    const stopResizing = () => {
+      setIsResizingPane(false);
+    };
+
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', stopResizing);
+    window.addEventListener('blur', stopResizing);
+
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove);
+      window.removeEventListener('mouseup', stopResizing);
+      window.removeEventListener('blur', stopResizing);
+    };
+  }, [isResizingPane]);
 
   const markDraftDirty = useCallback(
     (nextMode: EditorMode) => {
@@ -1410,248 +1503,400 @@ const ResumeBuilderContent = () => {
     doGenerateOutreach();
   };
 
+  const mobilePaneMode: Exclude<PaneMode, 'split'> = paneMode === 'preview' ? 'preview' : 'editor';
+  const showEditorPane = isDesktop ? paneMode !== 'preview' : mobilePaneMode === 'editor';
+  const showPreviewPane = isDesktop ? paneMode !== 'editor' : mobilePaneMode === 'preview';
+  const editorPaneWidth =
+    isDesktop && paneMode === 'split'
+      ? `${paneRatio}%`
+      : isDesktop && paneMode === 'editor'
+        ? '100%'
+        : undefined;
+  const previewPaneWidth =
+    isDesktop && paneMode === 'split'
+      ? `${100 - paneRatio}%`
+      : isDesktop && paneMode === 'preview'
+        ? '100%'
+        : undefined;
+
+  const handlePaneModeChange = useCallback((nextMode: PaneMode) => {
+    setPaneMode(nextMode);
+  }, []);
+
+  const handlePaneResizeStart = useCallback(() => {
+    setPaneMode('split');
+    setIsResizingPane(true);
+  }, []);
+
+  const handlePaneSeparatorKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      setPaneRatio((value) => clampPaneRatio(value - 4));
+      setPaneMode('split');
+    }
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      setPaneRatio((value) => clampPaneRatio(value + 4));
+      setPaneMode('split');
+    }
+  }, []);
+
+  const topLevelTabs = [
+    { id: 'resume', label: t('builder.previewTabs.resume') },
+    {
+      id: 'cover-letter',
+      label: t('builder.previewTabs.coverLetter'),
+      shortLabel: t('builder.previewTabs.coverLetter'),
+      disabled: !coverLetter,
+    },
+    {
+      id: 'outreach',
+      label: t('builder.previewTabs.outreach'),
+      shortLabel: t('builder.previewTabs.outreach'),
+      disabled: !outreachMessage,
+    },
+    {
+      id: 'jd-match',
+      label: t('builder.previewTabs.jdMatch'),
+      shortLabel: t('builder.previewTabs.jdMatch'),
+      disabled: !jobDescription,
+    },
+  ] satisfies Array<{
+    id: TabId;
+    label: string;
+    shortLabel?: string;
+    disabled?: boolean;
+  }>;
+
+  const resumeEditorTabs = [
+    { id: 'cv', label: 'CV' },
+    { id: 'design', label: 'Design' },
+    { id: 'locale', label: 'Locale' },
+    { id: 'settings', label: 'Settings' },
+  ] satisfies Array<{ id: EditorSection; label: string }>;
+
+  const toolbarIconButtonClass = 'text-gray-700';
+  const builderHeading = resumeTitle ?? t('nav.builder');
+
   return (
     <div
-      className="h-screen w-full bg-[#F0F0E8] flex justify-center items-center p-4 md:p-8"
+      className="h-[100dvh] overflow-hidden bg-[#F0F0E8] p-3 md:p-4"
       style={{
         backgroundImage:
-          'linear-gradient(rgba(29, 78, 216, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 78, 216, 0.1) 1px, transparent 1px)',
+          'linear-gradient(rgba(29, 78, 216, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 78, 216, 0.08) 1px, transparent 1px)',
         backgroundSize: '40px 40px',
       }}
     >
-      {/* Main Container */}
-      <div className="w-full h-full max-w-[90%] md:max-w-[95%] xl:max-w-[1800px] border border-black bg-[#F0F0E8] shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] flex flex-col">
-        {/* Header Section */}
-        <div className="border-b border-black p-6 md:p-8 bg-[#F0F0E8] no-print">
-          {/* Top Row: Back button and Actions */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <div>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden border border-black bg-[#F0F0E8] shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="sticky top-0 z-30 border-b border-black bg-[#F0F0E8]/95 backdrop-blur-sm no-print">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 md:px-4">
+            <div className="flex min-w-0 items-start gap-3">
               <Button
-                variant="link"
+                variant="outline"
+                size="icon-sm"
                 onClick={() => router.push('/dashboard')}
-                className="mb-2 -ml-1"
+                aria-label={t('nav.backToDashboard')}
+                title={t('nav.backToDashboard')}
               >
-                <ArrowLeft className="w-4 h-4" />
-                {t('nav.backToDashboard')}
+                <ArrowLeft className="h-4 w-4" />
               </Button>
-              <h1 className="font-serif text-3xl md:text-5xl text-black tracking-tight leading-[0.95] uppercase">
-                {t('nav.builder')}
-              </h1>
-              <div className="mt-3 flex items-center gap-3">
-                <p className="text-sm font-mono text-blue-700 uppercase tracking-wide font-bold">
-                  {'// '}
-                  {resumeId ? t('builder.editMode') : t('builder.createAndPreview')}
-                </p>
-                {hasUnsavedChanges && (
-                  <span className="flex items-center gap-1 text-xs font-mono text-amber-600 bg-amber-50 px-2 py-1 border border-amber-200">
-                    <AlertTriangle className="w-3 h-3" />
-                    {t('builder.unsavedDraft')}
+
+              <div className="min-w-0">
+                <h1 className="truncate font-serif text-xl uppercase tracking-tight md:text-2xl">
+                  {builderHeading}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700">
+                    {resumeId ? t('builder.editMode') : t('builder.createAndPreview')}
                   </span>
-                )}
-                <span className="flex items-center gap-1 border border-black bg-white px-2 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-gray-700">
-                  {autosaveState === 'saving' && <Loader2 className="h-3 w-3 animate-spin" />}
-                  {autosaveLabel}
-                </span>
+                  {hasUnsavedChanges && (
+                    <span className="flex items-center gap-1 border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-amber-700">
+                      <AlertTriangle className="h-3 w-3" />
+                      {t('builder.unsavedDraft')}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 border border-black bg-white px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-700">
+                    {autosaveState === 'saving' && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {autosaveLabel}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-3 mt-4 md:mt-0">
-              {/* Resume tab actions */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {isDesktop ? (
+                <>
+                  <Button
+                    variant={paneMode === 'editor' ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    onClick={() => handlePaneModeChange('editor')}
+                    aria-label="Show editor only"
+                    title="Show editor only"
+                    className={toolbarIconButtonClass}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={paneMode === 'split' ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    onClick={() => handlePaneModeChange('split')}
+                    aria-label="Show split view"
+                    title="Show split view"
+                    className={toolbarIconButtonClass}
+                  >
+                    <Columns2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={paneMode === 'preview' ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    onClick={() => handlePaneModeChange('preview')}
+                    aria-label="Show preview only"
+                    title="Show preview only"
+                    className={toolbarIconButtonClass}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant={mobilePaneMode === 'editor' ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    onClick={() => handlePaneModeChange('editor')}
+                    aria-label="Show editor"
+                    title="Show editor"
+                    className={toolbarIconButtonClass}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={mobilePaneMode === 'preview' ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    onClick={() => handlePaneModeChange('preview')}
+                    aria-label="Show preview"
+                    title="Show preview"
+                    className={toolbarIconButtonClass}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              )}
+
               {activeTab === 'resume' && (
                 <>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => regenerateWizard.startRegenerate()}
                     disabled={!resumeId}
+                    aria-label={t('builder.regenerate.buttonLabel')}
+                    title={t('builder.regenerate.buttonLabel')}
+                    className={toolbarIconButtonClass}
                   >
-                    <Sparkles className="w-4 h-4" />
-                    {t('builder.regenerate.buttonLabel')}
+                    <Sparkles className="h-3.5 w-3.5" />
                   </Button>
                   <Button
-                    variant="secondary"
-                    size="sm"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={handleUndoHistory}
                     disabled={!canUndo}
+                    aria-label="Undo"
+                    title="Undo"
+                    className={toolbarIconButtonClass}
                   >
-                    <Undo2 className="w-4 h-4" />
-                    Undo
+                    <Undo2 className="h-3.5 w-3.5" />
                   </Button>
                   <Button
-                    variant="secondary"
-                    size="sm"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={handleRedoHistory}
                     disabled={!canRedo}
+                    aria-label="Redo"
+                    title="Redo"
+                    className={toolbarIconButtonClass}
                   >
-                    <Redo2 className="w-4 h-4" />
-                    Redo
+                    <Redo2 className="h-3.5 w-3.5" />
                   </Button>
                   <Button
-                    variant="warning"
-                    size="sm"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={handleReset}
                     disabled={!hasUnsavedChanges}
+                    aria-label={t('common.reset')}
+                    title={t('common.reset')}
+                    className={toolbarIconButtonClass}
                   >
-                    <RotateCcw className="w-4 h-4" />
-                    {t('common.reset')}
+                    <RotateCcw className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="sm" onClick={handleSave} disabled={!resumeId || isSaving}>
-                    <Save className="w-4 h-4" />
+                  <Button size="xs" onClick={handleSave} disabled={!resumeId || isSaving}>
+                    <Save className="h-3.5 w-3.5" />
                     {isSaving ? t('common.saving') : t('common.save')}
                   </Button>
                   <Button
                     variant="success"
-                    size="sm"
+                    size="xs"
                     onClick={handleDownload}
                     disabled={!resumeId || isDownloading}
                   >
-                    <Download className="w-4 h-4" />
+                    <Download className="h-3.5 w-3.5" />
                     {isDownloading ? t('common.generating') : t('common.download')}
                   </Button>
                 </>
               )}
 
-              {/* Cover letter tab actions */}
               {activeTab === 'cover-letter' && coverLetter && (
                 <>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={handleGenerateCoverLetter}
                     disabled={isGeneratingCoverLetter}
+                    aria-label={t('coverLetter.regenerate')}
+                    title={t('coverLetter.regenerate')}
+                    className={toolbarIconButtonClass}
                   >
                     {isGeneratingCoverLetter ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="h-3.5 w-3.5" />
                     )}
-                    {t('coverLetter.regenerate')}
                   </Button>
                   <Button
                     variant="success"
-                    size="sm"
+                    size="xs"
                     onClick={handleDownloadCoverLetter}
                     disabled={!resumeId || isDownloading}
                   >
-                    <Download className="w-4 h-4" />
+                    <Download className="h-3.5 w-3.5" />
                     {isDownloading ? t('common.generating') : t('common.download')}
                   </Button>
                 </>
               )}
 
-              {/* Outreach tab actions */}
               {activeTab === 'outreach' && outreachMessage && (
                 <>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={handleGenerateOutreach}
                     disabled={isGeneratingOutreach}
+                    aria-label={t('outreach.regenerate')}
+                    title={t('outreach.regenerate')}
+                    className={toolbarIconButtonClass}
                   >
                     {isGeneratingOutreach ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="h-3.5 w-3.5" />
                     )}
-                    {t('outreach.regenerate')}
                   </Button>
-                  <Button variant="success" size="sm" onClick={handleCopyOutreach}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={handleCopyOutreach}
+                    disabled={!outreachMessage}
+                    aria-label={isCopied ? t('outreach.copied') : t('outreach.copyToClipboard')}
+                    title={isCopied ? t('outreach.copied') : t('outreach.copyToClipboard')}
+                    className={toolbarIconButtonClass}
+                  >
                     {isCopied ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        {t('outreach.copied')}
-                      </>
+                      <Check className="h-3.5 w-3.5" />
                     ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        {t('outreach.copyToClipboard')}
-                      </>
+                      <Copy className="h-3.5 w-3.5" />
                     )}
                   </Button>
                 </>
               )}
             </div>
           </div>
+
+          <div className="border-t border-black bg-[#E5E5E0] px-3 md:px-4">
+            <RetroTabs
+              tabs={topLevelTabs}
+              activeTab={activeTab}
+              onTabChange={(id) => setActiveTab(id as TabId)}
+              size="compact"
+            />
+          </div>
         </div>
 
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 bg-black gap-[1px] flex-1 min-h-0">
-          {/* Left Panel: Editor */}
-          <div className="bg-[#F0F0E8] p-6 md:p-8 overflow-y-auto no-print">
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="flex items-center gap-2 border-b-2 border-black pb-2">
-                <div className="w-3 h-3 bg-blue-700"></div>
-                <h2 className="font-mono text-lg font-bold uppercase tracking-wider">
-                  {activeTab === 'resume' &&
-                    (editorMode === 'raw'
-                      ? 'RenderCV YAML'
-                      : editorSection === 'cv'
-                        ? 'RenderCV Resume'
-                        : editorSection === 'design'
-                          ? 'RenderCV Design'
-                          : editorSection === 'locale'
-                            ? 'RenderCV Locale'
-                            : 'RenderCV Settings')}
-                  {activeTab === 'cover-letter' && t('builder.leftPanel.coverLetterEditor')}
-                  {activeTab === 'outreach' && t('builder.leftPanel.outreachEditor')}
-                  {activeTab === 'jd-match' && t('builder.leftPanel.jdMatchAnalysis')}
-                </h2>
-              </div>
-
-              {/* Resume Editor */}
-              {activeTab === 'resume' && (
-                <>
-                  <div className="border border-black bg-[#F8F7F1] px-4 py-3">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-700">
-                          RenderCV Editor Tabs
-                        </p>
-                        <p className="mt-1 text-sm text-gray-600">
-                          {editorMode === 'raw'
-                            ? 'Edit the same CV, Design, Locale, and Settings data directly as RenderCV-style YAML.'
-                            : 'Use `CV` for resume content, then switch to `Design`, `Locale`, or `Settings` for the hosted RenderCV controls.'}
-                        </p>
-                      </div>
-                      <div className="min-w-[240px]">
+        <div ref={workspaceRef} className="flex flex-1 min-h-0 overflow-hidden bg-black">
+          {showEditorPane && (
+            <div
+              style={editorPaneWidth ? { width: editorPaneWidth } : undefined}
+              className={cn(
+                'min-w-0 overflow-hidden bg-[#F0F0E8] no-print',
+                isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
+              )}
+            >
+              <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-3 pb-4 pt-3 md:px-4">
+                <div className="mx-auto flex max-w-4xl flex-col gap-3">
+                  {activeTab === 'resume' && (
+                    <div className="sticky top-0 z-20 border border-black bg-[#F8F7F1]/95 backdrop-blur-sm">
+                      <div className="flex flex-col gap-2 px-3 py-2.5 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-700">
+                            {editorMode === 'raw'
+                              ? 'RenderCV YAML'
+                              : editorSection === 'cv'
+                                ? 'Resume Content'
+                                : editorSection === 'design'
+                                  ? 'Theme Design'
+                                  : editorSection === 'locale'
+                                    ? 'Locale Copy'
+                                    : 'Runtime Settings'}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-gray-600">
+                            {editorMode === 'raw'
+                              ? 'Direct section editing with live validation.'
+                              : 'Compact visual editing focused on fast iteration.'}
+                          </p>
+                        </div>
                         <ToggleSwitch
                           checked={editorMode === 'raw'}
                           onCheckedChange={(checked) => void handleEditorModeChange(checked)}
                           label="Raw YAML"
-                          description="Switch between visual controls and editable YAML."
+                          density="compact"
                         />
                       </div>
+                      <RetroTabs
+                        tabs={resumeEditorTabs}
+                        activeTab={editorSection}
+                        onTabChange={(id) => setEditorSection(id as EditorSection)}
+                        size="compact"
+                      />
                     </div>
-                  </div>
-                  <RetroTabs
-                    tabs={[
-                      { id: 'cv', label: 'CV' },
-                      { id: 'design', label: 'Design' },
-                      { id: 'locale', label: 'Locale' },
-                      { id: 'settings', label: 'Settings' },
-                    ]}
-                    activeTab={editorSection}
-                    onTabChange={(id) => setEditorSection(id as EditorSection)}
-                  />
-                  {editorMode === 'visual' && editorSection === 'cv' && (
+                  )}
+
+                  {activeTab === 'resume' && editorMode === 'visual' && editorSection === 'cv' && (
                     <ResumeForm resumeData={resumeData} onUpdate={handleUpdate} />
                   )}
-                  {editorMode === 'visual' && editorSection === 'design' && (
-                    <RenderThemeControls settings={themeSettings} onChange={handleSettingsChange} />
-                  )}
-                  {editorMode === 'visual' && editorSection === 'locale' && (
-                    <RenderLocaleControls
-                      settings={themeSettings}
-                      onChange={handleSettingsChange}
-                    />
-                  )}
-                  {editorMode === 'visual' && editorSection === 'settings' && (
-                    <RenderRuntimeSettingsControls
-                      settings={themeSettings}
-                      onChange={handleSettingsChange}
-                    />
-                  )}
-                  {editorMode === 'raw' && (
+                  {activeTab === 'resume' &&
+                    editorMode === 'visual' &&
+                    editorSection === 'design' && (
+                      <RenderThemeControls
+                        settings={themeSettings}
+                        onChange={handleSettingsChange}
+                      />
+                    )}
+                  {activeTab === 'resume' &&
+                    editorMode === 'visual' &&
+                    editorSection === 'locale' && (
+                      <RenderLocaleControls
+                        settings={themeSettings}
+                        onChange={handleSettingsChange}
+                      />
+                    )}
+                  {activeTab === 'resume' &&
+                    editorMode === 'visual' &&
+                    editorSection === 'settings' && (
+                      <RenderRuntimeSettingsControls
+                        settings={themeSettings}
+                        onChange={handleSettingsChange}
+                      />
+                    )}
+                  {activeTab === 'resume' && editorMode === 'raw' && (
                     <RawYamlEditor
                       section={editorSection}
                       value={rawYamlSections[editorSection]}
@@ -1669,203 +1914,182 @@ const ResumeBuilderContent = () => {
                       }
                     />
                   )}
-                </>
-              )}
 
-              {/* Cover Letter Editor */}
-              {activeTab === 'cover-letter' &&
-                (coverLetter ? (
-                  <CoverLetterEditor
-                    content={coverLetter}
-                    onChange={setCoverLetter}
-                    onSave={handleSaveCoverLetter}
-                    isSaving={isCoverLetterSaving}
-                  />
-                ) : (
-                  <GeneratePrompt
-                    type="cover-letter"
-                    isGenerating={isGeneratingCoverLetter}
-                    onGenerate={handleGenerateCoverLetter}
-                    isTailoredResume={isTailoredResume}
-                  />
-                ))}
+                  {activeTab === 'cover-letter' &&
+                    (coverLetter ? (
+                      <CoverLetterEditor
+                        content={coverLetter}
+                        onChange={setCoverLetter}
+                        onSave={handleSaveCoverLetter}
+                        isSaving={isCoverLetterSaving}
+                      />
+                    ) : (
+                      <GeneratePrompt
+                        type="cover-letter"
+                        isGenerating={isGeneratingCoverLetter}
+                        onGenerate={handleGenerateCoverLetter}
+                        isTailoredResume={isTailoredResume}
+                      />
+                    ))}
 
-              {/* Outreach Editor */}
-              {activeTab === 'outreach' &&
-                (outreachMessage ? (
-                  <OutreachEditor
-                    content={outreachMessage}
-                    onChange={setOutreachMessage}
-                    onSave={handleSaveOutreach}
-                    isSaving={isOutreachSaving}
-                  />
-                ) : (
-                  <GeneratePrompt
-                    type="outreach"
-                    isGenerating={isGeneratingOutreach}
-                    onGenerate={handleGenerateOutreach}
-                    isTailoredResume={isTailoredResume}
-                  />
-                ))}
+                  {activeTab === 'outreach' &&
+                    (outreachMessage ? (
+                      <OutreachEditor
+                        content={outreachMessage}
+                        onChange={setOutreachMessage}
+                        onSave={handleSaveOutreach}
+                        isSaving={isOutreachSaving}
+                      />
+                    ) : (
+                      <GeneratePrompt
+                        type="outreach"
+                        isGenerating={isGeneratingOutreach}
+                        onGenerate={handleGenerateOutreach}
+                        isTailoredResume={isTailoredResume}
+                      />
+                    ))}
 
-              {/* JD Match Info Panel */}
-              {activeTab === 'jd-match' && (
-                <div className="space-y-4">
-                  <div className="border-2 border-black bg-white p-4">
-                    <h3 className="font-mono text-sm font-bold uppercase mb-2">
-                      {t('builder.jdMatch.aboutTitle')}
-                    </h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                      {t('builder.jdMatch.aboutDescription')}
-                    </p>
-                  </div>
-
-                  <div className="border-2 border-black bg-[#F0F0E8] p-4">
-                    <h3 className="font-mono text-sm font-bold uppercase mb-2">
-                      {t('builder.jdMatch.highlightedKeywordsTitle')}
-                    </h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                      {(() => {
-                        const template = t(
-                          'builder.jdMatch.highlightedKeywordsDescriptionTemplate'
-                        );
-                        const parts = template.split('__COLOR__');
-                        if (parts.length < 2) return template;
-                        return (
-                          <>
-                            {parts[0]}
-                            <mark className="bg-yellow-200 px-1">
-                              {t('builder.jdMatch.highlightColor')}
-                            </mark>
-                            {parts.slice(1).join('__COLOR__')}
-                          </>
-                        );
-                      })()}
-                    </p>
-                  </div>
-
-                  <div className="border-2 border-black bg-white p-4">
-                    <h3 className="font-mono text-sm font-bold uppercase mb-2">
-                      {t('builder.jdMatch.tipsTitle')}
-                    </h3>
-                    <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
-                      <li>{t('builder.jdMatch.tips.items.addMissingKeywords')}</li>
-                      <li>{t('builder.jdMatch.tips.items.focusTechnicalSkills')}</li>
-                      <li>{t('builder.jdMatch.tips.items.matchActionVerbs')}</li>
-                    </ul>
-                  </div>
+                  {activeTab === 'jd-match' && (
+                    <div className="space-y-3">
+                      <div className="border border-black bg-white px-4 py-3">
+                        <h3 className="font-mono text-xs font-bold uppercase tracking-wider">
+                          {t('builder.jdMatch.aboutTitle')}
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {t('builder.jdMatch.aboutDescription')}
+                        </p>
+                      </div>
+                      <div className="border border-black bg-[#F8F7F1] px-4 py-3">
+                        <h3 className="font-mono text-xs font-bold uppercase tracking-wider">
+                          {t('builder.jdMatch.highlightedKeywordsTitle')}
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {(() => {
+                            const template = t(
+                              'builder.jdMatch.highlightedKeywordsDescriptionTemplate'
+                            );
+                            const parts = template.split('__COLOR__');
+                            if (parts.length < 2) return template;
+                            return (
+                              <>
+                                {parts[0]}
+                                <mark className="bg-yellow-200 px-1">
+                                  {t('builder.jdMatch.highlightColor')}
+                                </mark>
+                                {parts.slice(1).join('__COLOR__')}
+                              </>
+                            );
+                          })()}
+                        </p>
+                      </div>
+                      <div className="border border-black bg-white px-4 py-3">
+                        <h3 className="font-mono text-xs font-bold uppercase tracking-wider">
+                          {t('builder.jdMatch.tipsTitle')}
+                        </h3>
+                        <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-gray-600">
+                          <li>{t('builder.jdMatch.tips.items.addMissingKeywords')}</li>
+                          <li>{t('builder.jdMatch.tips.items.focusTechnicalSkills')}</li>
+                          <li>{t('builder.jdMatch.tips.items.matchActionVerbs')}</li>
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Right Panel: Preview with Tabs */}
-          <div className="bg-[#E5E5E0] overflow-hidden flex flex-col no-print">
-            {/* Tabs Header */}
-            <div className="px-6 pt-3 shrink-0 bg-[#E5E5E0]">
-              <RetroTabs
-                tabs={[
-                  { id: 'resume', label: t('builder.previewTabs.resume') },
-                  {
-                    id: 'cover-letter',
-                    label: t('builder.previewTabs.coverLetter'),
-                    disabled: !coverLetter,
-                  },
-                  {
-                    id: 'outreach',
-                    label: t('builder.previewTabs.outreach'),
-                    disabled: !outreachMessage,
-                  },
-                  {
-                    id: 'jd-match',
-                    label: t('builder.previewTabs.jdMatch'),
-                    disabled: !jobDescription,
-                  },
-                ]}
-                activeTab={activeTab}
-                onTabChange={(id) => setActiveTab(id as TabId)}
-              />
+          {isDesktop && paneMode === 'split' && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize editor and preview panes"
+              tabIndex={0}
+              onMouseDown={handlePaneResizeStart}
+              onKeyDown={handlePaneSeparatorKeyDown}
+              className="group flex w-3 shrink-0 cursor-col-resize items-center justify-center bg-[#D8D8D2] no-print"
+            >
+              <GripVertical className="h-4 w-4 text-gray-500 transition group-hover:text-black" />
             </div>
+          )}
 
-            {/* Preview Content */}
-            <div className="flex-1 overflow-y-auto">
-              {/* Resume Preview */}
-              {activeTab === 'resume' && (
-                <RenderPreviewPanel
-                  resumeId={resumeId}
-                  settings={themeSettings}
-                  draftRequest={previewDraftRequest}
-                  initialArtifacts={improvedArtifacts}
-                  stale={false}
-                />
+          {showPreviewPane && (
+            <div
+              style={previewPaneWidth ? { width: previewPaneWidth } : undefined}
+              className={cn(
+                'min-w-0 overflow-hidden bg-[#E5E5E0] no-print',
+                isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
               )}
+            >
+              <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
+                {activeTab === 'resume' && (
+                  <RenderPreviewPanel
+                    resumeId={resumeId}
+                    settings={themeSettings}
+                    draftRequest={previewDraftRequest}
+                    initialArtifacts={improvedArtifacts}
+                    stale={false}
+                  />
+                )}
 
-              {/* Cover Letter Preview */}
-              {activeTab === 'cover-letter' &&
-                (coverLetter && resumeData.personalInfo ? (
-                  <div className="p-6">
-                    <CoverLetterPreview
-                      content={coverLetter}
-                      personalInfo={resumeData.personalInfo}
-                      pageSize={themeSettings.page_size}
+                {activeTab === 'cover-letter' &&
+                  (coverLetter && resumeData.personalInfo ? (
+                    <div className="p-3 md:p-4">
+                      <CoverLetterPreview
+                        content={coverLetter}
+                        personalInfo={resumeData.personalInfo}
+                        pageSize={themeSettings.page_size}
+                      />
+                    </div>
+                  ) : (
+                    <GeneratePrompt
+                      type="cover-letter"
+                      isGenerating={isGeneratingCoverLetter}
+                      onGenerate={handleGenerateCoverLetter}
+                      isTailoredResume={isTailoredResume}
                     />
-                  </div>
-                ) : (
-                  <GeneratePrompt
-                    type="cover-letter"
-                    isGenerating={isGeneratingCoverLetter}
-                    onGenerate={handleGenerateCoverLetter}
-                    isTailoredResume={isTailoredResume}
-                  />
-                ))}
+                  ))}
 
-              {/* Outreach Preview */}
-              {activeTab === 'outreach' &&
-                (outreachMessage ? (
-                  <div className="p-6">
-                    <OutreachPreview content={outreachMessage} />
-                  </div>
-                ) : (
-                  <GeneratePrompt
-                    type="outreach"
-                    isGenerating={isGeneratingOutreach}
-                    onGenerate={handleGenerateOutreach}
-                    isTailoredResume={isTailoredResume}
-                  />
-                ))}
+                {activeTab === 'outreach' &&
+                  (outreachMessage ? (
+                    <div className="p-3 md:p-4">
+                      <OutreachPreview content={outreachMessage} />
+                    </div>
+                  ) : (
+                    <GeneratePrompt
+                      type="outreach"
+                      isGenerating={isGeneratingOutreach}
+                      onGenerate={handleGenerateOutreach}
+                      isTailoredResume={isTailoredResume}
+                    />
+                  ))}
 
-              {/* JD Match Comparison */}
-              {activeTab === 'jd-match' && jobDescription && (
-                <JDComparisonView jobDescription={jobDescription} resumeData={resumeData} />
-              )}
+                {activeTab === 'jd-match' && jobDescription && (
+                  <JDComparisonView jobDescription={jobDescription} resumeData={resumeData} />
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-[#F0F0E8] flex justify-between items-center font-mono text-xs text-blue-700 border-t border-black no-print">
-          <span className="uppercase font-bold flex items-center gap-2">
+        <div className="flex items-center justify-between border-t border-black bg-[#F0F0E8] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-blue-700 no-print">
+          <span className="flex items-center gap-1.5 font-bold">
             <Image
               src="/logo.svg"
               alt="Resume Matcher"
-              width={20}
-              height={20}
-              className="w-5 h-5"
+              width={16}
+              height={16}
+              className="h-4 w-4"
             />
             {t('builder.footer.moduleLabel')}
           </span>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-700"></div>
-              <span className="uppercase">
-                {RENDER_THEME_OPTIONS.find((option) => option.id === themeSettings.theme_id)
-                  ?.label ?? themeSettings.theme_id}
-              </span>
-            </div>
-            <span className="text-gray-400">|</span>
-            <span className="uppercase">
-              {themeSettings.page_size === 'A4' ? 'A4' : t('builder.pageSize.usLetter')}
+          <div className="flex items-center gap-3">
+            <span>
+              {RENDER_THEME_OPTIONS.find((option) => option.id === themeSettings.theme_id)?.label ??
+                themeSettings.theme_id}
             </span>
+            <span className="text-gray-400">|</span>
+            <span>{themeSettings.page_size === 'A4' ? 'A4' : t('builder.pageSize.usLetter')}</span>
           </div>
         </div>
       </div>

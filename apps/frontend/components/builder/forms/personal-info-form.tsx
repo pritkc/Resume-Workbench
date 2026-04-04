@@ -22,11 +22,11 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
   };
 
   return (
-    <div className="space-y-4 border border-black p-6 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-      <h3 className="font-serif text-xl font-bold border-b border-black pb-2 mb-4">
+    <div className="space-y-3 border border-black bg-white px-4 py-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
+      <h3 className="mb-3 border-b border-black pb-2 font-serif text-lg font-bold">
         {t('builder.personalInfo')}
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="space-y-2">
           <Label
             htmlFor="name"

@@ -21,7 +21,7 @@ export const SummaryForm: React.FC<SummaryFormProps> = ({ value, onChange }) => 
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       <div className="space-y-2">
         <Label
           htmlFor="summary"
@@ -35,7 +35,7 @@ export const SummaryForm: React.FC<SummaryFormProps> = ({ value, onChange }) => 
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t('builder.placeholders.summary')}
-          className="min-h-[150px] text-black rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-white"
+          className="min-h-[120px] bg-white text-black rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700"
         />
       </div>
     </div>

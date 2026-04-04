@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
 import type { ImprovedResult } from '@/components/common/resume_previewer_context';
 import type { ResumeData } from '@/components/dashboard/resume-component';
@@ -13,19 +14,61 @@ import {
   previewImproveResume,
   confirmImproveResume,
 } from '@/lib/api/resume';
-import { fetchPromptConfig, type PromptOption } from '@/lib/api/config';
+import {
+  fetchGenerationDefaults,
+  fetchPromptConfig,
+  updateGenerationDefaults,
+  type PromptOption,
+} from '@/lib/api/config';
 import { Dropdown } from '@/components/ui/dropdown';
 import { useStatusCache } from '@/lib/context/status-cache';
 import { Loader2, ArrowLeft, AlertTriangle, Settings } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ApplicationPackPanel } from '@/components/rendercv/application-pack-panel';
-import { RenderThemeControls } from '@/components/rendercv/render-theme-controls';
-import {
-  DEFAULT_RENDER_THEME_SETTINGS,
-  normalizeRenderThemeSettings,
-} from '@/lib/types/render-theme';
+
+const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
+
+type StoredGenerationDefaults = {
+  include_cover_letter: boolean;
+  include_outreach_message: boolean;
+  prompt_id: string;
+};
+
+function readStoredGenerationDefaults(): StoredGenerationDefaults | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(GENERATION_DEFAULTS_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredGenerationDefaults>;
+    if (typeof parsed.prompt_id !== 'string' || !parsed.prompt_id.trim()) {
+      return null;
+    }
+
+    return {
+      prompt_id: parsed.prompt_id,
+      include_cover_letter: Boolean(parsed.include_cover_letter),
+      include_outreach_message: Boolean(parsed.include_outreach_message),
+    };
+  } catch {
+    window.localStorage.removeItem(GENERATION_DEFAULTS_STORAGE_KEY);
+    return null;
+  }
+}
+
+function storeGenerationDefaults(defaults: StoredGenerationDefaults) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(GENERATION_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
+}
 
 export default function TailorPage() {
   const { t } = useTranslations();
@@ -35,8 +78,9 @@ export default function TailorPage() {
   const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('keywords');
+  const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
+  const [includeOutreachMessage, setIncludeOutreachMessage] = useState(false);
   const [promptLoading, setPromptLoading] = useState(false);
-  const [themeSettings, setThemeSettings] = useState(DEFAULT_RENDER_THEME_SETTINGS);
   const hasUserSelectedPrompt = useRef(false);
   const missingDiffConfirmInFlight = useRef(false);
 
@@ -96,19 +140,45 @@ export default function TailorPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const localDefaults = readStoredGenerationDefaults();
+
+    if (localDefaults && !hasUserSelectedPrompt.current) {
+      setSelectedPromptId(localDefaults.prompt_id);
+      setIncludeCoverLetter(localDefaults.include_cover_letter);
+      setIncludeOutreachMessage(localDefaults.include_outreach_message);
+    }
 
     const loadPromptConfig = async () => {
       setPromptLoading(true);
       try {
-        const config = await fetchPromptConfig();
+        const [config, generationDefaults] = await Promise.all([
+          fetchPromptConfig(),
+          fetchGenerationDefaults().catch(() => null),
+        ]);
         if (!cancelled) {
           setPromptOptions(config.prompt_options || []);
+          const resolvedDefaults = generationDefaults ?? localDefaults;
+
+          if (resolvedDefaults) {
+            storeGenerationDefaults(resolvedDefaults);
+            setIncludeCoverLetter(resolvedDefaults.include_cover_letter);
+            setIncludeOutreachMessage(resolvedDefaults.include_outreach_message);
+          } else {
+            setIncludeCoverLetter(false);
+            setIncludeOutreachMessage(false);
+          }
+
           if (!hasUserSelectedPrompt.current) {
-            setSelectedPromptId(config.default_prompt_id || 'keywords');
+            setSelectedPromptId(
+              resolvedDefaults?.prompt_id || config.default_prompt_id || 'keywords'
+            );
           }
         }
       } catch (err) {
         console.error('Failed to load prompt config', err);
+        if (!cancelled && !hasUserSelectedPrompt.current && localDefaults?.prompt_id) {
+          setSelectedPromptId(localDefaults.prompt_id);
+        }
       } finally {
         if (!cancelled) {
           setPromptLoading(false);
@@ -153,7 +223,8 @@ export default function TailorPage() {
         })) ?? [],
       application_pack_id: result.data.application_pack_id ?? null,
       generation_run_id: result.data.generation_run_id ?? null,
-      theme_settings: normalizeRenderThemeSettings(result.data.theme_settings ?? themeSettings),
+      include_cover_letter: includeCoverLetter,
+      include_outreach_message: includeOutreachMessage,
     };
   };
 
@@ -187,7 +258,11 @@ export default function TailorPage() {
       incrementJobs(); // Update cached counter
 
       // 2. Preview Resume
-      const result = await previewImproveResume(resumeId, jobId, selectedPromptId, themeSettings);
+      const result = await previewImproveResume(resumeId, jobId, {
+        promptId: selectedPromptId,
+        includeCoverLetter,
+        includeOutreachMessage,
+      });
 
       if (!result?.data?.diff_summary || !result?.data?.detailed_changes) {
         console.warn('Diff data missing for tailor preview; requesting user confirmation.');
@@ -236,10 +311,20 @@ export default function TailorPage() {
       return;
     }
     const resumeId = masterResumeId;
+    const nextDefaults: StoredGenerationDefaults = {
+      prompt_id: selectedPromptId,
+      include_cover_letter: includeCoverLetter,
+      include_outreach_message: includeOutreachMessage,
+    };
+    storeGenerationDefaults(nextDefaults);
+
     setIsLoading(true);
     setError(null);
     startTimer();
     try {
+      void updateGenerationDefaults(nextDefaults).catch((defaultsError) => {
+        console.error('Failed to persist generation defaults', defaultsError);
+      });
       await runGenerate(resumeId, trimmedDescription);
     } finally {
       setIsLoading(false);
@@ -331,37 +416,36 @@ export default function TailorPage() {
     }
   };
 
-  const latestPackResult = pendingResult ?? missingDiffResult;
-
   return (
     <div
-      className="min-h-screen w-full bg-[#F6F5EE] flex flex-col items-center justify-center p-4 md:p-8 font-sans"
+      className="min-h-screen w-full bg-[#F6F5EE] px-3 py-4 font-sans md:px-4 md:py-5"
       style={{
         backgroundImage:
           'linear-gradient(rgba(29, 78, 216, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 78, 216, 0.1) 1px, transparent 1px)',
         backgroundSize: '40px 40px',
       }}
     >
-      <div className="w-full max-w-4xl bg-white border border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] p-8 md:p-12 lg:p-14 relative">
-        {/* Back Button */}
-        <Button variant="link" className="absolute top-4 left-4" onClick={() => router.back()}>
-          <ArrowLeft className="w-4 h-4" />
-          {t('common.back')}
-        </Button>
-
-        <div className="mb-8 mt-4 text-center">
-          <h1 className="font-serif text-4xl font-bold uppercase tracking-tight mb-2">
-            {t('tailor.heroTitle')}
-          </h1>
-          <p className="font-mono text-sm text-blue-700 font-bold uppercase">
-            {'// '}
-            {t('tailor.pasteJobDescriptionBelow')}
-          </p>
+      <div className="mx-auto w-full max-w-6xl border border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black bg-[#F8F7F1] px-4 py-3">
+          <div className="space-y-1">
+            <Button variant="ghost" size="xs" className="px-0" onClick={() => router.back()}>
+              <ArrowLeft className="w-4 h-4" />
+              {t('common.back')}
+            </Button>
+            <h1 className="font-serif text-2xl font-bold uppercase tracking-tight">
+              {t('tailor.heroTitle')}
+            </h1>
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">
+              {t('tailor.pasteJobDescriptionBelow')}
+            </p>
+          </div>
+          <div className="rounded-none border border-black bg-white px-2.5 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
+            {promptLoading ? t('common.loading') : selectedPromptId}
+          </div>
         </div>
 
-        {/* LLM Not Configured Warning */}
         {!statusLoading && !isLlmConfigured && (
-          <div className="mb-6 border-2 border-amber-500 bg-amber-50 p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
+          <div className="m-4 border border-amber-500 bg-amber-50 p-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -385,96 +469,117 @@ export default function TailorPage() {
           </div>
         )}
 
-        <div className="space-y-6">
-          <Dropdown
-            options={
-              promptOptions.length > 0
-                ? promptOptions.map((opt) => ({
-                    id: opt.id,
-                    label: t(`tailor.promptOptions.${opt.id}.label`),
-                    description: t(`tailor.promptOptions.${opt.id}.description`),
-                  }))
-                : [
-                    {
-                      id: 'nudge',
-                      label: t('tailor.promptOptions.nudge.label'),
-                      description: t('tailor.promptOptions.nudge.description'),
-                    },
-                    {
-                      id: 'keywords',
-                      label: t('tailor.promptOptions.keywords.label'),
-                      description: t('tailor.promptOptions.keywords.description'),
-                    },
-                    {
-                      id: 'full',
-                      label: t('tailor.promptOptions.full.label'),
-                      description: t('tailor.promptOptions.full.description'),
-                    },
-                  ]
-            }
-            value={selectedPromptId}
-            onChange={(value) => {
-              hasUserSelectedPrompt.current = true;
-              setSelectedPromptId(value);
-            }}
-            label={t('tailor.promptLabel')}
-            description={t('tailor.promptDescription')}
-            disabled={isLoading || promptLoading}
-          />
-
-          <div className="relative">
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <div className="border border-black bg-[#F0F0E8] p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
+                Job Description
+              </p>
+              <span className="font-mono text-[11px] text-gray-400">
+                {t('tailor.charactersCount', { count: jobDescription.length })}
+              </span>
+            </div>
             <Textarea
               placeholder={t('tailor.jobDescriptionPlaceholder')}
-              className="min-h-[300px] font-mono text-sm bg-[#F0F0E8] border-2 border-black focus:ring-0 focus:border-blue-700 resize-none p-4 rounded-none"
+              className="min-h-[420px] border border-black bg-white font-mono text-sm focus:ring-0 focus:border-blue-700 resize-none rounded-none"
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
               onKeyDown={handleTextareaKeyDown}
               disabled={isLoading}
             />
-            <div className="absolute bottom-2 right-2 text-xs font-mono text-gray-400 pointer-events-none">
-              {t('tailor.charactersCount', { count: jobDescription.length })}
-            </div>
           </div>
 
-          <RenderThemeControls settings={themeSettings} onChange={setThemeSettings} />
-
-          <ApplicationPackPanel
-            pendingResult={latestPackResult}
-            themeSettings={themeSettings}
-            selectedPromptId={selectedPromptId}
-          />
-
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-sm font-mono flex items-center gap-2">
-              <span>!</span> {error}
+          <div className="space-y-3">
+            <div className="border border-black bg-[#F8F7F1] p-3">
+              <Dropdown
+                options={
+                  promptOptions.length > 0
+                    ? promptOptions.map((opt) => ({
+                        id: opt.id,
+                        label: t(`tailor.promptOptions.${opt.id}.label`),
+                        description: t(`tailor.promptOptions.${opt.id}.description`),
+                      }))
+                    : [
+                        {
+                          id: 'nudge',
+                          label: t('tailor.promptOptions.nudge.label'),
+                          description: t('tailor.promptOptions.nudge.description'),
+                        },
+                        {
+                          id: 'keywords',
+                          label: t('tailor.promptOptions.keywords.label'),
+                          description: t('tailor.promptOptions.keywords.description'),
+                        },
+                        {
+                          id: 'full',
+                          label: t('tailor.promptOptions.full.label'),
+                          description: t('tailor.promptOptions.full.description'),
+                        },
+                      ]
+                }
+                value={selectedPromptId}
+                onChange={(value) => {
+                  hasUserSelectedPrompt.current = true;
+                  setSelectedPromptId(value);
+                }}
+                label={t('tailor.promptLabel')}
+                description={t('tailor.promptDescription')}
+                disabled={isLoading || promptLoading}
+                density="compact"
+              />
             </div>
-          )}
 
-          <Button
-            size="lg"
-            onClick={handleGenerate}
-            disabled={isLoading || statusLoading || !jobDescription.trim() || !isLlmConfigured}
-            className="w-full"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {t('common.processing')}
-                {elapsed > 0 && (
-                  <span className="font-mono text-xs opacity-70 ml-2">{elapsed}s</span>
-                )}
-              </>
-            ) : statusLoading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {t('common.checking')}
-              </>
-            ) : !isLlmConfigured ? (
-              t('tailor.configureApiKeyFirst')
-            ) : (
-              t('tailor.generateTailored')
+            <div className="space-y-2 border border-black bg-white p-3">
+              <ToggleSwitch
+                checked={includeCoverLetter}
+                onCheckedChange={setIncludeCoverLetter}
+                label="Cover letter"
+                description="Generate with this resume"
+                disabled={isLoading}
+                density="compact"
+              />
+              <ToggleSwitch
+                checked={includeOutreachMessage}
+                onCheckedChange={setIncludeOutreachMessage}
+                label="LinkedIn message"
+                description="Generate with this resume"
+                disabled={isLoading}
+                density="compact"
+              />
+            </div>
+
+            {error && (
+              <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
+                {error}
+              </div>
             )}
-          </Button>
+
+            <Button
+              size="lg"
+              onClick={handleGenerate}
+              disabled={isLoading || statusLoading || !jobDescription.trim() || !isLlmConfigured}
+              className="w-full"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  {t('common.processing')}
+                  {elapsed > 0 && (
+                    <span className="ml-2 font-mono text-xs opacity-70">{elapsed}s</span>
+                  )}
+                </>
+              ) : statusLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  {t('common.checking')}
+                </>
+              ) : !isLlmConfigured ? (
+                t('tailor.configureApiKeyFirst')
+              ) : (
+                t('tailor.generateTailored')
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 

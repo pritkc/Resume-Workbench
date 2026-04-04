@@ -37,10 +37,12 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
    * Button size:
    * - `default`: Standard button (h-10)
    * - `sm`: Small button (h-8)
+   * - `xs`: Compact button (h-7)
    * - `lg`: Large button (h-12)
    * - `icon`: Square icon button (h-9 w-9)
+   * - `icon-sm`: Compact square icon button (h-7 w-7)
    */
-  size?: 'default' | 'sm' | 'lg' | 'icon';
+  size?: 'default' | 'sm' | 'xs' | 'lg' | 'icon' | 'icon-sm';
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -152,10 +154,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     // Size styles
     const sizes = {
-      default: 'h-10 px-6 py-2',
-      sm: 'h-8 px-4 py-1 text-xs',
+      default: 'h-9 px-4 py-2',
+      sm: 'h-8 px-3 py-1 text-xs',
+      xs: 'h-7 px-2.5 py-1 text-[11px]',
       lg: 'h-12 px-8 py-3 text-base',
-      icon: 'h-10 w-10 p-0',
+      icon: 'h-9 w-9 p-0',
+      'icon-sm': 'h-7 w-7 p-0',
     };
 
     const variantClass = variants[variant];

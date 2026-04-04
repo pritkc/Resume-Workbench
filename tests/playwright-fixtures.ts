@@ -1,101 +1,110 @@
-import type { Page, Route } from '@playwright/test';
+import type { Page, Route } from "@playwright/test";
 
-export const frontendBaseUrl = process.env.E2E_FRONTEND_URL ?? 'http://127.0.0.1:3000';
-export const masterResumeId = 'master-123';
-export const tailoredResumeId = 'tailored-123';
+export const frontendBaseUrl =
+  process.env.E2E_FRONTEND_URL ?? "http://127.0.0.1:3000";
+export const masterResumeId = "master-123";
+export const tailoredResumeId = "tailored-123";
 
 export const themeSettings = {
-  theme_id: 'moderncv' as const,
-  page_size: 'A4' as const,
-  density_profile: 'balanced' as const,
+  theme_id: "moderncv" as const,
+  page_size: "A4" as const,
+  density_profile: "balanced" as const,
   bold_keywords: false,
-  accent_color: 'blue' as const,
+  accent_color: "blue" as const,
   show_contact_icons: false,
   margins_mm: { top: 10, bottom: 10, left: 10, right: 10 },
 };
 
 export const resumePreview = {
   personalInfo: {
-    name: 'Jane Doe',
-    title: 'Platform Engineer',
-    email: 'jane@example.com',
-    phone: '555-0100',
-    location: 'San Francisco, CA',
-    linkedin: 'linkedin.com/in/janedoe',
-    github: 'github.com/janedoe',
+    name: "Jane Doe",
+    title: "Platform Engineer",
+    email: "jane@example.com",
+    phone: "555-0100",
+    location: "San Francisco, CA",
+    linkedin: "linkedin.com/in/janedoe",
+    github: "github.com/janedoe",
   },
-  summary: 'Platform engineer focused on APIs, reliability, and analytics workflows.',
+  summary:
+    "Platform engineer focused on APIs, reliability, and analytics workflows.",
   workExperience: [
     {
       id: 1,
-      title: 'Senior Backend Engineer',
-      company: 'Example Cloud',
-      location: 'Remote',
-      years: '2023 - Present',
+      title: "Senior Backend Engineer",
+      company: "Example Cloud",
+      location: "Remote",
+      years: "2023 - Present",
       description: [
-        'Built FastAPI services for internal platform automation.',
-        'Improved data pipeline observability for product analytics.',
+        "Built FastAPI services for internal platform automation.",
+        "Improved data pipeline observability for product analytics.",
       ],
     },
   ],
   education: [
     {
       id: 1,
-      institution: 'State University',
-      degree: 'B.S. Computer Science',
-      years: '2018 - 2022',
-      description: 'GPA: 3.9',
+      institution: "State University",
+      degree: "B.S. Computer Science",
+      years: "2018 - 2022",
+      description: "GPA: 3.9",
     },
   ],
   personalProjects: [
     {
       id: 1,
-      name: 'Resume Forge',
-      role: 'Creator',
-      years: '2025',
-      description: ['Built a resume workflow tool with typed rendering and preview support.'],
+      name: "Resume Forge",
+      role: "Creator",
+      years: "2025",
+      description: [
+        "Built a resume workflow tool with typed rendering and preview support.",
+      ],
     },
   ],
   additional: {
-    technicalSkills: ['FastAPI', 'PostgreSQL', 'Python', 'Playwright'],
-    languages: ['English'],
+    technicalSkills: ["FastAPI", "PostgreSQL", "Python", "Playwright"],
+    languages: ["English"],
     certificationsTraining: [],
-    awards: ['Hackathon Winner'],
+    awards: ["Hackathon Winner"],
   },
 };
 
 export const pngArtifact = {
-  artifact_id: 'artifact-preview',
-  kind: 'resume_preview_png',
-  mime_type: 'image/png',
-  file_name: 'preview.png',
-  url: '/api/v1/artifacts/artifact-preview',
+  artifact_id: "artifact-preview",
+  kind: "resume_preview_png",
+  mime_type: "image/png",
+  file_name: "preview.png",
+  url: "/api/v1/artifacts/artifact-preview",
 };
 
 export const pdfArtifact = {
-  artifact_id: 'artifact-pdf',
-  kind: 'resume_pdf',
-  mime_type: 'application/pdf',
-  file_name: 'resume.pdf',
-  url: '/api/v1/artifacts/artifact-pdf',
+  artifact_id: "artifact-pdf",
+  kind: "resume_pdf",
+  mime_type: "application/pdf",
+  file_name: "resume.pdf",
+  url: "/api/v1/artifacts/artifact-pdf",
 };
 
 export const previewResult = {
   data: {
-    request_id: 'req-preview',
+    request_id: "req-preview",
     resume_id: null,
-    application_pack_id: 'pack-123',
-    generation_run_id: 'run-123',
-    job_id: 'job-123',
+    application_pack_id: "pack-123",
+    generation_run_id: "run-123",
+    job_id: "job-123",
     resume_preview: resumePreview,
-    improvements: [{ suggestion: 'Highlight FastAPI and API reliability work.', lineNumber: 1 }],
+    improvements: [
+      {
+        suggestion: "Highlight FastAPI and API reliability work.",
+        lineNumber: 1,
+      },
+    ],
     cover_letter:
-      'Tailored cover letter for the platform team.\n\nI build API systems that are observable and recruiter-readable.',
+      "Tailored cover letter for the platform team.\n\nI build API systems that are observable and recruiter-readable.",
     outreach_message:
-      'Hi team, I am excited about this backend role and would love to share why my API and analytics experience matches the position.',
+      "Hi team, I am excited about this backend role and would love to share why my API and analytics experience matches the position.",
     artifacts: [pngArtifact, pdfArtifact],
     theme_settings: themeSettings,
-    warnings: ['Maintained one-page layout.'],
+    warnings: ["Maintained one-page layout."],
     diff_summary: {
       total_changes: 3,
       skills_added: 1,
@@ -106,20 +115,21 @@ export const previewResult = {
     },
     detailed_changes: [
       {
-        field_path: 'summary',
-        field_type: 'summary',
-        change_type: 'modified',
-        original_value: 'Original summary',
-        new_value: 'Platform engineer focused on APIs, reliability, and analytics workflows.',
-        confidence: 'high',
+        field_path: "summary",
+        field_type: "summary",
+        change_type: "modified",
+        original_value: "Original summary",
+        new_value:
+          "Platform engineer focused on APIs, reliability, and analytics workflows.",
+        confidence: "high",
       },
       {
-        field_path: 'additional.technicalSkills[0]',
-        field_type: 'skill',
-        change_type: 'added',
-        original_value: '',
-        new_value: 'FastAPI',
-        confidence: 'high',
+        field_path: "additional.technicalSkills[0]",
+        field_type: "skill",
+        change_type: "added",
+        original_value: "",
+        new_value: "FastAPI",
+        confidence: "high",
       },
     ],
   },
@@ -133,56 +143,56 @@ export const confirmedResult = {
 };
 
 export const masterResumeResponse = {
-  request_id: 'req-master',
+  request_id: "req-master",
   data: {
     resume_id: masterResumeId,
     raw_resume: {
       id: null,
       content: JSON.stringify(resumePreview),
-      content_type: 'json',
-      created_at: '2026-04-01T00:00:00Z',
-      processing_status: 'ready' as const,
+      content_type: "json",
+      created_at: "2026-04-01T00:00:00Z",
+      processing_status: "ready" as const,
     },
     processed_resume: resumePreview,
     cover_letter: null,
     outreach_message: null,
     parent_id: null,
-    title: 'Master Resume',
+    title: "Master Resume",
     application_pack_id: null,
     theme_settings: themeSettings,
   },
 };
 
 export const tailoredResumeResponse = {
-  request_id: 'req-tailored',
+  request_id: "req-tailored",
   data: {
     resume_id: tailoredResumeId,
     raw_resume: {
       id: null,
       content: JSON.stringify(resumePreview),
-      content_type: 'json',
-      created_at: '2026-04-01T00:00:00Z',
-      processing_status: 'ready' as const,
+      content_type: "json",
+      created_at: "2026-04-01T00:00:00Z",
+      processing_status: "ready" as const,
     },
     processed_resume: resumePreview,
     cover_letter: confirmedResult.data.cover_letter,
     outreach_message: confirmedResult.data.outreach_message,
     parent_id: masterResumeId,
-    title: 'FastAPI Tailored Resume',
+    title: "FastAPI Tailored Resume",
     application_pack_id: confirmedResult.data.application_pack_id,
     theme_settings: themeSettings,
   },
 };
 
 export const jobDescriptionResponse = {
-  job_id: 'job-123',
+  job_id: "job-123",
   content:
-    'Senior backend role focused on FastAPI, recruiter-friendly impact bullets, data quality, testing, and one-page ATS resume alignment.',
+    "Senior backend role focused on FastAPI, recruiter-friendly impact bullets, data quality, testing, and one-page ATS resume alignment.",
 };
 
 export function statusPayload(overrides?: Partial<Record<string, unknown>>) {
   return {
-    status: 'ready',
+    status: "ready",
     llm_configured: true,
     llm_healthy: true,
     has_master_resume: true,
@@ -199,21 +209,44 @@ export function statusPayload(overrides?: Partial<Record<string, unknown>>) {
 export async function fulfillJson(route: Route, data: unknown, status = 200) {
   await route.fulfill({
     status,
-    contentType: 'application/json',
+    contentType: "application/json",
     body: JSON.stringify(data),
   });
 }
 
 export async function installArtifactMocks(page: Page) {
-  const pngBody = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9p7xLZcAAAAASUVORK5CYII=',
-    'base64'
+  const previewSvg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="600" height="840" viewBox="0 0 600 840">
+      <rect width="600" height="840" fill="#f8f7f1" />
+      <rect x="28" y="28" width="544" height="784" fill="#ffffff" stroke="#111111" stroke-width="4" />
+      <text x="56" y="92" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#111111">
+        Resume Preview
+      </text>
+      <text x="56" y="130" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#4b5563">
+        Mocked artifact for Playwright coverage
+      </text>
+      <rect x="56" y="170" width="488" height="18" fill="#d1d5db" />
+      <rect x="56" y="206" width="420" height="12" fill="#e5e7eb" />
+      <rect x="56" y="234" width="472" height="12" fill="#e5e7eb" />
+      <rect x="56" y="290" width="164" height="18" fill="#d1d5db" />
+      <rect x="56" y="326" width="488" height="12" fill="#e5e7eb" />
+      <rect x="56" y="354" width="460" height="12" fill="#e5e7eb" />
+      <rect x="56" y="410" width="152" height="18" fill="#d1d5db" />
+      <rect x="56" y="446" width="488" height="12" fill="#e5e7eb" />
+      <rect x="56" y="474" width="444" height="12" fill="#e5e7eb" />
+    </svg>
+  `.trim();
+  const pdfBody = Buffer.from(
+    "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length 44 >>\nstream\nBT /F1 18 Tf 36 360 Td (Mock PDF Artifact) Tj ET\nendstream\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF",
   );
-  await page.route('**/api/v1/artifacts/**', async (route) => {
+  await page.route("**/api/v1/artifacts/**", async (route) => {
+    const url = route.request().url();
     await route.fulfill({
       status: 200,
-      contentType: 'image/png',
-      body: pngBody,
+      contentType: url.includes("artifact-pdf")
+        ? "application/pdf"
+        : "image/svg+xml",
+      body: url.includes("artifact-pdf") ? pdfBody : previewSvg,
     });
   });
 }
@@ -222,7 +255,7 @@ export async function gotoWithRetry(page: Page, url: string, attempts = 3) {
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.goto(url, { waitUntil: "domcontentloaded" });
       return;
     } catch (error) {
       lastError = error;
@@ -240,15 +273,15 @@ export async function collectBrowserProblems(page: Page) {
   const pageErrors: string[] = [];
   const failedResponses: string[] = [];
 
-  page.on('console', (message) => {
-    if (message.type() === 'error' || message.type() === 'warning') {
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
       consoleMessages.push(`[${message.type()}] ${message.text()}`);
     }
   });
-  page.on('pageerror', (error) => {
+  page.on("pageerror", (error) => {
     pageErrors.push(error.message);
   });
-  page.on('response', async (response) => {
+  page.on("response", async (response) => {
     if (response.status() >= 400) {
       failedResponses.push(`${response.status()} ${response.url()}`);
     }

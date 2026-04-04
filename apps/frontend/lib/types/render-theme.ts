@@ -478,7 +478,8 @@ export const TEMPLATE_HINTS = {
   date_range: 'Placeholders: START_DATE, END_DATE.',
   time_span: 'Placeholders: HOW_MANY_YEARS, YEARS, HOW_MANY_MONTHS, MONTHS.',
   one_line_entry: 'Placeholders: LABEL, DETAILS.',
-  education_entry: 'Placeholders: INSTITUTION, AREA, DEGREE, DEGREE_WITH_AREA, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
+  education_entry:
+    'Placeholders: INSTITUTION, AREA, DEGREE, DEGREE_WITH_AREA, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
   normal_entry: 'Placeholders: NAME, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
   experience_entry: 'Placeholders: COMPANY, POSITION, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
   publication_entry: 'Placeholders: TITLE, AUTHORS, SUMMARY, DOI, URL, JOURNAL, DATE.',
@@ -852,7 +853,10 @@ export function getThemeDesignBaseline(themeId: RenderThemeId): RenderCvDesign {
   }
   const override = THEME_BASELINES[themeId] ?? { theme: themeId };
   return {
-    ...(deepMerge(classicBaseline as Record<string, unknown>, override as Record<string, unknown>) as RenderCvDesign),
+    ...(deepMerge(
+      classicBaseline as Record<string, unknown>,
+      override as Record<string, unknown>
+    ) as RenderCvDesign),
     theme: themeId,
   };
 }
@@ -973,7 +977,7 @@ function resolveThemeProfileState(
       ? 'LETTER'
       : design.page?.size === 'a4'
         ? 'A4'
-        : activeProfile.page_size ?? 'A4';
+        : (activeProfile.page_size ?? 'A4');
 
   const marginsMm = {
     top: inchesToMm(design.page?.top_margin, DEFAULT_MARGINS_MM.top),
@@ -1025,7 +1029,9 @@ function isThemeProfileEmpty(profile?: RenderThemeProfileSettings | null): boole
   );
 }
 
-function cleanThemeProfile(profile?: RenderThemeProfileSettings | null): RenderThemeProfileSettings | null {
+function cleanThemeProfile(
+  profile?: RenderThemeProfileSettings | null
+): RenderThemeProfileSettings | null {
   if (!profile) {
     return null;
   }

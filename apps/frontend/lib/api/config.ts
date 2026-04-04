@@ -232,6 +232,18 @@ export interface PromptConfigUpdate {
   default_prompt_id?: string;
 }
 
+export interface GenerationDefaults {
+  include_cover_letter: boolean;
+  include_outreach_message: boolean;
+  prompt_id: string;
+}
+
+export interface GenerationDefaultsUpdate {
+  include_cover_letter?: boolean;
+  include_outreach_message?: boolean;
+  prompt_id?: string;
+}
+
 // Fetch prompt configuration
 export async function fetchPromptConfig(): Promise<PromptConfig> {
   const res = await apiFetch('/config/prompts', { credentials: 'include' });
@@ -255,6 +267,34 @@ export async function updatePromptConfig(update: PromptConfigUpdate): Promise<Pr
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || `Failed to update prompt config (status ${res.status}).`);
+  }
+
+  return res.json();
+}
+
+export async function fetchGenerationDefaults(): Promise<GenerationDefaults> {
+  const res = await apiFetch('/config/generation-defaults', { credentials: 'include' });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load generation defaults (status ${res.status}).`);
+  }
+
+  return res.json();
+}
+
+export async function updateGenerationDefaults(
+  update: GenerationDefaultsUpdate
+): Promise<GenerationDefaults> {
+  const res = await apiFetch('/config/generation-defaults', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(update),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to update generation defaults (status ${res.status}).`);
   }
 
   return res.json();

@@ -381,6 +381,27 @@ class Database:
                 "confirmed_at": _iso(record.confirmed_at),
             }
 
+    def get_application_pack(self, pack_id: str) -> dict[str, Any] | None:
+        with self._session() as session:
+            record = application_pack_repo.get_application_pack(session, pack_id)
+            if record is None:
+                return None
+            return {
+                "pack_id": record.pack_id,
+                "base_resume_id": record.base_resume_id,
+                "job_id": record.job_id,
+                "tailored_resume_id": record.tailored_resume_id,
+                "generation_run_id": record.generation_run_id,
+                "status": record.status,
+                "company": record.company,
+                "role": record.role,
+                "location": record.location,
+                "theme_settings": record.theme_settings,
+                "created_at": _iso(record.created_at),
+                "updated_at": _iso(record.updated_at),
+                "confirmed_at": _iso(record.confirmed_at),
+            }
+
     def list_application_packs(
         self,
         *,

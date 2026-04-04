@@ -13,6 +13,8 @@ from app.schemas import (
     LLMConfigResponse,
     FeatureConfigRequest,
     FeatureConfigResponse,
+    GenerationDefaultsRequest,
+    GenerationDefaultsResponse,
     LanguageConfigRequest,
     LanguageConfigResponse,
     PromptConfigRequest,
@@ -70,6 +72,31 @@ def _mask_api_key(key: str) -> str:
 def _get_prompt_options() -> list[PromptOption]:
     """Return available prompt options for resume tailoring."""
     return [PromptOption(**option) for option in IMPROVE_PROMPT_OPTIONS]
+
+
+def _resolve_prompt_id(value: str | None, option_ids: set[str]) -> str:
+    if value in option_ids:
+        return value
+    return DEFAULT_IMPROVE_PROMPT_ID
+
+
+def _normalize_generation_defaults(stored: dict) -> GenerationDefaultsResponse:
+    options = _get_prompt_options()
+    option_ids = {option.id for option in options}
+    defaults = stored.get("generation_defaults")
+    if not isinstance(defaults, dict):
+        defaults = {}
+
+    prompt_id = _resolve_prompt_id(
+        defaults.get("prompt_id") or stored.get("default_prompt_id"),
+        option_ids,
+    )
+
+    return GenerationDefaultsResponse(
+        include_cover_letter=bool(defaults.get("include_cover_letter", False)),
+        include_outreach_message=bool(defaults.get("include_outreach_message", False)),
+        prompt_id=prompt_id,
+    )
 
 
 async def _log_llm_health_check(config: LLMConfig) -> None:
@@ -228,6 +255,45 @@ async def update_feature_config(request: FeatureConfigRequest) -> FeatureConfigR
         enable_cover_letter=stored.get("enable_cover_letter", False),
         enable_outreach_message=stored.get("enable_outreach_message", False),
     )
+
+
+@router.get("/generation-defaults", response_model=GenerationDefaultsResponse)
+async def get_generation_defaults() -> GenerationDefaultsResponse:
+    """Get the last-used tailoring defaults for the create-resume flow."""
+    return _normalize_generation_defaults(_load_config())
+
+
+@router.put("/generation-defaults", response_model=GenerationDefaultsResponse)
+async def update_generation_defaults(
+    request: GenerationDefaultsRequest,
+) -> GenerationDefaultsResponse:
+    """Update the last-used tailoring defaults for the create-resume flow."""
+    stored = _load_config()
+    defaults = stored.get("generation_defaults")
+    if not isinstance(defaults, dict):
+        defaults = {}
+
+    options = _get_prompt_options()
+    option_ids = {option.id for option in options}
+
+    if request.include_cover_letter is not None:
+        defaults["include_cover_letter"] = request.include_cover_letter
+    if request.include_outreach_message is not None:
+        defaults["include_outreach_message"] = request.include_outreach_message
+    if request.prompt_id is not None:
+        if request.prompt_id not in option_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Unsupported prompt id: "
+                    f"{request.prompt_id}. Supported: {sorted(option_ids)}"
+                ),
+            )
+        defaults["prompt_id"] = request.prompt_id
+
+    stored["generation_defaults"] = defaults
+    _save_config(stored)
+    return _normalize_generation_defaults(stored)
 
 
 # Supported languages for i18n

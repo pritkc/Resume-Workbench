@@ -44,15 +44,15 @@ export const DraggableSectionWrapper: React.FC<DraggableSectionWrapperProps> = (
         <div
           {...attributes}
           {...listeners}
-          className="absolute left-0 top-0 h-full w-4 flex items-start justify-center cursor-grab active:cursor-grabbing z-10"
+          className="absolute left-0 top-0 z-10 flex h-full w-3 items-start justify-center pt-2 cursor-grab active:cursor-grabbing"
           title="Drag to reorder"
         >
-          <GripVertical className="w-4 h-4 text-gray-400 hover:text-gray-700 transition-colors" />
+          <GripVertical className="h-3.5 w-3.5 text-gray-300 transition-colors hover:text-gray-600" />
         </div>
       )}
 
       {/* Section Content - add left padding to make room for drag handle */}
-      <div className={!disabled ? 'pl-4' : ''}>{children}</div>
+      <div className={!disabled ? 'pl-3' : ''}>{children}</div>
     </div>
   );
 };

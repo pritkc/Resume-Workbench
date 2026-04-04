@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.database import db
 from app.schemas import JobUploadRequest, JobUploadResponse
+from app.services.cover_letter import extract_job_target_metadata
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -23,9 +24,13 @@ async def upload_job_descriptions(request: JobUploadRequest) -> JobUploadRespons
         if not jd.strip():
             raise HTTPException(status_code=400, detail="Empty job description")
 
+        target_metadata = extract_job_target_metadata(jd.strip())
         job = db.create_job(
             content=jd.strip(),
             resume_id=request.resume_id,
+            company=target_metadata["company"],
+            role=target_metadata["role"],
+            location=target_metadata["location"],
         )
         job_ids.append(job["job_id"])
 

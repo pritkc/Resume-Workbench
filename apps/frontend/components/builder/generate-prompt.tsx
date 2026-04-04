@@ -36,20 +36,20 @@ export function GeneratePrompt({
     return (
       <div
         className={cn(
-          'flex flex-col items-center justify-center min-h-[400px] p-12 text-center',
+          'flex min-h-[260px] flex-col items-center justify-center p-6 text-center',
           className
         )}
       >
-        <div className="w-16 h-16 border-2 border-gray-300 bg-gray-100 flex items-center justify-center mb-6">
-          <Icon className="w-8 h-8 text-gray-400" />
+        <div className="mb-4 flex h-12 w-12 items-center justify-center border border-gray-300 bg-gray-100">
+          <Icon className="h-6 w-6 text-gray-400" />
         </div>
-        <h3 className="font-mono text-sm font-bold uppercase tracking-wider text-gray-600 mb-3">
+        <h3 className="mb-2 font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
           {t('builder.generatePrompt.notAvailableTitle', { title })}
         </h3>
-        <p className="font-mono text-xs text-gray-500 max-w-md mb-6 leading-relaxed">
+        <p className="mb-4 max-w-md font-mono text-[11px] leading-relaxed text-gray-500">
           {t('builder.generatePrompt.notAvailableDescription', { title })}
         </p>
-        <div className="flex items-center gap-2 text-blue-700 font-mono text-xs">
+        <div className="flex items-center gap-2 font-mono text-[11px] text-blue-700">
           <span>{t('builder.generatePrompt.goToDashboard')}</span>
           <ArrowRight className="w-4 h-4" />
         </div>
@@ -60,22 +60,22 @@ export function GeneratePrompt({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center min-h-[400px] p-12 text-center',
+        'flex min-h-[260px] flex-col items-center justify-center p-6 text-center',
         className
       )}
     >
-      <div className="w-16 h-16 border-2 border-blue-700 bg-blue-50 flex items-center justify-center mb-6">
-        <Icon className="w-8 h-8 text-blue-700" />
+      <div className="mb-4 flex h-12 w-12 items-center justify-center border border-blue-700 bg-blue-50">
+        <Icon className="h-6 w-6 text-blue-700" />
       </div>
-      <h3 className="font-mono text-sm font-bold uppercase tracking-wider mb-3">
+      <h3 className="mb-2 font-mono text-xs font-bold uppercase tracking-wider">
         {t('builder.generatePrompt.generateTitle', { title })}
       </h3>
-      <p className="font-mono text-xs text-gray-600 max-w-md mb-6 leading-relaxed">
+      <p className="mb-4 max-w-md font-mono text-[11px] leading-relaxed text-gray-600">
         {isOutreach
           ? t('builder.generatePrompt.outreachDescription')
           : t('builder.generatePrompt.coverLetterDescription')}
       </p>
-      <Button onClick={onGenerate} disabled={isGenerating} className="gap-2">
+      <Button onClick={onGenerate} disabled={isGenerating} size="xs" className="gap-1.5">
         {isGenerating ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -88,7 +88,7 @@ export function GeneratePrompt({
           </>
         )}
       </Button>
-      <p className="font-mono text-xs text-gray-400 mt-4">
+      <p className="mt-3 font-mono text-[10px] text-gray-400">
         {isOutreach
           ? t('builder.generatePrompt.outreachFooter')
           : t('builder.generatePrompt.coverLetterFooter')}

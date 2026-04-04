@@ -19,6 +19,7 @@ export interface ToggleSwitchProps {
   description?: string;
   disabled?: boolean;
   className?: string;
+  density?: 'default' | 'compact';
 }
 
 export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
@@ -28,8 +29,10 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   description,
   disabled = false,
   className,
+  density = 'default',
 }) => {
   const labelId = React.useId();
+  const isCompact = density === 'compact';
 
   const handleToggle = () => {
     if (!disabled) {
@@ -40,17 +43,33 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   return (
     <div
       className={cn(
-        'flex items-center justify-between p-4 border border-black bg-white',
+        'flex items-center justify-between border border-black bg-white',
         'shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]',
+        isCompact ? 'gap-3 px-3 py-2' : 'p-4',
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
     >
-      <div className="flex-1 mr-4">
-        <div id={labelId} className="font-mono text-sm font-bold uppercase tracking-wider">
+      <div className={cn('flex-1', isCompact ? 'mr-2' : 'mr-4')}>
+        <div
+          id={labelId}
+          className={cn(
+            'font-mono font-bold uppercase tracking-wider',
+            isCompact ? 'text-[11px]' : 'text-sm'
+          )}
+        >
           {label}
         </div>
-        {description && <div className="font-sans text-xs text-gray-500 mt-1">{description}</div>}
+        {description && (
+          <div
+            className={cn(
+              'font-sans text-gray-500',
+              isCompact ? 'mt-0.5 text-[11px]' : 'mt-1 text-xs'
+            )}
+          >
+            {description}
+          </div>
+        )}
       </div>
       <button
         type="button"
@@ -60,18 +79,20 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
         disabled={disabled}
         onClick={handleToggle}
         className={cn(
-          'relative inline-flex h-6 w-12 shrink-0 cursor-pointer items-center',
+          'relative inline-flex shrink-0 cursor-pointer items-center',
           'border-2 border-black transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2',
           'disabled:cursor-not-allowed',
+          isCompact ? 'h-5 w-10' : 'h-6 w-12',
           checked ? 'bg-blue-700' : 'bg-gray-200'
         )}
       >
         <span
           className={cn(
-            'pointer-events-none block h-4 w-4 bg-white border border-black shadow-sm',
+            'pointer-events-none block bg-white border border-black shadow-sm',
             'transition-transform duration-200',
-            checked ? 'translate-x-6' : 'translate-x-1'
+            isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4',
+            checked ? (isCompact ? 'translate-x-5' : 'translate-x-6') : 'translate-x-1'
           )}
         />
       </button>

@@ -87,26 +87,26 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex justify-end">
         <Button
           variant="outline"
-          size="sm"
+          size="xs"
           onClick={handleAdd}
-          className="rounded-none border-black hover:bg-black hover:text-white transition-colors"
+          className="rounded-none border-black transition-colors hover:bg-black hover:text-white"
         >
           <Plus className="w-4 h-4 mr-2" /> {t('builder.forms.education.addSchool')}
         </Button>
       </div>
 
       {data.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 border border-dashed border-black">
-          <p className="font-mono text-sm text-gray-500 mb-4">
+        <div className="border border-dashed border-black bg-gray-50 px-4 py-5 text-center">
+          <p className="mb-3 font-mono text-xs text-gray-500">
             {t('builder.genericItemForm.noEntries', { label: t('resume.sections.education') })}
           </p>
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={handleAdd}
             className="rounded-none border-black"
           >
@@ -119,20 +119,21 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
             items={data.map((item) => item.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-8">
+            <div className="space-y-4">
               {data.map((item) => (
                 <DraggableListItem key={item.id} id={item.id}>
-                  <div className="p-6 border border-black bg-gray-50 relative group">
+                  <div className="relative border border-black bg-gray-50 px-4 py-3 group">
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                      size="icon-sm"
+                      aria-label={t('common.delete')}
+                      className="absolute right-2 top-2 text-destructive opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                       onClick={() => handleRemove(item.id)}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pr-8">
+                    <div className="mb-3 grid grid-cols-1 gap-3 pr-7 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                           {t('builder.forms.education.fields.institution')}
@@ -175,7 +176,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                       <Textarea
                         value={item.description || ''}
                         onChange={(e) => handleChange(item.id, 'description', e.target.value)}
-                        className="min-h-[60px] text-black text-sm rounded-none border-black bg-white"
+                        className="min-h-[48px] rounded-none border-black bg-white text-sm text-black"
                         placeholder={t('builder.forms.education.placeholders.description')}
                       />
                     </div>

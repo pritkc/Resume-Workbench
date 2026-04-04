@@ -3,10 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  RENDER_DIMENSION_UNITS,
-  type RenderDimensionUnit,
-} from '@/lib/types/render-theme';
+import { RENDER_DIMENSION_UNITS, type RenderDimensionUnit } from '@/lib/types/render-theme';
 import { cn } from '@/lib/utils';
 
 export function arrayToText(value?: string[]): string {
@@ -23,7 +20,7 @@ export function textToArray(value: string): string[] {
 export function RenderCvSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border border-black bg-white">
-      <div className="border-b border-black bg-[#F8F7F1] px-4 py-2">
+      <div className="border-b border-black bg-[#F8F7F1] px-3 py-1.5">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-600">
           {title}
         </p>
@@ -33,24 +30,73 @@ export function RenderCvSection({ title, children }: { title: string; children: 
   );
 }
 
+export function RenderCvQuickNav({
+  items,
+  activeId,
+  onChange,
+}: {
+  items: Array<{ id: string; label: string }>;
+  activeId: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="sticky top-0 z-10 border border-black bg-[#F8F7F1] p-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onChange(item.id)}
+            className={cn(
+              'border px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] transition-colors',
+              item.id === activeId
+                ? 'border-black bg-black text-white'
+                : 'border-gray-300 bg-white text-gray-600 hover:border-black hover:text-black'
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function RenderCvRow({
   label,
   children,
   description,
   fieldHint,
+  density = 'compact',
 }: {
   label: string;
   children: ReactNode;
   description?: string;
   fieldHint?: ReactNode;
+  density?: 'default' | 'compact';
 }) {
+  const isCompact = density === 'compact';
+
   return (
-    <div className="grid gap-3 border-b border-gray-200 px-4 py-3 last:border-b-0 md:grid-cols-[180px_minmax(0,1fr)] md:items-center">
+    <div
+      className={cn(
+        'grid border-b border-gray-200 last:border-b-0',
+        isCompact
+          ? 'gap-2 px-3 py-2.5 md:grid-cols-[156px_minmax(0,1fr)] md:items-start'
+          : 'gap-3 px-4 py-3 md:grid-cols-[180px_minmax(0,1fr)] md:items-center'
+      )}
+    >
       <div>
-        <p className="text-sm font-medium text-gray-700">{label}</p>
-        {description ? <p className="mt-1 text-xs text-gray-500">{description}</p> : null}
+        <p className={cn('font-medium text-gray-700', isCompact ? 'text-[13px]' : 'text-sm')}>
+          {label}
+        </p>
+        {description ? (
+          <p className={cn('text-gray-500', isCompact ? 'mt-0.5 text-[11px]' : 'mt-1 text-xs')}>
+            {description}
+          </p>
+        ) : null}
       </div>
-      <div className="space-y-1.5">
+      <div className={cn(isCompact ? 'space-y-1' : 'space-y-1.5')}>
         {children}
         {fieldHint ? <p className="text-xs text-gray-500">{fieldHint}</p> : null}
       </div>
@@ -75,7 +121,7 @@ export function RenderCvInput({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="font-mono text-sm"
+      className="h-8 font-mono text-sm"
     />
   );
 }
@@ -97,7 +143,7 @@ export function RenderCvTextarea({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="font-mono text-sm"
+      className="min-h-[72px] font-mono text-sm"
     />
   );
 }
@@ -119,16 +165,16 @@ export function RenderCvAutocompleteInput({
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="font-mono text-sm"
+        className="h-8 font-mono text-sm"
       />
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
         {options.map((option) => (
           <button
             key={option}
             type="button"
             onClick={() => onChange(option)}
             className={cn(
-              'border px-2.5 py-1.5 text-left text-xs transition',
+              'border px-2 py-1.5 text-left text-[11px] transition',
               value === option
                 ? 'border-violet-300 bg-violet-100 text-violet-900'
                 : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:text-black'
@@ -160,9 +206,7 @@ function rgbToHex(value?: string | null): string | null {
     return `#${raw.toLowerCase()}`;
   }
 
-  const rgbMatch = trimmed.match(
-    /^rgb\s*\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i
-  );
+  const rgbMatch = trimmed.match(/^rgb\s*\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
   if (!rgbMatch) {
     return null;
   }
@@ -189,9 +233,12 @@ export function RenderCvColorInput({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="relative inline-flex h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-full border border-black bg-white">
-          <span className="absolute inset-[3px] rounded-full" style={{ backgroundColor: pickerValue }} />
+      <div className="flex flex-wrap items-center gap-2.5">
+        <label className="relative inline-flex h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-full border border-black bg-white">
+          <span
+            className="absolute inset-[3px] rounded-full"
+            style={{ backgroundColor: pickerValue }}
+          />
           <input
             type="color"
             aria-label="Pick color"
@@ -204,10 +251,10 @@ export function RenderCvColorInput({
           value={value ?? ''}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="min-w-[220px] flex-1 font-mono text-sm"
+          className="h-8 min-w-[220px] flex-1 font-mono text-sm"
         />
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-[11px] text-gray-500">
         Supports hex, rgb(...), hsl(...), and named colors.
       </p>
     </div>
@@ -291,7 +338,7 @@ export function RenderCvDimensionInput({
         }}
         placeholder={parsedPlaceholder.amount || placeholder}
         inputMode="decimal"
-        className="w-28 font-mono text-sm"
+        className="h-8 w-24 font-mono text-sm"
       />
       <div className="flex flex-wrap gap-1">
         {RENDER_DIMENSION_UNITS.map((unit) => (
@@ -305,7 +352,7 @@ export function RenderCvDimensionInput({
               }
             }}
             className={cn(
-              'border px-2 py-1 font-mono text-[11px] uppercase tracking-wider transition',
+              'border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition',
               activeUnit === unit
                 ? 'border-violet-300 bg-violet-100 text-violet-900'
                 : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-black'
@@ -329,7 +376,7 @@ export function RenderCvBulletPicker({
   options: readonly string[];
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1">
       {options.map((option) => (
         <button
           key={option}
@@ -337,7 +384,7 @@ export function RenderCvBulletPicker({
           aria-pressed={value === option}
           onClick={() => onChange(option)}
           className={cn(
-            'flex h-8 w-8 items-center justify-center border text-sm transition',
+            'flex h-7 w-7 items-center justify-center border text-sm transition',
             value === option
               ? 'border-violet-300 bg-violet-100 text-violet-900'
               : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:text-black'
@@ -363,7 +410,7 @@ export function RenderCvSelect<T extends string>({
     <select
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full border border-black bg-white px-3 py-2 font-mono text-sm"
+      className="h-8 w-full border border-black bg-white px-2.5 py-1.5 font-mono text-sm"
     >
       {options.map((option) => (
         <option key={option.id} value={option.id}>
@@ -382,9 +429,9 @@ export function RenderCvToggle({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="inline-flex cursor-pointer items-center gap-3">
+    <label className="inline-flex cursor-pointer items-center gap-2.5">
       <span
-        className={`relative inline-flex h-6 w-11 items-center rounded-full border border-black transition ${
+        className={`relative inline-flex h-5 w-10 items-center rounded-full border border-black transition ${
           checked ? 'bg-blue-700' : 'bg-[#E5E5E0]'
         }`}
       >
@@ -395,12 +442,12 @@ export function RenderCvToggle({
           className="sr-only"
         />
         <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-            checked ? 'translate-x-6' : 'translate-x-1'
+          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition ${
+            checked ? 'translate-x-5' : 'translate-x-1'
           }`}
         />
       </span>
-      <span className="font-mono text-xs uppercase tracking-wider text-gray-500">
+      <span className="font-mono text-[10px] uppercase tracking-wider text-gray-500">
         {checked ? 'On' : 'Off'}
       </span>
     </label>

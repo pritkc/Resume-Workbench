@@ -33,6 +33,13 @@ class TestJobUpload:
         data = resp.json()
         assert data["message"] == "data successfully processed"
         assert len(data["job_id"]) == 1
+        mock_db.create_job.assert_called_once_with(
+            content="Senior Engineer at TechCorp",
+            resume_id=None,
+            company=None,
+            role=None,
+            location=None,
+        )
 
     @patch("app.routers.jobs.db")
     async def test_upload_multiple_jobs(self, mock_db, client):

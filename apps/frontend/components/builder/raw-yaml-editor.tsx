@@ -38,6 +38,7 @@ const SECTION_LABELS: Record<RawYamlSection, string> = {
 
 const LINE_HEIGHT_PX = 24;
 const EDITOR_PADDING_PX = 16;
+const INDENT_SIZE_COLUMNS = 2;
 
 type CursorPosition = {
   line: number;
@@ -157,6 +158,26 @@ function offsetForLine(value: string, lineNumber: number, columnNumber = 1): num
     lines.slice(0, lineIndex).reduce((offset, line) => offset + line.length + 1, 0) + lineLength;
 
   return Math.min(baseOffset, maxOffsetForLine);
+}
+
+function getLeadingIndentColumns(line: string): number {
+  let columns = 0;
+
+  for (const character of line) {
+    if (character === ' ') {
+      columns += 1;
+      continue;
+    }
+
+    if (character === '\t') {
+      columns += INDENT_SIZE_COLUMNS;
+      continue;
+    }
+
+    break;
+  }
+
+  return columns;
 }
 
 export function RawYamlEditor({
@@ -316,13 +337,13 @@ export function RawYamlEditor({
       : null;
 
   return (
-    <div className="space-y-4">
-      <div className="border border-black bg-white px-4 py-3">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-3">
+      <div className="border border-black bg-white px-3 py-2.5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="font-mono text-xs font-bold uppercase tracking-wider">Raw YAML</p>
-            <p className="mt-1 text-sm text-gray-600">{SECTION_DESCRIPTIONS[section]}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-gray-500">
+            <p className="mt-0.5 text-[13px] text-gray-600">{SECTION_DESCRIPTIONS[section]}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">
               <span>{statusLabel}</span>
               <span>Ln {cursorPosition.line}</span>
               <span>Col {cursorPosition.column}</span>
@@ -330,7 +351,13 @@ export function RawYamlEditor({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={onResync} disabled={isLoading} className="gap-2">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={onResync}
+              disabled={isLoading}
+              className="gap-1.5"
+            >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -338,11 +365,11 @@ export function RawYamlEditor({
               )}
               Resync
             </Button>
-            <Button variant="outline" onClick={onCopySection} className="gap-2">
+            <Button variant="outline" size="xs" onClick={onCopySection} className="gap-1.5">
               <Copy className="h-4 w-4" />
               Copy Section
             </Button>
-            <Button variant="outline" onClick={onCopyAll} className="gap-2">
+            <Button variant="outline" size="xs" onClick={onCopyAll} className="gap-1.5">
               <Copy className="h-4 w-4" />
               Copy Full YAML
             </Button>
@@ -351,11 +378,11 @@ export function RawYamlEditor({
       </div>
 
       {error && (
-        <div className="border border-red-300 bg-red-50 px-4 py-3">
+        <div className="border border-red-300 bg-red-50 px-3 py-2.5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 text-red-700" />
-              <div className="font-mono text-xs text-red-800">
+              <div className="font-mono text-[11px] text-red-800">
                 <p className="font-bold uppercase tracking-[0.18em]">
                   {error.section
                     ? `${SECTION_LABELS[error.section]} Validation`
@@ -366,16 +393,16 @@ export function RawYamlEditor({
             </div>
             <div className="flex flex-wrap gap-2">
               {error.section && error.section !== section && onFocusErrorSection && (
-                <Button variant="outline" size="sm" onClick={onFocusErrorSection}>
+                <Button variant="outline" size="xs" onClick={onFocusErrorSection}>
                   Open {SECTION_LABELS[error.section]}
                 </Button>
               )}
               {activeError?.line && (
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   onClick={() => jumpToLine(activeError.line ?? 1, activeError.column ?? 1)}
-                  className="gap-2"
+                  className="gap-1.5"
                 >
                   <LocateFixed className="h-4 w-4" />
                   Jump To Line
@@ -386,10 +413,10 @@ export function RawYamlEditor({
         </div>
       )}
 
-      <div className="overflow-hidden border border-black bg-[#FEFDF8] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="flex min-h-[560px]">
+      <div className="overflow-hidden border border-black bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="flex min-h-[460px]">
           <div
-            className="select-none overflow-hidden border-r border-black bg-[#F4EFE2] py-4 pr-3 pl-2 font-mono text-xs leading-6 text-right text-slate-500"
+            className="select-none overflow-hidden border-r border-black bg-[#F4EFE2] py-3 pr-2.5 pl-2 font-mono text-[11px] leading-6 text-right text-slate-500"
             style={{ width: gutterWidth }}
           >
             <div style={{ transform: `translateY(-${scrollState.top}px)` }}>
@@ -416,15 +443,7 @@ export function RawYamlEditor({
             </div>
           </div>
 
-          <div className="relative flex-1 overflow-hidden bg-[#FFFDF7]">
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                backgroundImage:
-                  'repeating-linear-gradient(to right, rgba(148, 163, 184, 0.16) 0, rgba(148, 163, 184, 0.16) 1px, transparent 1px, transparent 2ch)',
-                backgroundPosition: `${EDITOR_PADDING_PX - scrollState.left}px 0`,
-              }}
-            />
+          <div className="relative flex-1 overflow-hidden bg-white">
             <div
               className="pointer-events-none absolute left-0 right-0 bg-blue-100/60"
               style={{
@@ -444,18 +463,33 @@ export function RawYamlEditor({
 
             <pre
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 m-0 overflow-hidden p-4 font-mono text-sm leading-6"
+              className="pointer-events-none absolute inset-0 m-0 overflow-hidden p-3 font-mono text-sm leading-6"
             >
               <div
                 style={{
                   transform: `translate(${-scrollState.left}px, -${scrollState.top}px)`,
                 }}
               >
-                {highlightedLines.map((highlightedLine, index) => (
-                  <div key={`line-${index + 1}`} className="h-6 whitespace-pre">
-                    {highlightedLine}
-                  </div>
-                ))}
+                {highlightedLines.map((highlightedLine, index) => {
+                  const indentColumns = getLeadingIndentColumns(lines[index] ?? '');
+
+                  return (
+                    <div key={`line-${index + 1}`} className="relative h-6 whitespace-pre">
+                      {indentColumns >= INDENT_SIZE_COLUMNS ? (
+                        <span
+                          className="pointer-events-none absolute left-0"
+                          style={{
+                            top: 2,
+                            bottom: 2,
+                            width: `${indentColumns}ch`,
+                            backgroundImage: `repeating-linear-gradient(to right, transparent 0 calc(${INDENT_SIZE_COLUMNS}ch - 1px), rgba(148, 163, 184, 0.45) calc(${INDENT_SIZE_COLUMNS}ch - 1px) ${INDENT_SIZE_COLUMNS}ch)`,
+                          }}
+                        />
+                      ) : null}
+                      <span className="relative">{highlightedLine}</span>
+                    </div>
+                  );
+                })}
               </div>
             </pre>
 
@@ -471,13 +505,13 @@ export function RawYamlEditor({
               onKeyUp={syncCursorPosition}
               spellCheck={false}
               wrap="off"
-              className="absolute inset-0 resize-none bg-transparent p-4 font-mono text-sm leading-6 text-transparent caret-slate-900 outline-none selection:bg-sky-200/70"
+              className="absolute inset-0 resize-none bg-transparent p-3 font-mono text-sm leading-6 text-transparent caret-slate-900 outline-none selection:bg-sky-200/70"
               style={{ tabSize: 2 }}
             />
           </div>
         </div>
 
-        <div className="border-t border-black bg-[#111827] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-slate-200">
+        <div className="border-t border-black bg-[#111827] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200">
           {activeError?.line
             ? `Error near line ${activeError.line}${activeError.column ? `, column ${activeError.column}` : ''}`
             : `Editing ${SECTION_LABELS[section]} YAML`}

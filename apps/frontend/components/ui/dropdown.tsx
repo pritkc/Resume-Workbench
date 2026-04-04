@@ -18,6 +18,7 @@ interface DropdownProps {
   description?: string;
   disabled?: boolean;
   className?: string;
+  density?: 'default' | 'compact';
 }
 
 export function Dropdown({
@@ -28,6 +29,7 @@ export function Dropdown({
   description,
   disabled = false,
   className = '',
+  density = 'default',
 }: DropdownProps) {
   const { t } = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
@@ -55,6 +57,8 @@ export function Dropdown({
     setIsOpen(false);
   };
 
+  const isCompact = density === 'compact';
+
   return (
     <div className={`space-y-1 ${className}`} ref={containerRef}>
       {label && (
@@ -72,14 +76,22 @@ export function Dropdown({
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           disabled={disabled}
-          className="w-full flex items-center justify-between border border-black bg-white px-4 py-3 font-mono text-sm transition-all duration-150 ease-out shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-none hover:translate-y-[2px] hover:translate-x-[2px] disabled:opacity-50 disabled:cursor-not-allowed rounded-none"
+          className={`
+            w-full flex items-center justify-between border border-black bg-white font-mono text-sm
+            transition-all duration-150 ease-out shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]
+            hover:shadow-none hover:translate-y-[2px] hover:translate-x-[2px]
+            disabled:opacity-50 disabled:cursor-not-allowed rounded-none
+            ${isCompact ? 'px-3 py-2' : 'px-4 py-3'}
+          `}
         >
           <div className="flex-1 text-left min-w-0">
             {selectedOption ? (
               <div>
                 <div className="font-bold text-black truncate">{selectedOption.label}</div>
                 {selectedOption.description && (
-                  <div className="text-xs text-gray-500 mt-1 font-normal truncate">
+                  <div
+                    className={`text-xs text-gray-500 font-normal truncate ${isCompact ? 'mt-0.5' : 'mt-1'}`}
+                  >
                     {selectedOption.description}
                   </div>
                 )}
@@ -103,11 +115,11 @@ export function Dropdown({
                 <React.Fragment key={option.id}>
                   <button
                     onClick={() => handleSelect(option.id)}
-                    className={`w-full px-4 py-3 text-left font-mono transition-colors duration-150 border border-black ${
+                    className={`w-full text-left font-mono transition-colors duration-150 border border-black ${
                       option.id === value
                         ? 'bg-green-700 text-white'
                         : 'bg-white text-black hover:bg-gray-50'
-                    } ${index > 0 ? '-mt-[1px]' : ''} active:bg-gray-100`}
+                    } ${isCompact ? 'px-3 py-2.5' : 'px-4 py-3'} ${index > 0 ? '-mt-[1px]' : ''} active:bg-gray-100`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">

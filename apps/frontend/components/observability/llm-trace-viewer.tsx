@@ -123,9 +123,7 @@ function renderPreviewStats(
   const previewChars = getPreviewChars(preview);
   const total = totalChars ?? previewChars;
   const suffix =
-    hasStoredTruncation(preview) || total > previewChars
-      ? ' / stored preview is truncated'
-      : '';
+    hasStoredTruncation(preview) || total > previewChars ? ' / stored preview is truncated' : '';
   return `${label}: ${formatCount(total)} total chars / ${formatCount(previewChars)} shown${suffix}`;
 }
 
@@ -173,39 +171,36 @@ export function LLMTraceViewer({
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [expandedPreviewCalls, setExpandedPreviewCalls] = useState<Record<string, boolean>>({});
 
-  const loadData = useCallback(
-    async (nextQuery: TraceQuery) => {
-      setIsLoading(true);
-      setError(null);
+  const loadData = useCallback(async (nextQuery: TraceQuery) => {
+    setIsLoading(true);
+    setError(null);
 
-      const callParams: FetchLLMCallsParams = {
-        traceId: nextQuery.traceId || undefined,
-        requestScope: nextQuery.requestScope || undefined,
-        success: toSuccessValue(nextQuery.successFilter),
-        limit: nextQuery.limit,
-      };
+    const callParams: FetchLLMCallsParams = {
+      traceId: nextQuery.traceId || undefined,
+      requestScope: nextQuery.requestScope || undefined,
+      success: toSuccessValue(nextQuery.successFilter),
+      limit: nextQuery.limit,
+    };
 
-      try {
-        const [summaryData, callsData] = await Promise.all([
-          fetchLlmCallSummary({
-            traceId: nextQuery.traceId || undefined,
-            requestScope: nextQuery.requestScope || undefined,
-          }),
-          fetchLlmCalls(callParams),
-        ]);
+    try {
+      const [summaryData, callsData] = await Promise.all([
+        fetchLlmCallSummary({
+          traceId: nextQuery.traceId || undefined,
+          requestScope: nextQuery.requestScope || undefined,
+        }),
+        fetchLlmCalls(callParams),
+      ]);
 
-        setSummary(summaryData);
-        setCalls(sortCalls(callsData, nextQuery.traceId || undefined));
-        setLastUpdatedAt(new Date().toISOString());
-      } catch (err) {
-        console.error('Failed to load LLM trace data', err);
-        setError(err instanceof Error ? err.message : 'Failed to load LLM trace data.');
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
+      setSummary(summaryData);
+      setCalls(sortCalls(callsData, nextQuery.traceId || undefined));
+      setLastUpdatedAt(new Date().toISOString());
+    } catch (err) {
+      console.error('Failed to load LLM trace data', err);
+      setError(err instanceof Error ? err.message : 'Failed to load LLM trace data.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void loadData(query);
@@ -320,9 +315,7 @@ export function LLMTraceViewer({
                     type="button"
                     onClick={() => setSuccessFilterInput(value)}
                     className={`${FILTER_BUTTON_BASE} ${
-                      successFilterInput === value
-                        ? FILTER_BUTTON_ACTIVE
-                        : FILTER_BUTTON_INACTIVE
+                      successFilterInput === value ? FILTER_BUTTON_ACTIVE : FILTER_BUTTON_INACTIVE
                     }`}
                   >
                     {value}
@@ -395,9 +388,7 @@ export function LLMTraceViewer({
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Calls
           </p>
-          <p className="mt-2 font-mono text-2xl font-bold">
-            {formatCount(summary?.total_calls)}
-          </p>
+          <p className="mt-2 font-mono text-2xl font-bold">{formatCount(summary?.total_calls)}</p>
           <p className="mt-2 text-xs text-gray-500">
             {formatCount(summary?.successful_calls)} successful /{' '}
             {formatCount(summary?.failed_calls)} failed
@@ -407,9 +398,7 @@ export function LLMTraceViewer({
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Tokens
           </p>
-          <p className="mt-2 font-mono text-2xl font-bold">
-            {formatCount(summary?.total_tokens)}
-          </p>
+          <p className="mt-2 font-mono text-2xl font-bold">{formatCount(summary?.total_tokens)}</p>
           <p className="mt-2 text-xs text-gray-500">
             {formatCount(summary?.input_tokens)} in / {formatCount(summary?.output_tokens)} out
           </p>
@@ -520,197 +509,191 @@ export function LLMTraceViewer({
             const previewsExpanded = Boolean(expandedPreviewCalls[call.llm_call_id]);
 
             return (
-            <article
-              key={call.llm_call_id}
-              className={`border p-4 ${
-                call.success
-                  ? 'border-black bg-[#F8F7F1]'
-                  : 'border-red-400 bg-red-50'
-              }`}
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-bold uppercase">
-                      {call.operation}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 border px-2 py-1 font-mono text-[11px] uppercase ${
-                        call.success
-                          ? 'border-green-700 text-green-700'
-                          : 'border-red-700 text-red-700'
-                      }`}
-                    >
-                      {call.success ? (
-                        <CheckCircle2 className="h-3 w-3" />
-                      ) : (
-                        <XCircle className="h-3 w-3" />
-                      )}
-                      {call.success ? 'success' : 'failed'}
-                    </span>
-                    <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
-                      attempt {call.attempt}
-                    </span>
-                    <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
-                      {call.request_kind}
-                    </span>
-                    {call.json_mode && (
-                      <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
-                        json mode
+              <article
+                key={call.llm_call_id}
+                className={`border p-4 ${
+                  call.success ? 'border-black bg-[#F8F7F1]' : 'border-red-400 bg-red-50'
+                }`}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-bold uppercase">
+                        {call.operation}
                       </span>
-                    )}
+                      <span
+                        className={`inline-flex items-center gap-1 border px-2 py-1 font-mono text-[11px] uppercase ${
+                          call.success
+                            ? 'border-green-700 text-green-700'
+                            : 'border-red-700 text-red-700'
+                        }`}
+                      >
+                        {call.success ? (
+                          <CheckCircle2 className="h-3 w-3" />
+                        ) : (
+                          <XCircle className="h-3 w-3" />
+                        )}
+                        {call.success ? 'success' : 'failed'}
+                      </span>
+                      <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
+                        attempt {call.attempt}
+                      </span>
+                      <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
+                        {call.request_kind}
+                      </span>
+                      {call.json_mode && (
+                        <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
+                          json mode
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="font-mono text-xs text-gray-500">
+                      {call.provider} / {call.model_name} / group {shortenId(call.call_group_id)}
+                    </div>
+
+                    <div className="grid gap-2 text-xs text-gray-600 md:grid-cols-2 xl:grid-cols-4">
+                      <div>
+                        <p className="font-mono uppercase tracking-wider text-gray-500">Trace</p>
+                        <p className="mt-1 font-mono">{shortenId(call.trace_id)}</p>
+                      </div>
+                      <div>
+                        <p className="font-mono uppercase tracking-wider text-gray-500">Scope</p>
+                        <p className="mt-1 font-mono">{call.request_scope ?? 'n/a'}</p>
+                      </div>
+                      <div>
+                        <p className="font-mono uppercase tracking-wider text-gray-500">Created</p>
+                        <p className="mt-1 font-mono">{formatTimestamp(call.created_at)}</p>
+                      </div>
+                      <div>
+                        <p className="font-mono uppercase tracking-wider text-gray-500">Finished</p>
+                        <p className="mt-1 font-mono">{formatTimestamp(call.completed_at)}</p>
+                      </div>
+                      <div>
+                        <p className="font-mono uppercase tracking-wider text-gray-500">
+                          Prompt Size
+                        </p>
+                        <p className="mt-1 font-mono">{formatCount(call.prompt_chars)} chars</p>
+                      </div>
+                      <div>
+                        <p className="font-mono uppercase tracking-wider text-gray-500">
+                          Response Size
+                        </p>
+                        <p className="mt-1 font-mono">
+                          {formatCount(call.response_chars ?? 0)} chars
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="font-mono text-xs text-gray-500">
-                    {call.provider} / {call.model_name} / group {shortenId(call.call_group_id)}
-                  </div>
-
-                  <div className="grid gap-2 text-xs text-gray-600 md:grid-cols-2 xl:grid-cols-4">
-                    <div>
-                      <p className="font-mono uppercase tracking-wider text-gray-500">Trace</p>
-                      <p className="mt-1 font-mono">{shortenId(call.trace_id)}</p>
-                    </div>
-                    <div>
-                      <p className="font-mono uppercase tracking-wider text-gray-500">Scope</p>
-                      <p className="mt-1 font-mono">{call.request_scope ?? 'n/a'}</p>
-                    </div>
-                    <div>
-                      <p className="font-mono uppercase tracking-wider text-gray-500">
-                        Created
+                  <div className="grid grid-cols-2 gap-3 text-sm lg:min-w-[320px]">
+                    <div className="border border-black bg-white p-3">
+                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                        Latency
                       </p>
-                      <p className="mt-1 font-mono">{formatTimestamp(call.created_at)}</p>
+                      <p className="mt-1 font-mono font-bold">{formatLatency(call.latency_ms)}</p>
                     </div>
-                    <div>
-                      <p className="font-mono uppercase tracking-wider text-gray-500">
-                        Finished
+                    <div className="border border-black bg-white p-3">
+                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                        Finish Reason
                       </p>
-                      <p className="mt-1 font-mono">{formatTimestamp(call.completed_at)}</p>
+                      <p className="mt-1 font-mono font-bold">{call.finish_reason ?? 'n/a'}</p>
                     </div>
-                    <div>
-                      <p className="font-mono uppercase tracking-wider text-gray-500">
-                        Prompt Size
+                    <div className="border border-black bg-white p-3">
+                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                        Tokens
                       </p>
-                      <p className="mt-1 font-mono">{formatCount(call.prompt_chars)} chars</p>
+                      <p className="mt-1 font-mono font-bold">
+                        {formatCount(getInputTokens(call) + getOutputTokens(call))}
+                      </p>
+                      <p className="mt-1 font-mono text-[11px] text-gray-500">
+                        {formatCount(getInputTokens(call))} in /{' '}
+                        {formatCount(getOutputTokens(call))} out
+                      </p>
                     </div>
-                    <div>
-                      <p className="font-mono uppercase tracking-wider text-gray-500">
-                        Response Size
+                    <div className="border border-black bg-white p-3">
+                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                        Est. Cost
                       </p>
-                      <p className="mt-1 font-mono">
-                        {formatCount(call.response_chars ?? 0)} chars
+                      <p className="mt-1 font-mono font-bold">
+                        {formatCost(call.estimated_total_cost_usd)}
+                      </p>
+                      <p className="mt-1 font-mono text-[11px] text-gray-500">
+                        max {call.max_tokens ?? 'n/a'} tokens
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-sm lg:min-w-[320px]">
-                  <div className="border border-black bg-white p-3">
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Latency
-                    </p>
-                    <p className="mt-1 font-mono font-bold">{formatLatency(call.latency_ms)}</p>
-                  </div>
-                  <div className="border border-black bg-white p-3">
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Finish Reason
-                    </p>
-                    <p className="mt-1 font-mono font-bold">{call.finish_reason ?? 'n/a'}</p>
-                  </div>
-                  <div className="border border-black bg-white p-3">
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Tokens
-                    </p>
-                    <p className="mt-1 font-mono font-bold">
-                      {formatCount(getInputTokens(call) + getOutputTokens(call))}
-                    </p>
-                    <p className="mt-1 font-mono text-[11px] text-gray-500">
-                      {formatCount(getInputTokens(call))} in / {formatCount(getOutputTokens(call))}{' '}
-                      out
-                    </p>
-                  </div>
-                  <div className="border border-black bg-white p-3">
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Est. Cost
-                    </p>
-                    <p className="mt-1 font-mono font-bold">
-                      {formatCost(call.estimated_total_cost_usd)}
-                    </p>
-                    <p className="mt-1 font-mono text-[11px] text-gray-500">
-                      max {call.max_tokens ?? 'n/a'} tokens
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {(call.error_type || call.error_message) && (
-                <div className="mt-4 border border-red-300 bg-red-50 p-3">
-                  <div className="flex items-start gap-2 text-sm text-red-700">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
-                      <p className="font-mono font-bold uppercase tracking-wider">
-                        {call.error_type ?? 'error'}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm">{call.error_message}</p>
+                {(call.error_type || call.error_message) && (
+                  <div className="mt-4 border border-red-300 bg-red-50 p-3">
+                    <div className="flex items-start gap-2 text-sm text-red-700">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-mono font-bold uppercase tracking-wider">
+                          {call.error_type ?? 'error'}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm">{call.error_message}</p>
+                      </div>
                     </div>
                   </div>
+                )}
+
+                <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                  <details open={previewsExpanded} className="border border-black bg-white p-3">
+                    <summary
+                      className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        togglePreviewPanels(call.llm_call_id);
+                      }}
+                    >
+                      Prompt Preview
+                    </summary>
+                    <p className="mt-3 font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                      {renderPreviewStats('Prompt', call.prompt_preview, call.prompt_chars)}
+                    </p>
+                    <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
+                      {call.prompt_preview || 'No prompt preview stored.'}
+                    </pre>
+                  </details>
+
+                  <details open={previewsExpanded} className="border border-black bg-white p-3">
+                    <summary
+                      className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        togglePreviewPanels(call.llm_call_id);
+                      }}
+                    >
+                      Response Preview
+                    </summary>
+                    <p className="mt-3 font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                      {renderPreviewStats('Response', call.response_preview, call.response_chars)}
+                    </p>
+                    <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
+                      {call.response_preview || 'No response preview stored.'}
+                    </pre>
+                  </details>
+
+                  <details open={previewsExpanded} className="border border-black bg-white p-3">
+                    <summary
+                      className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        togglePreviewPanels(call.llm_call_id);
+                      }}
+                    >
+                      Request Context
+                    </summary>
+                    <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
+                      {call.request_context
+                        ? JSON.stringify(call.request_context, null, 2)
+                        : 'No request context stored.'}
+                    </pre>
+                  </details>
                 </div>
-              )}
-
-              <div className="mt-4 grid gap-3 xl:grid-cols-3">
-                <details open={previewsExpanded} className="border border-black bg-white p-3">
-                  <summary
-                    className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      togglePreviewPanels(call.llm_call_id);
-                    }}
-                  >
-                    Prompt Preview
-                  </summary>
-                  <p className="mt-3 font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                    {renderPreviewStats('Prompt', call.prompt_preview, call.prompt_chars)}
-                  </p>
-                  <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
-                    {call.prompt_preview || 'No prompt preview stored.'}
-                  </pre>
-                </details>
-
-                <details open={previewsExpanded} className="border border-black bg-white p-3">
-                  <summary
-                    className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      togglePreviewPanels(call.llm_call_id);
-                    }}
-                  >
-                    Response Preview
-                  </summary>
-                  <p className="mt-3 font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                    {renderPreviewStats('Response', call.response_preview, call.response_chars)}
-                  </p>
-                  <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
-                    {call.response_preview || 'No response preview stored.'}
-                  </pre>
-                </details>
-
-                <details open={previewsExpanded} className="border border-black bg-white p-3">
-                  <summary
-                    className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      togglePreviewPanels(call.llm_call_id);
-                    }}
-                  >
-                    Request Context
-                  </summary>
-                  <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
-                    {call.request_context
-                      ? JSON.stringify(call.request_context, null, 2)
-                      : 'No request context stored.'}
-                  </pre>
-                </details>
-              </div>
-            </article>
+              </article>
             );
           })}
         </div>
@@ -723,8 +706,14 @@ export function LLMTraceViewer({
         </div>
         <ul className="mt-3 list-disc space-y-1 pl-5">
           <li>`trace_id` follows one request end-to-end. Use it when you want the exact flow.</li>
-          <li>`request_scope` is better for live watching a class of requests, like preview or confirm.</li>
-          <li>Prompt and response previews can contain resume/JD content, so keep this page internal-only.</li>
+          <li>
+            `request_scope` is better for live watching a class of requests, like preview or
+            confirm.
+          </li>
+          <li>
+            Prompt and response previews can contain resume/JD content, so keep this page
+            internal-only.
+          </li>
         </ul>
       </div>
     </div>

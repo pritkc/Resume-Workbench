@@ -75,6 +75,7 @@ from app.services.improver import (
 from app.services.refiner import refine_resume, calculate_keyword_match
 from app.schemas.refinement import RefinementConfig
 from app.services.cover_letter import (
+    extract_job_target_metadata,
     generate_cover_letter,
     generate_outreach_message,
     generate_resume_title,
@@ -88,6 +89,46 @@ def _get_default_prompt_id() -> str:
     option_ids = {option["id"] for option in IMPROVE_PROMPT_OPTIONS}
     prompt_id = config.get("default_prompt_id", DEFAULT_IMPROVE_PROMPT_ID)
     return prompt_id if prompt_id in option_ids else DEFAULT_IMPROVE_PROMPT_ID
+
+
+def _get_generation_defaults_config() -> dict[str, Any]:
+    config = _load_config()
+    defaults = config.get("generation_defaults")
+    if not isinstance(defaults, dict):
+        defaults = {}
+    return defaults
+
+
+def _resolve_prompt_id(request_prompt_id: str | None) -> str:
+    option_ids = {option["id"] for option in IMPROVE_PROMPT_OPTIONS}
+    if request_prompt_id in option_ids:
+        return request_prompt_id
+
+    generation_defaults = _get_generation_defaults_config()
+    generation_default_prompt = generation_defaults.get("prompt_id")
+    if generation_default_prompt in option_ids:
+        return generation_default_prompt
+
+    return _get_default_prompt_id()
+
+
+def _resolve_generation_flags(
+    *,
+    include_cover_letter: bool | None,
+    include_outreach_message: bool | None,
+) -> tuple[bool, bool]:
+    generation_defaults = _get_generation_defaults_config()
+    resolved_cover_letter = (
+        include_cover_letter
+        if include_cover_letter is not None
+        else bool(generation_defaults.get("include_cover_letter", False))
+    )
+    resolved_outreach = (
+        include_outreach_message
+        if include_outreach_message is not None
+        else bool(generation_defaults.get("include_outreach_message", False))
+    )
+    return resolved_cover_letter, resolved_outreach
 
 
 def _hash_job_content(content: str) -> str:
@@ -123,6 +164,31 @@ def _hash_improved_data(data: dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def _canonicalize_improved_resume_data(data: Any) -> dict[str, Any]:
+    """Normalize resume payloads so preview/confirm hash the same shape."""
+    payload = data.model_dump() if hasattr(data, "model_dump") else copy.deepcopy(data)
+    normalized = normalize_resume_data(copy.deepcopy(payload))
+    return ResumeData.model_validate(normalized).model_dump()
+
+
+def _legacy_improved_data_hash_candidates(data: Any) -> set[str]:
+    """Generate backward-compatible hashes for previews stored before canonical hashing."""
+    if hasattr(data, "model_dump"):
+        legacy_payload = data.model_dump(exclude_defaults=True, exclude_none=True)
+    else:
+        legacy_payload = copy.deepcopy(data)
+
+    if not isinstance(legacy_payload, dict):
+        return set()
+
+    candidates = {_hash_improved_data(legacy_payload)}
+
+    normalized_legacy_payload = normalize_resume_data(copy.deepcopy(legacy_payload))
+    candidates.add(_hash_improved_data(normalized_legacy_payload))
+
+    return candidates
+
+
 def _normalize_personal_info_value(value: Any) -> str:
     if value is None:
         return ""
@@ -130,6 +196,8 @@ def _normalize_personal_info_value(value: Any) -> str:
         return unicodedata.normalize("NFC", value).strip()
     if isinstance(value, (int, float, bool)):
         return str(value)
+    if isinstance(value, (list, dict)) and not value:
+        return ""
     normalized = _normalize_payload(value)
     return json.dumps(
         normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -256,6 +324,68 @@ def _stored_or_default_theme_settings(resume: dict[str, Any]) -> RenderThemeProf
         resume_id=resume["resume_id"],
     )
     return _resolve_render_theme_settings(normalized)
+
+
+def _resolve_request_theme_settings(
+    *,
+    request_theme_settings: Any,
+    resume: dict[str, Any],
+    application_pack_id: str | None = None,
+) -> RenderThemeProfile:
+    if request_theme_settings is not None:
+        return _resolve_render_theme_settings(request_theme_settings)
+
+    if application_pack_id:
+        application_pack = db.get_application_pack(application_pack_id)
+        if application_pack and application_pack.get("theme_settings"):
+            return _resolve_render_theme_settings(application_pack["theme_settings"])
+
+    return _stored_or_default_theme_settings(resume)
+
+
+def _merge_target_metadata(
+    *sources: dict[str, Any] | None,
+    title: str | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    metadata_from_title = extract_job_target_metadata("", title=title)
+
+    role = None
+    company = None
+    location = None
+
+    for source in [*sources, metadata_from_title]:
+        if not source:
+            continue
+        role = role or source.get("role")
+        company = company or source.get("company")
+        location = location or source.get("location")
+
+    return role, company, location
+
+
+def _backfill_job_target_metadata(
+    *,
+    job_id: str,
+    job: dict[str, Any],
+    title: str | None = None,
+) -> dict[str, Any]:
+    inferred = extract_job_target_metadata(job.get("content", ""), title=title)
+    updates = {
+        key: value
+        for key, value in inferred.items()
+        if value and not job.get(key)
+    }
+    if not updates:
+        return job
+
+    try:
+        updated_job = db.update_job(job_id, updates)
+        if updated_job:
+            return updated_job
+    except Exception as exc:
+        logger.warning("Failed to backfill target metadata for job %s: %s", job_id, exc)
+
+    return {**job, **updates}
 
 
 def _build_processed_resume(
@@ -1137,24 +1267,35 @@ async def render_resume_draft_preview(
 async def list_resumes(include_master: bool = Query(False)) -> ResumeListResponse:
     """List resumes, optionally including the master resume."""
     resumes = db.list_resumes()
+    application_packs = {
+        pack["pack_id"]: pack for pack in db.list_application_packs()
+    }
     if not include_master:
         resumes = [resume for resume in resumes if not resume.get("is_master", False)]
 
     resumes.sort(key=lambda item: item.get("updated_at", ""), reverse=True)
 
-    summaries = [
-        ResumeSummary(
-            resume_id=resume["resume_id"],
-            filename=resume.get("filename"),
-            is_master=resume.get("is_master", False),
-            parent_id=resume.get("parent_id"),
-            processing_status=resume.get("processing_status", "pending"),
-            created_at=resume.get("created_at", ""),
-            updated_at=resume.get("updated_at", ""),
+    summaries: list[ResumeSummary] = []
+    for resume in resumes:
+        target_role, target_company, target_location = _merge_target_metadata(
+            application_packs.get(resume.get("application_pack_id")),
             title=resume.get("title"),
         )
-        for resume in resumes
-    ]
+        summaries.append(
+            ResumeSummary(
+                resume_id=resume["resume_id"],
+                filename=resume.get("filename"),
+                is_master=resume.get("is_master", False),
+                parent_id=resume.get("parent_id"),
+                processing_status=resume.get("processing_status", "pending"),
+                created_at=resume.get("created_at", ""),
+                updated_at=resume.get("updated_at", ""),
+                title=resume.get("title"),
+                target_role=target_role,
+                target_company=target_company,
+                target_location=target_location,
+            )
+        )
 
     return ResumeListResponse(request_id=str(uuid4()), data=summaries)
 
@@ -1176,10 +1317,11 @@ async def improve_resume_preview_endpoint(
         raise HTTPException(status_code=404, detail="Job description not found")
 
     language = get_content_language()
-    prompt_id = request.prompt_id or _get_default_prompt_id()
-    feature_config = _load_config()
-    enable_cover_letter = feature_config.get("enable_cover_letter", False)
-    enable_outreach = feature_config.get("enable_outreach_message", False)
+    prompt_id = _resolve_prompt_id(request.prompt_id)
+    enable_cover_letter, enable_outreach = _resolve_generation_flags(
+        include_cover_letter=request.include_cover_letter,
+        include_outreach_message=request.include_outreach_message,
+    )
     request_id = str(uuid4())
 
     stage_state = {"stage": "load_job_keywords"}
@@ -1198,7 +1340,10 @@ async def improve_resume_preview_endpoint(
                     language=language,
                     prompt_id=prompt_id,
                     request_id=request_id,
-                    theme_settings=_resolve_render_theme_settings(request.theme_settings),
+                    theme_settings=_resolve_request_theme_settings(
+                        request_theme_settings=request.theme_settings,
+                        resume=resume,
+                    ),
                     enable_cover_letter=enable_cover_letter,
                     enable_outreach=enable_outreach,
                     stage_state=stage_state,
@@ -1339,6 +1484,7 @@ async def _improve_preview_flow(
         if refinement_attempted:
             response_warnings.append(f"Refinement failed: {str(e)}")
 
+    improved_data = _canonicalize_improved_resume_data(improved_data)
     improved_text = json.dumps(improved_data, indent=2)
     preview_hash = _hash_improved_data(improved_data)
     preview_hashes = job.get("preview_hashes")
@@ -1377,7 +1523,7 @@ async def _improve_preview_flow(
     (
         cover_letter,
         outreach_message,
-        _title,
+        generated_title,
         aux_warnings,
     ) = await _generate_auxiliary_messages(
         improved_data,
@@ -1387,6 +1533,15 @@ async def _improve_preview_flow(
         enable_outreach,
     )
     response_warnings.extend(aux_warnings)
+    job = _backfill_job_target_metadata(
+        job_id=request.job_id,
+        job=job,
+        title=generated_title,
+    )
+    target_role, target_company, target_location = _merge_target_metadata(
+        job,
+        title=generated_title,
+    )
     llm_summary = db.summarize_llm_calls(trace_id=request_id)
 
     _set_stage(stage_state, "create_application_pack")
@@ -1394,9 +1549,9 @@ async def _improve_preview_flow(
         base_resume_id=request.resume_id,
         job_id=request.job_id,
         status="preview_ready",
-        company=job.get("company"),
-        role=job.get("role"),
-        location=job.get("location"),
+        company=target_company,
+        role=target_role,
+        location=target_location,
         theme_settings=theme_settings.to_storage_dict(),
     )
     preview_run = db.create_generation_run(
@@ -1494,17 +1649,22 @@ async def improve_resume_confirm_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    feature_config = _load_config()
-    enable_cover_letter = feature_config.get("enable_cover_letter", False)
-    enable_outreach = feature_config.get("enable_outreach_message", False)
+    enable_cover_letter, enable_outreach = _resolve_generation_flags(
+        include_cover_letter=request.include_cover_letter,
+        include_outreach_message=request.include_outreach_message,
+    )
     language = get_content_language()
-    theme_settings = _resolve_render_theme_settings(request.theme_settings)
+    theme_settings = _resolve_request_theme_settings(
+        request_theme_settings=request.theme_settings,
+        resume=resume,
+        application_pack_id=request.application_pack_id,
+    )
     request_id = str(uuid4())
 
     stage = "serialize_improved_data"
     detail = "Failed to confirm resume. Please try again."
     try:
-        improved_data = request.improved_data.model_dump()
+        improved_data = _canonicalize_improved_resume_data(request.improved_data)
         improved_text = json.dumps(improved_data, indent=2)
         # NOTE: This endpoint relies on preview-hash validation to ensure the payload matches a prior preview.
         # Stronger guarantees would require server-side preview storage or re-running the improvement.
@@ -1539,8 +1699,9 @@ async def improve_resume_confirm_endpoint(
                 detail="Preview required before confirmation. Please retry preview.",
             )
 
-        request_hash = _hash_improved_data(improved_data)
-        if request_hash not in allowed_hashes:
+        request_hashes = {_hash_improved_data(improved_data)}
+        request_hashes.update(_legacy_improved_data_hash_candidates(request.improved_data))
+        if request_hashes.isdisjoint(allowed_hashes):
             logger.warning("Resume confirm rejected due to preview hash mismatch.")
             raise HTTPException(
                 status_code=400,
@@ -1580,6 +1741,15 @@ async def improve_resume_confirm_endpoint(
             )
             llm_summary = db.summarize_llm_calls(trace_id=request_id)
         response_warnings.extend(aux_warnings)
+        job = _backfill_job_target_metadata(
+            job_id=request.job_id,
+            job=job,
+            title=title,
+        )
+        target_role, target_company, target_location = _merge_target_metadata(
+            job,
+            title=title,
+        )
 
         stage = "create_resume"
         tailored_resume = db.create_resume(
@@ -1612,6 +1782,9 @@ async def improve_resume_confirm_endpoint(
                 {
                     "tailored_resume_id": tailored_resume["resume_id"],
                     "status": "confirmed",
+                    "company": target_company,
+                    "role": target_role,
+                    "location": target_location,
                     "theme_settings": theme_settings.to_storage_dict(),
                 },
             )
@@ -1620,9 +1793,9 @@ async def improve_resume_confirm_endpoint(
                 base_resume_id=request.resume_id,
                 job_id=request.job_id,
                 status="confirmed",
-                company=job.get("company"),
-                role=job.get("role"),
-                location=job.get("location"),
+                company=target_company,
+                role=target_role,
+                location=target_location,
                 theme_settings=theme_settings.to_storage_dict(),
             )
             application_pack_id = created_pack["pack_id"]
@@ -1733,10 +1906,10 @@ async def improve_resume_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    # Load feature configuration and content language
-    feature_config = _load_config()
-    enable_cover_letter = feature_config.get("enable_cover_letter", False)
-    enable_outreach = feature_config.get("enable_outreach_message", False)
+    enable_cover_letter, enable_outreach = _resolve_generation_flags(
+        include_cover_letter=request.include_cover_letter,
+        include_outreach_message=request.include_outreach_message,
+    )
     language = get_content_language()
     stage_state = {"stage": "load_job_keywords"}
     detail = "Failed to improve resume. Please try again."
@@ -1752,7 +1925,7 @@ async def improve_resume_endpoint(
             job_keywords = await extract_job_keywords(job["content"])
 
         # Generate improved resume in the configured language
-        prompt_id = request.prompt_id or _get_default_prompt_id()
+        prompt_id = _resolve_prompt_id(request.prompt_id)
         with llm_trace_scope(
             request_id,
             "resumes.improve",
@@ -1889,6 +2062,11 @@ async def improve_resume_endpoint(
                 enable_outreach,
             )
         response_warnings.extend(aux_warnings)
+        job = _backfill_job_target_metadata(
+            job_id=request.job_id,
+            job=job,
+            title=title,
+        )
 
         # Store the tailored resume with cover letter, outreach message, and title
         _set_stage(stage_state, "create_resume")

@@ -186,9 +186,10 @@ export const AddSectionButton: React.FC<AddSectionButtonProps> = ({ onAdd }) => 
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="w-full rounded-none border-dashed border-2 border-black py-6 hover:bg-gray-50 hover:border-solid transition-all"
+        size="sm"
+        className="w-full rounded-none border-dashed border-2 border-black py-4 transition-all hover:border-solid hover:bg-gray-50"
       >
-        <Plus className="w-5 h-5 mr-2" />
+        <Plus className="mr-1.5 h-4 w-4" />
         {t('builder.customSections.addCustomSectionButton')}
       </Button>
       <AddSectionDialog open={open} onOpenChange={setOpen} onAdd={onAdd} />

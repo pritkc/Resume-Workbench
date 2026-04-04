@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCcw } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCcw } from 'lucide-react';
 import {
   fetchDraftRenderPreview,
   fetchResumeRenderPreview,
@@ -88,36 +88,39 @@ export function RenderPreviewPanel({
   }, [draftRequest, error, hasFetchedResume, stale]);
 
   return (
-    <div className="space-y-4 p-6">
-      <div className="flex items-center justify-between border border-black bg-white px-4 py-3">
-        <div>
+    <div className="space-y-3 p-3 md:p-4">
+      <div className="flex items-center justify-between gap-3 border border-black bg-white px-3 py-2">
+        <div className="min-w-0">
           <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Preview</p>
-          <p className="mt-1 text-sm text-gray-600">
-            PNG preview and PDF artifact come from the same render snapshot.
+          <p className="mt-0.5 truncate text-[11px] text-gray-600">
+            Preview and PDF come from the same render snapshot.
           </p>
         </div>
         <Button
           variant="outline"
+          size="xs"
           onClick={() => void loadPreview()}
           disabled={(!resumeId && !draftRequest) || isLoading}
-          className="gap-2"
+          aria-label="Refresh preview"
+          className="gap-1.5"
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <RefreshCcw className="h-4 w-4" />
           )}
-          Refresh
+          <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
 
       {statusMessage && (
-        <div className="border border-black bg-[#F8F7F1] px-4 py-3 font-mono text-xs text-gray-700">
+        <div className="flex items-start gap-2 border border-black bg-[#F8F7F1] px-3 py-2 font-mono text-[11px] text-gray-700">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {statusMessage}
         </div>
       )}
 
-      <ArtifactGallery artifacts={artifacts} />
+      <ArtifactGallery artifacts={artifacts} showHeader={false} />
     </div>
   );
 }

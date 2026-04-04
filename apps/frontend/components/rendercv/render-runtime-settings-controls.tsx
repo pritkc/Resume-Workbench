@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,6 +10,7 @@ import {
 } from '@/lib/types/render-theme';
 import {
   RenderCvInput,
+  RenderCvQuickNav,
   RenderCvRow,
   RenderCvSection,
   arrayToText,
@@ -28,6 +30,8 @@ export function RenderRuntimeSettingsControls({
   settings,
   onChange,
 }: RenderRuntimeSettingsControlsProps) {
+  const [activeGroup, setActiveGroup] = useState<'general'>('general');
+
   const updateRuntimeSetting = (path: string[], value: unknown) => {
     const nextRuntimeSettings = clone(settings.settings);
     let cursor: Record<string, unknown> = nextRuntimeSettings as Record<string, unknown>;
@@ -45,12 +49,12 @@ export function RenderRuntimeSettingsControls({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between border border-black bg-white px-4 py-3">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between border border-black bg-white px-3 py-2.5">
         <div>
           <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Settings</p>
-          <p className="mt-1 text-sm text-gray-600">
-            Runtime options like current date, keyword bolding, and PDF metadata.
+          <p className="mt-1 text-[13px] text-gray-600">
+            Keep runtime defaults compact and close to the preview.
           </p>
         </div>
         <Button
@@ -63,33 +67,34 @@ export function RenderRuntimeSettingsControls({
               })
             )
           }
-          className="gap-2"
+          size="xs"
+          className="gap-1.5"
         >
           <RotateCcw className="h-4 w-4" />
           Reset Settings
         </Button>
       </div>
 
+      <RenderCvQuickNav
+        items={[{ id: 'general', label: 'General' }]}
+        activeId={activeGroup}
+        onChange={() => setActiveGroup('general')}
+      />
+
       <RenderCvSection title="General">
-        <RenderCvRow label="Current Date" description="Use `today` or an ISO date like 2026-04-03.">
+        <RenderCvRow label="Current Date" description="Use `today` or an ISO date.">
           <RenderCvInput
             value={settings.settings.current_date}
             onChange={(value) => updateRuntimeSetting(['current_date'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow
-          label="Bold Keywords"
-          description="Comma-separated list of keywords RenderCV should bold automatically."
-        >
+        <RenderCvRow label="Bold Keywords" description="Comma-separated list.">
           <RenderCvInput
             value={arrayToText(settings.settings.bold_keywords)}
             onChange={(value) => updateRuntimeSetting(['bold_keywords'], textToArray(value))}
           />
         </RenderCvRow>
-        <RenderCvRow
-          label="PDF Title"
-          description="Supports placeholders like NAME, CURRENT_DATE, MONTH_NAME, and YEAR."
-        >
+        <RenderCvRow label="PDF Title" description="Supports RenderCV placeholders.">
           <RenderCvInput
             value={settings.settings.pdf_title}
             onChange={(value) => updateRuntimeSetting(['pdf_title'], value)}

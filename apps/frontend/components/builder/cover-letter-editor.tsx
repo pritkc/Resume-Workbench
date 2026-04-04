@@ -36,18 +36,18 @@ export function CoverLetterEditor({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b-2 border-black bg-[#F5F5F0]">
+      <div className="flex items-center justify-between border-b border-black bg-[#F5F5F0] px-3 py-2.5">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4" />
           <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
             {t('coverLetter.title')}
           </h2>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-gray-500">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-gray-500">
             {t('builder.contentStats.wordsChars', { wordCount, charCount })}
           </span>
-          <Button size="sm" onClick={onSave} disabled={isSaving}>
+          <Button size="xs" onClick={onSave} disabled={isSaving}>
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {isSaving ? t('common.saving') : t('common.save')}
           </Button>
@@ -55,15 +55,15 @@ export function CoverLetterEditor({
       </div>
 
       {/* Editor Area */}
-      <div className="flex-1 p-4 overflow-hidden">
+      <div className="flex-1 overflow-hidden p-3">
         <textarea
           value={content}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t('coverLetter.editor.placeholder')}
           className={cn(
-            'w-full h-full min-h-[400px] p-4',
+            'h-full min-h-[280px] w-full p-3',
             'font-mono text-sm leading-relaxed',
-            'border-2 border-black bg-white',
+            'border border-black bg-white',
             'resize-none',
             'focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2',
             'placeholder:text-gray-400'
@@ -72,8 +72,8 @@ export function CoverLetterEditor({
       </div>
 
       {/* Footer Tips */}
-      <div className="p-4 border-t border-gray-200 bg-[#F5F5F0]">
-        <p className="font-mono text-xs text-gray-500">{t('coverLetter.editor.tip')}</p>
+      <div className="border-t border-gray-200 bg-[#F5F5F0] px-3 py-2">
+        <p className="font-mono text-[11px] text-gray-500">{t('coverLetter.editor.tip')}</p>
       </div>
     </div>
   );

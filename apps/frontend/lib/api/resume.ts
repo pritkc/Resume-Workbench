@@ -106,6 +106,8 @@ interface ImproveResumeConfirmRequest {
   }>;
   application_pack_id?: string | null;
   generation_run_id?: string | null;
+  include_cover_letter?: boolean | null;
+  include_outreach_message?: boolean | null;
   theme_settings?: RenderThemeSettings | null;
 }
 
@@ -253,8 +255,9 @@ export interface ResumeListItem {
   created_at: string;
   updated_at: string;
   title?: string | null;
-  // Optional lightweight snippet of associated job description (populated client-side)
-  jobSnippet?: string;
+  target_company?: string | null;
+  target_role?: string | null;
+  target_location?: string | null;
 }
 
 async function postImprove(
@@ -314,14 +317,22 @@ export async function improveResume(
 export async function previewImproveResume(
   resumeId: string,
   jobId: string,
-  promptId?: string,
-  themeSettings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS
+  options: {
+    promptId?: string;
+    includeCoverLetter?: boolean;
+    includeOutreachMessage?: boolean;
+    themeSettings?: RenderThemeSettings | null;
+  } = {}
 ): Promise<ImprovedResult> {
   return postImprove('/application-packs/preview', {
     resume_id: resumeId,
     job_id: jobId,
-    prompt_id: promptId ?? null,
-    theme_settings: serializeRenderThemeSettings(themeSettings),
+    prompt_id: options.promptId ?? null,
+    include_cover_letter: options.includeCoverLetter ?? null,
+    include_outreach_message: options.includeOutreachMessage ?? null,
+    theme_settings: options.themeSettings
+      ? serializeRenderThemeSettings(options.themeSettings)
+      : undefined,
   });
 }
 
@@ -331,6 +342,8 @@ export async function confirmImproveResume(
 ): Promise<ImprovedResult> {
   return postImprove('/application-packs/confirm', {
     ...payload,
+    include_cover_letter: payload.include_cover_letter ?? null,
+    include_outreach_message: payload.include_outreach_message ?? null,
     theme_settings: payload.theme_settings
       ? serializeRenderThemeSettings(payload.theme_settings)
       : undefined,

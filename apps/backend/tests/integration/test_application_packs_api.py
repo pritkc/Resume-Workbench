@@ -104,6 +104,7 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
             "content": "Senior Backend Engineer",
             "preview_hashes": {},
         }
+        mock_db.get_application_pack.return_value = None
         mock_db.update_job.return_value = {"job_id": "job-123"}
         mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
         mock_db.create_application_pack.return_value = {"pack_id": "pack-123"}
@@ -123,6 +124,83 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     assert data["generation_run_id"] == "run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-preview-1"
     assert "BogusSkill" not in data["resume_preview"]["additional"]["technicalSkills"]
+
+
+@pytest.mark.asyncio
+async def test_preview_uses_generation_defaults_and_request_scoped_flags(
+    sample_resume: dict, client
+):
+    improved = copy.deepcopy(sample_resume)
+    improved["summary"] = "Tailored summary"
+    refined = copy.deepcopy(improved)
+    auxiliary_messages = AsyncMock(
+        return_value=("Cover letter", None, "Tailored Title", [])
+    )
+
+    with (
+        patch("app.routers.resumes.db") as mock_db,
+        patch(
+            "app.routers.resumes._load_config",
+            return_value={
+                "default_prompt_id": "keywords",
+                "generation_defaults": {
+                    "include_cover_letter": False,
+                    "include_outreach_message": True,
+                    "prompt_id": "full",
+                },
+            },
+        ),
+        patch(
+            "app.routers.resumes.extract_job_keywords",
+            new=AsyncMock(return_value={"keywords": ["FastAPI"]}),
+        ),
+        patch(
+            "app.routers.resumes.generate_resume_diffs",
+            new=AsyncMock(return_value=ImproveDiffResult(changes=[], strategy_notes="")),
+        ),
+        patch("app.routers.resumes.apply_diffs", return_value=(improved, [], [])),
+        patch("app.routers.resumes.verify_diff_result", return_value=[]),
+        patch("app.routers.resumes.calculate_keyword_match", return_value=55.0),
+        patch(
+            "app.routers.resumes.refine_resume",
+            new=AsyncMock(return_value=_fake_refinement_result(refined)),
+        ),
+        patch(
+            "app.routers.resumes.generate_improvements",
+            return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
+        ),
+        patch("app.routers.resumes._generate_auxiliary_messages", new=auxiliary_messages),
+        patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
+        patch("app.routers.resumes.store_rendercv_bundle", return_value=[]),
+    ):
+        mock_db.get_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.get_job.return_value = {
+            "job_id": "job-123",
+            "content": "Senior Backend Engineer",
+            "preview_hashes": {},
+        }
+        mock_db.get_application_pack.return_value = None
+        mock_db.update_job.return_value = {"job_id": "job-123"}
+        mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.create_application_pack.return_value = {"pack_id": "pack-123"}
+        mock_db.create_generation_run.return_value = {"generation_run_id": "run-123"}
+        mock_db.update_generation_run.return_value = {"generation_run_id": "run-123"}
+        mock_db.update_application_pack.return_value = {"pack_id": "pack-123"}
+
+        async with client:
+            response = await client.post(
+                "/api/v1/application-packs/preview",
+                json={
+                    "resume_id": "res-123",
+                    "job_id": "job-123",
+                    "include_cover_letter": True,
+                    "include_outreach_message": False,
+                },
+            )
+
+    assert response.status_code == 200
+    assert mock_db.create_generation_run.call_args.kwargs["prompt_id"] == "full"
+    assert auxiliary_messages.await_args.args[2:] == ("en", True, False)
 
 
 @pytest.mark.asyncio
@@ -174,6 +252,7 @@ async def test_preview_falls_back_to_full_resume_when_diff_generation_fails(
             "content": "Senior Backend Engineer",
             "preview_hashes": {},
         }
+        mock_db.get_application_pack.return_value = None
         mock_db.update_job.return_value = {"job_id": "job-123"}
         mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
         mock_db.create_application_pack.return_value = {"pack_id": "pack-123"}
@@ -195,6 +274,131 @@ async def test_preview_falls_back_to_full_resume_when_diff_generation_fails(
         for warning in data.get("warnings", [])
     )
     fallback_improve.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict, client):
+    improved = copy.deepcopy(sample_resume)
+    improved["summary"] = "Round-tripped tailored summary"
+    improved.pop("sectionMeta", None)
+    improved.pop("customSections", None)
+    improved["personalInfo"].pop("website", None)
+    improved["personalInfo"].pop("linkedin", None)
+    improved["personalInfo"].pop("github", None)
+    refined = copy.deepcopy(sample_resume)
+    refined["summary"] = improved["summary"]
+    refined.pop("sectionMeta", None)
+    refined.pop("customSections", None)
+
+    job_record = {
+        "job_id": "job-123",
+        "content": "Senior Backend Engineer",
+        "preview_hashes": {},
+    }
+    application_pack = {
+        "pack_id": "pack-123",
+        "theme_settings": None,
+    }
+
+    def update_job(_job_id: str, updates: dict):
+        job_record.update(updates)
+        return job_record
+
+    with (
+        patch("app.routers.resumes.db") as mock_db,
+        patch(
+            "app.routers.resumes.extract_job_keywords",
+            new=AsyncMock(return_value={"keywords": ["FastAPI"]}),
+        ),
+        patch(
+            "app.routers.resumes.generate_resume_diffs",
+            new=AsyncMock(return_value=ImproveDiffResult(changes=[], strategy_notes="")),
+        ),
+        patch("app.routers.resumes.apply_diffs", return_value=(improved, [], [])),
+        patch("app.routers.resumes.verify_diff_result", return_value=[]),
+        patch("app.routers.resumes.calculate_keyword_match", return_value=55.0),
+        patch(
+            "app.routers.resumes.refine_resume",
+            new=AsyncMock(return_value=_fake_refinement_result(refined)),
+        ),
+        patch(
+            "app.routers.resumes.generate_improvements",
+            return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
+        ),
+        patch(
+            "app.routers.resumes._generate_auxiliary_messages",
+            new=AsyncMock(return_value=("Cover letter", "Outreach", "Tailored Title", [])),
+        ),
+        patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
+        patch(
+            "app.routers.resumes.store_rendercv_bundle",
+            side_effect=[
+                [
+                    {
+                        "artifact_id": "art-preview-1",
+                        "kind": "resume_preview_png",
+                        "mime_type": "image/png",
+                        "file_name": "preview.png",
+                        "url": "/api/v1/artifacts/art-preview-1",
+                    }
+                ],
+                [
+                    {
+                        "artifact_id": "art-final-1",
+                        "kind": "resume_pdf",
+                        "mime_type": "application/pdf",
+                        "file_name": "resume.pdf",
+                        "url": "/api/v1/artifacts/art-final-1",
+                    }
+                ],
+            ],
+        ),
+    ):
+        mock_db.get_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.get_job.side_effect = lambda _job_id: job_record
+        mock_db.get_application_pack.return_value = application_pack
+        mock_db.update_job.side_effect = update_job
+        mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.create_application_pack.return_value = application_pack
+        mock_db.create_generation_run.side_effect = [
+            {"generation_run_id": "preview-run-123"},
+            {"generation_run_id": "confirm-run-123"},
+        ]
+        mock_db.update_generation_run.return_value = {"generation_run_id": "preview-run-123"}
+        mock_db.update_application_pack.return_value = application_pack
+        mock_db.create_resume.return_value = {
+            **_fake_resume_record(sample_resume),
+            "resume_id": "tailored-123",
+            "content": "{}",
+        }
+        mock_db.create_improvement.return_value = {"request_id": "legacy-run"}
+
+        async with client:
+            preview_response = await client.post(
+                "/api/v1/application-packs/preview",
+                json={"resume_id": "res-123", "job_id": "job-123"},
+            )
+
+            assert preview_response.status_code == 200
+            preview_data = preview_response.json()["data"]
+
+            confirm_response = await client.post(
+                "/api/v1/application-packs/confirm",
+                json={
+                    "resume_id": "res-123",
+                    "job_id": "job-123",
+                    "application_pack_id": preview_data["application_pack_id"],
+                    "generation_run_id": preview_data["generation_run_id"],
+                    "improved_data": preview_data["resume_preview"],
+                    "improvements": preview_data["improvements"],
+                },
+            )
+
+    assert confirm_response.status_code == 200
+    confirm_data = confirm_response.json()["data"]
+    assert confirm_data["resume_id"] == "tailored-123"
+    assert confirm_data["application_pack_id"] == "pack-123"
+    assert confirm_data["generation_run_id"] == "confirm-run-123"
 
 
 @pytest.mark.asyncio
@@ -233,6 +437,10 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
         mock_db.create_improvement.return_value = {"request_id": "legacy-run"}
         mock_db.create_generation_run.return_value = {"generation_run_id": "confirm-run-123"}
         mock_db.update_application_pack.return_value = {"pack_id": "pack-123"}
+        mock_db.get_application_pack.return_value = {
+            "pack_id": "pack-123",
+            "theme_settings": None,
+        }
 
         with patch("app.routers.resumes._hash_improved_data", return_value="allowed-hash"):
             async with client:
@@ -268,6 +476,7 @@ async def test_confirm_rejects_modified_personal_info(sample_resume: dict, clien
             "content": "Senior Backend Engineer",
             "preview_hashes": {"default": "allowed-hash"},
         }
+        mock_db.get_application_pack.return_value = {"pack_id": "pack-123", "theme_settings": None}
 
         with patch("app.routers.resumes._hash_improved_data", return_value="allowed-hash"):
             async with client:

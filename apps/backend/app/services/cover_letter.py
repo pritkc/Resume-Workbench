@@ -19,6 +19,49 @@ _ROLE_AT_COMPANY_RE = re.compile(
     r"\bAs an?\s+(?P<role>.+?)\s+at\s+(?P<company>[^,\n\.]+)",
     re.IGNORECASE,
 )
+_TITLE_ROLE_COMPANY_RE = re.compile(
+    r"^(?P<role>.+?)\s*(?:@|\bat\b)\s*(?P<company>.+)$",
+    re.IGNORECASE,
+)
+_LOCATION_PATTERNS = (
+    re.compile(r"\blocation\s*[:\-]\s*(?P<location>[^\n|•]+)", re.IGNORECASE),
+    re.compile(r"\b(?P<location>remote(?:\s*\([^)]+\))?)\b", re.IGNORECASE),
+    re.compile(r"\b(?P<location>hybrid(?:\s+in\s+[^\n|•]+)?)\b", re.IGNORECASE),
+    re.compile(r"\b(?P<location>on-?site(?:\s+in\s+[^\n|•]+)?)\b", re.IGNORECASE),
+)
+
+
+def _clean_metadata_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = " ".join(value.strip().split())
+    cleaned = cleaned.strip(" -,:;|")
+    return cleaned[:120] if cleaned else None
+
+
+def _extract_role_company_from_title(title: str | None) -> tuple[str | None, str | None]:
+    cleaned_title = _clean_metadata_value(title)
+    if not cleaned_title:
+        return None, None
+
+    match = _TITLE_ROLE_COMPANY_RE.match(cleaned_title)
+    if not match:
+        return None, None
+
+    return (
+        _clean_metadata_value(match.group("role")),
+        _clean_metadata_value(match.group("company")),
+    )
+
+
+def _extract_location_from_job_description(job_description: str) -> str | None:
+    for pattern in _LOCATION_PATTERNS:
+        match = pattern.search(job_description)
+        if match:
+            location = _clean_metadata_value(match.group("location"))
+            if location:
+                return location
+    return None
 
 
 def _normalize_title_result(value: str) -> str:
@@ -45,6 +88,28 @@ def _extract_title_from_job_description(job_description: str) -> str | None:
         if role:
             return role[:80]
     return None
+
+
+def extract_job_target_metadata(
+    job_description: str,
+    *,
+    title: str | None = None,
+) -> dict[str, str | None]:
+    """Infer structured target-job metadata without a schema migration."""
+
+    role, company = _extract_role_company_from_title(title)
+
+    if not role or not company:
+        fallback_title = _extract_title_from_job_description(job_description)
+        extracted_role, extracted_company = _extract_role_company_from_title(fallback_title)
+        role = role or extracted_role
+        company = company or extracted_company
+
+    return {
+        "role": _clean_metadata_value(role),
+        "company": _clean_metadata_value(company),
+        "location": _extract_location_from_job_description(job_description),
+    }
 
 
 async def generate_cover_letter(

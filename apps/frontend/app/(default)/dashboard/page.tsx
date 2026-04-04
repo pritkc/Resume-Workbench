@@ -1,46 +1,70 @@
 'use client';
 
-import { SwissGrid } from '@/components/home/swiss-grid';
-import { ResumeUploadDialog } from '@/components/dashboard/resume-upload-dialog';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowUpRight,
+  FileText,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  Upload,
+} from 'lucide-react';
+import { ResumeUploadDialog } from '@/components/dashboard/resume-upload-dialog';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Card, CardTitle, CardDescription } from '@/components/ui/card';
-import Link from 'next/link';
-import { useTranslations } from '@/lib/i18n';
-
-// Optimized Imports for Performance (No Barrel Imports)
-import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
-import AlertCircle from 'lucide-react/dist/esm/icons/alert-circle';
-import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw';
-import Plus from 'lucide-react/dist/esm/icons/plus';
-import Settings from 'lucide-react/dist/esm/icons/settings';
-import AlertTriangle from 'lucide-react/dist/esm/icons/alert-triangle';
-
+import { Input } from '@/components/ui/input';
 import {
+  deleteResume,
   fetchResume,
   fetchResumeList,
-  deleteResume,
   retryProcessing,
-  fetchJobDescription,
   type ResumeListItem,
 } from '@/lib/api/resume';
 import { useStatusCache } from '@/lib/context/status-cache';
+import { useTranslations } from '@/lib/i18n';
 
 type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed' | 'loading';
+type DateFilter = 'all' | '7d' | '30d' | '90d';
+type SortOption = 'updated' | 'created' | 'company' | 'role';
+
+function normalizeFilterValue(value?: string | null): string {
+  return value?.trim() || '';
+}
+
+function statusBadgeClass(status: ResumeListItem['processing_status'] | ProcessingStatus): string {
+  switch (status) {
+    case 'ready':
+      return 'border-green-600 bg-green-50 text-green-700';
+    case 'processing':
+      return 'border-blue-700 bg-blue-50 text-blue-700';
+    case 'failed':
+      return 'border-red-500 bg-red-50 text-red-600';
+    default:
+      return 'border-gray-300 bg-white text-gray-500';
+  }
+}
 
 export default function DashboardPage() {
   const { t, locale } = useTranslations();
+  const router = useRouter();
   const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('loading');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [tailoredResumes, setTailoredResumes] = useState<ResumeListItem[]>([]);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
-  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('updated');
 
-  // Status cache for optimistic counter updates and LLM status check
   const {
     status: systemStatus,
     isLoading: statusLoading,
@@ -49,31 +73,27 @@ export default function DashboardPage() {
     setHasMasterResume,
   } = useStatusCache();
 
-  // Request id guard for concurrent loadTailoredResumes invocations
-  const loadRequestIdRef = useRef(0);
-  // Lightweight in-memory cache for job snippets to avoid N+1 refetches
-  const jobSnippetCacheRef = useRef<Record<string, string>>({});
-
-  // Check if LLM is configured (API key is set)
   const isLlmConfigured = !statusLoading && systemStatus?.llm_configured;
-
   const isTailorEnabled =
     Boolean(masterResumeId) && processingStatus === 'ready' && isLlmConfigured;
 
-  const formatDate = (value: string) => {
-    if (!value) return t('common.unknown');
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return t('common.unknown');
+  const formatDate = useCallback(
+    (value: string) => {
+      if (!value) return t('common.unknown');
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return t('common.unknown');
 
-    const dateLocale =
-      locale === 'es' ? 'es-ES' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
+      const dateLocale =
+        locale === 'es' ? 'es-ES' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
 
-    return date.toLocaleDateString(dateLocale, {
-      month: 'short',
-      day: '2-digit',
-      year: 'numeric',
-    });
-  };
+      return date.toLocaleDateString(dateLocale, {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+      });
+    },
+    [locale, t]
+  );
 
   const checkResumeStatus = useCallback(async (resumeId: string) => {
     try {
@@ -83,7 +103,6 @@ export default function DashboardPage() {
       setProcessingStatus(status as ProcessingStatus);
     } catch (err: unknown) {
       console.error('Failed to check resume status:', err);
-      // If resume not found (404), clear the stale localStorage
       if (err instanceof Error && err.message.includes('404')) {
         localStorage.removeItem('master_resume_id');
         setMasterResumeId(null);
@@ -93,18 +112,10 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => {
-    const storedId = localStorage.getItem('master_resume_id');
-    if (storedId) {
-      setMasterResumeId(storedId);
-      checkResumeStatus(storedId);
-    }
-  }, [checkResumeStatus]);
-
   const loadTailoredResumes = useCallback(async () => {
     try {
       const data = await fetchResumeList(true);
-      const masterFromList = data.find((r) => r.is_master);
+      const masterFromList = data.find((resume) => resume.is_master);
       const storedId = localStorage.getItem('master_resume_id');
       const resolvedMasterId = masterFromList?.resume_id || storedId;
 
@@ -117,48 +128,17 @@ export default function DashboardPage() {
         setMasterResumeId(null);
       }
 
-      const filtered = data.filter((r) => r.resume_id !== resolvedMasterId);
-      setTailoredResumes(filtered);
-
-      // Only fetch job descriptions for resumes that are actually tailored
-      // (identified by having a non-null parent_id). This avoids N+1 calls
-      // for untailored resumes.
-      const tailoredWithParent = filtered.filter((r) => r.parent_id);
-
-      // Guard against concurrent invocations overwriting each other
-      const requestId = ++loadRequestIdRef.current;
-
-      // Fetch job description snippets for tailored resumes in parallel and attach to state
-      // Use a small in-memory cache to avoid re-fetching the same snippet repeatedly.
-      const jobSnippets: Record<string, string> = {};
-      await Promise.all(
-        tailoredWithParent.map(async (r) => {
-          // Use cached snippet when available
-          if (jobSnippetCacheRef.current[r.resume_id]) {
-            jobSnippets[r.resume_id] = jobSnippetCacheRef.current[r.resume_id];
-            return;
-          }
-          try {
-            const jd = await fetchJobDescription(r.resume_id);
-            const snippet = (jd?.content || '').slice(0, 80);
-            jobSnippetCacheRef.current[r.resume_id] = snippet;
-            jobSnippets[r.resume_id] = snippet;
-          } catch {
-            // ignore missing job descriptions and cache empty result
-            jobSnippetCacheRef.current[r.resume_id] = '';
-            jobSnippets[r.resume_id] = '';
-          }
-        })
-      );
-
-      // Only apply results if this invocation is the latest (prevents stale overwrite)
-      if (requestId === loadRequestIdRef.current) {
-        setTailoredResumes((prev) =>
-          prev.map((r) => ({ ...r, jobSnippet: jobSnippets[r.resume_id] || '' }))
-        );
-      }
+      setTailoredResumes(data.filter((resume) => resume.resume_id !== resolvedMasterId));
     } catch (err) {
       console.error('Failed to load tailored resumes:', err);
+    }
+  }, [checkResumeStatus]);
+
+  useEffect(() => {
+    const storedId = localStorage.getItem('master_resume_id');
+    if (storedId) {
+      setMasterResumeId(storedId);
+      checkResumeStatus(storedId);
     }
   }, [checkResumeStatus]);
 
@@ -166,27 +146,25 @@ export default function DashboardPage() {
     loadTailoredResumes();
   }, [loadTailoredResumes]);
 
-  // Refresh list when window gains focus (e.g., returning from viewer after delete)
   useEffect(() => {
     const handleFocus = () => {
       loadTailoredResumes();
     };
+
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [loadTailoredResumes, checkResumeStatus]);
+  }, [loadTailoredResumes]);
 
   const handleUploadComplete = (resumeId: string) => {
     localStorage.setItem('master_resume_id', resumeId);
     setMasterResumeId(resumeId);
-    // Check status after upload completes
     checkResumeStatus(resumeId);
-    // Update cached counters
     incrementResumes();
     setHasMasterResume(true);
+    void loadTailoredResumes();
   };
 
-  const handleRetryProcessing = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRetryProcessing = async () => {
     if (!masterResumeId) return;
     setIsRetrying(true);
     try {
@@ -209,11 +187,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDeleteAndReupload = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteDialog(true);
-  };
-
   const confirmDeleteAndReupload = async () => {
     if (!masterResumeId) return;
     try {
@@ -230,326 +203,436 @@ export default function DashboardPage() {
     }
   };
 
-  const getStatusDisplay = () => {
+  const getStatusDisplay = useCallback(() => {
     switch (processingStatus) {
       case 'loading':
         return {
           text: t('dashboard.status.checking'),
-          icon: <Loader2 className="w-3 h-3 animate-spin" />,
+          icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
           color: 'text-gray-500',
         };
       case 'processing':
         return {
           text: t('dashboard.status.processing'),
-          icon: <Loader2 className="w-3 h-3 animate-spin" />,
+          icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
           color: 'text-blue-700',
         };
       case 'ready':
-        return { text: t('dashboard.status.ready'), icon: null, color: 'text-green-700' };
+        return {
+          text: t('dashboard.status.ready'),
+          icon: null,
+          color: 'text-green-700',
+        };
       case 'failed':
         return {
           text: t('dashboard.status.failed'),
-          icon: <AlertCircle className="w-3 h-3" />,
+          icon: <AlertCircle className="h-3.5 w-3.5" />,
           color: 'text-red-600',
         };
       default:
-        return { text: t('dashboard.status.pending'), icon: null, color: 'text-gray-500' };
+        return {
+          text: t('dashboard.status.pending'),
+          icon: null,
+          color: 'text-gray-500',
+        };
     }
-  };
+  }, [processingStatus, t]);
 
-  const getMonogram = (title: string): string => {
-    const words = title.split(/\s+/).filter((w) => /^[a-zA-Z]/.test(w));
-    return words
-      .slice(0, 3)
-      .map((w) => w.charAt(0).toUpperCase())
-      .join('');
-  };
+  const resumeCompanies = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          tailoredResumes
+            .map((resume) => normalizeFilterValue(resume.target_company))
+            .filter(Boolean)
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [tailoredResumes]
+  );
 
-  // Muted palette that complements the #F0F0E8 canvas
-  const cardPalette = [
-    { bg: '#1D4ED8', fg: '#FFFFFF' }, // Hyper Blue
-    { bg: '#15803D', fg: '#FFFFFF' }, // Signal Green
-    { bg: '#000000', fg: '#FFFFFF' }, // Ink
-    { bg: '#92400E', fg: '#FFFFFF' }, // Warm Brown
-    { bg: '#7C3AED', fg: '#FFFFFF' }, // Violet
-    { bg: '#0E7490', fg: '#FFFFFF' }, // Teal
-    { bg: '#B91C1C', fg: '#FFFFFF' }, // Deep Red
-    { bg: '#4338CA', fg: '#FFFFFF' }, // Indigo
-  ];
+  const resumeRoles = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          tailoredResumes.map((resume) => normalizeFilterValue(resume.target_role)).filter(Boolean)
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [tailoredResumes]
+  );
 
-  const hashTitle = (title: string): number => {
-    let hash = 0;
-    for (let i = 0; i < title.length; i++) {
-      hash = (hash << 5) - hash + title.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash);
-  };
+  const filteredResumes = useMemo(() => {
+    const searchNeedle = searchQuery.trim().toLowerCase();
+    const now = Date.now();
+    const dayToMs = 24 * 60 * 60 * 1000;
+    const dateWindowDays =
+      dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : dateFilter === '90d' ? 90 : null;
 
-  const totalCards = 1 + tailoredResumes.length + 1;
-  const fillerCount = Math.max(0, (5 - (totalCards % 5)) % 5);
-  const extraFillerCount = 5;
-  // Use Tailwind classes for fillers now that we have them in config or use specific hex if needed
-  // Using the hex values from before to maintain exact look, or we could map them to variants
-  const fillerPalette = ['bg-[#E5E5E0]', 'bg-[#D8D8D2]', 'bg-[#CFCFC7]', 'bg-[#E0E0D8]'];
+    const filtered = tailoredResumes.filter((resume) => {
+      const title = normalizeFilterValue(resume.title || resume.filename || 'Untitled resume');
+      const role = normalizeFilterValue(resume.target_role);
+      const company = normalizeFilterValue(resume.target_company);
+      const searchable = `${title} ${role} ${company}`.toLowerCase();
+
+      if (searchNeedle && !searchable.includes(searchNeedle)) {
+        return false;
+      }
+      if (companyFilter && company !== companyFilter) {
+        return false;
+      }
+      if (roleFilter && role !== roleFilter) {
+        return false;
+      }
+
+      if (dateWindowDays) {
+        const comparisonDate = new Date(resume.updated_at || resume.created_at).getTime();
+        if (Number.isNaN(comparisonDate) || now - comparisonDate > dateWindowDays * dayToMs) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    filtered.sort((left, right) => {
+      if (sortBy === 'company') {
+        return normalizeFilterValue(left.target_company).localeCompare(
+          normalizeFilterValue(right.target_company)
+        );
+      }
+
+      if (sortBy === 'role') {
+        return normalizeFilterValue(left.target_role).localeCompare(
+          normalizeFilterValue(right.target_role)
+        );
+      }
+
+      const leftDate = new Date(
+        sortBy === 'created' ? left.created_at : left.updated_at || left.created_at
+      ).getTime();
+      const rightDate = new Date(
+        sortBy === 'created' ? right.created_at : right.updated_at || right.created_at
+      ).getTime();
+      return rightDate - leftDate;
+    });
+
+    return filtered;
+  }, [companyFilter, dateFilter, roleFilter, searchQuery, sortBy, tailoredResumes]);
+
+  const masterStatus = getStatusDisplay();
 
   return (
-    <div className="space-y-6">
-      {/* Configuration Warning Banner */}
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-3 py-4 md:px-4 md:py-5">
       {masterResumeId && !isLlmConfigured && !statusLoading && (
-        <div className="border-2 border-warning bg-amber-50 p-4 shadow-sw-default mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-warning" />
+        <div className="flex items-start justify-between gap-3 border border-amber-500 bg-amber-50 px-3 py-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />
             <div>
-              <p className="font-mono text-sm font-bold uppercase tracking-wider text-amber-800">
+              <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-800">
                 {t('dashboard.llmNotConfiguredTitle')}
               </p>
-              <p className="font-mono text-xs text-amber-700 mt-0.5">
+              <p className="mt-1 text-[13px] text-amber-700">
                 {t('dashboard.llmNotConfiguredMessage')}
               </p>
             </div>
           </div>
           <Link href="/settings">
-            <Button variant="outline" size="sm" className="border-warning text-amber-700">
-              <Settings className="w-4 h-4 mr-2" />
+            <Button variant="outline" size="xs" className="border-amber-500 text-amber-700">
+              <Settings className="h-4 w-4" />
               {t('nav.settings')}
             </Button>
           </Link>
         </div>
       )}
 
-      <SwissGrid>
-        {/* 1. Master Resume Logic */}
-        {!masterResumeId ? (
-          // LLM Not Configured or Upload State
-          !isLlmConfigured && !statusLoading ? (
-            <Link href="/settings" className="block h-full">
-              <Card
-                variant="interactive"
-                className="aspect-square h-full border-dashed border-warning bg-amber-50"
-              >
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="w-14 h-14 border-2 border-warning bg-white flex items-center justify-center mb-4">
-                    <AlertTriangle className="w-7 h-7 text-warning" />
+      {!masterResumeId ? (
+        !isLlmConfigured && !statusLoading ? (
+          <div className="border border-black bg-white px-4 py-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-2">
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-700">
+                  {t('dashboard.setupRequiredTitle')}
+                </p>
+                <h1 className="font-serif text-3xl font-bold uppercase tracking-tight">
+                  {t('dashboard.setupRequiredMessage')}
+                </h1>
+              </div>
+              <Link href="/settings">
+                <Button size="lg" className="gap-2">
+                  <Settings className="h-4 w-4" />
+                  {t('nav.goToSettings')}
+                </Button>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <ResumeUploadDialog
+            open={isUploadDialogOpen}
+            onOpenChange={setIsUploadDialogOpen}
+            onUploadComplete={handleUploadComplete}
+            trigger={
+              <div className="cursor-pointer border border-black bg-white px-4 py-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)] transition-transform hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-2">
+                    <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
+                      Workspace setup
+                    </p>
+                    <h1 className="font-serif text-3xl font-bold uppercase tracking-tight">
+                      {t('dashboard.initializeMasterResume')}
+                    </h1>
+                    <p className="text-[13px] text-gray-600">{t('dashboard.initializeSequence')}</p>
                   </div>
-                  <div>
-                    <CardTitle className="text-lg uppercase text-amber-800 mb-2">
-                      {t('dashboard.setupRequiredTitle')}
-                    </CardTitle>
-                    <CardDescription className="text-amber-700 text-xs">
-                      {t('dashboard.setupRequiredMessage')}
-                    </CardDescription>
-                    <div className="flex items-center gap-2 mt-4 text-amber-700 group-hover:text-amber-900">
-                      <Settings className="w-4 h-4" />
-                      <span className="font-mono text-xs font-bold uppercase">
-                        {t('nav.goToSettings')}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-3 border border-black bg-[#F8F7F1] px-4 py-3">
+                    <Upload className="h-5 w-5" />
+                    <span className="font-mono text-xs font-bold uppercase tracking-[0.18em]">
+                      Upload resume
+                    </span>
                   </div>
                 </div>
-              </Card>
-            </Link>
-          ) : (
-            <ResumeUploadDialog
-              open={isUploadDialogOpen}
-              onOpenChange={setIsUploadDialogOpen}
-              onUploadComplete={handleUploadComplete}
-              trigger={
-                <Card
-                  variant="interactive"
-                  className="aspect-square h-full hover:bg-primary hover:text-canvas"
+              </div>
+            }
+          />
+        )
+      ) : (
+        <section className="border border-black bg-white px-4 py-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center border border-black bg-blue-700 text-white">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
+                    {t('dashboard.masterResume')}
+                  </p>
+                  <h1 className="font-serif text-2xl font-bold uppercase tracking-tight">
+                    Focused editing workspace
+                  </h1>
+                </div>
+              </div>
+              <div
+                className={`flex items-center gap-2 font-mono text-xs uppercase ${masterStatus.color}`}
+              >
+                {masterStatus.icon}
+                <span>{t('dashboard.statusLine', { status: masterStatus.text })}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => router.push(`/builder?id=${masterResumeId}`)}
+              >
+                <FileText className="h-4 w-4" />
+                Open builder
+              </Button>
+              {(processingStatus === 'failed' || processingStatus === 'processing') && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={handleRetryProcessing}
+                    disabled={isRetrying}
+                  >
+                    {isRetrying ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {t('dashboard.retryProcessing')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="border-red-500 text-red-600 hover:bg-red-50"
+                    onClick={() => setShowDeleteDialog(true)}
+                  >
+                    {t('dashboard.deleteAndReupload')}
+                  </Button>
+                </>
+              )}
+              <Button
+                size="lg"
+                onClick={() => {
+                  if (isTailorEnabled) {
+                    router.push('/tailor');
+                  }
+                }}
+                disabled={!isTailorEnabled}
+              >
+                <Plus className="h-4 w-4" />
+                {t('dashboard.createResume')}
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="border-b border-black bg-[#F8F7F1] px-4 py-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
+                Tailored resumes
+              </p>
+              <h2 className="font-serif text-2xl font-bold uppercase tracking-tight">
+                Scan by role, company, and recency
+              </h2>
+            </div>
+            <div className="flex items-center gap-2 font-mono text-xs uppercase text-gray-500">
+              <span>{filteredResumes.length}</span>
+              <span>results</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky top-3 z-10 border-b border-black bg-white px-4 py-3">
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto_minmax(0,0.9fr)]">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search title, role, or company"
+                className="pl-9"
+              />
+            </label>
+
+            <select
+              value={companyFilter}
+              onChange={(event) => setCompanyFilter(event.target.value)}
+              className="h-10 border border-black bg-white px-3 font-mono text-sm"
+            >
+              <option value="">All companies</option>
+              {resumeCompanies.map((company) => (
+                <option key={company} value={company}>
+                  {company}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={roleFilter}
+              onChange={(event) => setRoleFilter(event.target.value)}
+              className="h-10 border border-black bg-white px-3 font-mono text-sm"
+            >
+              <option value="">All roles</option>
+              {resumeRoles.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex border border-black bg-[#F8F7F1]">
+              {(['all', '7d', '30d', '90d'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setDateFilter(option)}
+                  className={`min-w-[56px] border-r border-black px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.16em] last:border-r-0 ${
+                    dateFilter === option
+                      ? 'bg-black text-white'
+                      : 'text-gray-600 hover:bg-[#ECEADF]'
+                  }`}
                 >
-                  <div className="flex-1 flex flex-col justify-between pointer-events-none">
-                    <div className="w-14 h-14 border-2 border-current flex items-center justify-center mb-4">
-                      <span className="text-2xl leading-none relative top-[-2px]">+</span>
+                  {option}
+                </button>
+              ))}
+            </div>
+
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as SortOption)}
+              className="h-10 border border-black bg-white px-3 font-mono text-sm"
+            >
+              <option value="updated">Last updated</option>
+              <option value="created">Created</option>
+              <option value="company">Company</option>
+              <option value="role">Role</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="overflow-hidden">
+          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_120px_110px_96px] md:gap-3">
+            {['Resume', 'Role', 'Company', 'Updated', 'Status', 'Open'].map((label) => (
+              <span
+                key={label}
+                className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+
+          {filteredResumes.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <p className="font-serif text-xl font-bold uppercase tracking-tight">
+                No tailored resumes yet
+              </p>
+              <p className="mt-2 text-[13px] text-gray-600">
+                Generate a new resume to start building a searchable history here.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-black/10">
+              {filteredResumes.map((resume) => {
+                const title = resume.title || resume.filename || 'Untitled resume';
+                return (
+                  <button
+                    key={resume.resume_id}
+                    type="button"
+                    onClick={() => router.push(`/resumes/${resume.resume_id}`)}
+                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_120px_110px_96px] md:items-center"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-serif text-lg font-bold leading-tight">{title}</p>
+                      <p className="mt-1 text-[12px] text-gray-500">
+                        {resume.target_location ||
+                          t('dashboard.edited', {
+                            date: formatDate(resume.updated_at || resume.created_at),
+                          })}
+                      </p>
+                    </div>
+                    <div className="font-mono text-sm text-gray-700">
+                      {resume.target_role || 'Unknown role'}
+                    </div>
+                    <div className="font-mono text-sm text-gray-700">
+                      {resume.target_company || 'Unknown company'}
+                    </div>
+                    <div className="font-mono text-xs uppercase text-gray-500">
+                      {formatDate(resume.updated_at || resume.created_at)}
                     </div>
                     <div>
-                      <CardTitle className="text-xl uppercase">
-                        {t('dashboard.initializeMasterResume')}
-                      </CardTitle>
-                      <CardDescription className="mt-2 opacity-60 group-hover:opacity-100 text-current">
-                        {'// '}
-                        {t('dashboard.initializeSequence')}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </Card>
-              }
-            />
-          )
-        ) : (
-          // Master Resume Exists
-          <Card
-            variant="interactive"
-            className="aspect-square h-full"
-            onClick={() => router.push(`/builder?id=${masterResumeId}`)}
-          >
-            <div className="flex-1 flex flex-col h-full">
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-16 h-16 border-2 border-black bg-blue-700 text-white flex items-center justify-center">
-                  <span className="font-mono font-bold text-lg">M</span>
-                </div>
-                <div className="flex gap-1">
-                  {(processingStatus === 'failed' || processingStatus === 'processing') && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover:bg-blue-100 hover:text-blue-700 z-10 rounded-none relative"
-                        onClick={handleRetryProcessing}
-                        disabled={isRetrying}
-                        title={t('dashboard.retryProcessing')}
+                      <span
+                        className={`inline-flex items-center border px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.16em] ${statusBadgeClass(resume.processing_status)}`}
                       >
-                        {isRetrying ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <CardTitle className="text-lg group-hover:text-primary">
-                {t('dashboard.masterResume')}
-              </CardTitle>
-              <CardDescription className="mt-2 uppercase">{'// '}Open in builder</CardDescription>
-
-              <div
-                className={`text-xs font-mono mt-auto pt-4 flex flex-col gap-2 uppercase ${getStatusDisplay().color}`}
-              >
-                <div className="flex items-center gap-1">
-                  {getStatusDisplay().icon}
-                  {t('dashboard.statusLine', { status: getStatusDisplay().text })}
-                </div>
-                {(processingStatus === 'failed' || processingStatus === 'processing') && (
-                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7 rounded-none border-black"
-                      onClick={handleRetryProcessing}
-                      disabled={isRetrying}
-                    >
-                      {isRetrying
-                        ? t('dashboard.retryingProcessing')
-                        : t('dashboard.retryProcessing')}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7 rounded-none border-red-600 text-red-600 hover:bg-red-50"
-                      onClick={handleDeleteAndReupload}
-                    >
-                      {t('dashboard.deleteAndReupload')}
-                    </Button>
-                  </div>
-                )}
-              </div>
+                        {resume.processing_status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 font-mono text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
+                      <span>Open</span>
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-          </Card>
-        )}
+          )}
+        </div>
+      </section>
 
-        {/* 2. Tailored Resumes */}
-        {tailoredResumes.map((resume) => {
-          const title =
-            resume.title || resume.jobSnippet || resume.filename || t('dashboard.tailoredResume');
-          const color = cardPalette[hashTitle(title) % cardPalette.length];
-          return (
-            <Card
-              key={resume.resume_id}
-              variant="interactive"
-              className="aspect-square h-full bg-canvas"
-              onClick={() => router.push(`/resumes/${resume.resume_id}`)}
-            >
-              <div className="flex-1 flex flex-col">
-                <div className="flex justify-between items-start mb-6">
-                  <div
-                    className="w-12 h-12 border-2 border-black flex items-center justify-center"
-                    style={{ backgroundColor: color.bg, color: color.fg }}
-                  >
-                    <span className="font-mono font-bold">{getMonogram(title)}</span>
-                  </div>
-                  <span className="font-mono text-xs text-gray-500 uppercase">
-                    {resume.processing_status}
-                  </span>
-                </div>
-                <CardTitle className="text-lg">
-                  <span className="block font-serif text-base font-bold leading-tight mb-1 w-full line-clamp-2">
-                    {title}
-                  </span>
-                </CardTitle>
-                <CardDescription className="mt-auto pt-4 uppercase">
-                  {t('dashboard.edited', {
-                    date: formatDate(resume.updated_at || resume.created_at),
-                  })}{' '}
-                </CardDescription>
-              </div>
-            </Card>
-          );
-        })}
-
-        {/* 3. Create Tailored Resume */}
-        <Card
-          className={`aspect-square h-full ${!isTailorEnabled ? 'opacity-60' : ''}`}
-          variant={isTailorEnabled ? 'interactive' : 'default'}
-          role="button"
-          tabIndex={isTailorEnabled ? 0 : -1}
-          aria-disabled={!isTailorEnabled}
-          onClick={() => {
-            if (isTailorEnabled) {
-              router.push('/tailor');
-            }
-          }}
-          onKeyDown={(e) => {
-            if (!isTailorEnabled) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              router.push('/tailor');
-            }
-          }}
-        >
-          <div className="flex-1 flex flex-col items-center justify-center text-center h-full">
-            <div className="w-20 h-20 bg-blue-700 text-white border-2 border-black shadow-sw-default flex items-center justify-center">
-              <Plus className="w-8 h-8" />
-            </div>
-            <p className="text-xs font-mono mt-4 uppercase text-green-700">
-              {t('dashboard.createResume')}
-            </p>
-          </div>
-        </Card>
-
-        {/* 4. Fillers */}
-        {Array.from({ length: fillerCount }).map((_, index) => (
-          <Card
-            key={`filler-${index}`}
-            variant="ghost"
-            noPadding
-            className="hidden md:block bg-canvas aspect-square h-full opacity-50 pointer-events-none"
-          />
-        ))}
-
-        {Array.from({ length: extraFillerCount }).map((_, index) => (
-          <Card
-            key={`extra-filler-${index}`}
-            variant="ghost"
-            noPadding
-            className={`hidden md:block ${fillerPalette[index % fillerPalette.length]} aspect-square h-full opacity-70 pointer-events-none`}
-          />
-        ))}
-
-        <ConfirmDialog
-          open={showDeleteDialog}
-          onOpenChange={setShowDeleteDialog}
-          title={t('confirmations.deleteMasterResumeTitle')}
-          description={t('confirmations.deleteMasterResumeDescription')}
-          confirmLabel={t('dashboard.deleteAndReupload')}
-          cancelLabel={t('confirmations.keepResumeCancelLabel')}
-          onConfirm={confirmDeleteAndReupload}
-          variant="danger"
-        />
-      </SwissGrid>
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title={t('confirmations.deleteMasterResumeTitle')}
+        description={t('confirmations.deleteMasterResumeDescription')}
+        confirmLabel={t('dashboard.deleteAndReupload')}
+        cancelLabel={t('confirmations.keepResumeCancelLabel')}
+        onConfirm={confirmDeleteAndReupload}
+        variant="danger"
+      />
     </div>
   );
 }

@@ -290,7 +290,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
         onToggleVisibility={() => handleToggleVisibility(section.id)}
         isFirst={isFirst}
         isLast={isLast}
-        canDelete={true}
+        canDelete={!section.isDefault}
       >
         {renderContent()}
       </SectionHeader>

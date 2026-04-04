@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.prompts import DEFAULT_IMPROVE_PROMPT_ID
+
 _TEXT_VALUE_KEYS = (
     "text",
     "summary",
@@ -417,6 +419,9 @@ class ResumeSummary(BaseModel):
     created_at: str
     updated_at: str
     title: str | None = None
+    target_company: str | None = None
+    target_role: str | None = None
+    target_location: str | None = None
 
 
 class ResumeListResponse(BaseModel):
@@ -470,6 +475,8 @@ class ImproveResumeRequest(BaseModel):
     resume_id: str
     job_id: str
     prompt_id: str | None = None
+    include_cover_letter: bool | None = None
+    include_outreach_message: bool | None = None
     theme_settings: RenderThemeSettings | None = None
 
 
@@ -685,6 +692,8 @@ class ImproveResumeConfirmRequest(BaseModel):
     improvements: list[ImprovementSuggestion]
     application_pack_id: str | None = None
     generation_run_id: str | None = None
+    include_cover_letter: bool | None = None
+    include_outreach_message: bool | None = None
     theme_settings: RenderThemeSettings | None = None
 
 
@@ -719,6 +728,22 @@ class FeatureConfigResponse(BaseModel):
 
     enable_cover_letter: bool = False
     enable_outreach_message: bool = False
+
+
+class GenerationDefaultsRequest(BaseModel):
+    """Request to update the last-used tailoring defaults."""
+
+    include_cover_letter: bool | None = None
+    include_outreach_message: bool | None = None
+    prompt_id: str | None = None
+
+
+class GenerationDefaultsResponse(BaseModel):
+    """Response for persisted tailoring defaults."""
+
+    include_cover_letter: bool = False
+    include_outreach_message: bool = False
+    prompt_id: str = DEFAULT_IMPROVE_PROMPT_ID
 
 
 class LanguageConfigRequest(BaseModel):

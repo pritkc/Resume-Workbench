@@ -86,32 +86,33 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex justify-end">
         <Button
           variant="outline"
-          size="sm"
+          size="xs"
           onClick={handleAdd}
-          className="rounded-none border-black hover:bg-black hover:text-white transition-colors"
+          className="rounded-none border-black px-2.5 transition-colors hover:bg-black hover:text-white"
         >
-          <Plus className="w-4 h-4 mr-2" /> {t('builder.forms.projects.addProject')}
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('builder.forms.projects.addProject')}
         </Button>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-3">
         {data.map((item) => (
-          <div key={item.id} className="p-6 border border-black bg-gray-50 relative group">
+          <div key={item.id} className="group relative border border-black bg-gray-50 px-3 py-2.5">
             <Button
               variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+              size="icon-sm"
+              aria-label={t('common.delete')}
+              className="absolute right-2 top-2 text-destructive opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
               onClick={() => handleRemove(item.id)}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pr-8">
-              <div className="space-y-2">
+            <div className="mb-2.5 grid grid-cols-1 gap-2.5 pr-7 md:grid-cols-2">
+              <div className="space-y-1.5">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   {t('builder.forms.projects.fields.projectName')}
                 </Label>
@@ -122,7 +123,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                   className="rounded-none border-black bg-white"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   {t('builder.forms.projects.fields.role')}
                 </Label>
@@ -133,7 +134,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                   className="rounded-none border-black bg-white"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   {t('builder.genericItemForm.fields.years')}{' '}
                   <span className="text-gray-400">({t('common.optional')})</span>
@@ -145,7 +146,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                   className="rounded-none border-black bg-white"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   <Github className="w-3 h-3 inline mr-1" />
                   GitHub <span className="text-gray-400">({t('common.optional')})</span>
@@ -157,7 +158,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                   className="rounded-none border-black bg-white"
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-1.5 md:col-span-2">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   <Globe className="w-3 h-3 inline mr-1" />
                   {t('builder.forms.projects.fields.website')}{' '}
@@ -172,18 +173,18 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   {t('builder.genericItemForm.fields.descriptionPoints')}
                 </Label>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="xs"
                   onClick={() => handleAddDescription(item.id)}
-                  className="h-6 text-xs text-blue-700 hover:text-blue-800 hover:bg-blue-50"
+                  className="px-2 text-[11px] text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                 >
-                  <Plus className="w-3 h-3 mr-1" /> {t('builder.genericItemForm.actions.addPoint')}
+                  <Plus className="mr-1 h-3 w-3" /> {t('builder.genericItemForm.actions.addPoint')}
                 </Button>
               </div>
               {item.description?.map((desc, idx) => (
@@ -193,14 +194,15 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                       value={desc}
                       onChange={(html) => handleDescriptionChange(item.id, idx, html)}
                       placeholder={t('builder.forms.projects.placeholders.description')}
-                      minHeight="60px"
+                      minHeight="48px"
                     />
                   </div>
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="icon-sm"
+                    aria-label={t('common.delete')}
                     onClick={() => handleRemoveDescription(item.id, idx)}
-                    className="h-[60px] w-8 text-muted-foreground hover:text-destructive self-end"
+                    className="self-end text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>
@@ -211,17 +213,17 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
         ))}
 
         {data.length === 0 && (
-          <div className="text-center py-12 bg-gray-50 border border-dashed border-black">
-            <p className="font-mono text-sm text-gray-500 mb-4">
+          <div className="border border-dashed border-black bg-gray-50 px-3 py-4 text-center">
+            <p className="mb-2 font-mono text-[11px] text-gray-500">
               {t('builder.genericItemForm.noEntries', { label: t('resume.sections.projects') })}
             </p>
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={handleAdd}
               className="rounded-none border-black"
             >
-              <Plus className="w-4 h-4 mr-2" /> {t('builder.forms.projects.addFirstProject')}
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('builder.forms.projects.addFirstProject')}
             </Button>
           </div>
         )}

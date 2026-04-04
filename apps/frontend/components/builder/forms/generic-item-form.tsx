@@ -131,27 +131,28 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
       <div className="flex justify-end">
         <Button
           variant="outline"
-          size="sm"
+          size="xs"
           onClick={handleAdd}
-          className="rounded-none border-black hover:bg-black hover:text-white transition-colors"
+          className="rounded-none border-black transition-colors hover:bg-black hover:text-white"
         >
           <Plus className="w-4 h-4 mr-2" /> {finalAddLabel}
         </Button>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-4">
         {items.map((item) => (
-          <div key={item.id} className="p-6 border border-black bg-gray-50 relative group">
+          <div key={item.id} className="relative border border-black bg-gray-50 px-4 py-3 group">
             <Button
               variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+              size="icon-sm"
+              aria-label={t('common.delete')}
+              className="absolute right-2 top-2 text-destructive opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
               onClick={() => handleRemove(item.id)}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pr-8">
+            <div className="mb-3 grid grid-cols-1 gap-3 pr-7 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   {t('builder.genericItemForm.fields.title')}
@@ -204,16 +205,16 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
               )}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div className="flex justify-between items-center">
                 <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                   {t('builder.genericItemForm.fields.descriptionPoints')}
                 </Label>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="xs"
                   onClick={() => handleAddDescription(item.id)}
-                  className="h-6 text-xs text-blue-700 hover:text-blue-800 hover:bg-blue-50"
+                  className="text-[11px] text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                 >
                   <Plus className="w-3 h-3 mr-1" /> {t('builder.genericItemForm.actions.addPoint')}
                 </Button>
@@ -225,14 +226,15 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
                       value={desc}
                       onChange={(html) => handleDescriptionChange(item.id, idx, html)}
                       placeholder={finalDescriptionPlaceholder}
-                      minHeight="60px"
+                      minHeight="48px"
                     />
                   </div>
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="icon-sm"
+                    aria-label={t('common.delete')}
                     onClick={() => handleRemoveDescription(item.id, idx)}
-                    className="h-[60px] w-8 text-muted-foreground hover:text-destructive self-end"
+                    className="self-end text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>
@@ -243,13 +245,13 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
         ))}
 
         {items.length === 0 && (
-          <div className="text-center py-12 bg-gray-50 border border-dashed border-black">
-            <p className="font-mono text-sm text-gray-500 mb-4">
+          <div className="border border-dashed border-black bg-gray-50 px-4 py-5 text-center">
+            <p className="mb-3 font-mono text-xs text-gray-500">
               {t('builder.genericItemForm.noEntries', { label: finalItemLabel })}
             </p>
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={handleAdd}
               className="rounded-none border-black"
             >

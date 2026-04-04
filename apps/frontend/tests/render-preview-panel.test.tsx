@@ -119,4 +119,13 @@ describe('RenderPreviewPanel', () => {
     await waitFor(() => expect(fetchDraftRenderPreview).toHaveBeenCalledWith(draftRequest));
     expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
   });
+
+  it('keeps a single compact preview header when artifacts load', async () => {
+    render(<RenderPreviewPanel resumeId="resume-123" settings={baseSettings} />);
+
+    await screen.findByAltText('preview.png');
+
+    expect(screen.getAllByText('RenderCV Preview')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Refresh preview' })).toBeInTheDocument();
+  });
 });

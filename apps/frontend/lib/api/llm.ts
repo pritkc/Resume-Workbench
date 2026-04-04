@@ -108,9 +108,7 @@ async function parseJsonResponse<T>(response: Response, errorPrefix: string): Pr
   return (await response.json()) as T;
 }
 
-export async function fetchLlmCalls(
-  params: FetchLLMCallsParams = {}
-): Promise<LLMCallRecord[]> {
+export async function fetchLlmCalls(params: FetchLLMCallsParams = {}): Promise<LLMCallRecord[]> {
   const query = new URLSearchParams();
   appendQueryParam(query, 'trace_id', params.traceId);
   appendQueryParam(query, 'call_group_id', params.callGroupId);

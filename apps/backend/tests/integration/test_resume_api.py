@@ -1,6 +1,4 @@
 """Integration tests for resume CRUD endpoints."""
-
-from pathlib import Path
 from unittest.mock import patch, AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -120,12 +118,19 @@ class TestGetResume:
 
 
 class TestUploadResume:
+    @patch("app.routers.resumes.parse_document", new_callable=AsyncMock)
     @patch("app.routers.resumes.parse_resume_to_json", new_callable=AsyncMock)
     @patch("app.routers.resumes.db")
-    async def test_upload_and_fetch_sample_pdf(self, mock_db, mock_parse_resume, client, sample_resume):
-        sample_pdf = (
-            Path(__file__).resolve().parents[4] / "tests" / "Prit-Chakalasiya-DE.pdf"
-        )
+    async def test_upload_and_fetch_sample_pdf(
+        self,
+        mock_db,
+        mock_parse_resume,
+        mock_parse_document,
+        client,
+        sample_resume,
+    ):
+        sample_filename = "sample-resume.pdf"
+        sample_markdown = "# PRIT CHAKALASIYA\nSenior Backend Engineer"
         state: dict[str, object] = {}
 
         async def create_resume_atomic_master(**kwargs):
@@ -149,7 +154,7 @@ class TestUploadResume:
                 "resume_id": resume_id,
                 "content": state["content"],
                 "content_type": state["content_type"],
-                "filename": sample_pdf.name,
+                "filename": sample_filename,
                 "is_master": True,
                 "parent_id": None,
                 "application_pack_id": None,
@@ -164,17 +169,23 @@ class TestUploadResume:
                 "updated_at": "2026-01-01T00:00:00Z",
             }
 
+        mock_parse_document.return_value = sample_markdown
         mock_parse_resume.return_value = sample_resume
         mock_db.create_resume_atomic_master = AsyncMock(side_effect=create_resume_atomic_master)
         mock_db.update_resume.side_effect = update_resume
         mock_db.get_resume.side_effect = get_resume
 
         async with client:
-            with sample_pdf.open("rb") as handle:
-                upload = await client.post(
-                    "/api/v1/resumes/upload",
-                    files={"file": (sample_pdf.name, handle.read(), "application/pdf")},
-                )
+            upload = await client.post(
+                "/api/v1/resumes/upload",
+                files={
+                    "file": (
+                        sample_filename,
+                        b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF",
+                        "application/pdf",
+                    )
+                },
+            )
 
             assert upload.status_code == 200
             assert upload.json()["processing_status"] == "ready"
@@ -392,6 +403,7 @@ class TestListResumes:
             {"resume_id": "master", "is_master": True, "created_at": "2026-01-01", "updated_at": "2026-01-01"},
             {"resume_id": "tailored-1", "is_master": False, "created_at": "2026-01-02", "updated_at": "2026-01-02"},
         ]
+        mock_db.list_application_packs.return_value = []
         async with client:
             resp = await client.get("/api/v1/resumes/list")
         assert resp.status_code == 200
@@ -405,11 +417,40 @@ class TestListResumes:
             {"resume_id": "master", "is_master": True, "created_at": "2026-01-01", "updated_at": "2026-01-01"},
             {"resume_id": "tailored-1", "is_master": False, "created_at": "2026-01-02", "updated_at": "2026-01-02"},
         ]
+        mock_db.list_application_packs.return_value = []
         async with client:
             resp = await client.get("/api/v1/resumes/list", params={"include_master": True})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert len(data) == 2
+
+    @patch("app.routers.resumes.db")
+    async def test_list_returns_target_metadata(self, mock_db, client):
+        mock_db.list_resumes.return_value = [
+            {
+                "resume_id": "tailored-1",
+                "is_master": False,
+                "application_pack_id": "pack-123",
+                "created_at": "2026-01-02",
+                "updated_at": "2026-01-02",
+                "title": "Backend Engineer @ Acme",
+            }
+        ]
+        mock_db.list_application_packs.return_value = [
+            {
+                "pack_id": "pack-123",
+                "company": "Acme",
+                "role": "Backend Engineer",
+                "location": "Remote",
+            }
+        ]
+        async with client:
+            resp = await client.get("/api/v1/resumes/list")
+        assert resp.status_code == 200
+        item = resp.json()["data"][0]
+        assert item["target_company"] == "Acme"
+        assert item["target_role"] == "Backend Engineer"
+        assert item["target_location"] == "Remote"
 
 
 class TestDeleteResume:

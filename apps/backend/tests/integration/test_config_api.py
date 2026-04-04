@@ -108,6 +108,48 @@ class TestFeatureConfig:
         assert resp.json()["enable_cover_letter"] is True
 
 
+class TestGenerationDefaults:
+    """GET/PUT /api/v1/config/generation-defaults"""
+
+    @patch("app.routers.config._load_config")
+    async def test_get_generation_defaults(self, mock_load, client):
+        mock_load.return_value = {
+            "default_prompt_id": "keywords",
+            "generation_defaults": {
+                "include_cover_letter": True,
+                "include_outreach_message": False,
+                "prompt_id": "full",
+            },
+        }
+        async with client:
+            resp = await client.get("/api/v1/config/generation-defaults")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["include_cover_letter"] is True
+        assert data["include_outreach_message"] is False
+        assert data["prompt_id"] == "full"
+
+    @patch("app.routers.config._save_config")
+    @patch("app.routers.config._load_config")
+    async def test_put_generation_defaults(self, mock_load, mock_save, client):
+        mock_load.return_value = {"generation_defaults": {}}
+        async with client:
+            resp = await client.put(
+                "/api/v1/config/generation-defaults",
+                json={
+                    "include_cover_letter": True,
+                    "include_outreach_message": True,
+                    "prompt_id": "keywords",
+                },
+            )
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "include_cover_letter": True,
+            "include_outreach_message": True,
+            "prompt_id": "keywords",
+        }
+
+
 class TestLanguageConfig:
     """GET/PUT /api/v1/config/language"""
 

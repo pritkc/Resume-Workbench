@@ -9,6 +9,8 @@ const uploadJobDescriptions = vi.fn();
 const previewImproveResume = vi.fn();
 const confirmImproveResume = vi.fn();
 const fetchPromptConfig = vi.fn();
+const fetchGenerationDefaults = vi.fn();
+const updateGenerationDefaults = vi.fn();
 const incrementJobs = vi.fn();
 const incrementImprovements = vi.fn();
 const incrementResumes = vi.fn();
@@ -35,6 +37,8 @@ vi.mock('@/lib/api/resume', () => ({
 
 vi.mock('@/lib/api/config', () => ({
   fetchPromptConfig: (...args: unknown[]) => fetchPromptConfig(...args),
+  fetchGenerationDefaults: (...args: unknown[]) => fetchGenerationDefaults(...args),
+  updateGenerationDefaults: (...args: unknown[]) => updateGenerationDefaults(...args),
 }));
 
 vi.mock('@/lib/context/status-cache', () => ({
@@ -145,6 +149,8 @@ describe('TailorPage', () => {
     previewImproveResume.mockReset();
     confirmImproveResume.mockReset();
     fetchPromptConfig.mockReset();
+    fetchGenerationDefaults.mockReset();
+    updateGenerationDefaults.mockReset();
     incrementJobs.mockReset();
     incrementImprovements.mockReset();
     incrementResumes.mockReset();
@@ -157,10 +163,31 @@ describe('TailorPage', () => {
       prompt_options: [{ id: 'keywords' }],
       default_prompt_id: 'keywords',
     });
+    fetchGenerationDefaults.mockResolvedValue({
+      include_cover_letter: true,
+      include_outreach_message: false,
+      prompt_id: 'keywords',
+    });
+    updateGenerationDefaults.mockResolvedValue({
+      include_cover_letter: true,
+      include_outreach_message: false,
+      prompt_id: 'keywords',
+    });
   });
 
-  it('shows diff review together with RenderCV artifacts and confirms the pack payload', async () => {
+  it('loads last-used defaults and confirms the request-scoped tailoring payload', async () => {
     render(<TailorPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Cover letter' })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      )
+    );
+    expect(screen.getByRole('switch', { name: 'LinkedIn message' })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
 
     fireEvent.change(screen.getByPlaceholderText('tailor.jobDescriptionPlaceholder'), {
       target: {
@@ -173,6 +200,11 @@ describe('TailorPage', () => {
 
     expect(await screen.findByText('tailor.diffModal.title')).toBeInTheDocument();
     expect(screen.getAllByAltText('preview.png').length).toBeGreaterThan(0);
+    expect(updateGenerationDefaults).toHaveBeenCalledWith({
+      prompt_id: 'keywords',
+      include_cover_letter: true,
+      include_outreach_message: false,
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'tailor.diffModal.confirmButton' }));
 
@@ -184,12 +216,8 @@ describe('TailorPage', () => {
         job_id: 'job-123',
         application_pack_id: 'pack-123',
         generation_run_id: 'run-123',
-        theme_settings: expect.objectContaining({
-          theme_id: 'moderncv',
-          theme_profiles: expect.objectContaining({
-            moderncv: expect.any(Object),
-          }),
-        }),
+        include_cover_letter: true,
+        include_outreach_message: false,
       })
     );
     expect(setImprovedData).toHaveBeenCalledWith(confirmedResult);

@@ -142,7 +142,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <div
           className={cn(
             'w-full border border-black bg-white',
-            'px-3 py-2 text-sm text-gray-400 rounded-none'
+            'px-2.5 py-1.5 text-sm text-gray-400 rounded-none'
           )}
           style={{ minHeight }}
         >
@@ -162,9 +162,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       <div
         className={cn(
           'w-full border border-black bg-white',
-          'px-3 py-2 text-sm text-black rounded-none',
+          'px-2.5 py-1.5 text-sm text-black rounded-none',
           'focus-within:ring-1 focus-within:ring-blue-700',
-          '[&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[36px]',
+          '[&_.ProseMirror]:min-h-[32px] [&_.ProseMirror]:outline-none',
           '[&_.ProseMirror_p]:m-0',
           '[&_.ProseMirror_a]:text-blue-700 [&_.ProseMirror_a]:underline'
         )}

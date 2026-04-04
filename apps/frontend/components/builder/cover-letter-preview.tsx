@@ -45,21 +45,21 @@ export function CoverLetterPreview({
   return (
     <div
       className={cn(
-        'bg-white border-2 border-black',
-        'shadow-[4px_4px_0px_0px_#000000]',
+        'border border-black bg-white',
+        'shadow-[2px_2px_0px_0px_#000000]',
         'overflow-hidden',
         className
       )}
     >
       {/* Letter Content */}
       <div
-        className={cn('p-8 md:p-12', pageSize === 'A4' ? 'min-h-[297mm]' : 'min-h-[11in]')}
+        className={cn('p-5 md:p-6', pageSize === 'A4' ? 'min-h-[297mm]' : 'min-h-[11in]')}
         style={{
           maxWidth: pageSize === 'A4' ? '210mm' : '8.5in',
         }}
       >
         {/* Header - Personal Info */}
-        <header className="mb-8 border-b-2 border-black pb-4">
+        <header className="mb-6 border-b border-black pb-3">
           <h1 className="font-serif text-2xl font-bold tracking-tight">
             {personalInfo.name || t('coverLetter.preview.defaultName')}
           </h1>
@@ -72,7 +72,7 @@ export function CoverLetterPreview({
         </header>
 
         {/* Date */}
-        <div className="mb-8">
+        <div className="mb-6">
           <p className="font-mono text-sm text-gray-600">{today}</p>
         </div>
 
