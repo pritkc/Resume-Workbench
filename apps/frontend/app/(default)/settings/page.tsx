@@ -708,6 +708,37 @@ export default function SettingsPage() {
             )}
           </section>
 
+          <section className="space-y-6">
+            <div className="flex items-center gap-2 border-b border-black/10 pb-2">
+              <Activity className="w-4 h-4" />
+              <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
+                LLM Observability
+              </h2>
+            </div>
+
+            <div className="border border-black bg-white p-6 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="max-w-2xl">
+                  <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
+                    Internal Debugger
+                  </p>
+                  <p className="mt-2 text-sm text-gray-700">
+                    Inspect every LLM call with request scopes, trace IDs, prompt/response
+                    previews, latency, finish reasons, token usage, and estimated cost. Keep this
+                    page internal-only because prompt previews can contain resume and job data.
+                  </p>
+                </div>
+
+                <Link href="/llm-traces">
+                  <Button variant="outline" className="gap-2">
+                    <Activity className="w-4 h-4" />
+                    Open Trace Viewer
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </section>
+
           {/* LLM Configuration */}
           <section className="space-y-6">
             <div className="flex items-center gap-2 border-b border-black/10 pb-2">

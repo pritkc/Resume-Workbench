@@ -519,9 +519,24 @@ class ArtifactSummary(BaseModel):
 
 
 class RenderThemeSettings(BaseModel):
-    """Curated render theme settings exposed by the API."""
+    """RenderCV configuration exposed by the API.
 
-    theme_id: Literal["classic", "moderncv"] = "classic"
+    The legacy top-level fields remain so existing clients continue to work.
+    Richer hosted-UI controls are stored in the nested `design`, `locale`,
+    and `settings` dictionaries.
+    """
+
+    theme_id: Literal[
+        "classic",
+        "moderncv",
+        "sb2nov",
+        "engineeringresumes",
+        "engineeringclassic",
+        "harvard",
+        "opal",
+        "ember",
+        "ink",
+    ] = "classic"
     page_size: Literal["A4", "LETTER"] = "A4"
     density_profile: Literal["compact", "balanced", "spacious"] = "balanced"
     bold_keywords: bool = False
@@ -530,6 +545,22 @@ class RenderThemeSettings(BaseModel):
     margins_mm: dict[str, int] = Field(
         default_factory=lambda: {"top": 10, "bottom": 10, "left": 10, "right": 10}
     )
+    design: dict[str, Any] = Field(default_factory=dict)
+    locale: dict[str, Any] = Field(default_factory=dict)
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResumeUpdateRequest(BaseModel):
+    """Request to update a resume and its RenderCV configuration."""
+
+    processed_resume: ResumeData
+    theme_settings: RenderThemeSettings | None = None
+
+
+class RenderResumeRequest(BaseModel):
+    """Request to render preview/PDF with an explicit RenderCV config."""
+
+    theme_settings: RenderThemeSettings | None = None
 
 
 class RenderThemeOption(BaseModel):
@@ -765,6 +796,91 @@ class StatusResponse(BaseModel):
     llm_healthy: bool
     has_master_resume: bool
     database_stats: dict[str, Any]
+
+
+class LLMCallRecord(BaseModel):
+    """Persisted trace for a single LLM attempt."""
+
+    llm_call_id: str
+    call_group_id: str
+    trace_id: str | None = None
+    request_scope: str | None = None
+    operation: str
+    provider: str
+    model: str
+    model_name: str
+    response_model: str | None = None
+    request_kind: str
+    success: bool
+    attempt: int
+    max_tokens: int | None = None
+    temperature: float | None = None
+    reasoning_effort: str | None = None
+    json_mode: bool
+    latency_ms: int | None = None
+    finish_reason: str | None = None
+    prompt_chars: int
+    prompt_tokens_est: int | None = None
+    response_chars: int | None = None
+    response_tokens_est: int | None = None
+    usage_input_tokens: int | None = None
+    usage_output_tokens: int | None = None
+    usage_total_tokens: int | None = None
+    estimated_input_cost_usd: float | None = None
+    estimated_output_cost_usd: float | None = None
+    estimated_total_cost_usd: float | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    prompt_preview: str | None = None
+    response_preview: str | None = None
+    request_context: dict[str, Any] | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    completed_at: str | None = None
+
+
+class LLMOperationSummary(BaseModel):
+    """Aggregate metrics for one LLM operation."""
+
+    operation: str
+    calls: int
+    successes: int
+    failures: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    estimated_cost_usd: float
+
+
+class LLMCallSummary(BaseModel):
+    """Aggregate LLM metrics for a trace or request scope."""
+
+    trace_id: str | None = None
+    request_scope: str | None = None
+    total_calls: int
+    successful_calls: int
+    failed_calls: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    estimated_cost_usd: float
+    usage_backed_calls: int
+    estimated_calls: int
+    operations: list[LLMOperationSummary] = Field(default_factory=list)
+
+
+class LLMCallListResponse(BaseModel):
+    """List response for LLM call traces."""
+
+    request_id: str
+    data: list[LLMCallRecord]
+
+
+class LLMCallSummaryResponse(BaseModel):
+    """Summary response for LLM trace metrics."""
+
+    request_id: str
+    data: LLMCallSummary
 
 
 # Diff-Based Improvement Models

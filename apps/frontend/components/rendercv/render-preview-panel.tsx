@@ -19,10 +19,12 @@ interface RenderPreviewPanelProps {
   stale?: boolean;
 }
 
+const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
+
 export function RenderPreviewPanel({
   resumeId,
   settings = DEFAULT_RENDER_THEME_SETTINGS,
-  initialArtifacts = [],
+  initialArtifacts = EMPTY_ARTIFACTS,
   refreshKey,
   stale = false,
 }: RenderPreviewPanelProps) {

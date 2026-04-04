@@ -21,6 +21,17 @@ interface ProcessedResume {
     website?: string | null;
     linkedin?: string | null;
     github?: string | null;
+    photoUrl?: string | null;
+    socialNetworks?: Array<{
+      network?: string;
+      username?: string;
+    }>;
+    customConnections?: Array<{
+      placeholder?: string;
+      url?: string | null;
+      fontawesome_icon?: string | null;
+      fontAwesomeIcon?: string | null;
+    }>;
   };
   summary?: string;
   workExperience?: Array<{
@@ -217,9 +228,13 @@ export async function fetchResumeList(includeMaster = false): Promise<ResumeList
 
 export async function updateResume(
   resumeId: string,
-  resumeData: ProcessedResume
+  resumeData: ProcessedResume,
+  themeSettings?: RenderThemeSettings
 ): Promise<ResumeResponse['data']> {
-  const res = await apiPatch(`/resumes/${encodeURIComponent(resumeId)}`, resumeData);
+  const res = await apiPatch(`/resumes/${encodeURIComponent(resumeId)}`, {
+    processed_resume: resumeData,
+    theme_settings: themeSettings ? normalizeRenderThemeSettings(themeSettings) : undefined,
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Failed to update resume (status ${res.status}): ${text}`);
@@ -231,10 +246,13 @@ export async function updateResume(
 export function getResumePdfUrl(
   resumeId: string,
   settings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS,
-  locale?: Locale
+  locale?: Locale,
+  useSavedThemeSettings = false
 ): string {
   const normalizedId = normalizeResumeId(resumeId);
-  const params = renderThemeSettingsToQuery(settings);
+  const params = useSavedThemeSettings
+    ? new URLSearchParams({ useSavedThemeSettings: 'true' })
+    : renderThemeSettingsToQuery(settings);
   if (locale) {
     params.set('lang', locale);
   }
@@ -247,8 +265,14 @@ export async function downloadResumePdf(
   settings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS,
   locale?: Locale
 ): Promise<Blob> {
-  const url = getResumePdfUrl(resumeId, settings, locale);
-  const res = await apiFetch(url);
+  const res = await apiPost(
+    `/resumes/${encodeURIComponent(normalizeResumeId(resumeId))}/pdf`,
+    {
+      theme_settings: normalizeRenderThemeSettings(settings),
+      lang: locale,
+    },
+    240_000
+  );
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Failed to download resume (status ${res.status}): ${text}`);
@@ -370,9 +394,12 @@ export async function fetchResumeRenderPreview(
   resumeId: string,
   settings: RenderThemeSettings = DEFAULT_RENDER_THEME_SETTINGS
 ): Promise<RenderPreviewResponse> {
-  const params = renderThemeSettingsToQuery(settings);
-  const res = await apiFetch(
-    `/resumes/${encodeURIComponent(resumeId)}/render-preview?${params.toString()}`
+  const res = await apiPost(
+    `/resumes/${encodeURIComponent(normalizeResumeId(resumeId))}/render-preview`,
+    {
+      theme_settings: normalizeRenderThemeSettings(settings),
+    },
+    240_000
   );
   if (!res.ok) {
     const text = await res.text().catch(() => '');

@@ -46,7 +46,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Disable features we don't need for bullet points
         heading: false,
         bulletList: false,
         orderedList: false,
@@ -54,6 +53,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         codeBlock: false,
         horizontalRule: false,
         hardBreak: false,
+        link: false,
+        underline: false,
       }),
       Underline,
       Link.configure({

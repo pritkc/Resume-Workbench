@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -52,6 +52,8 @@ export default function ResumeViewerPage() {
   const [themeSettings, setThemeSettings] = useState<RenderThemeSettings>(
     DEFAULT_RENDER_THEME_SETTINGS
   );
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const resumeId = params?.id as string;
 
@@ -59,6 +61,7 @@ export default function ResumeViewerPage() {
     if (!resumeId) return;
 
     const loadResume = async () => {
+      const translate = tRef.current;
       try {
         setLoading(true);
         setError(null);
@@ -77,23 +80,23 @@ export default function ResumeViewerPage() {
           setResumeData(data.processed_resume as ResumeData);
           setError(null);
         } else if (status === 'failed') {
-          setError(t('resumeViewer.errors.processingFailed'));
+          setError(translate('resumeViewer.errors.processingFailed'));
         } else if (status === 'processing') {
-          setError(t('resumeViewer.errors.stillProcessing'));
+          setError(translate('resumeViewer.errors.stillProcessing'));
         } else if (data.raw_resume?.content) {
           // Try to parse raw_resume content as JSON (for tailored resumes stored as JSON)
           try {
             const parsed = JSON.parse(data.raw_resume.content);
             setResumeData(parsed as ResumeData);
           } catch {
-            setError(t('resumeViewer.errors.notProcessedYet'));
+            setError(translate('resumeViewer.errors.notProcessedYet'));
           }
         } else {
-          setError(t('resumeViewer.errors.noDataAvailable'));
+          setError(translate('resumeViewer.errors.noDataAvailable'));
         }
       } catch (err) {
         console.error('Failed to load resume:', err);
-        setError(t('resumeViewer.errors.failedToLoad'));
+        setError(translate('resumeViewer.errors.failedToLoad'));
       } finally {
         setLoading(false);
       }
@@ -101,7 +104,7 @@ export default function ResumeViewerPage() {
 
     loadResume();
     setIsMasterResume(localStorage.getItem('master_resume_id') === resumeId);
-  }, [resumeId, t]);
+  }, [resumeId]);
 
   const handleRetryProcessing = async () => {
     if (!resumeId) return;
@@ -177,7 +180,7 @@ export default function ResumeViewerPage() {
     } catch (err) {
       console.error('Failed to download resume:', err);
       if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
-        const fallbackUrl = getResumePdfUrl(resumeId, themeSettings, uiLanguage);
+        const fallbackUrl = getResumePdfUrl(resumeId, themeSettings, uiLanguage, true);
         const didOpen = openUrlInNewTab(fallbackUrl);
         if (!didOpen) {
           alert(t('common.popupBlocked', { url: fallbackUrl }));

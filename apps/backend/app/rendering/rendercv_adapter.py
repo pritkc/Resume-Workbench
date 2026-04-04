@@ -6,7 +6,12 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
-from app.rendering.theme_profiles import RenderThemeSettings, build_design
+from app.rendering.theme_profiles import (
+    RenderThemeSettings,
+    build_design,
+    build_locale,
+    build_settings,
+)
 
 _LINK_PREFIX_RE = re.compile(r"^(https?://)?(www\.)?", re.IGNORECASE)
 _NON_DIGIT_RE = re.compile(r"\D+")
@@ -34,6 +39,14 @@ def _extract_social_username(value: str | None) -> str | None:
 
 def _social_networks(personal_info: dict[str, Any]) -> list[dict[str, str]]:
     networks: list[dict[str, str]] = []
+    for item in personal_info.get("socialNetworks") or []:
+        if not isinstance(item, dict):
+            continue
+        network = _clean_text(item.get("network"))
+        username = _extract_social_username(item.get("username"))
+        if network and username:
+            networks.append({"network": network, "username": username})
+
     linkedin_username = _extract_social_username(personal_info.get("linkedin"))
     github_username = _extract_social_username(personal_info.get("github"))
     if linkedin_username:
@@ -41,6 +54,25 @@ def _social_networks(personal_info: dict[str, Any]) -> list[dict[str, str]]:
     if github_username:
         networks.append({"network": "GitHub", "username": github_username})
     return networks
+
+
+def _custom_connections(personal_info: dict[str, Any]) -> list[dict[str, str]] | None:
+    entries: list[dict[str, str]] = []
+    for item in personal_info.get("customConnections") or []:
+        if not isinstance(item, dict):
+            continue
+        placeholder = _clean_text(item.get("placeholder"))
+        if not placeholder:
+            continue
+        row: dict[str, str] = {"placeholder": placeholder}
+        url = _clean_text(item.get("url"))
+        icon = _clean_text(item.get("fontawesome_icon") or item.get("fontAwesomeIcon"))
+        if url:
+            row["url"] = url if url.startswith("http") else f"https://{url}"
+        if icon:
+            row["fontawesome_icon"] = icon
+        entries.append(row)
+    return entries or None
 
 
 def _normalize_phone_number(value: str | None) -> str | None:
@@ -197,12 +229,13 @@ def resume_to_rendercv_payload(
         sections[section_title] = values
 
     website = _clean_text(personal_info.get("website"))
-    return {
+    payload = {
         "cv": {
             "name": personal_info.get("name") or "Candidate",
             "headline": _clean_text(personal_info.get("title")),
             "location": _clean_text(personal_info.get("location")),
             "email": _clean_text(personal_info.get("email")),
+            "photo": _clean_text(personal_info.get("photoUrl") or personal_info.get("photo_url")),
             "phone": _normalize_phone_number(personal_info.get("phone")),
             "website": (
                 website
@@ -210,7 +243,15 @@ def resume_to_rendercv_payload(
                 else (f"https://{website}" if website else None)
             ),
             "social_networks": _social_networks(personal_info),
+            "custom_connections": _custom_connections(personal_info),
             "sections": sections,
         },
         "design": build_design(theme_settings),
     }
+    locale = build_locale(theme_settings)
+    settings = build_settings(theme_settings)
+    if locale:
+        payload["locale"] = locale
+    if settings:
+        payload["settings"] = settings
+    return payload

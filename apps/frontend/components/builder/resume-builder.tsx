@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
 import { RenderThemeControls } from '@/components/rendercv/render-theme-controls';
+import { RenderLocaleControls } from '@/components/rendercv/render-locale-controls';
+import { RenderRuntimeSettingsControls } from '@/components/rendercv/render-runtime-settings-controls';
 import { RenderPreviewPanel } from '@/components/rendercv/render-preview-panel';
 import {
   downloadResumePdf,
@@ -46,6 +48,7 @@ import { useRegenerateWizard } from '@/hooks/use-regenerate-wizard';
 import { useTranslations } from '@/lib/i18n';
 import {
   DEFAULT_RENDER_THEME_SETTINGS,
+  RENDER_THEME_OPTIONS,
   normalizeRenderThemeSettings,
   type RenderThemeSettings,
 } from '@/lib/types/render-theme';
@@ -54,6 +57,7 @@ import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/uti
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
 
 type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match';
+type EditorSection = 'cv' | 'design' | 'locale' | 'settings';
 
 const STORAGE_KEY = 'resume_builder_draft';
 const SETTINGS_STORAGE_KEY = 'resume_builder_settings';
@@ -118,6 +122,9 @@ const ResumeBuilderContent = () => {
   const [themeSettings, setThemeSettings] = useState<RenderThemeSettings>(
     DEFAULT_RENDER_THEME_SETTINGS
   );
+  const [lastSavedThemeSettings, setLastSavedThemeSettings] = useState<RenderThemeSettings>(
+    DEFAULT_RENDER_THEME_SETTINGS
+  );
   const { improvedData } = useResumePreview();
   const improvedPreview = improvedData?.data?.resume_preview;
   const improvedCoverLetter = improvedData?.data?.cover_letter;
@@ -145,6 +152,7 @@ const ResumeBuilderContent = () => {
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabId>('resume');
+  const [editorSection, setEditorSection] = useState<EditorSection>('cv');
 
   // Cover letter & outreach state
   const [coverLetter, setCoverLetter] = useState('');
@@ -268,6 +276,7 @@ const ResumeBuilderContent = () => {
       return;
     }
     setThemeSettings(improvedThemeSettings);
+    setLastSavedThemeSettings(improvedThemeSettings);
   }, [improvedData?.data?.theme_settings, improvedThemeSettings]);
 
   // Warn user before leaving with unsaved changes
@@ -294,6 +303,11 @@ const ResumeBuilderContent = () => {
           setIsTailoredResume(Boolean(data.parent_id));
           // Store resume title for downloads
           setResumeTitle(data.title ?? null);
+          if (data.theme_settings) {
+            const normalizedThemeSettings = normalizeRenderThemeSettings(data.theme_settings);
+            setThemeSettings(normalizedThemeSettings);
+            setLastSavedThemeSettings(normalizedThemeSettings);
+          }
           // Load cover letter and outreach message if available
           if (data.cover_letter) {
             setCoverLetter(data.cover_letter);
@@ -403,6 +417,7 @@ const ResumeBuilderContent = () => {
 
   const handleSettingsChange = useCallback((newSettings: RenderThemeSettings) => {
     setThemeSettings(newSettings);
+    setHasUnsavedChanges(true);
   }, []);
 
   const handleSave = async () => {
@@ -412,10 +427,15 @@ const ResumeBuilderContent = () => {
     }
     try {
       setIsSaving(true);
-      const updated = await updateResume(resumeId, resumeData);
+      const updated = await updateResume(resumeId, resumeData, themeSettings);
       const nextData = (updated.processed_resume || resumeData) as ResumeData;
       setResumeData(nextData);
       setLastSavedData(nextData);
+      if (updated.theme_settings) {
+        const savedThemeSettings = normalizeRenderThemeSettings(updated.theme_settings);
+        setThemeSettings(savedThemeSettings);
+        setLastSavedThemeSettings(savedThemeSettings);
+      }
       setHasUnsavedChanges(false);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
     } catch (error) {
@@ -428,8 +448,10 @@ const ResumeBuilderContent = () => {
 
   const handleReset = () => {
     setResumeData(lastSavedData);
+    setThemeSettings(lastSavedThemeSettings);
     setHasUnsavedChanges(false);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(lastSavedData));
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(lastSavedThemeSettings));
   };
 
   const handleDownload = async () => {
@@ -446,7 +468,7 @@ const ResumeBuilderContent = () => {
     } catch (error) {
       console.error('Failed to download resume:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        const fallbackUrl = getResumePdfUrl(resumeId, themeSettings, uiLanguage);
+        const fallbackUrl = getResumePdfUrl(resumeId, themeSettings, uiLanguage, true);
         const didOpen = openUrlInNewTab(fallbackUrl);
         if (!didOpen) {
           showNotification(t('common.popupBlocked', { url: fallbackUrl }), 'warning');
@@ -746,7 +768,14 @@ const ResumeBuilderContent = () => {
               <div className="flex items-center gap-2 border-b-2 border-black pb-2">
                 <div className="w-3 h-3 bg-blue-700"></div>
                 <h2 className="font-mono text-lg font-bold uppercase tracking-wider">
-                  {activeTab === 'resume' && t('builder.leftPanel.editorPanel')}
+                  {activeTab === 'resume' &&
+                    (editorSection === 'cv'
+                      ? 'RenderCV Resume'
+                      : editorSection === 'design'
+                        ? 'RenderCV Design'
+                        : editorSection === 'locale'
+                          ? 'RenderCV Locale'
+                          : 'RenderCV Settings')}
                   {activeTab === 'cover-letter' && t('builder.leftPanel.coverLetterEditor')}
                   {activeTab === 'outreach' && t('builder.leftPanel.outreachEditor')}
                   {activeTab === 'jd-match' && t('builder.leftPanel.jdMatchAnalysis')}
@@ -756,8 +785,43 @@ const ResumeBuilderContent = () => {
               {/* Resume Editor */}
               {activeTab === 'resume' && (
                 <>
-                  <RenderThemeControls settings={themeSettings} onChange={handleSettingsChange} />
-                  <ResumeForm resumeData={resumeData} onUpdate={handleUpdate} />
+                  <div className="border border-black bg-[#F8F7F1] px-4 py-3">
+                    <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                      RenderCV Editor Tabs
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Use `CV` for resume content, then switch to `Design`, `Locale`, or `Settings`
+                      for the hosted RenderCV controls.
+                    </p>
+                  </div>
+                  <RetroTabs
+                    tabs={[
+                      { id: 'cv', label: 'CV' },
+                      { id: 'design', label: 'Design' },
+                      { id: 'locale', label: 'Locale' },
+                      { id: 'settings', label: 'Settings' },
+                    ]}
+                    activeTab={editorSection}
+                    onTabChange={(id) => setEditorSection(id as EditorSection)}
+                  />
+                  {editorSection === 'cv' && (
+                    <ResumeForm resumeData={resumeData} onUpdate={handleUpdate} />
+                  )}
+                  {editorSection === 'design' && (
+                    <RenderThemeControls settings={themeSettings} onChange={handleSettingsChange} />
+                  )}
+                  {editorSection === 'locale' && (
+                    <RenderLocaleControls
+                      settings={themeSettings}
+                      onChange={handleSettingsChange}
+                    />
+                  )}
+                  {editorSection === 'settings' && (
+                    <RenderRuntimeSettingsControls
+                      settings={themeSettings}
+                      onChange={handleSettingsChange}
+                    />
+                  )}
                 </>
               )}
 
@@ -957,9 +1021,8 @@ const ResumeBuilderContent = () => {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-700"></div>
               <span className="uppercase">
-                {themeSettings.theme_id === 'classic'
-                  ? t('builder.footer.singleColumn')
-                  : t('builder.footer.twoColumn')}
+                {RENDER_THEME_OPTIONS.find((option) => option.id === themeSettings.theme_id)
+                  ?.label ?? themeSettings.theme_id}
               </span>
             </div>
             <span className="text-gray-400">|</span>

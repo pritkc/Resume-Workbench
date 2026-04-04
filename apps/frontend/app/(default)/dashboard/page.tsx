@@ -382,7 +382,7 @@ export default function DashboardPage() {
           <Card
             variant="interactive"
             className="aspect-square h-full"
-            onClick={() => router.push(`/resumes/${masterResumeId}`)}
+            onClick={() => router.push(`/builder?id=${masterResumeId}`)}
           >
             <div className="flex-1 flex flex-col h-full">
               <div className="flex justify-between items-start mb-6">
@@ -414,6 +414,7 @@ export default function DashboardPage() {
               <CardTitle className="text-lg group-hover:text-primary">
                 {t('dashboard.masterResume')}
               </CardTitle>
+              <CardDescription className="mt-2 uppercase">{'// '}Open in builder</CardDescription>
 
               <div
                 className={`text-xs font-mono mt-auto pt-4 flex flex-col gap-2 uppercase ${getStatusDisplay().color}`}
@@ -490,15 +491,29 @@ export default function DashboardPage() {
         })}
 
         {/* 3. Create Tailored Resume */}
-        <Card className="aspect-square h-full" variant="default">
+        <Card
+          className={`aspect-square h-full ${!isTailorEnabled ? 'opacity-60' : ''}`}
+          variant={isTailorEnabled ? 'interactive' : 'default'}
+          role="button"
+          tabIndex={isTailorEnabled ? 0 : -1}
+          aria-disabled={!isTailorEnabled}
+          onClick={() => {
+            if (isTailorEnabled) {
+              router.push('/tailor');
+            }
+          }}
+          onKeyDown={(e) => {
+            if (!isTailorEnabled) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              router.push('/tailor');
+            }
+          }}
+        >
           <div className="flex-1 flex flex-col items-center justify-center text-center h-full">
-            <Button
-              onClick={() => router.push('/tailor')}
-              disabled={!isTailorEnabled}
-              className="w-20 h-20 bg-blue-700 text-white border-2 border-black shadow-sw-default hover:bg-blue-800 hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none transition-all rounded-none"
-            >
+            <div className="w-20 h-20 bg-blue-700 text-white border-2 border-black shadow-sw-default flex items-center justify-center">
               <Plus className="w-8 h-8" />
-            </Button>
+            </div>
             <p className="text-xs font-mono mt-4 uppercase text-green-700">
               {t('dashboard.createResume')}
             </p>

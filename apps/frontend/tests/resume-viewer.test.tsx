@@ -129,7 +129,7 @@ describe('ResumeViewerPage', () => {
     await waitFor(() =>
       expect(downloadResumePdf).toHaveBeenCalledWith(
         'resume-123',
-        {
+        expect.objectContaining({
           theme_id: 'moderncv',
           page_size: 'LETTER',
           density_profile: 'compact',
@@ -137,7 +137,16 @@ describe('ResumeViewerPage', () => {
           accent_color: 'green',
           show_contact_icons: true,
           margins_mm: { top: 12, bottom: 12, left: 11, right: 11 },
-        },
+          design: expect.objectContaining({
+            theme: 'moderncv',
+          }),
+          locale: expect.objectContaining({
+            language: 'english',
+          }),
+          settings: expect.objectContaining({
+            current_date: 'today',
+          }),
+        }),
         'en'
       )
     );

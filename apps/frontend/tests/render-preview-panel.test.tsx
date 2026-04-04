@@ -69,4 +69,16 @@ describe('RenderPreviewPanel', () => {
       expect(fetchResumeRenderPreview).toHaveBeenLastCalledWith('resume-123', updatedSettings)
     );
   });
+
+  it('keeps fetched artifacts visible when no initial artifacts are provided', async () => {
+    const { rerender } = render(
+      <RenderPreviewPanel resumeId="resume-123" settings={baseSettings} />
+    );
+
+    expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
+
+    rerender(<RenderPreviewPanel resumeId="resume-123" settings={baseSettings} />);
+
+    expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
+  });
 });
