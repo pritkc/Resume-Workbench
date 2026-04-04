@@ -6,6 +6,7 @@ import {
   DEFAULT_RENDER_THEME_SETTINGS,
   normalizeRenderThemeSettings,
   renderThemeSettingsToQuery,
+  serializeRenderThemeSettings,
 } from '@/lib/types/render-theme';
 import { type Locale } from '@/i18n/config';
 import { API_BASE, apiPost, apiPatch, apiDelete, apiFetch } from './client';
@@ -194,7 +195,7 @@ export async function previewImproveResume(
     resume_id: resumeId,
     job_id: jobId,
     prompt_id: promptId ?? null,
-    theme_settings: normalizeRenderThemeSettings(themeSettings),
+    theme_settings: serializeRenderThemeSettings(themeSettings),
   });
 }
 
@@ -202,7 +203,12 @@ export async function previewImproveResume(
 export async function confirmImproveResume(
   payload: ImproveResumeConfirmRequest
 ): Promise<ImprovedResult> {
-  return postImprove('/application-packs/confirm', payload as unknown as Record<string, unknown>);
+  return postImprove('/application-packs/confirm', {
+    ...payload,
+    theme_settings: payload.theme_settings
+      ? serializeRenderThemeSettings(payload.theme_settings)
+      : undefined,
+  });
 }
 
 /** Fetches a raw resume record for previewing the original upload */
@@ -233,7 +239,7 @@ export async function updateResume(
 ): Promise<ResumeResponse['data']> {
   const res = await apiPatch(`/resumes/${encodeURIComponent(resumeId)}`, {
     processed_resume: resumeData,
-    theme_settings: themeSettings ? normalizeRenderThemeSettings(themeSettings) : undefined,
+    theme_settings: themeSettings ? serializeRenderThemeSettings(themeSettings) : undefined,
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -268,7 +274,7 @@ export async function downloadResumePdf(
   const res = await apiPost(
     `/resumes/${encodeURIComponent(normalizeResumeId(resumeId))}/pdf`,
     {
-      theme_settings: normalizeRenderThemeSettings(settings),
+      theme_settings: serializeRenderThemeSettings(settings),
       lang: locale,
     },
     240_000
@@ -397,7 +403,7 @@ export async function fetchResumeRenderPreview(
   const res = await apiPost(
     `/resumes/${encodeURIComponent(normalizeResumeId(resumeId))}/render-preview`,
     {
-      theme_settings: normalizeRenderThemeSettings(settings),
+      theme_settings: serializeRenderThemeSettings(settings),
     },
     240_000
   );

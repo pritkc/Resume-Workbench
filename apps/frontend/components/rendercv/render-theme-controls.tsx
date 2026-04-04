@@ -3,18 +3,32 @@
 import { RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  DEFAULT_RENDER_THEME_SETTINGS,
+  RENDER_ACCENT_OPTIONS,
   RENDER_ALIGNMENT_OPTIONS,
+  RENDER_BULLET_OPTIONS,
   RENDER_DATE_ALIGNMENT_OPTIONS,
+  RENDER_DENSITY_OPTIONS,
+  RENDER_FONT_FAMILY_OPTIONS,
   RENDER_PHONE_NUMBER_FORMAT_OPTIONS,
   RENDER_PHOTO_POSITION_OPTIONS,
   RENDER_SECTION_TITLE_TYPE_OPTIONS,
   RENDER_THEME_OPTIONS,
-  normalizeRenderThemeSettings,
+  TEMPLATE_HINTS,
+  resetActiveRenderThemeProfile,
+  switchActiveRenderTheme,
+  updateActiveRenderTheme,
+  type RenderAccentColor,
+  type RenderCvDesign,
+  type RenderDensityProfile,
   type RenderThemeId,
+  type RenderThemeProfileSettings,
   type RenderThemeSettings,
 } from '@/lib/types/render-theme';
 import {
+  RenderCvAutocompleteInput,
+  RenderCvBulletPicker,
+  RenderCvColorInput,
+  RenderCvDimensionInput,
   RenderCvInput,
   RenderCvRow,
   RenderCvSection,
@@ -30,64 +44,146 @@ interface RenderThemeControlsProps {
   onChange: (settings: RenderThemeSettings) => void;
 }
 
-function clone<T>(value: T): T {
-  return structuredClone(value);
+function setNestedValue(root: Record<string, unknown>, path: string[], value: unknown) {
+  let cursor = root;
+  for (const key of path.slice(0, -1)) {
+    const nested = cursor[key];
+    if (!nested || typeof nested !== 'object' || Array.isArray(nested)) {
+      cursor[key] = {};
+    }
+    cursor = cursor[key] as Record<string, unknown>;
+  }
+  cursor[path[path.length - 1]] = value;
+}
+
+function dimensionToMm(value: string, fallback: number): number {
+  const numeric = Number.parseFloat(value.replace(/[^0-9.-]/g, ''));
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized.endsWith('mm')) return Math.round(numeric);
+  if (normalized.endsWith('cm')) return Math.round(numeric * 10);
+  if (normalized.endsWith('pt')) return Math.round((numeric / 72) * 25.4);
+  if (normalized.endsWith('in')) return Math.round(numeric * 25.4);
+  return fallback;
+}
+
+function titleForTheme(themeId: RenderThemeId) {
+  return RENDER_THEME_OPTIONS.find((option) => option.id === themeId)?.label ?? 'Theme';
+}
+
+function profileValue(
+  settings: RenderThemeSettings
+): RenderThemeProfileSettings | undefined {
+  return settings.theme_profiles[settings.theme_id];
 }
 
 export function RenderThemeControls({ settings, onChange }: RenderThemeControlsProps) {
-  const updateDesign = (path: string[], value: unknown, extra?: Partial<RenderThemeSettings>) => {
-    const nextDesign = clone(settings.design);
-    let cursor: Record<string, unknown> = nextDesign as Record<string, unknown>;
+  const activeProfile = profileValue(settings);
 
-    for (const key of path.slice(0, -1)) {
-      const nested = cursor[key];
-      if (!nested || typeof nested !== 'object' || Array.isArray(nested)) {
-        cursor[key] = {};
-      }
-      cursor = cursor[key] as Record<string, unknown>;
-    }
+  const updateDesign = (
+    path: string[],
+    value: unknown,
+    mutateProfile?: (profile: RenderThemeProfileSettings, nextDesign: RenderCvDesign) => void
+  ) => {
+    onChange(
+      updateActiveRenderTheme(settings, ({ design, profile }) => {
+        setNestedValue(design as Record<string, unknown>, path, value);
+        mutateProfile?.(profile, design);
+      })
+    );
+  };
 
-    cursor[path[path.length - 1]] = value;
-    onChange(normalizeRenderThemeSettings({ ...settings, ...extra, design: nextDesign }));
+  const updateProfile = (mutate: (profile: RenderThemeProfileSettings) => void) => {
+    onChange(
+      updateActiveRenderTheme(settings, ({ profile }) => {
+        mutate(profile);
+      })
+    );
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between border border-black bg-white px-4 py-3">
-        <div>
-          <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Design</p>
-          <p className="mt-1 text-sm text-gray-600">
-            Theme, typography, spacing, templates, and layout controls from the hosted editor.
-          </p>
+      <div className="border border-black bg-white px-4 py-3">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Design</p>
+            <p className="mt-1 text-sm text-gray-600">
+              Changes are stored per theme. You&apos;re editing{' '}
+              <span className="font-semibold text-black">{titleForTheme(settings.theme_id)}</span>.
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Switch themes freely to compare layouts without losing each theme&apos;s custom edits.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-[220px]">
+              <p className="mb-1 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-600">
+                Theme
+              </p>
+              <RenderCvSelect
+                value={settings.theme_id}
+                options={RENDER_THEME_OPTIONS}
+                onChange={(value) =>
+                  onChange(switchActiveRenderTheme(settings, value as RenderThemeId))
+                }
+              />
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => onChange(resetActiveRenderThemeProfile(settings))}
+              className="gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset Theme Defaults
+            </Button>
+          </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={() =>
-            onChange(
-              normalizeRenderThemeSettings({
-                ...settings,
-                theme_id: DEFAULT_RENDER_THEME_SETTINGS.theme_id,
-                page_size: DEFAULT_RENDER_THEME_SETTINGS.page_size,
-                show_contact_icons: DEFAULT_RENDER_THEME_SETTINGS.show_contact_icons,
-                margins_mm: clone(DEFAULT_RENDER_THEME_SETTINGS.margins_mm),
-                design: clone(DEFAULT_RENDER_THEME_SETTINGS.design),
-              })
-            )
-          }
-          className="gap-2"
-        >
-          <RotateCcw className="h-4 w-4" />
-          Reset Design
-        </Button>
       </div>
 
-      <RenderCvSection title="Theme">
-        <RenderCvRow label="Theme">
+      <RenderCvSection title="Theme Profile">
+        <RenderCvRow
+          label="Density Preset"
+          description="Applies a quick spacing preset for this theme only."
+        >
           <RenderCvSelect
-            value={settings.theme_id}
-            options={RENDER_THEME_OPTIONS}
+            value={settings.density_profile}
+            options={RENDER_DENSITY_OPTIONS}
             onChange={(value) =>
-              updateDesign(['theme'], value, { theme_id: value as RenderThemeId })
+              updateProfile((profile) => {
+                profile.density_profile = value as RenderDensityProfile;
+              })
+            }
+          />
+        </RenderCvRow>
+        <RenderCvRow
+          label="Accent Preset"
+          description="Quickly updates name, headline, connection, section title, and link colors together."
+        >
+          <RenderCvSelect
+            value={activeProfile?.accent_color ?? settings.accent_color}
+            options={RENDER_ACCENT_OPTIONS.map((accent) => ({
+              id: accent,
+              label: accent[0].toUpperCase() + accent.slice(1),
+            }))}
+            onChange={(value) =>
+              updateProfile((profile) => {
+                profile.accent_color = value as RenderAccentColor;
+              })
+            }
+          />
+        </RenderCvRow>
+        <RenderCvRow
+          label="Show Contact Icons"
+          description="Stored separately per theme and mirrored to the header connection settings."
+        >
+          <RenderCvToggle
+            checked={settings.show_contact_icons}
+            onChange={(value) =>
+              updateDesign(['header', 'connections', 'show_icons'], value, (profile) => {
+                profile.show_contact_icons = value;
+              })
             }
           />
         </RenderCvRow>
@@ -102,34 +198,62 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
               { id: 'us-letter', label: 'US Letter' },
             ]}
             onChange={(value) =>
-              updateDesign(['page', 'size'], value, {
-                page_size: value === 'us-letter' ? 'LETTER' : 'A4',
+              updateDesign(['page', 'size'], value, (profile) => {
+                profile.page_size = value === 'us-letter' ? 'LETTER' : 'A4';
               })
             }
           />
         </RenderCvRow>
         <RenderCvRow label="Top Margin">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.page?.top_margin}
-            onChange={(value) => updateDesign(['page', 'top_margin'], value)}
+            onChange={(value) =>
+              updateDesign(['page', 'top_margin'], value, (profile) => {
+                profile.margins_mm = {
+                  ...(profile.margins_mm ?? {}),
+                  top: dimensionToMm(value, settings.margins_mm.top),
+                };
+              })
+            }
           />
         </RenderCvRow>
         <RenderCvRow label="Bottom Margin">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.page?.bottom_margin}
-            onChange={(value) => updateDesign(['page', 'bottom_margin'], value)}
+            onChange={(value) =>
+              updateDesign(['page', 'bottom_margin'], value, (profile) => {
+                profile.margins_mm = {
+                  ...(profile.margins_mm ?? {}),
+                  bottom: dimensionToMm(value, settings.margins_mm.bottom),
+                };
+              })
+            }
           />
         </RenderCvRow>
         <RenderCvRow label="Left Margin">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.page?.left_margin}
-            onChange={(value) => updateDesign(['page', 'left_margin'], value)}
+            onChange={(value) =>
+              updateDesign(['page', 'left_margin'], value, (profile) => {
+                profile.margins_mm = {
+                  ...(profile.margins_mm ?? {}),
+                  left: dimensionToMm(value, settings.margins_mm.left),
+                };
+              })
+            }
           />
         </RenderCvRow>
         <RenderCvRow label="Right Margin">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.page?.right_margin}
-            onChange={(value) => updateDesign(['page', 'right_margin'], value)}
+            onChange={(value) =>
+              updateDesign(['page', 'right_margin'], value, (profile) => {
+                profile.margins_mm = {
+                  ...(profile.margins_mm ?? {}),
+                  right: dimensionToMm(value, settings.margins_mm.right),
+                };
+              })
+            }
           />
         </RenderCvRow>
         <RenderCvRow label="Show Footer">
@@ -158,11 +282,12 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           ['top_note', 'Top Note'],
         ].map(([key, label]) => (
           <RenderCvRow key={key} label={label}>
-            <RenderCvInput
+            <RenderCvColorInput
               value={
                 settings.design.colors?.[key as keyof NonNullable<typeof settings.design.colors>]
               }
               onChange={(value) => updateDesign(['colors', key], value)}
+              placeholder="Hex, rgb(...), hsl(...), or named color"
             />
           </RenderCvRow>
         ))}
@@ -170,7 +295,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
 
       <RenderCvSection title="Typography">
         <RenderCvRow label="Line Spacing">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.typography?.line_spacing}
             onChange={(value) => updateDesign(['typography', 'line_spacing'], value)}
           />
@@ -201,8 +326,12 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           ['connections', 'Connections'],
           ['section_titles', 'Section Titles'],
         ].map(([key, label]) => (
-          <RenderCvRow key={key} label={label}>
-            <RenderCvInput
+          <RenderCvRow
+            key={key}
+            label={label}
+            description="Choose a bundled RenderCV font or type a custom family."
+          >
+            <RenderCvAutocompleteInput
               value={
                 settings.design.typography?.font_family?.[
                   key as keyof NonNullable<
@@ -211,6 +340,8 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
                 ]
               }
               onChange={(value) => updateDesign(['typography', 'font_family', key], value)}
+              options={RENDER_FONT_FAMILY_OPTIONS}
+              placeholder="Type a font family"
             />
           </RenderCvRow>
         ))}
@@ -225,7 +356,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           ['section_titles', 'Section Titles'],
         ].map(([key, label]) => (
           <RenderCvRow key={key} label={label}>
-            <RenderCvInput
+            <RenderCvDimensionInput
               value={
                 settings.design.typography?.font_size?.[
                   key as keyof NonNullable<
@@ -305,7 +436,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           />
         </RenderCvRow>
         <RenderCvRow label="Photo Width">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.header?.photo_width}
             onChange={(value) => updateDesign(['header', 'photo_width'], value)}
           />
@@ -318,31 +449,31 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           />
         </RenderCvRow>
         <RenderCvRow label="Photo Space Left">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.header?.photo_space_left}
             onChange={(value) => updateDesign(['header', 'photo_space_left'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Photo Space Right">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.header?.photo_space_right}
             onChange={(value) => updateDesign(['header', 'photo_space_right'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Below Name">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.header?.space_below_name}
             onChange={(value) => updateDesign(['header', 'space_below_name'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Below Headline">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.header?.space_below_headline}
             onChange={(value) => updateDesign(['header', 'space_below_headline'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Below Connections">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.header?.space_below_connections}
             onChange={(value) => updateDesign(['header', 'space_below_connections'], value)}
           />
@@ -369,8 +500,8 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           <RenderCvToggle
             checked={settings.design.header?.connections?.show_icons}
             onChange={(value) =>
-              updateDesign(['header', 'connections', 'show_icons'], value, {
-                show_contact_icons: value,
+              updateDesign(['header', 'connections', 'show_icons'], value, (profile) => {
+                profile.show_contact_icons = value;
               })
             }
           />
@@ -379,7 +510,10 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           <RenderCvToggle
             checked={settings.design.header?.connections?.display_urls_instead_of_usernames}
             onChange={(value) =>
-              updateDesign(['header', 'connections', 'display_urls_instead_of_usernames'], value)
+              updateDesign(
+                ['header', 'connections', 'display_urls_instead_of_usernames'],
+                value
+              )
             }
           />
         </RenderCvRow>
@@ -387,10 +521,11 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           <RenderCvInput
             value={settings.design.header?.connections?.separator}
             onChange={(value) => updateDesign(['header', 'connections', 'separator'], value)}
+            placeholder="Leave empty for no separator"
           />
         </RenderCvRow>
         <RenderCvRow label="Space Between Connections">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.header?.connections?.space_between_connections}
             onChange={(value) =>
               updateDesign(['header', 'connections', 'space_between_connections'], value)
@@ -408,19 +543,19 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           />
         </RenderCvRow>
         <RenderCvRow label="Line Thickness">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.section_titles?.line_thickness}
             onChange={(value) => updateDesign(['section_titles', 'line_thickness'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Above">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.section_titles?.space_above}
             onChange={(value) => updateDesign(['section_titles', 'space_above'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Below">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.section_titles?.space_below}
             onChange={(value) => updateDesign(['section_titles', 'space_below'], value)}
           />
@@ -435,13 +570,13 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           />
         </RenderCvRow>
         <RenderCvRow label="Space Between Regular Entries">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.sections?.space_between_regular_entries}
             onChange={(value) => updateDesign(['sections', 'space_between_regular_entries'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Between Text Entries">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.sections?.space_between_text_based_entries}
             onChange={(value) =>
               updateDesign(['sections', 'space_between_text_based_entries'], value)
@@ -457,25 +592,26 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             onChange={(value) =>
               updateDesign(['sections', 'show_time_spans_in'], textToArray(value))
             }
+            placeholder="experience, education"
           />
         </RenderCvRow>
       </RenderCvSection>
 
       <RenderCvSection title="Entries">
         <RenderCvRow label="Date/Location Width">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.date_and_location_width}
             onChange={(value) => updateDesign(['entries', 'date_and_location_width'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Side Space">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.side_space}
             onChange={(value) => updateDesign(['entries', 'side_space'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Column Spacing">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.space_between_columns}
             onChange={(value) => updateDesign(['entries', 'space_between_columns'], value)}
           />
@@ -493,7 +629,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           />
         </RenderCvRow>
         <RenderCvRow label="Degree Width">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.degree_width}
             onChange={(value) => updateDesign(['entries', 'degree_width'], value)}
           />
@@ -502,13 +638,13 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
 
       <RenderCvSection title="Entry Summary">
         <RenderCvRow label="Space Above">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.summary?.space_above}
             onChange={(value) => updateDesign(['entries', 'summary', 'space_above'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Left">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.summary?.space_left}
             onChange={(value) => updateDesign(['entries', 'summary', 'space_left'], value)}
           />
@@ -517,31 +653,33 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
 
       <RenderCvSection title="Entry Highlights">
         <RenderCvRow label="Bullet">
-          <RenderCvInput
+          <RenderCvBulletPicker
             value={settings.design.entries?.highlights?.bullet}
+            options={RENDER_BULLET_OPTIONS}
             onChange={(value) => updateDesign(['entries', 'highlights', 'bullet'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Nested Bullet">
-          <RenderCvInput
+          <RenderCvBulletPicker
             value={settings.design.entries?.highlights?.nested_bullet}
+            options={RENDER_BULLET_OPTIONS}
             onChange={(value) => updateDesign(['entries', 'highlights', 'nested_bullet'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Left">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.highlights?.space_left}
             onChange={(value) => updateDesign(['entries', 'highlights', 'space_left'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Above">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.highlights?.space_above}
             onChange={(value) => updateDesign(['entries', 'highlights', 'space_above'], value)}
           />
         </RenderCvRow>
         <RenderCvRow label="Space Between Items">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.highlights?.space_between_items}
             onChange={(value) =>
               updateDesign(['entries', 'highlights', 'space_between_items'], value)
@@ -549,7 +687,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
           />
         </RenderCvRow>
         <RenderCvRow label="Space Between Bullet & Text">
-          <RenderCvInput
+          <RenderCvDimensionInput
             value={settings.design.entries?.highlights?.space_between_bullet_and_text}
             onChange={(value) =>
               updateDesign(['entries', 'highlights', 'space_between_bullet_and_text'], value)
@@ -559,31 +697,31 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
       </RenderCvSection>
 
       <RenderCvSection title="Templates">
-        <RenderCvRow label="Footer">
+        <RenderCvRow label="Footer" fieldHint={TEMPLATE_HINTS.footer}>
           <RenderCvInput
             value={settings.design.templates?.footer}
             onChange={(value) => updateDesign(['templates', 'footer'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Top Note">
+        <RenderCvRow label="Top Note" fieldHint={TEMPLATE_HINTS.top_note}>
           <RenderCvInput
             value={settings.design.templates?.top_note}
             onChange={(value) => updateDesign(['templates', 'top_note'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Single Date">
+        <RenderCvRow label="Single Date" fieldHint={TEMPLATE_HINTS.single_date}>
           <RenderCvInput
             value={settings.design.templates?.single_date}
             onChange={(value) => updateDesign(['templates', 'single_date'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Date Range">
+        <RenderCvRow label="Date Range" fieldHint={TEMPLATE_HINTS.date_range}>
           <RenderCvInput
             value={settings.design.templates?.date_range}
             onChange={(value) => updateDesign(['templates', 'date_range'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Time Span">
+        <RenderCvRow label="Time Span" fieldHint={TEMPLATE_HINTS.time_span}>
           <RenderCvInput
             value={settings.design.templates?.time_span}
             onChange={(value) => updateDesign(['templates', 'time_span'], value)}
@@ -592,7 +730,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
       </RenderCvSection>
 
       <RenderCvSection title="One-Line Entry Template">
-        <RenderCvRow label="Main Column">
+        <RenderCvRow label="Main Column" fieldHint={TEMPLATE_HINTS.one_line_entry}>
           <RenderCvTextarea
             value={settings.design.templates?.one_line_entry?.main_column}
             onChange={(value) =>
@@ -603,7 +741,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
       </RenderCvSection>
 
       <RenderCvSection title="Education Entry Template">
-        <RenderCvRow label="Main Column">
+        <RenderCvRow label="Main Column" fieldHint={TEMPLATE_HINTS.education_entry}>
           <RenderCvTextarea
             value={settings.design.templates?.education_entry?.main_column}
             onChange={(value) =>
@@ -611,7 +749,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             }
           />
         </RenderCvRow>
-        <RenderCvRow label="Degree Column">
+        <RenderCvRow label="Degree Column" fieldHint={TEMPLATE_HINTS.education_entry}>
           <RenderCvInput
             value={settings.design.templates?.education_entry?.degree_column}
             onChange={(value) =>
@@ -619,7 +757,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             }
           />
         </RenderCvRow>
-        <RenderCvRow label="Date & Location Column">
+        <RenderCvRow label="Date & Location Column" fieldHint={TEMPLATE_HINTS.education_entry}>
           <RenderCvInput
             value={settings.design.templates?.education_entry?.date_and_location_column}
             onChange={(value) =>
@@ -630,13 +768,13 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
       </RenderCvSection>
 
       <RenderCvSection title="Normal Entry Template">
-        <RenderCvRow label="Main Column">
+        <RenderCvRow label="Main Column" fieldHint={TEMPLATE_HINTS.normal_entry}>
           <RenderCvTextarea
             value={settings.design.templates?.normal_entry?.main_column}
             onChange={(value) => updateDesign(['templates', 'normal_entry', 'main_column'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Date & Location Column">
+        <RenderCvRow label="Date & Location Column" fieldHint={TEMPLATE_HINTS.normal_entry}>
           <RenderCvInput
             value={settings.design.templates?.normal_entry?.date_and_location_column}
             onChange={(value) =>
@@ -647,7 +785,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
       </RenderCvSection>
 
       <RenderCvSection title="Experience Entry Template">
-        <RenderCvRow label="Main Column">
+        <RenderCvRow label="Main Column" fieldHint={TEMPLATE_HINTS.experience_entry}>
           <RenderCvTextarea
             value={settings.design.templates?.experience_entry?.main_column}
             onChange={(value) =>
@@ -655,7 +793,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             }
           />
         </RenderCvRow>
-        <RenderCvRow label="Date & Location Column">
+        <RenderCvRow label="Date & Location Column" fieldHint={TEMPLATE_HINTS.experience_entry}>
           <RenderCvInput
             value={settings.design.templates?.experience_entry?.date_and_location_column}
             onChange={(value) =>
@@ -666,7 +804,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
       </RenderCvSection>
 
       <RenderCvSection title="Publication Entry Template">
-        <RenderCvRow label="Main Column">
+        <RenderCvRow label="Main Column" fieldHint={TEMPLATE_HINTS.publication_entry}>
           <RenderCvTextarea
             value={settings.design.templates?.publication_entry?.main_column}
             onChange={(value) =>
@@ -674,7 +812,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             }
           />
         </RenderCvRow>
-        <RenderCvRow label="Date & Location Column">
+        <RenderCvRow label="Date & Location Column" fieldHint={TEMPLATE_HINTS.publication_entry}>
           <RenderCvInput
             value={settings.design.templates?.publication_entry?.date_and_location_column}
             onChange={(value) =>

@@ -184,7 +184,12 @@ describe('TailorPage', () => {
         job_id: 'job-123',
         application_pack_id: 'pack-123',
         generation_run_id: 'run-123',
-        theme_settings: previewResult.data.theme_settings,
+        theme_settings: expect.objectContaining({
+          theme_id: 'moderncv',
+          theme_profiles: expect.objectContaining({
+            moderncv: expect.any(Object),
+          }),
+        }),
       })
     );
     expect(setImprovedData).toHaveBeenCalledWith(confirmedResult);

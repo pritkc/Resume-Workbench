@@ -518,6 +518,17 @@ class ArtifactSummary(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class RenderThemeProfileSettings(BaseModel):
+    """Sparse per-theme design overrides stored for the builder."""
+
+    page_size: Literal["A4", "LETTER"] | None = None
+    density_profile: Literal["compact", "balanced", "spacious"] | None = None
+    accent_color: Literal["blue", "green", "orange", "red"] | None = None
+    show_contact_icons: bool | None = None
+    margins_mm: dict[str, int] = Field(default_factory=dict)
+    design: dict[str, Any] = Field(default_factory=dict)
+
+
 class RenderThemeSettings(BaseModel):
     """RenderCV configuration exposed by the API.
 
@@ -546,6 +557,7 @@ class RenderThemeSettings(BaseModel):
         default_factory=lambda: {"top": 10, "bottom": 10, "left": 10, "right": 10}
     )
     design: dict[str, Any] = Field(default_factory=dict)
+    theme_profiles: dict[str, RenderThemeProfileSettings] = Field(default_factory=dict)
     locale: dict[str, Any] = Field(default_factory=dict)
     settings: dict[str, Any] = Field(default_factory=dict)
 

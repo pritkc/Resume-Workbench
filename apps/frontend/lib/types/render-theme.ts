@@ -1,3 +1,5 @@
+import themeBaselineData from '@/lib/rendercv/theme-baselines.json';
+
 export type RenderThemeId =
   | 'classic'
   | 'moderncv'
@@ -11,7 +13,12 @@ export type RenderThemeId =
 export type RenderPageSize = 'A4' | 'LETTER';
 export type RenderDensityProfile = 'compact' | 'balanced' | 'spacious';
 export type RenderAccentColor = 'blue' | 'green' | 'orange' | 'red';
-export type RenderAlignment = 'left' | 'center' | 'right' | 'justified';
+export type RenderAlignment =
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'justified'
+  | 'justified-with-no-hyphenation';
 export type RenderDateAlignment = 'left' | 'center' | 'right';
 export type RenderPhoneNumberFormat = 'national' | 'international' | 'E164';
 export type RenderPhotoPosition = 'left' | 'right';
@@ -47,6 +54,8 @@ export type RenderLanguage =
   | 'spanish'
   | 'turkish'
   | 'vietnamese';
+export type RenderDimensionUnit = 'cm' | 'mm' | 'in' | 'pt' | 'em' | 'ex';
+export type RenderBullet = '●' | '•' | '◦' | '-' | '◆' | '★' | '■' | '—' | '○';
 
 export interface RenderCvDesign {
   theme?: RenderThemeId;
@@ -165,7 +174,7 @@ export interface RenderCvDesign {
     };
     education_entry?: {
       main_column?: string;
-      degree_column?: string;
+      degree_column?: string | null;
       date_and_location_column?: string;
     };
     normal_entry?: {
@@ -205,6 +214,22 @@ export interface RenderCvRuntimeSettings {
   render_command?: Record<string, unknown>;
 }
 
+export interface RenderThemeProfileSettings {
+  page_size?: RenderPageSize;
+  density_profile?: RenderDensityProfile;
+  accent_color?: RenderAccentColor;
+  show_contact_icons?: boolean;
+  margins_mm?: Partial<{
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  }>;
+  design?: RenderCvDesign;
+}
+
+export type RenderThemeProfiles = Partial<Record<RenderThemeId, RenderThemeProfileSettings>>;
+
 export interface RenderThemeSettings {
   theme_id: RenderThemeId;
   page_size: RenderPageSize;
@@ -219,6 +244,7 @@ export interface RenderThemeSettings {
     right: number;
   };
   design: RenderCvDesign;
+  theme_profiles: RenderThemeProfiles;
   locale: RenderCvLocale;
   settings: RenderCvRuntimeSettings;
 }
@@ -240,6 +266,7 @@ export interface RenderPreviewResponse {
   pdf_artifact?: ArtifactSummary | null;
 }
 
+const DEFAULT_THEME_ID: RenderThemeId = 'classic';
 const DEFAULT_MARGINS_MM = {
   top: 10,
   bottom: 10,
@@ -285,14 +312,14 @@ const densityToLineSpacing: Record<RenderDensityProfile, string> = {
 
 const densityToRegularSpacing: Record<RenderDensityProfile, string> = {
   compact: '0.8em',
-  balanced: '1em',
-  spacious: '1.2em',
+  balanced: '1.2em',
+  spacious: '1.6em',
 };
 
 const densityToTextSpacing: Record<RenderDensityProfile, string> = {
   compact: '0.16em',
-  balanced: '0.24em',
-  spacious: '0.32em',
+  balanced: '0.3em',
+  spacious: '0.42em',
 };
 
 const ACCENT_RGB: Record<RenderAccentColor, string> = {
@@ -301,6 +328,20 @@ const ACCENT_RGB: Record<RenderAccentColor, string> = {
   orange: 'rgb(249, 115, 22)',
   red: 'rgb(220, 38, 38)',
 };
+
+const legacyDensityToRegularSpacing: Record<RenderDensityProfile, string> = {
+  compact: '0.8em',
+  balanced: '1em',
+  spacious: '1.2em',
+};
+
+const legacyDensityToTextSpacing: Record<RenderDensityProfile, string> = {
+  compact: '0.16em',
+  balanced: '0.24em',
+  spacious: '0.32em',
+};
+
+const THEME_BASELINES = themeBaselineData as Record<RenderThemeId, RenderCvDesign>;
 
 export const RENDER_THEME_OPTIONS: Array<{
   id: RenderThemeId;
@@ -367,6 +408,7 @@ export const RENDER_ALIGNMENT_OPTIONS: Array<{ id: RenderAlignment; label: strin
   { id: 'center', label: 'Center' },
   { id: 'right', label: 'Right' },
   { id: 'justified', label: 'Justified' },
+  { id: 'justified-with-no-hyphenation', label: 'Justified (No Hyphenation)' },
 ];
 
 export const RENDER_DATE_ALIGNMENT_OPTIONS: Array<{ id: RenderDateAlignment; label: string }> = [
@@ -406,48 +448,194 @@ export const RENDER_SECTION_TITLE_TYPE_OPTIONS: Array<{
   { id: 'centered_with_full_line', label: 'Centered Full Line' },
 ];
 
-function mmToInches(value: number): string {
-  return `${(value / 25.4).toFixed(2)}in`;
+export const RENDER_FONT_FAMILY_OPTIONS = [
+  'DejaVu Sans Mono',
+  'EB Garamond',
+  'Fontin',
+  'Gentium Book Plus',
+  'Lato',
+  'Libertinus Serif',
+  'Mukta',
+  'New Computer Modern',
+  'Noto Sans',
+  'Open Sans',
+  'Open Sauce Sans',
+  'Poppins',
+  'Raleway',
+  'Roboto',
+  'Source Sans 3',
+  'Ubuntu',
+  'XCharter',
+] as const;
+
+export const RENDER_BULLET_OPTIONS: RenderBullet[] = ['●', '•', '◦', '-', '◆', '★', '■', '—', '○'];
+export const RENDER_DIMENSION_UNITS: RenderDimensionUnit[] = ['cm', 'mm', 'in', 'pt', 'em', 'ex'];
+
+export const TEMPLATE_HINTS = {
+  footer: 'Placeholders: NAME, PAGE_NUMBER, TOTAL_PAGES, CURRENT_DATE, MONTH_NAME, YEAR.',
+  top_note: 'Placeholders: LAST_UPDATED, CURRENT_DATE, NAME, MONTH_NAME, YEAR.',
+  single_date: 'Placeholders: MONTH_NAME, MONTH_ABBREVIATION, MONTH, DAY, YEAR.',
+  date_range: 'Placeholders: START_DATE, END_DATE.',
+  time_span: 'Placeholders: HOW_MANY_YEARS, YEARS, HOW_MANY_MONTHS, MONTHS.',
+  one_line_entry: 'Placeholders: LABEL, DETAILS.',
+  education_entry: 'Placeholders: INSTITUTION, AREA, DEGREE, DEGREE_WITH_AREA, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
+  normal_entry: 'Placeholders: NAME, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
+  experience_entry: 'Placeholders: COMPANY, POSITION, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
+  publication_entry: 'Placeholders: TITLE, AUTHORS, SUMMARY, DOI, URL, JOURNAL, DATE.',
+} as const;
+
+const DEFAULT_RENDERCV_LOCALE: RenderCvLocale = {
+  language: 'english',
+  last_updated: 'Last updated in',
+  present: 'present',
+  month: 'month',
+  months: 'months',
+  year: 'year',
+  years: 'years',
+  phrases: {
+    degree_with_area: 'DEGREE in AREA',
+  },
+  month_abbreviations: DEFAULT_MONTH_ABBREVIATIONS,
+  month_names: DEFAULT_MONTH_NAMES,
+};
+
+const DEFAULT_RENDERCV_RUNTIME_SETTINGS: RenderCvRuntimeSettings = {
+  current_date: 'today',
+  bold_keywords: [],
+  pdf_title: 'NAME - CV',
+};
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
 }
 
-function inchesToMm(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-  const numeric = Number.parseFloat(value.replace(/[^0-9.]/g, ''));
-  if (Number.isNaN(numeric)) return fallback;
-  if (value.includes('cm')) return Math.round(numeric * 10);
-  if (value.includes('pt')) return Math.round((numeric / 72) * 25.4);
-  if (value.includes('em')) return fallback;
-  return Math.round(numeric * 25.4);
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function deepMerge<T extends Record<string, unknown>>(
   base: T,
   updates?: Record<string, unknown>
 ): T {
-  if (!updates) return structuredClone(base);
+  if (!updates) {
+    return clone(base);
+  }
 
-  const output = structuredClone(base) as Record<string, unknown>;
+  const output = clone(base) as Record<string, unknown>;
   for (const [key, value] of Object.entries(updates)) {
-    if (
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      output[key] &&
-      typeof output[key] === 'object' &&
-      !Array.isArray(output[key])
-    ) {
-      output[key] = deepMerge(
-        output[key] as Record<string, unknown>,
-        value as Record<string, unknown>
-      );
+    if (typeof value === 'undefined') {
       continue;
     }
-    output[key] = value;
+    if (isPlainObject(value) && isPlainObject(output[key])) {
+      output[key] = deepMerge(output[key] as Record<string, unknown>, value);
+      continue;
+    }
+    output[key] = clone(value);
   }
   return output as T;
 }
 
-function buildDefaultDesign(
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((value, index) => deepEqual(value, b[index]));
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) {
+      return false;
+    }
+    return aKeys.every((key) => deepEqual(a[key], b[key]));
+  }
+  return false;
+}
+
+function diffObject(base: unknown, value: unknown): unknown {
+  if (deepEqual(base, value)) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return clone(value);
+  }
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const baseRecord = isPlainObject(base) ? base : {};
+  const output: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    const diff = diffObject(baseRecord[key], nestedValue);
+    if (typeof diff !== 'undefined') {
+      output[key] = diff;
+    }
+  }
+  return Object.keys(output).length > 0 ? output : undefined;
+}
+
+function mmToInches(value: number): string {
+  return `${(value / 25.4).toFixed(2)}in`;
+}
+
+function inchesToMm(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const numeric = Number.parseFloat(value.replace(/[^0-9.-]/g, ''));
+  if (Number.isNaN(numeric)) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized.endsWith('mm')) return Math.round(numeric);
+  if (normalized.endsWith('cm')) return Math.round(numeric * 10);
+  if (normalized.endsWith('pt')) return Math.round((numeric / 72) * 25.4);
+  if (normalized.endsWith('in')) return Math.round(numeric * 25.4);
+  if (normalized.endsWith('em') || normalized.endsWith('ex')) return fallback;
+  return Math.round(numeric * 25.4);
+}
+
+function normalizeColorValue(value?: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  return value.replace(/\s+/g, '').toLowerCase();
+}
+
+function applyDensityToDesign(
+  design: RenderCvDesign,
+  density: RenderDensityProfile
+): RenderCvDesign {
+  return {
+    ...design,
+    typography: {
+      ...design.typography,
+      line_spacing: densityToLineSpacing[density],
+    },
+    sections: {
+      ...design.sections,
+      space_between_regular_entries: densityToRegularSpacing[density],
+      space_between_text_based_entries: densityToTextSpacing[density],
+    },
+  };
+}
+
+function applyAccentToDesign(
+  design: RenderCvDesign,
+  accentColor: RenderAccentColor
+): RenderCvDesign {
+  const accent = ACCENT_RGB[accentColor];
+  return {
+    ...design,
+    colors: {
+      ...design.colors,
+      name: accent,
+      headline: accent,
+      connections: accent,
+      section_titles: accent,
+      links: accent,
+    },
+  };
+}
+
+function buildLegacyDefaultDesign(
   themeId: RenderThemeId,
   pageSize: RenderPageSize,
   density: RenderDensityProfile,
@@ -455,7 +643,6 @@ function buildDefaultDesign(
   showContactIcons: boolean,
   marginsMm: RenderThemeSettings['margins_mm']
 ): RenderCvDesign {
-  const accent = ACCENT_RGB[accentColor];
   return {
     theme: themeId,
     page: {
@@ -469,11 +656,11 @@ function buildDefaultDesign(
     },
     colors: {
       body: 'rgb(0, 0, 0)',
-      name: accent,
-      headline: accent,
-      connections: accent,
-      section_titles: accent,
-      links: accent,
+      name: ACCENT_RGB[accentColor],
+      headline: ACCENT_RGB[accentColor],
+      connections: ACCENT_RGB[accentColor],
+      section_titles: ACCENT_RGB[accentColor],
+      links: ACCENT_RGB[accentColor],
       footer: 'rgb(128, 128, 128)',
       top_note: 'rgb(128, 128, 128)',
     },
@@ -538,8 +725,8 @@ function buildDefaultDesign(
     },
     sections: {
       allow_page_break: true,
-      space_between_regular_entries: densityToRegularSpacing[density],
-      space_between_text_based_entries: densityToTextSpacing[density],
+      space_between_regular_entries: legacyDensityToRegularSpacing[density],
+      space_between_text_based_entries: legacyDensityToTextSpacing[density],
       show_time_spans_in: [],
     },
     entries: {
@@ -592,45 +779,8 @@ function buildDefaultDesign(
   };
 }
 
-const DEFAULT_RENDERCV_LOCALE: RenderCvLocale = {
-  language: 'english',
-  last_updated: 'Last updated in',
-  present: 'present',
-  month: 'month',
-  months: 'months',
-  year: 'year',
-  years: 'years',
-  phrases: {
-    degree_with_area: 'DEGREE in AREA',
-  },
-  month_abbreviations: DEFAULT_MONTH_ABBREVIATIONS,
-  month_names: DEFAULT_MONTH_NAMES,
-};
-
-const DEFAULT_RENDERCV_RUNTIME_SETTINGS: RenderCvRuntimeSettings = {
-  current_date: 'today',
-  bold_keywords: [],
-  pdf_title: 'NAME - CV',
-};
-
-export const DEFAULT_RENDER_THEME_SETTINGS: RenderThemeSettings = {
-  theme_id: 'classic',
-  page_size: 'A4',
-  density_profile: 'balanced',
-  bold_keywords: false,
-  accent_color: 'blue',
-  show_contact_icons: false,
-  margins_mm: { ...DEFAULT_MARGINS_MM },
-  design: buildDefaultDesign('classic', 'A4', 'balanced', 'blue', false, DEFAULT_MARGINS_MM),
-  locale: structuredClone(DEFAULT_RENDERCV_LOCALE),
-  settings: structuredClone(DEFAULT_RENDERCV_RUNTIME_SETTINGS),
-};
-
 function normalizeThemeId(value?: string | null): RenderThemeId {
-  return (
-    RENDER_THEME_OPTIONS.find((option) => option.id === value)?.id ??
-    DEFAULT_RENDER_THEME_SETTINGS.theme_id
-  );
+  return RENDER_THEME_OPTIONS.find((option) => option.id === value)?.id ?? DEFAULT_THEME_ID;
 }
 
 function normalizePageSize(value?: string | null): RenderPageSize {
@@ -647,7 +797,266 @@ function normalizeAccent(value?: string | null): RenderAccentColor {
     : 'blue';
 }
 
-export function normalizeRenderThemeSettings(
+function normalizeThemeProfile(
+  value?: Partial<RenderThemeProfileSettings> | null
+): RenderThemeProfileSettings {
+  const margins = value?.margins_mm;
+  const normalizedMargins =
+    isPlainObject(margins) && Object.keys(margins).length > 0
+      ? {
+          ...(typeof margins.top === 'number' ? { top: margins.top } : {}),
+          ...(typeof margins.bottom === 'number' ? { bottom: margins.bottom } : {}),
+          ...(typeof margins.left === 'number' ? { left: margins.left } : {}),
+          ...(typeof margins.right === 'number' ? { right: margins.right } : {}),
+        }
+      : undefined;
+
+  return {
+    ...(value?.page_size ? { page_size: normalizePageSize(value.page_size) } : {}),
+    ...(value?.density_profile ? { density_profile: normalizeDensity(value.density_profile) } : {}),
+    ...(value?.accent_color ? { accent_color: normalizeAccent(value.accent_color) } : {}),
+    ...(typeof value?.show_contact_icons === 'boolean'
+      ? { show_contact_icons: value.show_contact_icons }
+      : {}),
+    ...(normalizedMargins && Object.keys(normalizedMargins).length > 0
+      ? { margins_mm: normalizedMargins }
+      : {}),
+    ...(isPlainObject(value?.design) ? { design: clone(value.design as RenderCvDesign) } : {}),
+  };
+}
+
+function normalizeThemeProfiles(value: unknown): RenderThemeProfiles {
+  if (!isPlainObject(value)) {
+    return {};
+  }
+
+  const nextProfiles: RenderThemeProfiles = {};
+  for (const option of RENDER_THEME_OPTIONS) {
+    const rawProfile = value[option.id];
+    if (!isPlainObject(rawProfile)) {
+      continue;
+    }
+    const normalized = normalizeThemeProfile(rawProfile as RenderThemeProfileSettings);
+    if (isThemeProfileEmpty(normalized)) {
+      continue;
+    }
+    nextProfiles[option.id] = normalized;
+  }
+  return nextProfiles;
+}
+
+export function getThemeDesignBaseline(themeId: RenderThemeId): RenderCvDesign {
+  const classicBaseline = clone(THEME_BASELINES.classic);
+  if (themeId === 'classic') {
+    return classicBaseline;
+  }
+  const override = THEME_BASELINES[themeId] ?? { theme: themeId };
+  return {
+    ...(deepMerge(classicBaseline as Record<string, unknown>, override as Record<string, unknown>) as RenderCvDesign),
+    theme: themeId,
+  };
+}
+
+function inferAccentFromDesign(design: RenderCvDesign): RenderAccentColor {
+  const accentCandidates = [
+    design.colors?.name,
+    design.colors?.headline,
+    design.colors?.connections,
+    design.colors?.section_titles,
+    design.colors?.links,
+  ]
+    .map((value) => normalizeColorValue(value))
+    .filter(Boolean) as string[];
+
+  for (const [accent, rgb] of Object.entries(ACCENT_RGB) as Array<[RenderAccentColor, string]>) {
+    const normalizedRgb = normalizeColorValue(rgb);
+    if (accentCandidates.length > 0 && accentCandidates.every((value) => value === normalizedRgb)) {
+      return accent;
+    }
+  }
+
+  const nameColor = normalizeColorValue(design.colors?.name);
+  for (const [accent, rgb] of Object.entries(ACCENT_RGB) as Array<[RenderAccentColor, string]>) {
+    if (nameColor === normalizeColorValue(rgb)) {
+      return accent;
+    }
+  }
+
+  return 'blue';
+}
+
+function inferDensityFromDesign(design: RenderCvDesign): RenderDensityProfile {
+  const lineSpacing = design.typography?.line_spacing;
+  const regularSpacing = design.sections?.space_between_regular_entries;
+  const textSpacing = design.sections?.space_between_text_based_entries;
+
+  for (const density of RENDER_DENSITY_OPTIONS.map((option) => option.id)) {
+    if (
+      lineSpacing === densityToLineSpacing[density] &&
+      regularSpacing === densityToRegularSpacing[density] &&
+      textSpacing === densityToTextSpacing[density]
+    ) {
+      return density;
+    }
+  }
+
+  return 'balanced';
+}
+
+function resolveThemeProfileState(
+  themeId: RenderThemeId,
+  profile?: RenderThemeProfileSettings
+): Pick<
+  RenderThemeSettings,
+  'page_size' | 'density_profile' | 'accent_color' | 'show_contact_icons' | 'margins_mm' | 'design'
+> {
+  const activeProfile = normalizeThemeProfile(profile);
+  let design = deepMerge(
+    getThemeDesignBaseline(themeId) as Record<string, unknown>,
+    (activeProfile.design ?? {}) as Record<string, unknown>
+  ) as RenderCvDesign;
+
+  if (activeProfile.page_size) {
+    design = {
+      ...design,
+      page: {
+        ...design.page,
+        size: activeProfile.page_size === 'A4' ? 'a4' : 'us-letter',
+      },
+    };
+  }
+
+  if (activeProfile.margins_mm) {
+    design = {
+      ...design,
+      page: {
+        ...design.page,
+        ...(typeof activeProfile.margins_mm.top === 'number'
+          ? { top_margin: mmToInches(activeProfile.margins_mm.top) }
+          : {}),
+        ...(typeof activeProfile.margins_mm.bottom === 'number'
+          ? { bottom_margin: mmToInches(activeProfile.margins_mm.bottom) }
+          : {}),
+        ...(typeof activeProfile.margins_mm.left === 'number'
+          ? { left_margin: mmToInches(activeProfile.margins_mm.left) }
+          : {}),
+        ...(typeof activeProfile.margins_mm.right === 'number'
+          ? { right_margin: mmToInches(activeProfile.margins_mm.right) }
+          : {}),
+      },
+    };
+  }
+
+  if (typeof activeProfile.show_contact_icons === 'boolean') {
+    design = {
+      ...design,
+      header: {
+        ...design.header,
+        connections: {
+          ...design.header?.connections,
+          show_icons: activeProfile.show_contact_icons,
+        },
+      },
+    };
+  }
+
+  if (activeProfile.density_profile) {
+    design = applyDensityToDesign(design, activeProfile.density_profile);
+  }
+
+  if (activeProfile.accent_color) {
+    design = applyAccentToDesign(design, activeProfile.accent_color);
+  }
+
+  const pageSize =
+    design.page?.size === 'us-letter'
+      ? 'LETTER'
+      : design.page?.size === 'a4'
+        ? 'A4'
+        : activeProfile.page_size ?? 'A4';
+
+  const marginsMm = {
+    top: inchesToMm(design.page?.top_margin, DEFAULT_MARGINS_MM.top),
+    bottom: inchesToMm(design.page?.bottom_margin, DEFAULT_MARGINS_MM.bottom),
+    left: inchesToMm(design.page?.left_margin, DEFAULT_MARGINS_MM.left),
+    right: inchesToMm(design.page?.right_margin, DEFAULT_MARGINS_MM.right),
+  };
+
+  const showContactIcons =
+    typeof activeProfile.show_contact_icons === 'boolean'
+      ? activeProfile.show_contact_icons
+      : (design.header?.connections?.show_icons ?? false);
+
+  return {
+    page_size: pageSize,
+    density_profile: activeProfile.density_profile ?? inferDensityFromDesign(design),
+    accent_color: activeProfile.accent_color ?? inferAccentFromDesign(design),
+    show_contact_icons: showContactIcons,
+    margins_mm: marginsMm,
+    design: {
+      ...design,
+      theme: themeId,
+      page: {
+        ...design.page,
+        size: pageSize === 'A4' ? 'a4' : 'us-letter',
+      },
+      header: {
+        ...design.header,
+        connections: {
+          ...design.header?.connections,
+          show_icons: showContactIcons,
+        },
+      },
+    },
+  };
+}
+
+function isThemeProfileEmpty(profile?: RenderThemeProfileSettings | null): boolean {
+  if (!profile) {
+    return true;
+  }
+  return !(
+    profile.page_size ||
+    profile.density_profile ||
+    profile.accent_color ||
+    typeof profile.show_contact_icons === 'boolean' ||
+    (profile.margins_mm && Object.keys(profile.margins_mm).length > 0) ||
+    (profile.design && Object.keys(profile.design).length > 0)
+  );
+}
+
+function cleanThemeProfile(profile?: RenderThemeProfileSettings | null): RenderThemeProfileSettings | null {
+  if (!profile) {
+    return null;
+  }
+
+  const nextProfile: RenderThemeProfileSettings = {};
+  if (profile.page_size) {
+    nextProfile.page_size = normalizePageSize(profile.page_size);
+  }
+  if (profile.density_profile) {
+    nextProfile.density_profile = normalizeDensity(profile.density_profile);
+  }
+  if (profile.accent_color) {
+    nextProfile.accent_color = normalizeAccent(profile.accent_color);
+  }
+  if (typeof profile.show_contact_icons === 'boolean') {
+    nextProfile.show_contact_icons = profile.show_contact_icons;
+  }
+  if (profile.margins_mm && Object.keys(profile.margins_mm).length > 0) {
+    nextProfile.margins_mm = clone(profile.margins_mm);
+  }
+  if (profile.design) {
+    const cleanedDesign = diffObject({}, profile.design);
+    if (cleanedDesign && isPlainObject(cleanedDesign)) {
+      nextProfile.design = cleanedDesign as RenderCvDesign;
+    }
+  }
+
+  return isThemeProfileEmpty(nextProfile) ? null : nextProfile;
+}
+
+function normalizeLegacyRenderThemeSettings(
   value?: Partial<RenderThemeSettings> | null
 ): RenderThemeSettings {
   const themeId = normalizeThemeId(
@@ -659,7 +1068,7 @@ export function normalizeRenderThemeSettings(
     ...DEFAULT_MARGINS_MM,
     ...(value?.margins_mm ?? {}),
   };
-  const designDefaults = buildDefaultDesign(
+  const designDefaults = buildLegacyDefaultDesign(
     themeId,
     normalizePageSize(value?.page_size),
     density,
@@ -677,14 +1086,12 @@ export function normalizeRenderThemeSettings(
       : design.page?.size === 'a4'
         ? 'A4'
         : normalizePageSize(value?.page_size);
-
   const nextMargins = {
     top: inchesToMm(design.page?.top_margin, marginsMm.top),
     bottom: inchesToMm(design.page?.bottom_margin, marginsMm.bottom),
     left: inchesToMm(design.page?.left_margin, marginsMm.left),
     right: inchesToMm(design.page?.right_margin, marginsMm.right),
   };
-
   const locale = deepMerge(
     DEFAULT_RENDERCV_LOCALE as Record<string, unknown>,
     (value?.locale ?? {}) as Record<string, unknown>
@@ -695,11 +1102,10 @@ export function normalizeRenderThemeSettings(
   ) as RenderCvRuntimeSettings;
 
   return {
-    ...DEFAULT_RENDER_THEME_SETTINGS,
-    ...value,
     theme_id: themeId,
     page_size: pageSize,
     density_profile: density,
+    bold_keywords: Boolean(value?.bold_keywords ?? false),
     accent_color: accentColor,
     show_contact_icons:
       design.header?.connections?.show_icons ?? value?.show_contact_icons ?? false,
@@ -719,9 +1125,180 @@ export function normalizeRenderThemeSettings(
         },
       },
     },
+    theme_profiles: {},
     locale,
     settings: runtimeSettings,
   };
+}
+
+function migrateLegacyThemeSettings(
+  value?: Partial<RenderThemeSettings> | null
+): RenderThemeSettings {
+  const legacySettings = normalizeLegacyRenderThemeSettings(value);
+  const baselineState = resolveThemeProfileState(legacySettings.theme_id, {});
+  const designDiff = diffObject(
+    getThemeDesignBaseline(legacySettings.theme_id),
+    legacySettings.design
+  ) as RenderCvDesign | undefined;
+
+  const migratedProfile = cleanThemeProfile({
+    ...(legacySettings.page_size !== baselineState.page_size
+      ? { page_size: legacySettings.page_size }
+      : {}),
+    ...(legacySettings.density_profile !== baselineState.density_profile
+      ? { density_profile: legacySettings.density_profile }
+      : {}),
+    ...(legacySettings.accent_color !== baselineState.accent_color
+      ? { accent_color: legacySettings.accent_color }
+      : {}),
+    ...(legacySettings.show_contact_icons !== baselineState.show_contact_icons
+      ? { show_contact_icons: legacySettings.show_contact_icons }
+      : {}),
+    ...(!deepEqual(legacySettings.margins_mm, baselineState.margins_mm)
+      ? { margins_mm: legacySettings.margins_mm }
+      : {}),
+    ...(designDiff ? { design: designDiff } : {}),
+  });
+
+  return normalizeRenderThemeSettings({
+    theme_id: legacySettings.theme_id,
+    theme_profiles: migratedProfile ? { [legacySettings.theme_id]: migratedProfile } : {},
+    locale: legacySettings.locale,
+    settings: legacySettings.settings,
+    bold_keywords: legacySettings.bold_keywords,
+  });
+}
+
+export function normalizeRenderThemeSettings(
+  value?: Partial<RenderThemeSettings> | null
+): RenderThemeSettings {
+  if (!value) {
+    const resolved = resolveThemeProfileState(DEFAULT_THEME_ID, {});
+    return {
+      theme_id: DEFAULT_THEME_ID,
+      page_size: resolved.page_size,
+      density_profile: resolved.density_profile,
+      bold_keywords: false,
+      accent_color: resolved.accent_color,
+      show_contact_icons: resolved.show_contact_icons,
+      margins_mm: resolved.margins_mm,
+      design: resolved.design,
+      theme_profiles: {},
+      locale: clone(DEFAULT_RENDERCV_LOCALE),
+      settings: clone(DEFAULT_RENDERCV_RUNTIME_SETTINGS),
+    };
+  }
+
+  if (!('theme_profiles' in value)) {
+    return migrateLegacyThemeSettings(value);
+  }
+
+  const themeId = normalizeThemeId(value.theme_id);
+  const themeProfiles = normalizeThemeProfiles(value.theme_profiles);
+  const resolved = resolveThemeProfileState(themeId, themeProfiles[themeId]);
+  const locale = deepMerge(
+    DEFAULT_RENDERCV_LOCALE as Record<string, unknown>,
+    (value.locale ?? {}) as Record<string, unknown>
+  ) as RenderCvLocale;
+  const runtimeSettings = deepMerge(
+    DEFAULT_RENDERCV_RUNTIME_SETTINGS as Record<string, unknown>,
+    (value.settings ?? {}) as Record<string, unknown>
+  ) as RenderCvRuntimeSettings;
+
+  return {
+    theme_id: themeId,
+    page_size: resolved.page_size,
+    density_profile: resolved.density_profile,
+    bold_keywords: Boolean(value.bold_keywords ?? false),
+    accent_color: resolved.accent_color,
+    show_contact_icons: resolved.show_contact_icons,
+    margins_mm: resolved.margins_mm,
+    design: resolved.design,
+    theme_profiles: themeProfiles,
+    locale,
+    settings: runtimeSettings,
+  };
+}
+
+export const DEFAULT_RENDER_THEME_SETTINGS = normalizeRenderThemeSettings({
+  theme_id: DEFAULT_THEME_ID,
+  theme_profiles: {},
+  locale: DEFAULT_RENDERCV_LOCALE,
+  settings: DEFAULT_RENDERCV_RUNTIME_SETTINGS,
+});
+
+export function serializeRenderThemeSettings(
+  value?: RenderThemeSettings | null
+): Record<string, unknown> {
+  const resolved = normalizeRenderThemeSettings(value);
+  const themeProfiles: Record<string, RenderThemeProfileSettings> = {};
+
+  for (const option of RENDER_THEME_OPTIONS) {
+    const cleanedProfile = cleanThemeProfile(resolved.theme_profiles[option.id]);
+    if (cleanedProfile) {
+      themeProfiles[option.id] = cleanedProfile;
+    }
+  }
+
+  return {
+    theme_id: resolved.theme_id,
+    bold_keywords: resolved.bold_keywords,
+    locale: clone(resolved.locale),
+    settings: clone(resolved.settings),
+    theme_profiles: themeProfiles,
+  };
+}
+
+export function switchActiveRenderTheme(
+  settings: RenderThemeSettings,
+  themeId: RenderThemeId
+): RenderThemeSettings {
+  return normalizeRenderThemeSettings({
+    ...settings,
+    theme_id: themeId,
+    theme_profiles: settings.theme_profiles,
+  });
+}
+
+export function resetActiveRenderThemeProfile(settings: RenderThemeSettings): RenderThemeSettings {
+  const nextProfiles = { ...settings.theme_profiles };
+  delete nextProfiles[settings.theme_id];
+  return normalizeRenderThemeSettings({
+    ...settings,
+    theme_profiles: nextProfiles,
+  });
+}
+
+export function updateActiveRenderTheme(
+  settings: RenderThemeSettings,
+  mutate: (draft: { design: RenderCvDesign; profile: RenderThemeProfileSettings }) => void
+): RenderThemeSettings {
+  const themeId = settings.theme_id;
+  const draftDesign = clone(settings.design);
+  const draftProfile = normalizeThemeProfile(settings.theme_profiles[themeId]);
+
+  mutate({ design: draftDesign, profile: draftProfile });
+
+  const designDiff = diffObject(getThemeDesignBaseline(themeId), draftDesign) as
+    | RenderCvDesign
+    | undefined;
+
+  const cleanedProfile = cleanThemeProfile({
+    ...draftProfile,
+    ...(designDiff ? { design: designDiff } : { design: undefined }),
+  });
+
+  const nextProfiles = { ...settings.theme_profiles };
+  if (cleanedProfile) {
+    nextProfiles[themeId] = cleanedProfile;
+  } else {
+    delete nextProfiles[themeId];
+  }
+
+  return normalizeRenderThemeSettings({
+    ...settings,
+    theme_profiles: nextProfiles,
+  });
 }
 
 export function renderThemeSettingsToQuery(settings?: RenderThemeSettings): URLSearchParams {

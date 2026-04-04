@@ -1,7 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { RenderPreviewPanel } from '@/components/rendercv/render-preview-panel';
-import type { RenderThemeSettings } from '@/lib/types/render-theme';
+import {
+  DEFAULT_RENDER_THEME_SETTINGS,
+  normalizeRenderThemeSettings,
+  type RenderThemeSettings,
+} from '@/lib/types/render-theme';
 
 const fetchResumeRenderPreview = vi.fn();
 
@@ -10,13 +14,7 @@ vi.mock('@/lib/api/resume', () => ({
 }));
 
 const baseSettings: RenderThemeSettings = {
-  theme_id: 'classic',
-  page_size: 'A4',
-  density_profile: 'balanced',
-  bold_keywords: false,
-  accent_color: 'blue',
-  show_contact_icons: false,
-  margins_mm: { top: 10, bottom: 10, left: 10, right: 10 },
+  ...DEFAULT_RENDER_THEME_SETTINGS,
 };
 
 describe('RenderPreviewPanel', () => {
@@ -57,10 +55,15 @@ describe('RenderPreviewPanel', () => {
     expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
 
     const updatedSettings: RenderThemeSettings = {
-      ...baseSettings,
-      theme_id: 'moderncv',
-      density_profile: 'compact',
-      accent_color: 'green',
+      ...normalizeRenderThemeSettings({
+        theme_id: 'moderncv',
+        theme_profiles: {
+          moderncv: {
+            density_profile: 'compact',
+            accent_color: 'green',
+          },
+        },
+      }),
     };
 
     rerender(<RenderPreviewPanel resumeId="resume-123" settings={updatedSettings} />);

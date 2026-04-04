@@ -24,6 +24,7 @@ from app.rendering.rendercv_engine import RenderCVRenderError, render_resume_bun
 from app.rendering.theme_profiles import (
     RenderThemeSettings as RenderThemeProfile,
     legacy_to_theme_settings,
+    migrate_legacy_theme_settings,
 )
 from app.services.artifact_service import store_rendercv_bundle
 
@@ -129,9 +130,16 @@ def _resolve_render_theme_settings(theme_settings: Any) -> RenderThemeProfile:
     if theme_settings is None:
         return RenderThemeProfile()
     if hasattr(theme_settings, "model_dump"):
-        return RenderThemeProfile(**theme_settings.model_dump())
+        model_fields_set = getattr(theme_settings, "model_fields_set", set())
+        return RenderThemeProfile.from_payload(
+            theme_settings.model_dump(exclude_none=True),
+            uses_theme_profiles="theme_profiles" in model_fields_set,
+        )
     if isinstance(theme_settings, dict):
-        return RenderThemeProfile(**theme_settings)
+        return RenderThemeProfile.from_payload(
+            theme_settings,
+            uses_theme_profiles="theme_profiles" in theme_settings,
+        )
     return RenderThemeProfile()
 
 
@@ -165,13 +173,22 @@ def _normalize_stored_theme_settings(
     theme_settings: Any, *, resume_id: str
 ) -> dict[str, Any] | None:
     if theme_settings is None:
-        return None
+        return RenderThemeProfile.from_payload(
+            {"theme_id": "classic", "theme_profiles": {}},
+            uses_theme_profiles=True,
+        ).to_dict()
 
     try:
         if hasattr(theme_settings, "model_dump"):
             return _resolve_render_theme_settings(theme_settings).to_dict()
 
         if isinstance(theme_settings, dict):
+            if "theme_profiles" in theme_settings:
+                return RenderThemeProfile.from_payload(
+                    theme_settings,
+                    uses_theme_profiles=True,
+                ).to_dict()
+
             if {
                 "theme_id",
                 "page_size",
@@ -184,14 +201,18 @@ def _normalize_stored_theme_settings(
                 "locale",
                 "settings",
             } & set(theme_settings.keys()):
-                return _resolve_render_theme_settings(theme_settings).to_dict()
+                legacy_settings = RenderThemeProfile.from_payload(
+                    theme_settings,
+                    uses_theme_profiles=False,
+                )
+                return migrate_legacy_theme_settings(legacy_settings).to_dict()
 
             margins = theme_settings.get("margins")
             spacing = theme_settings.get("spacing")
             margins = margins if isinstance(margins, dict) else {}
             spacing = spacing if isinstance(spacing, dict) else {}
 
-            return legacy_to_theme_settings(
+            legacy_settings = legacy_to_theme_settings(
                 template=str(theme_settings.get("template") or "swiss-single"),
                 page_size=_coerce_page_size(theme_settings.get("pageSize")),
                 compact_mode=bool(theme_settings.get("compactMode", False)),
@@ -204,7 +225,8 @@ def _normalize_stored_theme_settings(
                 margin_bottom=_coerce_margin_mm(margins.get("bottom"), 10),
                 margin_left=_coerce_margin_mm(margins.get("left"), 10),
                 margin_right=_coerce_margin_mm(margins.get("right"), 10),
-            ).to_dict()
+            )
+            return migrate_legacy_theme_settings(legacy_settings).to_dict()
     except Exception as exc:
         logger.warning(
             "Falling back to default theme settings for resume %s: %s",
@@ -212,7 +234,10 @@ def _normalize_stored_theme_settings(
             exc,
         )
 
-    return RenderThemeProfile().to_dict()
+    return RenderThemeProfile.from_payload(
+        {"theme_id": "classic", "theme_profiles": {}},
+        uses_theme_profiles=True,
+    ).to_dict()
 
 
 def _stored_or_default_theme_settings(resume: dict[str, Any]) -> RenderThemeProfile:
@@ -1122,7 +1147,7 @@ async def _improve_preview_flow(
         company=job.get("company"),
         role=job.get("role"),
         location=job.get("location"),
-        theme_settings=theme_settings.to_dict(),
+        theme_settings=theme_settings.to_storage_dict(),
     )
     preview_run = db.create_generation_run(
         run_kind="application_pack_preview",
@@ -1319,7 +1344,7 @@ async def improve_resume_confirm_endpoint(
             outreach_message=outreach_message,
             title=title,
             application_pack_id=request.application_pack_id,
-            theme_settings=theme_settings.to_dict(),
+            theme_settings=theme_settings.to_storage_dict(),
         )
 
         improvements_payload = [imp.model_dump() for imp in request.improvements]
@@ -1337,7 +1362,7 @@ async def improve_resume_confirm_endpoint(
                 {
                     "tailored_resume_id": tailored_resume["resume_id"],
                     "status": "confirmed",
-                    "theme_settings": theme_settings.to_dict(),
+                    "theme_settings": theme_settings.to_storage_dict(),
                 },
             )
         else:
@@ -1348,7 +1373,7 @@ async def improve_resume_confirm_endpoint(
                 company=job.get("company"),
                 role=job.get("role"),
                 location=job.get("location"),
-                theme_settings=theme_settings.to_dict(),
+                theme_settings=theme_settings.to_storage_dict(),
             )
             application_pack_id = created_pack["pack_id"]
             db.update_resume(
@@ -1698,7 +1723,7 @@ async def update_resume_endpoint(
         "processing_status": "ready",
     }
     if incoming_theme_settings is not None:
-        update_fields["theme_settings"] = incoming_theme_settings.to_dict()
+        update_fields["theme_settings"] = incoming_theme_settings.to_storage_dict()
 
     updated = db.update_resume(
         resume_id,

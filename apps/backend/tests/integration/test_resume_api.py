@@ -101,15 +101,22 @@ class TestGetResume:
         data = resp.json()["data"]
         assert data["processed_resume"] is None
         assert data["raw_resume"]["content"] == '{"summary":"Raw JSON fallback"}'
-        assert data["theme_settings"] == {
-            "theme_id": "moderncv",
-            "page_size": "LETTER",
-            "density_profile": "compact",
-            "bold_keywords": False,
-            "accent_color": "green",
-            "show_contact_icons": True,
-            "margins_mm": {"top": 12, "bottom": 14, "left": 11, "right": 13},
+        assert data["theme_settings"]["theme_id"] == "moderncv"
+        assert data["theme_settings"]["page_size"] == "LETTER"
+        assert data["theme_settings"]["density_profile"] == "compact"
+        assert data["theme_settings"]["bold_keywords"] is False
+        assert data["theme_settings"]["accent_color"] == "green"
+        assert data["theme_settings"]["show_contact_icons"] is True
+        assert data["theme_settings"]["margins_mm"] == {
+            "top": 12,
+            "bottom": 14,
+            "left": 11,
+            "right": 13,
         }
+        assert (
+            data["theme_settings"]["theme_profiles"]["moderncv"]["density_profile"]
+            == "compact"
+        )
 
 
 class TestUploadResume:
