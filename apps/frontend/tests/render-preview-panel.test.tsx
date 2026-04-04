@@ -8,9 +8,11 @@ import {
 } from '@/lib/types/render-theme';
 
 const fetchResumeRenderPreview = vi.fn();
+const fetchDraftRenderPreview = vi.fn();
 
 vi.mock('@/lib/api/resume', () => ({
   fetchResumeRenderPreview: (...args: unknown[]) => fetchResumeRenderPreview(...args),
+  fetchDraftRenderPreview: (...args: unknown[]) => fetchDraftRenderPreview(...args),
 }));
 
 const baseSettings: RenderThemeSettings = {
@@ -20,6 +22,7 @@ const baseSettings: RenderThemeSettings = {
 describe('RenderPreviewPanel', () => {
   beforeEach(() => {
     fetchResumeRenderPreview.mockReset();
+    fetchDraftRenderPreview.mockReset();
     fetchResumeRenderPreview.mockResolvedValue({
       resume_id: 'resume-123',
       theme_settings: baseSettings,
@@ -37,6 +40,21 @@ describe('RenderPreviewPanel', () => {
           mime_type: 'application/pdf',
           file_name: 'resume.pdf',
           url: '/api/v1/artifacts/artifact-pdf',
+        },
+      ],
+      preview_artifacts: [],
+      pdf_artifact: null,
+    });
+    fetchDraftRenderPreview.mockResolvedValue({
+      resume_id: 'draft',
+      theme_settings: baseSettings,
+      artifacts: [
+        {
+          artifact_id: 'artifact-preview',
+          kind: 'resume_preview_png',
+          mime_type: 'image/png',
+          file_name: 'preview.png',
+          url: '/api/v1/artifacts/artifact-preview',
         },
       ],
       preview_artifacts: [],
@@ -82,6 +100,23 @@ describe('RenderPreviewPanel', () => {
 
     rerender(<RenderPreviewPanel resumeId="resume-123" settings={baseSettings} />);
 
+    expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
+  });
+
+  it('renders preview from an unsaved draft payload', async () => {
+    const draftRequest = {
+      processed_resume: {
+        personalInfo: {
+          name: 'Draft User',
+        },
+        summary: 'Draft summary',
+      },
+      theme_settings: baseSettings,
+    };
+
+    render(<RenderPreviewPanel settings={baseSettings} draftRequest={draftRequest} />);
+
+    await waitFor(() => expect(fetchDraftRenderPreview).toHaveBeenCalledWith(draftRequest));
     expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
   });
 });

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, Suspense, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { ResumeForm } from './resume-form';
+import { RawYamlEditor } from './raw-yaml-editor';
 import { CoverLetterEditor } from './cover-letter-editor';
 import { OutreachEditor } from './outreach-editor';
 import { CoverLetterPreview } from './cover-letter-preview';
@@ -13,12 +14,15 @@ import { GeneratePrompt } from './generate-prompt';
 import { Button } from '@/components/ui/button';
 import { RetroTabs } from '@/components/ui/retro-tabs';
 import { ConfirmDialog, type ConfirmDialogProps } from '@/components/ui/confirm-dialog';
+import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import {
   Download,
   Save,
   AlertTriangle,
   ArrowLeft,
   RotateCcw,
+  Undo2,
+  Redo2,
   Copy,
   Check,
   Sparkles,
@@ -35,12 +39,18 @@ import {
   getResumePdfUrl,
   getCoverLetterPdfUrl,
   fetchResume,
-  updateResume,
   updateCoverLetter,
   updateOutreachMessage,
   generateCoverLetter,
   generateOutreachMessage,
   fetchJobDescription,
+  normalizeResumeDraft,
+  saveResumeDraft,
+  isDraftRequestError,
+  type DraftValidationDetail,
+  type RawYamlSections,
+  type ResumeDraftRequest,
+  type ResumeDraftResponse,
 } from '@/lib/api/resume';
 import { JDComparisonView } from './jd-comparison-view';
 import { RegenerateWizard } from './regenerate-wizard';
@@ -58,9 +68,22 @@ import type { RegenerateItemInput } from '@/lib/api/enrichment';
 
 type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match';
 type EditorSection = 'cv' | 'design' | 'locale' | 'settings';
+type EditorMode = 'visual' | 'raw';
+type AutosaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'invalid';
+type DraftSnapshot = {
+  resumeData: ResumeData;
+  themeSettings: RenderThemeSettings;
+  rawYamlSections: RawYamlSections;
+  yamlNeedsSync: boolean;
+  editorMode: EditorMode;
+  editorSection: EditorSection;
+};
 
 const STORAGE_KEY = 'resume_builder_draft';
 const SETTINGS_STORAGE_KEY = 'resume_builder_settings';
+const YAML_STORAGE_KEY = 'resume_builder_raw_yaml';
+const AUTOSAVE_DEBOUNCE_MS = 1000;
+const HISTORY_COMMIT_DEBOUNCE_MS = 350;
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -86,6 +109,41 @@ const buildInitialData = (t: Translate): ResumeData => ({
     awards: [],
   },
 });
+
+const EMPTY_RAW_YAML: RawYamlSections = {
+  cv: 'cv: {}\n',
+  design: 'design: {}\n',
+  locale: 'locale: {}\n',
+  settings: 'settings: {}\n',
+};
+
+function buildFullYaml(sections: RawYamlSections): string {
+  return [
+    sections.cv.trimEnd(),
+    sections.design.trimEnd(),
+    sections.locale.trimEnd(),
+    sections.settings.trimEnd(),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+    .concat('\n');
+}
+
+function cloneDraftSnapshot(snapshot: DraftSnapshot): DraftSnapshot {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(snapshot);
+  }
+  return JSON.parse(JSON.stringify(snapshot)) as DraftSnapshot;
+}
+
+function serializeDraftSnapshot(snapshot: DraftSnapshot): string {
+  return JSON.stringify({
+    resumeData: snapshot.resumeData,
+    themeSettings: snapshot.themeSettings,
+    yamlNeedsSync: snapshot.yamlNeedsSync,
+    rawYamlSections: snapshot.yamlNeedsSync ? null : snapshot.rawYamlSections,
+  });
+}
 
 const ResumeBuilderContent = () => {
   const { t } = useTranslations();
@@ -125,6 +183,31 @@ const ResumeBuilderContent = () => {
   const [lastSavedThemeSettings, setLastSavedThemeSettings] = useState<RenderThemeSettings>(
     DEFAULT_RENDER_THEME_SETTINGS
   );
+  const [activeTab, setActiveTab] = useState<TabId>('resume');
+  const [editorSection, setEditorSection] = useState<EditorSection>('cv');
+  const [editorMode, setEditorMode] = useState<EditorMode>('visual');
+  const [rawYamlSections, setRawYamlSections] = useState<RawYamlSections>(EMPTY_RAW_YAML);
+  const [rawYamlIssue, setRawYamlIssue] = useState<DraftValidationDetail | null>(null);
+  const [yamlNeedsSync, setYamlNeedsSync] = useState(true);
+  const [isPreparingRawMode, setIsPreparingRawMode] = useState(false);
+  const [autosaveState, setAutosaveState] = useState<AutosaveState>('idle');
+  const [autosaveError, setAutosaveError] = useState<string | null>(null);
+  const [historyNonce, setHistoryNonce] = useState(0);
+  const draftVersionRef = useRef(0);
+  const lastSavedRawYamlSectionsRef = useRef<RawYamlSections>(EMPTY_RAW_YAML);
+  const historyPastRef = useRef<DraftSnapshot[]>([]);
+  const historyFutureRef = useRef<DraftSnapshot[]>([]);
+  const historyCurrentRef = useRef<DraftSnapshot | null>(null);
+  const historyCommitTimeoutRef = useRef<number | null>(null);
+  const resumeDataRef = useRef(resumeData);
+  const themeSettingsRef = useRef(themeSettings);
+  const rawYamlSectionsRef = useRef(rawYamlSections);
+  const yamlNeedsSyncRef = useRef(yamlNeedsSync);
+  const editorModeRef = useRef(editorMode);
+  const editorSectionRef = useRef(editorSection);
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  const lastSavedDataRef = useRef(lastSavedData);
+  const lastSavedThemeSettingsRef = useRef(lastSavedThemeSettings);
   const { improvedData } = useResumePreview();
   const improvedPreview = improvedData?.data?.resume_preview;
   const improvedCoverLetter = improvedData?.data?.cover_letter;
@@ -137,6 +220,339 @@ const ResumeBuilderContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const resumeId = searchParams.get('id');
+  const currentDraftSnapshot = useMemo<DraftSnapshot>(
+    () => ({
+      resumeData,
+      themeSettings,
+      rawYamlSections,
+      yamlNeedsSync,
+      editorMode,
+      editorSection,
+    }),
+    [editorMode, editorSection, rawYamlSections, resumeData, themeSettings, yamlNeedsSync]
+  );
+
+  useEffect(() => {
+    resumeDataRef.current = resumeData;
+  }, [resumeData]);
+
+  useEffect(() => {
+    themeSettingsRef.current = themeSettings;
+  }, [themeSettings]);
+
+  useEffect(() => {
+    rawYamlSectionsRef.current = rawYamlSections;
+  }, [rawYamlSections]);
+
+  useEffect(() => {
+    yamlNeedsSyncRef.current = yamlNeedsSync;
+  }, [yamlNeedsSync]);
+
+  useEffect(() => {
+    editorModeRef.current = editorMode;
+  }, [editorMode]);
+
+  useEffect(() => {
+    editorSectionRef.current = editorSection;
+  }, [editorSection]);
+
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    lastSavedDataRef.current = lastSavedData;
+  }, [lastSavedData]);
+
+  useEffect(() => {
+    lastSavedThemeSettingsRef.current = lastSavedThemeSettings;
+  }, [lastSavedThemeSettings]);
+
+  const buildDraftSnapshot = useCallback(
+    (overrides: Partial<DraftSnapshot> = {}): DraftSnapshot => ({
+      resumeData: overrides.resumeData ?? resumeDataRef.current,
+      themeSettings: overrides.themeSettings ?? themeSettingsRef.current,
+      rawYamlSections: overrides.rawYamlSections ?? rawYamlSectionsRef.current,
+      yamlNeedsSync: overrides.yamlNeedsSync ?? yamlNeedsSyncRef.current,
+      editorMode: overrides.editorMode ?? editorModeRef.current,
+      editorSection: overrides.editorSection ?? editorSectionRef.current,
+    }),
+    []
+  );
+
+  const replaceCurrentHistorySnapshot = useCallback((snapshot: DraftSnapshot) => {
+    historyCurrentRef.current = cloneDraftSnapshot(snapshot);
+    setHistoryNonce((value) => value + 1);
+  }, []);
+
+  const seedHistory = useCallback((snapshot: DraftSnapshot) => {
+    if (historyCommitTimeoutRef.current) {
+      window.clearTimeout(historyCommitTimeoutRef.current);
+      historyCommitTimeoutRef.current = null;
+    }
+    historyPastRef.current = [];
+    historyFutureRef.current = [];
+    historyCurrentRef.current = cloneDraftSnapshot(snapshot);
+    setHistoryNonce((value) => value + 1);
+  }, []);
+
+  const commitHistorySnapshot = useCallback(
+    (snapshot: DraftSnapshot) => {
+      const committedSnapshot = historyCurrentRef.current;
+      if (!committedSnapshot) {
+        seedHistory(snapshot);
+        return;
+      }
+      if (serializeDraftSnapshot(committedSnapshot) === serializeDraftSnapshot(snapshot)) {
+        return;
+      }
+
+      historyPastRef.current.push(cloneDraftSnapshot(committedSnapshot));
+      if (historyPastRef.current.length > 60) {
+        historyPastRef.current.shift();
+      }
+      historyFutureRef.current = [];
+      historyCurrentRef.current = cloneDraftSnapshot(snapshot);
+      setHistoryNonce((value) => value + 1);
+    },
+    [seedHistory]
+  );
+
+  const queueHistoryCommit = useCallback(
+    (snapshot: DraftSnapshot) => {
+      if (historyFutureRef.current.length > 0) {
+        historyFutureRef.current = [];
+        setHistoryNonce((value) => value + 1);
+      }
+      if (historyCommitTimeoutRef.current) {
+        window.clearTimeout(historyCommitTimeoutRef.current);
+      }
+      historyCommitTimeoutRef.current = window.setTimeout(() => {
+        commitHistorySnapshot(snapshot);
+        historyCommitTimeoutRef.current = null;
+      }, HISTORY_COMMIT_DEBOUNCE_MS);
+    },
+    [commitHistorySnapshot]
+  );
+
+  const isSnapshotSaved = useCallback((snapshot: DraftSnapshot) => {
+    const structuredSnapshot = JSON.stringify({
+      resumeData: snapshot.resumeData,
+      themeSettings: snapshot.themeSettings,
+    });
+    const savedStructuredSnapshot = JSON.stringify({
+      resumeData: lastSavedDataRef.current,
+      themeSettings: lastSavedThemeSettingsRef.current,
+    });
+
+    if (structuredSnapshot !== savedStructuredSnapshot) {
+      return false;
+    }
+
+    if (snapshot.yamlNeedsSync) {
+      return true;
+    }
+
+    return (
+      JSON.stringify(snapshot.rawYamlSections) ===
+      JSON.stringify(lastSavedRawYamlSectionsRef.current)
+    );
+  }, []);
+
+  const applyHistorySnapshot = useCallback(
+    (snapshot: DraftSnapshot) => {
+      setResumeData(snapshot.resumeData);
+      setThemeSettings(snapshot.themeSettings);
+      setRawYamlSections(snapshot.rawYamlSections);
+      setYamlNeedsSync(snapshot.yamlNeedsSync);
+      setEditorMode(snapshot.editorMode);
+      setEditorSection(snapshot.editorSection);
+      setRawYamlIssue(null);
+      setAutosaveError(null);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot.resumeData));
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(snapshot.themeSettings));
+      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(snapshot.rawYamlSections));
+
+      if (isSnapshotSaved(snapshot)) {
+        setHasUnsavedChanges(false);
+        setAutosaveState('saved');
+      } else {
+        setHasUnsavedChanges(true);
+        setAutosaveState('dirty');
+      }
+    },
+    [isSnapshotSaved]
+  );
+
+  const handleUndoHistory = useCallback(() => {
+    if (historyCommitTimeoutRef.current) {
+      window.clearTimeout(historyCommitTimeoutRef.current);
+      historyCommitTimeoutRef.current = null;
+    }
+
+    const committedSnapshot = historyCurrentRef.current;
+    if (!committedSnapshot) {
+      return;
+    }
+
+    if (
+      serializeDraftSnapshot(currentDraftSnapshot) !== serializeDraftSnapshot(committedSnapshot)
+    ) {
+      historyFutureRef.current.unshift(cloneDraftSnapshot(currentDraftSnapshot));
+      applyHistorySnapshot(committedSnapshot);
+      setHistoryNonce((value) => value + 1);
+      return;
+    }
+
+    const previousSnapshot = historyPastRef.current.pop();
+    if (!previousSnapshot) {
+      return;
+    }
+
+    historyFutureRef.current.unshift(cloneDraftSnapshot(currentDraftSnapshot));
+    historyCurrentRef.current = cloneDraftSnapshot(previousSnapshot);
+    applyHistorySnapshot(previousSnapshot);
+    setHistoryNonce((value) => value + 1);
+  }, [applyHistorySnapshot, currentDraftSnapshot]);
+
+  const handleRedoHistory = useCallback(() => {
+    if (historyCommitTimeoutRef.current) {
+      window.clearTimeout(historyCommitTimeoutRef.current);
+      historyCommitTimeoutRef.current = null;
+    }
+
+    const nextSnapshot = historyFutureRef.current.shift();
+    if (!nextSnapshot) {
+      return;
+    }
+
+    const committedSnapshot = historyCurrentRef.current ?? currentDraftSnapshot;
+    historyPastRef.current.push(cloneDraftSnapshot(committedSnapshot));
+    if (historyPastRef.current.length > 60) {
+      historyPastRef.current.shift();
+    }
+    historyCurrentRef.current = cloneDraftSnapshot(nextSnapshot);
+    applyHistorySnapshot(nextSnapshot);
+    setHistoryNonce((value) => value + 1);
+  }, [applyHistorySnapshot, currentDraftSnapshot]);
+
+  const canUndo = useMemo(() => {
+    void historyNonce;
+    const committedSnapshot = historyCurrentRef.current;
+    if (!committedSnapshot) {
+      return false;
+    }
+    return (
+      historyPastRef.current.length > 0 ||
+      serializeDraftSnapshot(currentDraftSnapshot) !== serializeDraftSnapshot(committedSnapshot)
+    );
+  }, [currentDraftSnapshot, historyNonce]);
+
+  const canRedo = useMemo(() => {
+    void historyNonce;
+    return historyFutureRef.current.length > 0;
+  }, [historyNonce]);
+
+  const markDraftDirty = useCallback(
+    (nextMode: EditorMode) => {
+      draftVersionRef.current += 1;
+      setHasUnsavedChanges(true);
+      setAutosaveState(nextMode === 'raw' && rawYamlIssue ? 'invalid' : 'dirty');
+      setAutosaveError(null);
+      if (nextMode === 'visual') {
+        setYamlNeedsSync(true);
+      }
+    },
+    [rawYamlIssue]
+  );
+
+  const applyDraftResponse = useCallback(
+    (response: ResumeDraftResponse, version: number) => {
+      const nextData = (response.data.processed_resume || resumeData) as ResumeData;
+      const nextThemeSettings = response.data.theme_settings
+        ? normalizeRenderThemeSettings(response.data.theme_settings)
+        : themeSettings;
+
+      setLastSavedData(nextData);
+      setLastSavedThemeSettings(nextThemeSettings);
+      lastSavedRawYamlSectionsRef.current = response.yaml_sections;
+
+      if (draftVersionRef.current === version) {
+        setResumeData(nextData);
+        setThemeSettings(nextThemeSettings);
+        setRawYamlSections(response.yaml_sections);
+        setRawYamlIssue(null);
+        setYamlNeedsSync(false);
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextThemeSettings));
+        localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(response.yaml_sections));
+        setHasUnsavedChanges(false);
+        setAutosaveState('saved');
+        setAutosaveError(null);
+        replaceCurrentHistorySnapshot(
+          buildDraftSnapshot({
+            resumeData: nextData,
+            themeSettings: nextThemeSettings,
+            rawYamlSections: response.yaml_sections,
+            yamlNeedsSync: false,
+          })
+        );
+      } else {
+        setAutosaveState('dirty');
+      }
+    },
+    [buildDraftSnapshot, replaceCurrentHistorySnapshot, resumeData, themeSettings]
+  );
+
+  const structuredDraftRequest = useMemo<ResumeDraftRequest>(
+    () => ({
+      resume_id: resumeId,
+      processed_resume: resumeData,
+      theme_settings: themeSettings,
+    }),
+    [resumeData, resumeId, themeSettings]
+  );
+
+  const rawDraftRequest = useMemo<ResumeDraftRequest | null>(
+    () =>
+      editorMode === 'raw'
+        ? {
+            resume_id: resumeId,
+            yaml_sections: rawYamlSections,
+            theme_settings: themeSettings,
+          }
+        : null,
+    [editorMode, rawYamlSections, resumeId, themeSettings]
+  );
+
+  const previewDraftRequest = useMemo<ResumeDraftRequest>(
+    () => rawDraftRequest ?? structuredDraftRequest,
+    [rawDraftRequest, structuredDraftRequest]
+  );
+
+  const autosaveLabel = useMemo(() => {
+    if (!resumeId) {
+      return 'Draft lives locally until this resume exists on the server.';
+    }
+    if (autosaveState === 'saving') {
+      return 'Autosaving...';
+    }
+    if (autosaveState === 'saved') {
+      return 'All changes saved.';
+    }
+    if (autosaveState === 'invalid') {
+      return 'Autosave paused until the YAML is valid.';
+    }
+    if (autosaveState === 'error') {
+      return autosaveError || 'Autosave failed.';
+    }
+    if (autosaveState === 'dirty') {
+      return 'Changes pending autosave.';
+    }
+    return 'Autosave is ready.';
+  }, [autosaveError, autosaveState, resumeId]);
 
   useEffect(() => {
     if (resumeId || hasUnsavedChanges || improvedPreview) {
@@ -148,11 +564,15 @@ const ResumeBuilderContent = () => {
     }
     setResumeData(initialData);
     setLastSavedData(initialData);
-  }, [initialData, resumeId, hasUnsavedChanges, improvedPreview]);
-
-  // Tab state
-  const [activeTab, setActiveTab] = useState<TabId>('resume');
-  const [editorSection, setEditorSection] = useState<EditorSection>('cv');
+    seedHistory(
+      buildDraftSnapshot({
+        resumeData: initialData,
+        themeSettings: themeSettingsRef.current,
+        yamlNeedsSync: true,
+        editorMode: 'visual',
+      })
+    );
+  }, [buildDraftSnapshot, hasUnsavedChanges, improvedPreview, initialData, resumeId, seedHistory]);
 
   // Cover letter & outreach state
   const [coverLetter, setCoverLetter] = useState('');
@@ -188,9 +608,25 @@ const ResumeBuilderContent = () => {
         // Update resume title for downloads
         setResumeTitle(data.title ?? null);
         if (data.processed_resume) {
-          setResumeData(data.processed_resume as ResumeData);
-          setLastSavedData(data.processed_resume as ResumeData);
+          const nextResumeData = data.processed_resume as ResumeData;
+          const nextThemeSettings = data.theme_settings
+            ? normalizeRenderThemeSettings(data.theme_settings)
+            : themeSettingsRef.current;
+          setResumeData(nextResumeData);
+          setLastSavedData(nextResumeData);
+          setThemeSettings(nextThemeSettings);
+          setLastSavedThemeSettings(nextThemeSettings);
           setHasUnsavedChanges(false);
+          setAutosaveState('saved');
+          setYamlNeedsSync(true);
+          seedHistory(
+            buildDraftSnapshot({
+              resumeData: nextResumeData,
+              themeSettings: nextThemeSettings,
+              yamlNeedsSync: true,
+              editorMode: 'visual',
+            })
+          );
         }
       } catch (error) {
         console.error('Failed to reload resume after applying regenerated changes:', error);
@@ -265,6 +701,16 @@ const ResumeBuilderContent = () => {
         setThemeSettings(DEFAULT_RENDER_THEME_SETTINGS);
       }
     }
+
+    const savedYaml = localStorage.getItem(YAML_STORAGE_KEY);
+    if (savedYaml) {
+      try {
+        setRawYamlSections(JSON.parse(savedYaml) as RawYamlSections);
+        setYamlNeedsSync(false);
+      } catch {
+        localStorage.removeItem(YAML_STORAGE_KEY);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -277,19 +723,20 @@ const ResumeBuilderContent = () => {
     }
     setThemeSettings(improvedThemeSettings);
     setLastSavedThemeSettings(improvedThemeSettings);
+    setYamlNeedsSync(true);
   }, [improvedData?.data?.theme_settings, improvedThemeSettings]);
 
   // Warn user before leaving with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
+      if (hasUnsavedChanges || autosaveState === 'saving' || autosaveState === 'invalid') {
         e.preventDefault();
         e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
+  }, [autosaveState, hasUnsavedChanges]);
 
   useEffect(() => {
     const loadResumeData = async () => {
@@ -319,6 +766,18 @@ const ResumeBuilderContent = () => {
           if (data.processed_resume) {
             setResumeData(data.processed_resume as ResumeData);
             setLastSavedData(data.processed_resume as ResumeData);
+            setAutosaveState('saved');
+            setYamlNeedsSync(true);
+            seedHistory(
+              buildDraftSnapshot({
+                resumeData: data.processed_resume as ResumeData,
+                themeSettings: data.theme_settings
+                  ? normalizeRenderThemeSettings(data.theme_settings)
+                  : themeSettingsRef.current,
+                yamlNeedsSync: true,
+                editorMode: 'visual',
+              })
+            );
             setLoadingState('loaded');
             return;
           }
@@ -328,6 +787,18 @@ const ResumeBuilderContent = () => {
               const parsed = JSON.parse(data.raw_resume.content);
               setResumeData(parsed);
               setLastSavedData(parsed);
+              setAutosaveState('saved');
+              setYamlNeedsSync(true);
+              seedHistory(
+                buildDraftSnapshot({
+                  resumeData: parsed,
+                  themeSettings: data.theme_settings
+                    ? normalizeRenderThemeSettings(data.theme_settings)
+                    : themeSettingsRef.current,
+                  yamlNeedsSync: true,
+                  editorMode: 'visual',
+                })
+              );
               setLoadingState('loaded');
               return;
             } catch {
@@ -352,6 +823,16 @@ const ResumeBuilderContent = () => {
         }
         // Persist to localStorage as backup
         localStorage.setItem(STORAGE_KEY, JSON.stringify(improvedPreview));
+        setAutosaveState('saved');
+        setYamlNeedsSync(true);
+        seedHistory(
+          buildDraftSnapshot({
+            resumeData: improvedPreview,
+            themeSettings: improvedThemeSettings,
+            yamlNeedsSync: true,
+            editorMode: 'visual',
+          })
+        );
         setLoadingState('loaded');
         return;
       }
@@ -364,6 +845,17 @@ const ResumeBuilderContent = () => {
           setResumeData(parsed);
           setLastSavedData(parsed);
           setHasUnsavedChanges(true); // Mark as unsaved since it's a draft
+          setAutosaveState('dirty');
+          setYamlNeedsSync(true);
+          seedHistory(
+            buildDraftSnapshot({
+              resumeData: parsed,
+              themeSettings: themeSettingsRef.current,
+              rawYamlSections: rawYamlSectionsRef.current,
+              yamlNeedsSync: true,
+              editorMode: 'visual',
+            })
+          );
           setLoadingState('loaded');
           return;
         } catch {
@@ -376,7 +868,15 @@ const ResumeBuilderContent = () => {
     };
 
     loadResumeData();
-  }, [improvedPreview, improvedCoverLetter, improvedOutreach, resumeId]);
+  }, [
+    buildDraftSnapshot,
+    improvedCoverLetter,
+    improvedOutreach,
+    improvedPreview,
+    improvedThemeSettings,
+    resumeId,
+    seedHistory,
+  ]);
 
   // Fetch job description when we have a tailored resume
   useEffect(() => {
@@ -408,51 +908,310 @@ const ResumeBuilderContent = () => {
     };
   }, [isTailoredResume, resumeId]);
 
-  const handleUpdate = useCallback((newData: ResumeData) => {
-    setResumeData(newData);
-    setHasUnsavedChanges(true);
-    // Auto-save draft to localStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
-  }, []);
+  const syncRawYamlFromStructured = useCallback(async () => {
+    setIsPreparingRawMode(true);
+    try {
+      const response = await normalizeResumeDraft(structuredDraftRequest);
+      setRawYamlSections(response.yaml_sections);
+      setRawYamlIssue(null);
+      setYamlNeedsSync(false);
+      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(response.yaml_sections));
+      if (!hasUnsavedChangesRef.current) {
+        lastSavedRawYamlSectionsRef.current = response.yaml_sections;
+      }
+      replaceCurrentHistorySnapshot(
+        buildDraftSnapshot({
+          rawYamlSections: response.yaml_sections,
+          yamlNeedsSync: false,
+          editorMode: 'raw',
+        })
+      );
+    } catch (error) {
+      const issue =
+        isDraftRequestError(error) && error.detail
+          ? error.detail
+          : {
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'Failed to build YAML from the current draft.',
+            };
+      setRawYamlIssue(issue);
+      if (issue.section) {
+        setEditorSection(issue.section);
+      }
+    } finally {
+      setIsPreparingRawMode(false);
+    }
+  }, [buildDraftSnapshot, replaceCurrentHistorySnapshot, structuredDraftRequest]);
 
-  const handleSettingsChange = useCallback((newSettings: RenderThemeSettings) => {
-    setThemeSettings(newSettings);
-    setHasUnsavedChanges(true);
-  }, []);
+  const persistDraft = useCallback(
+    async ({ manual, version }: { manual: boolean; version: number }) => {
+      if (!resumeId) {
+        return false;
+      }
+
+      const payload =
+        editorMode === 'raw'
+          ? ({
+              resume_id: resumeId,
+              yaml_sections: rawYamlSections,
+              theme_settings: themeSettings,
+            } satisfies ResumeDraftRequest)
+          : structuredDraftRequest;
+
+      try {
+        if (manual) {
+          setIsSaving(true);
+        } else {
+          setAutosaveState('saving');
+          setAutosaveError(null);
+        }
+
+        const response = await saveResumeDraft(resumeId, payload);
+        applyDraftResponse(response, version);
+        return true;
+      } catch (error) {
+        const issue =
+          isDraftRequestError(error) && error.detail
+            ? error.detail
+            : {
+                message: error instanceof Error ? error.message : 'Failed to save draft.',
+              };
+        const message = issue.message;
+        if (!manual && draftVersionRef.current !== version) {
+          return false;
+        }
+        if (editorMode === 'raw') {
+          setRawYamlIssue(issue);
+          if (issue.section) {
+            setEditorSection(issue.section);
+          }
+          setAutosaveState('invalid');
+        } else {
+          setAutosaveState('error');
+        }
+        setAutosaveError(message);
+        if (manual) {
+          showNotification(message, 'danger');
+        }
+        return false;
+      } finally {
+        if (manual) {
+          setIsSaving(false);
+        }
+      }
+    },
+    [
+      applyDraftResponse,
+      editorMode,
+      rawYamlSections,
+      resumeId,
+      showNotification,
+      structuredDraftRequest,
+      themeSettings,
+    ]
+  );
+
+  useEffect(() => {
+    if (!resumeId || !hasUnsavedChanges) {
+      return;
+    }
+
+    const version = draftVersionRef.current;
+    const timeout = window.setTimeout(() => {
+      void persistDraft({ manual: false, version });
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    editorMode,
+    hasUnsavedChanges,
+    persistDraft,
+    rawYamlSections,
+    resumeData,
+    resumeId,
+    themeSettings,
+  ]);
+
+  const handleUpdate = useCallback(
+    (newData: ResumeData) => {
+      setResumeData(newData);
+      setRawYamlIssue(null);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+      markDraftDirty('visual');
+      queueHistoryCommit(
+        buildDraftSnapshot({
+          resumeData: newData,
+          yamlNeedsSync: true,
+          editorMode: 'visual',
+        })
+      );
+    },
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit]
+  );
+
+  const handleSettingsChange = useCallback(
+    (newSettings: RenderThemeSettings) => {
+      setThemeSettings(newSettings);
+      setRawYamlIssue(null);
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+      markDraftDirty('visual');
+      queueHistoryCommit(
+        buildDraftSnapshot({
+          themeSettings: newSettings,
+          yamlNeedsSync: true,
+          editorMode: 'visual',
+        })
+      );
+    },
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit]
+  );
+
+  const handleRawYamlChange = useCallback(
+    (section: EditorSection, value: string) => {
+      const nextSections = {
+        ...rawYamlSections,
+        [section]: value,
+      };
+      setRawYamlSections(nextSections);
+      setRawYamlIssue(null);
+      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
+      markDraftDirty('raw');
+      queueHistoryCommit(
+        buildDraftSnapshot({
+          rawYamlSections: nextSections,
+          yamlNeedsSync: false,
+          editorMode: 'raw',
+          editorSection: section,
+        })
+      );
+    },
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit, rawYamlSections]
+  );
+
+  const handleEditorModeChange = useCallback(
+    async (checked: boolean) => {
+      const nextMode: EditorMode = checked ? 'raw' : 'visual';
+      setEditorMode(nextMode);
+      if (nextMode === 'visual') {
+        setRawYamlIssue(null);
+      }
+
+      if (nextMode === 'raw' && yamlNeedsSync) {
+        await syncRawYamlFromStructured();
+      }
+    },
+    [syncRawYamlFromStructured, yamlNeedsSync]
+  );
 
   const handleSave = async () => {
     if (!resumeId) {
       showNotification(t('builder.alerts.saveNotAvailable'), 'warning');
       return;
     }
-    try {
-      setIsSaving(true);
-      const updated = await updateResume(resumeId, resumeData, themeSettings);
-      const nextData = (updated.processed_resume || resumeData) as ResumeData;
-      setResumeData(nextData);
-      setLastSavedData(nextData);
-      if (updated.theme_settings) {
-        const savedThemeSettings = normalizeRenderThemeSettings(updated.theme_settings);
-        setThemeSettings(savedThemeSettings);
-        setLastSavedThemeSettings(savedThemeSettings);
-      }
-      setHasUnsavedChanges(false);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
-    } catch (error) {
-      console.error('Failed to save resume:', error);
-      showNotification(t('builder.alerts.saveFailed'), 'danger');
-    } finally {
-      setIsSaving(false);
+
+    const success = await persistDraft({
+      manual: true,
+      version: draftVersionRef.current,
+    });
+    if (success) {
+      showNotification('Resume saved.', 'success');
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     setResumeData(lastSavedData);
     setThemeSettings(lastSavedThemeSettings);
+    setRawYamlIssue(null);
     setHasUnsavedChanges(false);
+    setAutosaveState('saved');
+    setAutosaveError(null);
+    setYamlNeedsSync(true);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(lastSavedData));
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(lastSavedThemeSettings));
+    if (editorMode === 'raw') {
+      try {
+        const response = await normalizeResumeDraft({
+          resume_id: resumeId,
+          processed_resume: lastSavedData,
+          theme_settings: lastSavedThemeSettings,
+        });
+        setRawYamlSections(response.yaml_sections);
+        setYamlNeedsSync(false);
+        localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(response.yaml_sections));
+        lastSavedRawYamlSectionsRef.current = response.yaml_sections;
+        seedHistory(
+          buildDraftSnapshot({
+            resumeData: lastSavedData,
+            themeSettings: lastSavedThemeSettings,
+            rawYamlSections: response.yaml_sections,
+            yamlNeedsSync: false,
+          })
+        );
+      } catch (error) {
+        const issue =
+          isDraftRequestError(error) && error.detail
+            ? error.detail
+            : {
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : 'Failed to rebuild YAML from saved data.',
+              };
+        setRawYamlIssue(issue);
+        if (issue.section) {
+          setEditorSection(issue.section);
+        }
+      }
+      return;
+    }
+    seedHistory(
+      buildDraftSnapshot({
+        resumeData: lastSavedData,
+        themeSettings: lastSavedThemeSettings,
+        yamlNeedsSync: true,
+        editorMode: 'visual',
+      })
+    );
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (activeTab !== 'resume') {
+        return;
+      }
+
+      const usesUndoModifier = event.metaKey || event.ctrlKey;
+      if (!usesUndoModifier || event.altKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          handleRedoHistory();
+        } else {
+          handleUndoHistory();
+        }
+      } else if (key === 'y' && event.ctrlKey) {
+        event.preventDefault();
+        handleRedoHistory();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, handleRedoHistory, handleUndoHistory]);
+
+  useEffect(() => {
+    return () => {
+      if (historyCommitTimeoutRef.current) {
+        window.clearTimeout(historyCommitTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleDownload = async () => {
     if (!resumeId) {
@@ -460,6 +1219,15 @@ const ResumeBuilderContent = () => {
       return;
     }
     try {
+      if (hasUnsavedChanges) {
+        const saved = await persistDraft({
+          manual: true,
+          version: draftVersionRef.current,
+        });
+        if (!saved) {
+          return;
+        }
+      }
       setIsDownloading(true);
       const blob = await downloadResumePdf(resumeId, themeSettings, uiLanguage);
       const filename = sanitizeFilename(resumeTitle, resumeId, 'resume');
@@ -484,6 +1252,30 @@ const ResumeBuilderContent = () => {
       setIsDownloading(false);
     }
   };
+
+  const handleCopyCurrentYamlSection = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(rawYamlSections[editorSection]);
+      showNotification('Copied YAML section.', 'success');
+    } catch (error) {
+      console.error('Failed to copy YAML section:', error);
+      showNotification('Failed to copy YAML section.', 'danger');
+    }
+  }, [editorSection, rawYamlSections, showNotification]);
+
+  const handleCopyFullYaml = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(buildFullYaml(rawYamlSections));
+      showNotification('Copied full YAML.', 'success');
+    } catch (error) {
+      console.error('Failed to copy full YAML:', error);
+      showNotification('Failed to copy full YAML.', 'danger');
+    }
+  }, [rawYamlSections, showNotification]);
+
+  const handleResyncYaml = useCallback(async () => {
+    await syncRawYamlFromStructured();
+  }, [syncRawYamlFromStructured]);
 
   // Cover letter handlers
   const handleSaveCoverLetter = async () => {
@@ -656,6 +1448,10 @@ const ResumeBuilderContent = () => {
                     {t('builder.unsavedDraft')}
                   </span>
                 )}
+                <span className="flex items-center gap-1 border border-black bg-white px-2 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-gray-700">
+                  {autosaveState === 'saving' && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {autosaveLabel}
+                </span>
               </div>
             </div>
 
@@ -671,6 +1467,24 @@ const ResumeBuilderContent = () => {
                   >
                     <Sparkles className="w-4 h-4" />
                     {t('builder.regenerate.buttonLabel')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleUndoHistory}
+                    disabled={!canUndo}
+                  >
+                    <Undo2 className="w-4 h-4" />
+                    Undo
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRedoHistory}
+                    disabled={!canRedo}
+                  >
+                    <Redo2 className="w-4 h-4" />
+                    Redo
                   </Button>
                   <Button
                     variant="warning"
@@ -769,13 +1583,15 @@ const ResumeBuilderContent = () => {
                 <div className="w-3 h-3 bg-blue-700"></div>
                 <h2 className="font-mono text-lg font-bold uppercase tracking-wider">
                   {activeTab === 'resume' &&
-                    (editorSection === 'cv'
-                      ? 'RenderCV Resume'
-                      : editorSection === 'design'
-                        ? 'RenderCV Design'
-                        : editorSection === 'locale'
-                          ? 'RenderCV Locale'
-                          : 'RenderCV Settings')}
+                    (editorMode === 'raw'
+                      ? 'RenderCV YAML'
+                      : editorSection === 'cv'
+                        ? 'RenderCV Resume'
+                        : editorSection === 'design'
+                          ? 'RenderCV Design'
+                          : editorSection === 'locale'
+                            ? 'RenderCV Locale'
+                            : 'RenderCV Settings')}
                   {activeTab === 'cover-letter' && t('builder.leftPanel.coverLetterEditor')}
                   {activeTab === 'outreach' && t('builder.leftPanel.outreachEditor')}
                   {activeTab === 'jd-match' && t('builder.leftPanel.jdMatchAnalysis')}
@@ -786,13 +1602,26 @@ const ResumeBuilderContent = () => {
               {activeTab === 'resume' && (
                 <>
                   <div className="border border-black bg-[#F8F7F1] px-4 py-3">
-                    <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-700">
-                      RenderCV Editor Tabs
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      Use `CV` for resume content, then switch to `Design`, `Locale`, or `Settings`
-                      for the hosted RenderCV controls.
-                    </p>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                          RenderCV Editor Tabs
+                        </p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {editorMode === 'raw'
+                            ? 'Edit the same CV, Design, Locale, and Settings data directly as RenderCV-style YAML.'
+                            : 'Use `CV` for resume content, then switch to `Design`, `Locale`, or `Settings` for the hosted RenderCV controls.'}
+                        </p>
+                      </div>
+                      <div className="min-w-[240px]">
+                        <ToggleSwitch
+                          checked={editorMode === 'raw'}
+                          onCheckedChange={(checked) => void handleEditorModeChange(checked)}
+                          label="Raw YAML"
+                          description="Switch between visual controls and editable YAML."
+                        />
+                      </div>
+                    </div>
                   </div>
                   <RetroTabs
                     tabs={[
@@ -804,22 +1633,40 @@ const ResumeBuilderContent = () => {
                     activeTab={editorSection}
                     onTabChange={(id) => setEditorSection(id as EditorSection)}
                   />
-                  {editorSection === 'cv' && (
+                  {editorMode === 'visual' && editorSection === 'cv' && (
                     <ResumeForm resumeData={resumeData} onUpdate={handleUpdate} />
                   )}
-                  {editorSection === 'design' && (
+                  {editorMode === 'visual' && editorSection === 'design' && (
                     <RenderThemeControls settings={themeSettings} onChange={handleSettingsChange} />
                   )}
-                  {editorSection === 'locale' && (
+                  {editorMode === 'visual' && editorSection === 'locale' && (
                     <RenderLocaleControls
                       settings={themeSettings}
                       onChange={handleSettingsChange}
                     />
                   )}
-                  {editorSection === 'settings' && (
+                  {editorMode === 'visual' && editorSection === 'settings' && (
                     <RenderRuntimeSettingsControls
                       settings={themeSettings}
                       onChange={handleSettingsChange}
+                    />
+                  )}
+                  {editorMode === 'raw' && (
+                    <RawYamlEditor
+                      section={editorSection}
+                      value={rawYamlSections[editorSection]}
+                      statusLabel={autosaveLabel}
+                      error={rawYamlIssue}
+                      isLoading={isPreparingRawMode}
+                      onChange={(value) => handleRawYamlChange(editorSection, value)}
+                      onCopySection={() => void handleCopyCurrentYamlSection()}
+                      onCopyAll={() => void handleCopyFullYaml()}
+                      onResync={() => void handleResyncYaml()}
+                      onFocusErrorSection={
+                        rawYamlIssue?.section
+                          ? () => setEditorSection(rawYamlIssue.section as EditorSection)
+                          : undefined
+                      }
                     />
                   )}
                 </>
@@ -944,23 +1791,13 @@ const ResumeBuilderContent = () => {
             <div className="flex-1 overflow-y-auto">
               {/* Resume Preview */}
               {activeTab === 'resume' && (
-                <>
-                  {resumeId ? (
-                    <RenderPreviewPanel
-                      resumeId={resumeId}
-                      settings={themeSettings}
-                      initialArtifacts={improvedArtifacts}
-                      refreshKey={`${resumeId}:${themeSettings.theme_id}:${themeSettings.density_profile}:${themeSettings.page_size}:${hasUnsavedChanges}`}
-                      stale={hasUnsavedChanges}
-                    />
-                  ) : (
-                    <div className="p-6">
-                      <div className="border border-black bg-white px-4 py-3 font-mono text-xs text-gray-700">
-                        Save the resume once to generate a RenderCV preview.
-                      </div>
-                    </div>
-                  )}
-                </>
+                <RenderPreviewPanel
+                  resumeId={resumeId}
+                  settings={themeSettings}
+                  draftRequest={previewDraftRequest}
+                  initialArtifacts={improvedArtifacts}
+                  stale={false}
+                />
               )}
 
               {/* Cover Letter Preview */}

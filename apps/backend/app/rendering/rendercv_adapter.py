@@ -2,19 +2,60 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from typing import Any
 from urllib.parse import urlparse
+
+import yaml
 
 from app.rendering.theme_profiles import (
     RenderThemeSettings,
     build_design,
     build_locale,
     build_settings,
+    theme_settings_from_rendercv_sections,
 )
+from app.schemas.models import DEFAULT_SECTION_META
 
 _LINK_PREFIX_RE = re.compile(r"^(https?://)?(www\.)?", re.IGNORECASE)
 _NON_DIGIT_RE = re.compile(r"\D+")
+_MARKDOWN_LINK_RE = re.compile(r"^\[(?P<label>.+?)\]\((?P<url>[^)]+)\)$")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+_KNOWN_SECTION_KEYS = {
+    "summary",
+    "experience",
+    "education",
+    "projects",
+    "skills",
+    "certifications",
+    "awards",
+}
+
+_DEDICATED_SOCIAL_NETWORKS = {
+    "linkedin": "LinkedIn",
+    "github": "GitHub",
+}
+
+
+class RenderCVYamlValidationError(ValueError):
+    """Structured YAML validation error with section and cursor metadata."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        section: str | None = None,
+        line: int | None = None,
+        column: int | None = None,
+        path: list[str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.section = section
+        self.line = line
+        self.column = column
+        self.path = path or []
 
 
 def _clean_text(value: str | None) -> str | None:
@@ -37,22 +78,48 @@ def _extract_social_username(value: str | None) -> str | None:
     return parts[-1].lstrip("@")
 
 
+def _canonical_social_network_name(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    normalized = _NON_ALNUM_RE.sub("", cleaned.lower())
+    return _DEDICATED_SOCIAL_NETWORKS.get(normalized, cleaned)
+
+
 def _social_networks(personal_info: dict[str, Any]) -> list[dict[str, str]]:
     networks: list[dict[str, str]] = []
-    for item in personal_info.get("socialNetworks") or []:
-        if not isinstance(item, dict):
-            continue
-        network = _clean_text(item.get("network"))
-        username = _extract_social_username(item.get("username"))
-        if network and username:
-            networks.append({"network": network, "username": username})
+    seen: set[tuple[str, str]] = set()
 
     linkedin_username = _extract_social_username(personal_info.get("linkedin"))
     github_username = _extract_social_username(personal_info.get("github"))
+
+    def append_network(network: str | None, username: str | None) -> None:
+        canonical_name = _canonical_social_network_name(network)
+        canonical_username = _extract_social_username(username)
+        if not canonical_name or not canonical_username:
+            return
+
+        key = (canonical_name.lower(), canonical_username.lower())
+        if key in seen:
+            return
+
+        seen.add(key)
+        networks.append({"network": canonical_name, "username": canonical_username})
+
+    for item in personal_info.get("socialNetworks") or []:
+        if not isinstance(item, dict):
+            continue
+        network = _canonical_social_network_name(item.get("network"))
+        if network == "LinkedIn" and linkedin_username:
+            continue
+        if network == "GitHub" and github_username:
+            continue
+        append_network(network, item.get("username"))
+
     if linkedin_username:
-        networks.append({"network": "LinkedIn", "username": linkedin_username})
+        append_network("LinkedIn", linkedin_username)
     if github_username:
-        networks.append({"network": "GitHub", "username": github_username})
+        append_network("GitHub", github_username)
     return networks
 
 
@@ -255,3 +322,393 @@ def resume_to_rendercv_payload(
     if settings:
         payload["settings"] = settings
     return payload
+
+
+def _normalize_section_yaml(root_key: str, value: Any) -> str:
+    return yaml.safe_dump(
+        {root_key: value if value is not None else {}},
+        sort_keys=False,
+        allow_unicode=True,
+    )
+
+
+def rendercv_payload_to_yaml_sections(
+    resume_data: dict[str, Any],
+    theme_settings: RenderThemeSettings,
+) -> dict[str, str]:
+    payload = resume_to_rendercv_payload(resume_data, theme_settings)
+    return {
+        "cv": _normalize_section_yaml("cv", payload.get("cv") or {}),
+        "design": _normalize_section_yaml("design", payload.get("design") or {}),
+        "locale": _normalize_section_yaml("locale", payload.get("locale") or {}),
+        "settings": _normalize_section_yaml("settings", payload.get("settings") or {}),
+    }
+
+
+def _text_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        cleaned = _clean_text(value)
+        return [cleaned] if cleaned else []
+    if isinstance(value, list):
+        items: list[str] = []
+        for entry in value:
+            if isinstance(entry, str):
+                cleaned = _clean_text(entry)
+                if cleaned:
+                    items.append(cleaned)
+            elif isinstance(entry, dict):
+                bullet = _clean_text(entry.get("bullet"))
+                summary = _clean_text(entry.get("summary"))
+                details = _clean_text(entry.get("details"))
+                title = _clean_text(entry.get("title"))
+                line = bullet or summary or details or title
+                if line:
+                    items.append(line)
+        return items
+    return []
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _parse_markdown_link(value: str | None) -> tuple[str | None, str | None]:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return None, None
+    match = _MARKDOWN_LINK_RE.match(cleaned)
+    if not match:
+        return cleaned, None
+    return match.group("label").strip(), match.group("url").strip()
+
+
+def _stringify_description(summary: str | None, highlights: list[str]) -> str | None:
+    pieces = [piece for piece in [summary, *highlights] if piece]
+    if not pieces:
+        return None
+    return "\n".join(pieces)
+
+
+def _build_custom_section_meta(
+    custom_sections: dict[str, dict[str, Any]],
+    base_resume_data: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    base_meta = copy.deepcopy(base_resume_data.get("sectionMeta") or []) if base_resume_data else []
+    if not base_meta:
+        base_meta = copy.deepcopy(DEFAULT_SECTION_META)
+
+    default_meta = [meta for meta in base_meta if meta.get("isDefault", True)]
+    existing_custom_meta = [meta for meta in base_meta if not meta.get("isDefault", True)]
+    existing_by_name = {
+        str(meta.get("displayName", "")).strip().lower(): meta
+        for meta in existing_custom_meta
+        if meta.get("displayName")
+    }
+    existing_by_key = {
+        str(meta.get("key", "")).strip().lower(): meta
+        for meta in existing_custom_meta
+        if meta.get("key")
+    }
+    existing_indices = [
+        int(str(meta.get("id", "")).replace("custom_", ""))
+        for meta in existing_custom_meta
+        if str(meta.get("id", "")).startswith("custom_")
+        and str(meta.get("id", "")).replace("custom_", "").isdigit()
+    ]
+    next_custom_index = max(existing_indices, default=0)
+    next_order = max((int(meta.get("order", 0)) for meta in base_meta), default=0)
+
+    resolved_custom_meta: list[dict[str, Any]] = []
+    for display_name, section in custom_sections.items():
+        existing = existing_by_name.get(display_name.lower()) or existing_by_key.get(
+            display_name.lower()
+        )
+        if existing:
+            meta = copy.deepcopy(existing)
+            meta["displayName"] = display_name
+            meta["sectionType"] = section["sectionType"]
+            resolved_custom_meta.append(meta)
+            continue
+
+        next_custom_index += 1
+        next_order += 1
+        custom_id = f"custom_{next_custom_index}"
+        resolved_custom_meta.append(
+            {
+                "id": custom_id,
+                "key": custom_id,
+                "displayName": display_name,
+                "sectionType": section["sectionType"],
+                "isDefault": False,
+                "isVisible": True,
+                "order": next_order,
+            }
+        )
+
+    return default_meta + resolved_custom_meta
+
+
+def _parse_custom_section_items(items: list[Any]) -> dict[str, Any]:
+    if not items:
+        return {"sectionType": "stringList", "strings": []}
+
+    if all(isinstance(item, str) for item in items):
+        return {"sectionType": "stringList", "strings": _text_list(items)}
+
+    if all(isinstance(item, dict) and "bullet" in item for item in items):
+        return {"sectionType": "stringList", "strings": _text_list(items)}
+
+    parsed_items: list[dict[str, Any]] = []
+    for index, item in enumerate(items, start=1):
+        if isinstance(item, str):
+            parsed_items.append({"id": index, "title": item, "description": []})
+            continue
+
+        if not isinstance(item, dict):
+            continue
+
+        parsed_items.append(
+            {
+                "id": index,
+                "title": _clean_text(
+                    item.get("title")
+                    or item.get("name")
+                    or item.get("company")
+                    or item.get("institution")
+                    or item.get("label")
+                    or item.get("position")
+                )
+                or "",
+                "subtitle": _clean_text(
+                    item.get("subtitle")
+                    or item.get("summary")
+                    or item.get("details")
+                    or item.get("area")
+                ),
+                "location": _clean_text(item.get("location")),
+                "years": _clean_text(item.get("date")) or "",
+                "description": _text_list(item.get("highlights")),
+            }
+        )
+
+    if parsed_items:
+        return {"sectionType": "itemList", "items": parsed_items}
+
+    return {"sectionType": "stringList", "strings": _text_list(items)}
+
+
+def rendercv_cv_to_resume_data(
+    cv_payload: dict[str, Any],
+    *,
+    base_resume_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    resume_data = copy.deepcopy(base_resume_data) if base_resume_data else {}
+    sections = cv_payload.get("sections")
+    sections = sections if isinstance(sections, dict) else {}
+
+    social_networks: list[dict[str, str]] = []
+    social_lookup: dict[str, str] = {}
+    social_seen: set[tuple[str, str]] = set()
+    for item in cv_payload.get("social_networks") or []:
+        if not isinstance(item, dict):
+            continue
+        network = _canonical_social_network_name(item.get("network"))
+        username = _extract_social_username(item.get("username"))
+        if not network or not username:
+            continue
+
+        if network in _DEDICATED_SOCIAL_NETWORKS.values():
+            social_lookup[network.lower()] = username
+            continue
+
+        key = (network.lower(), username.lower())
+        if key in social_seen:
+            continue
+
+        social_seen.add(key)
+        social_networks.append({"network": network, "username": username})
+
+    summary_items = _text_list(sections.get("summary"))
+    skills_entries = sections.get("skills") if isinstance(sections.get("skills"), list) else []
+    technical_skills: list[str] = []
+    languages: list[str] = []
+    for entry in skills_entries:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label", "")).strip().lower()
+        details = _split_csv(_clean_text(entry.get("details")))
+        if "language" in label:
+            languages.extend(details)
+        else:
+            technical_skills.extend(details)
+
+    work_experience = []
+    for index, item in enumerate(sections.get("experience") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        description = _text_list(item.get("highlights"))
+        summary = _clean_text(item.get("summary"))
+        if summary:
+            description = [summary, *description]
+        work_experience.append(
+            {
+                "id": index,
+                "title": _clean_text(item.get("position")) or "",
+                "company": _clean_text(item.get("company")) or "",
+                "location": _clean_text(item.get("location")),
+                "years": _clean_text(item.get("date")) or "",
+                "description": description,
+            }
+        )
+
+    education = []
+    for index, item in enumerate(sections.get("education") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        education.append(
+            {
+                "id": index,
+                "institution": _clean_text(item.get("institution")) or "",
+                "degree": _clean_text(item.get("area") or item.get("degree")) or "",
+                "years": _clean_text(item.get("date")) or "",
+                "description": _stringify_description(
+                    _clean_text(item.get("summary")),
+                    _text_list(item.get("highlights")),
+                ),
+            }
+        )
+
+    projects = []
+    for index, item in enumerate(sections.get("projects") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        name, website = _parse_markdown_link(item.get("name"))
+        projects.append(
+            {
+                "id": index,
+                "name": name or "",
+                "role": _clean_text(item.get("summary")) or "",
+                "years": _clean_text(item.get("date")) or "",
+                "website": website,
+                "description": _text_list(item.get("highlights")),
+            }
+        )
+
+    custom_sections_payload = {
+        title: values
+        for title, values in sections.items()
+        if title not in _KNOWN_SECTION_KEYS
+    }
+    parsed_custom_sections = {
+        title: _parse_custom_section_items(values if isinstance(values, list) else [values])
+        for title, values in custom_sections_payload.items()
+    }
+    section_meta = _build_custom_section_meta(parsed_custom_sections, base_resume_data)
+    custom_sections: dict[str, Any] = {}
+    for meta in section_meta:
+        if meta.get("isDefault", True):
+            continue
+        display_name = str(meta.get("displayName", "")).strip()
+        if display_name in parsed_custom_sections:
+            custom_sections[str(meta["key"])] = parsed_custom_sections[display_name]
+
+    resume_data.update(
+        {
+            "personalInfo": {
+                **(resume_data.get("personalInfo") or {}),
+                "name": cv_payload.get("name") or "",
+                "title": _clean_text(cv_payload.get("headline")) or "",
+                "email": _clean_text(cv_payload.get("email")) or "",
+                "phone": _clean_text(cv_payload.get("phone")) or "",
+                "location": _clean_text(cv_payload.get("location")) or "",
+                "website": _clean_text(cv_payload.get("website")),
+                "linkedin": social_lookup.get("linkedin"),
+                "github": social_lookup.get("github"),
+                "photoUrl": _clean_text(cv_payload.get("photo")),
+                "socialNetworks": social_networks,
+                "customConnections": [
+                    item
+                    for item in cv_payload.get("custom_connections") or []
+                    if isinstance(item, dict)
+                ],
+            },
+            "summary": summary_items[0] if summary_items else "",
+            "workExperience": work_experience,
+            "education": education,
+            "personalProjects": projects,
+            "additional": {
+                "technicalSkills": technical_skills,
+                "languages": languages,
+                "certificationsTraining": _text_list(sections.get("certifications")),
+                "awards": _text_list(sections.get("awards")),
+            },
+            "customSections": custom_sections,
+            "sectionMeta": section_meta,
+        }
+    )
+    return resume_data
+
+
+def parse_rendercv_yaml_sections(
+    yaml_sections: dict[str, str],
+    *,
+    base_resume_data: dict[str, Any] | None = None,
+    base_theme_settings: RenderThemeSettings | None = None,
+) -> tuple[dict[str, Any], RenderThemeSettings]:
+    def load_section(root_key: str) -> dict[str, Any]:
+        raw_text = yaml_sections.get(root_key, "")
+        if not raw_text.strip():
+            return {}
+        try:
+            parsed = yaml.safe_load(raw_text)
+        except yaml.YAMLError as exc:
+            mark = getattr(exc, "problem_mark", None)
+            line = getattr(mark, "line", None)
+            column = getattr(mark, "column", None)
+            message = getattr(exc, "problem", None) or getattr(exc, "context", None) or str(exc)
+            raise RenderCVYamlValidationError(
+                f"{root_key.upper()} YAML is invalid: {message}",
+                section=root_key,
+                line=(line + 1) if isinstance(line, int) else None,
+                column=(column + 1) if isinstance(column, int) else None,
+            ) from exc
+        if parsed is None:
+            return {}
+        if not isinstance(parsed, dict):
+            raise RenderCVYamlValidationError(
+                f"{root_key.upper()} YAML must decode to an object.",
+                section=root_key,
+            )
+        if root_key in parsed:
+            section_value = parsed[root_key]
+        else:
+            section_value = parsed
+        if section_value is None:
+            return {}
+        if not isinstance(section_value, dict):
+            raise RenderCVYamlValidationError(
+                f"{root_key.upper()} YAML must contain a mapping.",
+                section=root_key,
+            )
+        return section_value
+
+    cv_payload = load_section("cv")
+    design_payload = load_section("design")
+    locale_payload = load_section("locale")
+    settings_payload = load_section("settings")
+
+    theme_settings = theme_settings_from_rendercv_sections(
+        design=design_payload,
+        locale=locale_payload,
+        settings=settings_payload,
+        base_settings=base_theme_settings,
+    )
+    resume_data = rendercv_cv_to_resume_data(
+        cv_payload,
+        base_resume_data=base_resume_data,
+    )
+    return resume_data, theme_settings

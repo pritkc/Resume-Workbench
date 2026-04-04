@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCcw } from 'lucide-react';
-import { fetchResumeRenderPreview } from '@/lib/api/resume';
+import {
+  fetchDraftRenderPreview,
+  fetchResumeRenderPreview,
+  type ResumeDraftRequest,
+} from '@/lib/api/resume';
 import {
   type ArtifactSummary,
   type RenderThemeSettings,
@@ -14,6 +18,7 @@ import { ArtifactGallery } from './artifact-gallery';
 interface RenderPreviewPanelProps {
   resumeId?: string | null;
   settings?: RenderThemeSettings;
+  draftRequest?: ResumeDraftRequest | null;
   initialArtifacts?: ArtifactSummary[];
   refreshKey?: string | number;
   stale?: boolean;
@@ -24,6 +29,7 @@ const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
 export function RenderPreviewPanel({
   resumeId,
   settings = DEFAULT_RENDER_THEME_SETTINGS,
+  draftRequest,
   initialArtifacts = EMPTY_ARTIFACTS,
   refreshKey,
   stale = false,
@@ -38,14 +44,16 @@ export function RenderPreviewPanel({
 
   const hasFetchedResume = Boolean(resumeId);
 
-  const loadPreview = async () => {
-    if (!resumeId) {
+  const loadPreview = useCallback(async () => {
+    if (!resumeId && !draftRequest) {
       return;
     }
     try {
       setIsLoading(true);
       setError(null);
-      const preview = await fetchResumeRenderPreview(resumeId, settings);
+      const preview = draftRequest
+        ? await fetchDraftRenderPreview(draftRequest)
+        : await fetchResumeRenderPreview(resumeId!, settings);
       setArtifacts(preview.artifacts);
     } catch (loadError) {
       const message =
@@ -54,14 +62,17 @@ export function RenderPreviewPanel({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [draftRequest, resumeId, settings]);
 
   useEffect(() => {
-    if (!resumeId) {
+    if (!resumeId && !draftRequest) {
       return;
     }
-    void loadPreview();
-  }, [resumeId, settings, refreshKey]);
+    const timeout = window.setTimeout(() => {
+      void loadPreview();
+    }, 450);
+    return () => window.clearTimeout(timeout);
+  }, [draftRequest, loadPreview, refreshKey, resumeId, settings]);
 
   const statusMessage = useMemo(() => {
     if (error) {
@@ -70,11 +81,11 @@ export function RenderPreviewPanel({
     if (stale) {
       return 'Preview reflects the last saved resume until you save current edits.';
     }
-    if (!hasFetchedResume) {
+    if (!hasFetchedResume && !draftRequest) {
       return 'Save the resume once to generate a RenderCV preview.';
     }
     return null;
-  }, [error, hasFetchedResume, stale]);
+  }, [draftRequest, error, hasFetchedResume, stale]);
 
   return (
     <div className="space-y-4 p-6">
@@ -88,7 +99,7 @@ export function RenderPreviewPanel({
         <Button
           variant="outline"
           onClick={() => void loadPreview()}
-          disabled={!resumeId || isLoading}
+          disabled={(!resumeId && !draftRequest) || isLoading}
           className="gap-2"
         >
           {isLoading ? (

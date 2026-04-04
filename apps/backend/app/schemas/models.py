@@ -131,6 +131,9 @@ class PersonalInfo(BaseModel):
     website: str | None = None
     linkedin: str | None = None
     github: str | None = None
+    photoUrl: str | None = None
+    socialNetworks: list[dict[str, str]] = Field(default_factory=list)
+    customConnections: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class Experience(BaseModel):
@@ -573,6 +576,32 @@ class RenderResumeRequest(BaseModel):
     """Request to render preview/PDF with an explicit RenderCV config."""
 
     theme_settings: RenderThemeSettings | None = None
+
+
+class RawYamlSections(BaseModel):
+    """Editable RenderCV-style YAML slices used by the raw editor."""
+
+    cv: str
+    design: str
+    locale: str
+    settings: str
+
+
+class ResumeDraftRequest(BaseModel):
+    """Draft payload for previewing, normalizing, or persisting unsaved changes."""
+
+    resume_id: str | None = None
+    processed_resume: ResumeData | None = None
+    theme_settings: RenderThemeSettings | None = None
+    yaml_sections: RawYamlSections | None = None
+
+
+class ResumeDraftNormalizedResponse(BaseModel):
+    """Normalized structured + YAML draft response."""
+
+    request_id: str
+    data: ResumeFetchData
+    yaml_sections: RawYamlSections
 
 
 class RenderThemeOption(BaseModel):

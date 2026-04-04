@@ -238,6 +238,151 @@ class TestUpdateResume:
         assert payload["processed_resume"]["summary"] == sample_resume["summary"]
 
 
+class TestDraftResumeFlows:
+    @patch("app.routers.resumes.db")
+    async def test_normalize_resume_draft_returns_yaml_sections(
+        self, mock_db, client, mock_resume_record, sample_resume
+    ):
+        mock_db.get_resume.return_value = mock_resume_record
+
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/draft/normalize",
+                json={
+                    "resume_id": "res-123",
+                    "processed_resume": sample_resume,
+                    "theme_settings": mock_resume_record["theme_settings"],
+                },
+            )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["data"]["processed_resume"]["summary"] == sample_resume["summary"]
+        assert payload["yaml_sections"]["cv"].startswith("cv:")
+        assert payload["yaml_sections"]["design"].startswith("design:")
+
+    @patch("app.routers.resumes.store_rendercv_bundle")
+    @patch("app.routers.resumes.render_resume_bundle")
+    async def test_render_resume_draft_preview_accepts_yaml_sections(
+        self, mock_render_bundle, mock_store_bundle, client
+    ):
+        mock_render_bundle.return_value = MagicMock()
+        mock_store_bundle.return_value = [
+            {
+                "artifact_id": "artifact-preview",
+                "kind": "resume_preview_png",
+                "mime_type": "image/png",
+                "file_name": "preview.png",
+                "url": "/api/v1/artifacts/artifact-preview",
+            },
+            {
+                "artifact_id": "artifact-pdf",
+                "kind": "resume_pdf",
+                "mime_type": "application/pdf",
+                "file_name": "resume.pdf",
+                "url": "/api/v1/artifacts/artifact-pdf",
+            },
+        ]
+
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/draft/render-preview",
+                json={
+                    "yaml_sections": {
+                        "cv": "cv:\n  name: Jane Doe\n  sections:\n    summary:\n      - Senior backend engineer\n",
+                        "design": "design:\n  theme: classic\n",
+                        "locale": "locale:\n  language: english\n",
+                        "settings": "settings:\n  current_date: today\n",
+                    }
+                },
+            )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["resume_id"] == "draft"
+        assert payload["pdf_artifact"]["artifact_id"] == "artifact-pdf"
+        mock_render_bundle.assert_called_once()
+
+    @patch("app.routers.resumes.db")
+    async def test_save_resume_draft_persists_yaml_changes(
+        self, mock_db, client, mock_resume_record
+    ):
+        state = {
+            **mock_resume_record,
+            "processed_data": mock_resume_record["processed_data"],
+            "theme_settings": mock_resume_record["theme_settings"],
+        }
+
+        def update_resume(resume_id, updates):
+            state.update(updates)
+            return {
+                **mock_resume_record,
+                **state,
+                "resume_id": resume_id,
+                "created_at": mock_resume_record["created_at"],
+            }
+
+        mock_db.get_resume.return_value = mock_resume_record
+        mock_db.update_resume.side_effect = update_resume
+
+        async with client:
+            resp = await client.patch(
+                "/api/v1/resumes/res-123/draft",
+                json={
+                    "resume_id": "res-123",
+                    "yaml_sections": {
+                        "cv": (
+                            "cv:\n"
+                            "  name: Jane Doe\n"
+                            "  headline: Senior Backend Engineer\n"
+                            "  email: jane@example.com\n"
+                            "  sections:\n"
+                            "    summary:\n"
+                            "      - Updated summary from YAML\n"
+                        ),
+                        "design": "design:\n  theme: classic\n",
+                        "locale": "locale:\n  language: english\n",
+                        "settings": "settings:\n  current_date: today\n",
+                    },
+                },
+            )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["data"]["processed_resume"]["summary"] == "Updated summary from YAML"
+        assert state["processed_data"]["summary"] == "Updated summary from YAML"
+
+    async def test_normalize_resume_draft_returns_section_and_line_for_invalid_yaml(
+        self, client
+    ):
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/draft/normalize",
+                json={
+                    "yaml_sections": {
+                        "cv": (
+                            "cv:\n"
+                            "  name: Jane Doe\n"
+                            "  sections:\n"
+                            "    summary:\n"
+                            "      - Broken entry\n"
+                            "    skills: [Python\n"
+                        ),
+                        "design": "design:\n  theme: classic\n",
+                        "locale": "locale:\n  language: english\n",
+                        "settings": "settings:\n  current_date: today\n",
+                    }
+                },
+            )
+
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert detail["type"] == "yaml_validation"
+        assert detail["section"] == "cv"
+        assert detail["line"] == 7
+        assert "invalid" in detail["message"].lower()
+
+
 class TestListResumes:
     """GET /api/v1/resumes/list"""
 

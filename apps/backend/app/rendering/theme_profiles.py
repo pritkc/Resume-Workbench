@@ -786,3 +786,90 @@ def build_settings(settings: RenderThemeSettings) -> dict[str, object] | None:
     if not settings.settings:
         return None
     return _deep_merge({}, settings.settings)
+
+
+def theme_settings_from_rendercv_sections(
+    *,
+    design: dict[str, Any] | None = None,
+    locale: dict[str, Any] | None = None,
+    settings: dict[str, Any] | None = None,
+    base_settings: RenderThemeSettings | None = None,
+) -> RenderThemeSettings:
+    base = base_settings or RenderThemeSettings.from_payload(
+        {"theme_id": DEFAULT_THEME_ID, "theme_profiles": {}},
+        uses_theme_profiles=True,
+    )
+    design_payload = deepcopy(design or build_design(base))
+    theme_id = _normalize_theme_id(design_payload.get("theme") or base.theme_id)
+    design_payload["theme"] = theme_id
+
+    page = design_payload.get("page") if isinstance(design_payload.get("page"), dict) else {}
+    connections = (
+        design_payload.get("header", {}).get("connections", {})
+        if isinstance(design_payload.get("header"), dict)
+        else {}
+    )
+
+    page_size: PageSize = (
+        "LETTER"
+        if page.get("size") == "us-letter"
+        else ("A4" if page.get("size") == "a4" else base.page_size)
+    )
+    margins_mm = {
+        "top": _dimension_to_mm(page.get("top_margin"), base.margins_mm["top"]),
+        "bottom": _dimension_to_mm(page.get("bottom_margin"), base.margins_mm["bottom"]),
+        "left": _dimension_to_mm(page.get("left_margin"), base.margins_mm["left"]),
+        "right": _dimension_to_mm(page.get("right_margin"), base.margins_mm["right"]),
+    }
+    show_contact_icons = bool(
+        connections.get("show_icons")
+        if "show_icons" in connections
+        else base.show_contact_icons
+    )
+    density_profile = _infer_density_from_design(design_payload)
+    accent_color = _infer_accent_from_design(design_payload)
+
+    baseline_state = _resolve_theme_profile_state(theme_id, ThemeProfileSettings())
+    design_diff = _deep_diff(get_theme_design_baseline(theme_id), design_payload)
+
+    next_profile = ThemeProfileSettings(
+        page_size=page_size if page_size != baseline_state["page_size"] else None,
+        density_profile=(
+            density_profile
+            if density_profile != baseline_state["density_profile"]
+            else None
+        ),
+        accent_color=(
+            accent_color if accent_color != baseline_state["accent_color"] else None
+        ),
+        show_contact_icons=(
+            show_contact_icons
+            if show_contact_icons != baseline_state["show_contact_icons"]
+            else None
+        ),
+        margins_mm=(
+            deepcopy(margins_mm)
+            if not _deep_equal(margins_mm, baseline_state["margins_mm"])
+            else {}
+        ),
+        design=design_diff if isinstance(design_diff, dict) else {},
+    )
+
+    theme_profiles = deepcopy(base.theme_profiles)
+    if next_profile.to_dict():
+        theme_profiles[theme_id] = next_profile
+    elif theme_id in theme_profiles:
+        del theme_profiles[theme_id]
+
+    payload = {
+        "theme_id": theme_id,
+        "bold_keywords": base.bold_keywords,
+        "locale": deepcopy(locale if locale is not None else base.locale),
+        "settings": deepcopy(settings if settings is not None else base.settings),
+        "theme_profiles": {
+            key: profile.to_dict()
+            for key, profile in theme_profiles.items()
+            if profile.to_dict()
+        },
+    }
+    return RenderThemeSettings.from_payload(payload, uses_theme_profiles=True)

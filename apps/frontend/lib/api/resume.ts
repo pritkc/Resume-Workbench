@@ -4,7 +4,6 @@ import {
   type RenderThemeSettings,
   type RenderPreviewResponse,
   DEFAULT_RENDER_THEME_SETTINGS,
-  normalizeRenderThemeSettings,
   renderThemeSettingsToQuery,
   serializeRenderThemeSettings,
 } from '@/lib/types/render-theme';
@@ -110,12 +109,139 @@ interface ImproveResumeConfirmRequest {
   theme_settings?: RenderThemeSettings | null;
 }
 
+export interface RawYamlSections {
+  cv: string;
+  design: string;
+  locale: string;
+  settings: string;
+}
+
+export type RawYamlSection = keyof RawYamlSections;
+
+export interface DraftValidationDetail {
+  type?: string;
+  message: string;
+  section?: RawYamlSection;
+  line?: number | null;
+  column?: number | null;
+  path?: string[];
+}
+
+export class DraftRequestError extends Error {
+  status: number;
+  detail?: DraftValidationDetail;
+
+  constructor(message: string, status: number, detail?: DraftValidationDetail) {
+    super(message);
+    this.name = 'DraftRequestError';
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+export interface ResumeDraftRequest {
+  resume_id?: string | null;
+  processed_resume?: ProcessedResume;
+  theme_settings?: RenderThemeSettings | null;
+  yaml_sections?: RawYamlSections;
+}
+
+export interface ResumeDraftResponse {
+  request_id: string;
+  data: ResumeResponse['data'];
+  yaml_sections: RawYamlSections;
+}
+
 function normalizeResumeId(resumeId: string): string {
   const normalized = resumeId.trim();
   if (!normalized) {
     throw new Error('Resume ID is required.');
   }
   return normalized;
+}
+
+function normalizeDraftValidationDetail(value: unknown): DraftValidationDetail | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const message = typeof raw.message === 'string' ? raw.message.trim() : '';
+  if (!message) {
+    return undefined;
+  }
+
+  const path = Array.isArray(raw.path)
+    ? raw.path.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : undefined;
+
+  return {
+    type: typeof raw.type === 'string' ? raw.type : undefined,
+    message,
+    section:
+      raw.section === 'cv' ||
+      raw.section === 'design' ||
+      raw.section === 'locale' ||
+      raw.section === 'settings'
+        ? raw.section
+        : undefined,
+    line: typeof raw.line === 'number' ? raw.line : null,
+    column: typeof raw.column === 'number' ? raw.column : null,
+    path,
+  };
+}
+
+export function isDraftRequestError(error: unknown): error is DraftRequestError {
+  return error instanceof DraftRequestError;
+}
+
+export function formatDraftValidationDetail(detail?: DraftValidationDetail | null): string {
+  if (!detail) {
+    return 'Draft validation failed.';
+  }
+
+  const locationParts: string[] = [];
+  if (detail.section) {
+    locationParts.push(detail.section.toUpperCase());
+  }
+  if (detail.line) {
+    locationParts.push(`line ${detail.line}`);
+  }
+  if (detail.column) {
+    locationParts.push(`column ${detail.column}`);
+  }
+  if (detail.path?.length) {
+    locationParts.push(detail.path.join('.'));
+  }
+
+  return locationParts.length > 0
+    ? `${locationParts.join(' • ')}: ${detail.message}`
+    : detail.message;
+}
+
+async function throwDraftRequestError(response: Response, fallback: string): Promise<never> {
+  const text = await response.text().catch(() => '');
+
+  if (!text) {
+    throw new DraftRequestError(fallback, response.status);
+  }
+
+  try {
+    const payload = JSON.parse(text) as { detail?: unknown };
+    const detail = normalizeDraftValidationDetail(payload.detail);
+    if (detail) {
+      throw new DraftRequestError(formatDraftValidationDetail(detail), response.status, detail);
+    }
+    if (typeof payload.detail === 'string') {
+      throw new DraftRequestError(payload.detail, response.status);
+    }
+  } catch (parseError) {
+    if (parseError instanceof DraftRequestError) {
+      throw parseError;
+    }
+  }
+
+  throw new DraftRequestError(`${fallback}: ${text}`, response.status);
 }
 
 export interface ResumeListItem {
@@ -410,6 +536,59 @@ export async function fetchResumeRenderPreview(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Failed to fetch render preview (status ${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+export async function normalizeResumeDraft(
+  payload: ResumeDraftRequest
+): Promise<ResumeDraftResponse> {
+  const res = await apiPost('/resumes/draft/normalize', {
+    ...payload,
+    theme_settings: payload.theme_settings
+      ? serializeRenderThemeSettings(payload.theme_settings)
+      : undefined,
+  });
+  if (!res.ok) {
+    await throwDraftRequestError(res, `Failed to normalize draft (status ${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchDraftRenderPreview(
+  payload: ResumeDraftRequest
+): Promise<RenderPreviewResponse> {
+  const res = await apiPost(
+    '/resumes/draft/render-preview',
+    {
+      ...payload,
+      theme_settings: payload.theme_settings
+        ? serializeRenderThemeSettings(payload.theme_settings)
+        : undefined,
+    },
+    240_000
+  );
+  if (!res.ok) {
+    await throwDraftRequestError(
+      res,
+      `Failed to fetch draft render preview (status ${res.status})`
+    );
+  }
+  return res.json();
+}
+
+export async function saveResumeDraft(
+  resumeId: string,
+  payload: ResumeDraftRequest
+): Promise<ResumeDraftResponse> {
+  const res = await apiPatch(`/resumes/${encodeURIComponent(normalizeResumeId(resumeId))}/draft`, {
+    ...payload,
+    theme_settings: payload.theme_settings
+      ? serializeRenderThemeSettings(payload.theme_settings)
+      : undefined,
+  });
+  if (!res.ok) {
+    await throwDraftRequestError(res, `Failed to save draft (status ${res.status})`);
   }
   return res.json();
 }

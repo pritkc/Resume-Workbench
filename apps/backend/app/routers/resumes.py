@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+from datetime import datetime, timezone
 import hashlib
 import json
 import logging
@@ -14,12 +15,18 @@ from uuid import uuid4
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import ValidationError
+import yaml
 
 from app.config_cache import get_content_language, load_config as _load_config
 from app.database import db
 from app.llm import llm_trace_scope
 from app.pdf import render_resume_pdf, PDFRenderError
 from app.config import settings
+from app.rendering.rendercv_adapter import (
+    parse_rendercv_yaml_sections,
+    rendercv_payload_to_yaml_sections,
+    RenderCVYamlValidationError,
+)
 from app.rendering.rendercv_engine import RenderCVRenderError, render_resume_bundle
 from app.rendering.theme_profiles import (
     RenderThemeSettings as RenderThemeProfile,
@@ -35,18 +42,21 @@ from app.schemas import (
     ImproveResumeRequest,
     ImproveResumeResponse,
     ImproveResumeData,
+    RawResume,
+    RawYamlSections,
     RefinementStats,
-    ResumeDiffSummary,
-    ResumeFieldDiff,
+    RenderResumeRequest,
     ResumeData,
+    ResumeDiffSummary,
+    ResumeDraftNormalizedResponse,
+    ResumeDraftRequest,
+    ResumeFieldDiff,
     ResumeFetchData,
     ResumeFetchResponse,
     ResumeListResponse,
-    ResumeUpdateRequest,
     ResumeSummary,
+    ResumeUpdateRequest,
     ResumeUploadResponse,
-    RawResume,
-    RenderResumeRequest,
     UpdateCoverLetterRequest,
     UpdateOutreachMessageRequest,
     UpdateTitleRequest,
@@ -272,6 +282,161 @@ def _build_processed_resume(
             exc,
         )
         return None
+
+
+def _default_resume_draft() -> dict[str, Any]:
+    return normalize_resume_data(ResumeData().model_dump())
+
+
+def _default_theme_draft() -> RenderThemeProfile:
+    return RenderThemeProfile.from_payload(
+        {"theme_id": "classic", "theme_profiles": {}},
+        uses_theme_profiles=True,
+    )
+
+
+def _build_resume_fetch_data(
+    *,
+    resume_id: str,
+    raw_content: str,
+    processed_data: dict[str, Any],
+    theme_settings: RenderThemeProfile,
+    raw_created_at: str | None = None,
+    processing_status: str = "ready",
+    cover_letter: str | None = None,
+    outreach_message: str | None = None,
+    parent_id: str | None = None,
+    title: str | None = None,
+    application_pack_id: str | None = None,
+) -> ResumeFetchData:
+    created_at = raw_created_at or datetime.now(timezone.utc).isoformat()
+    return ResumeFetchData(
+        resume_id=resume_id,
+        raw_resume=RawResume(
+            id=None,
+            content=raw_content,
+            content_type="json",
+            created_at=created_at,
+            processing_status=processing_status,
+        ),
+        processed_resume=ResumeData.model_validate(normalize_resume_data(copy.deepcopy(processed_data))),
+        cover_letter=cover_letter,
+        outreach_message=outreach_message,
+        parent_id=parent_id,
+        title=title,
+        application_pack_id=application_pack_id,
+        theme_settings=theme_settings.to_dict(),
+    )
+
+
+def _save_resume_payload(
+    *,
+    resume_id: str,
+    updated_data: dict[str, Any],
+    theme_settings: RenderThemeProfile | None,
+) -> dict[str, Any]:
+    updated_content = json.dumps(updated_data, indent=2)
+    update_fields: dict[str, Any] = {
+        "content": updated_content,
+        "content_type": "json",
+        "processed_data": updated_data,
+        "processing_status": "ready",
+    }
+    if theme_settings is not None:
+        update_fields["theme_settings"] = theme_settings.to_storage_dict()
+
+    updated = db.update_resume(
+        resume_id,
+        update_fields,
+    )
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update resume")
+    return updated
+
+
+def _normalize_draft_request(
+    request: ResumeDraftRequest,
+    *,
+    base_resume: dict[str, Any] | None = None,
+    base_theme_settings: RenderThemeProfile | None = None,
+) -> tuple[dict[str, Any], RenderThemeProfile, RawYamlSections]:
+    base_resume_data = copy.deepcopy(base_resume) if base_resume else _default_resume_draft()
+    base_theme = base_theme_settings or _default_theme_draft()
+
+    try:
+        if request.yaml_sections is not None:
+            normalized_resume_data, resolved_theme_settings = parse_rendercv_yaml_sections(
+                request.yaml_sections.model_dump(),
+                base_resume_data=base_resume_data,
+                base_theme_settings=(
+                    _resolve_render_theme_settings(request.theme_settings)
+                    if request.theme_settings is not None
+                    else base_theme
+                ),
+            )
+        elif request.processed_resume is not None:
+            normalized_resume_data = request.processed_resume.model_dump()
+            resolved_theme_settings = (
+                _resolve_render_theme_settings(request.theme_settings)
+                if request.theme_settings is not None
+                else base_theme
+            )
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Draft requests must include either processed_resume or yaml_sections."
+                ),
+            )
+    except RenderCVYamlValidationError as exc:
+        detail: dict[str, Any] = {
+            "type": "yaml_validation",
+            "message": str(exc),
+        }
+        if exc.section:
+            detail["section"] = exc.section
+        if exc.line is not None:
+            detail["line"] = exc.line
+        if exc.column is not None:
+            detail["column"] = exc.column
+        if exc.path:
+            detail["path"] = exc.path
+        raise HTTPException(status_code=422, detail=detail) from exc
+    except yaml.YAMLError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"type": "yaml_validation", "message": f"Invalid YAML: {exc}"},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"type": "yaml_validation", "message": str(exc)},
+        ) from exc
+    except ValidationError as exc:
+        errors = exc.errors()
+        first_error = errors[0] if errors else {}
+        path = [str(part) for part in first_error.get("loc", [])]
+        message = first_error.get("msg") or str(exc)
+        detail: dict[str, Any] = {
+            "type": "yaml_validation" if request.yaml_sections is not None else "validation",
+            "message": message,
+        }
+        if request.yaml_sections is not None:
+            detail["section"] = "cv"
+        if path:
+            detail["path"] = path
+        raise HTTPException(status_code=422, detail=detail) from exc
+
+    validated_resume = ResumeData.model_validate(
+        normalize_resume_data(copy.deepcopy(normalized_resume_data))
+    )
+    yaml_sections = RawYamlSections(
+        **rendercv_payload_to_yaml_sections(
+            validated_resume.model_dump(),
+            resolved_theme_settings,
+        )
+    )
+    return validated_resume.model_dump(), resolved_theme_settings, yaml_sections
 
 
 def _raise_improve_error(
@@ -881,6 +1046,91 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
             ),
         ),
     )
+
+
+@router.post("/draft/normalize", response_model=ResumeDraftNormalizedResponse)
+async def normalize_resume_draft(
+    request: ResumeDraftRequest,
+) -> ResumeDraftNormalizedResponse:
+    resume: dict[str, Any] | None = None
+    base_resume_data: dict[str, Any] | None = None
+    base_theme_settings: RenderThemeProfile | None = None
+
+    if request.resume_id:
+        resume = db.get_resume(request.resume_id)
+        if resume:
+            base_resume_data = _get_original_resume_data(resume)
+            base_theme_settings = _stored_or_default_theme_settings(resume)
+
+    normalized_data, theme_settings, yaml_sections = _normalize_draft_request(
+        request,
+        base_resume=base_resume_data,
+        base_theme_settings=base_theme_settings,
+    )
+
+    draft_resume_id = request.resume_id or "draft"
+    return ResumeDraftNormalizedResponse(
+        request_id=str(uuid4()),
+        data=_build_resume_fetch_data(
+            resume_id=draft_resume_id,
+            raw_content=json.dumps(normalized_data, indent=2),
+            processed_data=normalized_data,
+            theme_settings=theme_settings,
+            raw_created_at=resume.get("created_at") if resume else None,
+            cover_letter=resume.get("cover_letter") if resume else None,
+            outreach_message=resume.get("outreach_message") if resume else None,
+            parent_id=resume.get("parent_id") if resume else None,
+            title=resume.get("title") if resume else None,
+            application_pack_id=resume.get("application_pack_id") if resume else None,
+        ),
+        yaml_sections=yaml_sections,
+    )
+
+
+@router.post("/draft/render-preview")
+async def render_resume_draft_preview(
+    request: ResumeDraftRequest,
+) -> dict[str, Any]:
+    resume: dict[str, Any] | None = None
+    base_resume_data: dict[str, Any] | None = None
+    base_theme_settings: RenderThemeProfile | None = None
+
+    if request.resume_id:
+        resume = db.get_resume(request.resume_id)
+        if resume:
+            base_resume_data = _get_original_resume_data(resume)
+            base_theme_settings = _stored_or_default_theme_settings(resume)
+
+    normalized_data, theme_settings, _ = _normalize_draft_request(
+        request,
+        base_resume=base_resume_data,
+        base_theme_settings=base_theme_settings,
+    )
+
+    try:
+        bundle = render_resume_bundle(
+            normalized_data,
+            theme_settings,
+            identifier=(resume.get("title") if resume else None) or request.resume_id or "draft",
+        )
+        artifacts = store_rendercv_bundle(bundle, resume_id=request.resume_id)
+    except RenderCVRenderError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    preview_artifacts = [
+        artifact for artifact in artifacts if artifact["kind"] == "resume_preview_png"
+    ]
+
+    return {
+        "resume_id": request.resume_id or "draft",
+        "theme_settings": theme_settings.to_dict(),
+        "artifacts": artifacts,
+        "preview_artifacts": preview_artifacts,
+        "pdf_artifact": next(
+            (artifact for artifact in artifacts if artifact["kind"] == "resume_pdf"),
+            None,
+        ),
+    }
 
 
 @router.get("/list", response_model=ResumeListResponse)
@@ -1714,49 +1964,77 @@ async def update_resume_endpoint(
             )
     else:
         updated_data = resume_payload.model_dump()
-    updated_content = json.dumps(updated_data, indent=2)
-
-    update_fields: dict[str, Any] = {
-        "content": updated_content,
-        "content_type": "json",
-        "processed_data": updated_data,
-        "processing_status": "ready",
-    }
-    if incoming_theme_settings is not None:
-        update_fields["theme_settings"] = incoming_theme_settings.to_storage_dict()
-
-    updated = db.update_resume(
-        resume_id,
-        update_fields,
-    )
-
-    if not updated:
-        raise HTTPException(status_code=500, detail="Failed to update resume")
-
-    raw_resume = RawResume(
-        id=None,
-        content=updated["content"],
-        content_type=updated["content_type"],
-        created_at=updated["created_at"],
-        processing_status=updated.get("processing_status", "pending"),
-    )
-
-    processed_resume = _build_processed_resume(
-        updated.get("processed_data"),
+    updated = _save_resume_payload(
         resume_id=resume_id,
+        updated_data=updated_data,
+        theme_settings=incoming_theme_settings,
     )
 
     return ResumeFetchResponse(
         request_id=str(uuid4()),
-        data=ResumeFetchData(
+        data=_build_resume_fetch_data(
             resume_id=resume_id,
-            raw_resume=raw_resume,
-            processed_resume=processed_resume,
-            theme_settings=_normalize_stored_theme_settings(
-                updated.get("theme_settings"),
-                resume_id=resume_id,
+            raw_content=updated["content"],
+            processed_data=updated.get("processed_data") or updated_data,
+            theme_settings=_resolve_render_theme_settings(
+                _normalize_stored_theme_settings(
+                    updated.get("theme_settings"),
+                    resume_id=resume_id,
+                )
             ),
+            raw_created_at=updated.get("created_at"),
+            processing_status=updated.get("processing_status", "ready"),
+            cover_letter=updated.get("cover_letter"),
+            outreach_message=updated.get("outreach_message"),
+            parent_id=updated.get("parent_id"),
+            title=updated.get("title"),
+            application_pack_id=updated.get("application_pack_id"),
         ),
+    )
+
+
+@router.patch("/{resume_id}/draft", response_model=ResumeDraftNormalizedResponse)
+async def save_resume_draft(
+    resume_id: str,
+    request: ResumeDraftRequest,
+) -> ResumeDraftNormalizedResponse:
+    existing = db.get_resume(resume_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    normalized_data, theme_settings, yaml_sections = _normalize_draft_request(
+        request,
+        base_resume=_get_original_resume_data(existing),
+        base_theme_settings=_stored_or_default_theme_settings(existing),
+    )
+
+    updated = _save_resume_payload(
+        resume_id=resume_id,
+        updated_data=normalized_data,
+        theme_settings=theme_settings,
+    )
+
+    return ResumeDraftNormalizedResponse(
+        request_id=str(uuid4()),
+        data=_build_resume_fetch_data(
+            resume_id=resume_id,
+            raw_content=updated["content"],
+            processed_data=updated.get("processed_data") or normalized_data,
+            theme_settings=_resolve_render_theme_settings(
+                _normalize_stored_theme_settings(
+                    updated.get("theme_settings"),
+                    resume_id=resume_id,
+                )
+            ),
+            raw_created_at=updated.get("created_at"),
+            processing_status=updated.get("processing_status", "ready"),
+            cover_letter=updated.get("cover_letter"),
+            outreach_message=updated.get("outreach_message"),
+            parent_id=updated.get("parent_id"),
+            title=updated.get("title"),
+            application_pack_id=updated.get("application_pack_id"),
+        ),
+        yaml_sections=yaml_sections,
     )
 
 

@@ -22,6 +22,17 @@ export interface PersonalInfo {
   website?: string;
   linkedin?: string;
   github?: string;
+  photoUrl?: string | null;
+  socialNetworks?: Array<{
+    network?: string;
+    username?: string;
+  }>;
+  customConnections?: Array<{
+    placeholder?: string;
+    url?: string | null;
+    fontawesome_icon?: string | null;
+    fontAwesomeIcon?: string | null;
+  }>;
 }
 
 export interface Experience {
