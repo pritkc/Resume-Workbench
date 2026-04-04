@@ -1,5 +1,6 @@
 """Integration tests for resume CRUD endpoints."""
 
+from pathlib import Path
 from unittest.mock import patch, AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -69,8 +70,116 @@ class TestGetResume:
             resp = await client.get("/api/v1/resumes", params={"resume_id": "nonexistent"})
         assert resp.status_code == 404
 
+    @patch("app.routers.resumes.db")
+    async def test_fetch_invalid_processed_data_uses_raw_fallback_and_normalizes_legacy_theme(
+        self, mock_db, client, mock_resume_record
+    ):
+        mock_db.get_resume.return_value = {
+            **mock_resume_record,
+            "content": '{"summary":"Raw JSON fallback"}',
+            "content_type": "json",
+            "processed_data": {"workExperience": "not-a-list"},
+            "theme_settings": {
+                "template": "modern-two-column",
+                "pageSize": "LETTER",
+                "margins": {"top": 12, "bottom": 14, "left": 11, "right": 13},
+                "spacing": {"section": 2, "item": 1, "lineHeight": 2},
+                "fontSize": {
+                    "base": 3,
+                    "headerScale": 3,
+                    "headerFont": "serif",
+                    "bodyFont": "sans-serif",
+                },
+                "compactMode": True,
+                "showContactIcons": True,
+                "accentColor": "green",
+            },
+        }
+        async with client:
+            resp = await client.get("/api/v1/resumes", params={"resume_id": "res-123"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["processed_resume"] is None
+        assert data["raw_resume"]["content"] == '{"summary":"Raw JSON fallback"}'
+        assert data["theme_settings"] == {
+            "theme_id": "moderncv",
+            "page_size": "LETTER",
+            "density_profile": "compact",
+            "bold_keywords": False,
+            "accent_color": "green",
+            "show_contact_icons": True,
+            "margins_mm": {"top": 12, "bottom": 14, "left": 11, "right": 13},
+        }
+
 
 class TestUploadResume:
+    @patch("app.routers.resumes.parse_resume_to_json", new_callable=AsyncMock)
+    @patch("app.routers.resumes.db")
+    async def test_upload_and_fetch_sample_pdf(self, mock_db, mock_parse_resume, client, sample_resume):
+        sample_pdf = (
+            Path(__file__).resolve().parents[4] / "tests" / "Prit-Chakalasiya-DE.pdf"
+        )
+        state: dict[str, object] = {}
+
+        async def create_resume_atomic_master(**kwargs):
+            state.update(kwargs)
+            return {
+                "resume_id": "res-sample",
+                "processing_status": "processing",
+                "is_master": True,
+            }
+
+        def update_resume(resume_id, updates):
+            state.update(updates)
+            return {
+                "resume_id": resume_id,
+                "processing_status": state.get("processing_status", "pending"),
+                "is_master": True,
+            }
+
+        def get_resume(resume_id):
+            return {
+                "resume_id": resume_id,
+                "content": state["content"],
+                "content_type": state["content_type"],
+                "filename": sample_pdf.name,
+                "is_master": True,
+                "parent_id": None,
+                "application_pack_id": None,
+                "processed_data": state.get("processed_data"),
+                "processing_status": state.get("processing_status", "pending"),
+                "cover_letter": None,
+                "outreach_message": None,
+                "title": None,
+                "original_markdown": state.get("original_markdown"),
+                "theme_settings": None,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+
+        mock_parse_resume.return_value = sample_resume
+        mock_db.create_resume_atomic_master = AsyncMock(side_effect=create_resume_atomic_master)
+        mock_db.update_resume.side_effect = update_resume
+        mock_db.get_resume.side_effect = get_resume
+
+        async with client:
+            with sample_pdf.open("rb") as handle:
+                upload = await client.post(
+                    "/api/v1/resumes/upload",
+                    files={"file": (sample_pdf.name, handle.read(), "application/pdf")},
+                )
+
+            assert upload.status_code == 200
+            assert upload.json()["processing_status"] == "ready"
+
+            fetch = await client.get("/api/v1/resumes", params={"resume_id": "res-sample"})
+
+        assert fetch.status_code == 200
+        data = fetch.json()["data"]
+        assert "PRIT CHAKALASIYA" in data["raw_resume"]["content"]
+        assert data["processed_resume"]["summary"] == sample_resume["summary"]
+        assert state["original_markdown"] == state["content"]
+
     @patch("app.routers.resumes.parse_resume_to_json", new_callable=AsyncMock)
     @patch("app.routers.resumes.parse_document", new_callable=AsyncMock)
     @patch("app.routers.resumes.db")

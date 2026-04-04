@@ -480,7 +480,13 @@ async def generate_resume_diffs(
     result = await complete_json(
         prompt=prompt,
         system_prompt="You are an expert resume editor. Output only valid JSON with targeted changes.",
-        max_tokens=4096,
+        max_tokens=8192,
+        retries=3,
+        operation="resume_generate_diffs",
+        metadata={
+            "prompt_id": selected_id,
+            "job_description_chars": len(job_description),
+        },
     )
 
     # Parse result — handle LLM ignoring diff format gracefully
@@ -530,6 +536,8 @@ async def extract_job_keywords(job_description: str) -> dict[str, Any]:
     return await complete_json(
         prompt=prompt,
         system_prompt="You are an expert job description analyzer.",
+        operation="job_extract_keywords",
+        metadata={"job_description_chars": len(job_description)},
     )
 
 
@@ -663,6 +671,11 @@ async def improve_resume(
         prompt=prompt,
         system_prompt="You are an expert resume editor. Output only valid JSON.",
         max_tokens=8192,
+        operation="resume_generate_full",
+        metadata={
+            "prompt_id": selected_prompt_id,
+            "job_description_chars": len(job_description),
+        },
     )
 
     # LLM-006: Pre-validation check for truncation signs

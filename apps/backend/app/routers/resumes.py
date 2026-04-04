@@ -13,9 +13,11 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
+from pydantic import ValidationError
 
 from app.config_cache import get_content_language, load_config as _load_config
 from app.database import db
+from app.llm import llm_trace_scope
 from app.pdf import render_resume_pdf, PDFRenderError
 from app.config import settings
 from app.rendering.rendercv_engine import RenderCVRenderError, render_resume_bundle
@@ -23,7 +25,6 @@ from app.rendering.theme_profiles import (
     RenderThemeSettings as RenderThemeProfile,
     legacy_to_theme_settings,
 )
-from app.services.critic_service import run_critic_pass
 from app.services.artifact_service import store_rendercv_bundle
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,11 @@ from app.schemas import (
     ResumeFetchData,
     ResumeFetchResponse,
     ResumeListResponse,
+    ResumeUpdateRequest,
     ResumeSummary,
     ResumeUploadResponse,
     RawResume,
+    RenderResumeRequest,
     UpdateCoverLetterRequest,
     UpdateOutreachMessageRequest,
     UpdateTitleRequest,
@@ -132,6 +135,120 @@ def _resolve_render_theme_settings(theme_settings: Any) -> RenderThemeProfile:
     return RenderThemeProfile()
 
 
+def _coerce_page_size(value: Any) -> str:
+    return "LETTER" if value == "LETTER" else "A4"
+
+
+def _coerce_spacing_level(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(parsed, 5))
+
+
+def _coerce_margin_mm(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(5, min(parsed, 25))
+
+
+def _coerce_accent_color(value: Any) -> str:
+    if value in {"blue", "green", "orange", "red"}:
+        return value
+    return "blue"
+
+
+def _normalize_stored_theme_settings(
+    theme_settings: Any, *, resume_id: str
+) -> dict[str, Any] | None:
+    if theme_settings is None:
+        return None
+
+    try:
+        if hasattr(theme_settings, "model_dump"):
+            return _resolve_render_theme_settings(theme_settings).to_dict()
+
+        if isinstance(theme_settings, dict):
+            if {
+                "theme_id",
+                "page_size",
+                "density_profile",
+                "bold_keywords",
+                "accent_color",
+                "show_contact_icons",
+                "margins_mm",
+                "design",
+                "locale",
+                "settings",
+            } & set(theme_settings.keys()):
+                return _resolve_render_theme_settings(theme_settings).to_dict()
+
+            margins = theme_settings.get("margins")
+            spacing = theme_settings.get("spacing")
+            margins = margins if isinstance(margins, dict) else {}
+            spacing = spacing if isinstance(spacing, dict) else {}
+
+            return legacy_to_theme_settings(
+                template=str(theme_settings.get("template") or "swiss-single"),
+                page_size=_coerce_page_size(theme_settings.get("pageSize")),
+                compact_mode=bool(theme_settings.get("compactMode", False)),
+                section_spacing=_coerce_spacing_level(spacing.get("section"), 3),
+                item_spacing=_coerce_spacing_level(spacing.get("item"), 2),
+                line_height=_coerce_spacing_level(spacing.get("lineHeight"), 3),
+                accent_color=_coerce_accent_color(theme_settings.get("accentColor")),
+                show_contact_icons=bool(theme_settings.get("showContactIcons", False)),
+                margin_top=_coerce_margin_mm(margins.get("top"), 10),
+                margin_bottom=_coerce_margin_mm(margins.get("bottom"), 10),
+                margin_left=_coerce_margin_mm(margins.get("left"), 10),
+                margin_right=_coerce_margin_mm(margins.get("right"), 10),
+            ).to_dict()
+    except Exception as exc:
+        logger.warning(
+            "Falling back to default theme settings for resume %s: %s",
+            resume_id,
+            exc,
+        )
+
+    return RenderThemeProfile().to_dict()
+
+
+def _stored_or_default_theme_settings(resume: dict[str, Any]) -> RenderThemeProfile:
+    normalized = _normalize_stored_theme_settings(
+        resume.get("theme_settings"),
+        resume_id=resume["resume_id"],
+    )
+    return _resolve_render_theme_settings(normalized)
+
+
+def _build_processed_resume(
+    processed_data: Any, *, resume_id: str
+) -> ResumeData | None:
+    if not processed_data:
+        return None
+
+    if not isinstance(processed_data, dict):
+        logger.warning(
+            "Ignoring non-dict processed_data for resume %s during fetch.",
+            resume_id,
+        )
+        return None
+
+    normalized_data = normalize_resume_data(copy.deepcopy(processed_data))
+
+    try:
+        return ResumeData.model_validate(normalized_data)
+    except ValidationError as exc:
+        logger.warning(
+            "Ignoring invalid processed_data for resume %s during fetch: %s",
+            resume_id,
+            exc,
+        )
+        return None
+
+
 def _raise_improve_error(
     action: str,
     stage: str,
@@ -166,6 +283,88 @@ def _get_original_markdown(resume: dict[str, Any]) -> str | None:
         if content and isinstance(content, str):
             return content
     return None
+
+
+def _set_stage(stage_state: dict[str, str] | None, stage: str) -> None:
+    if stage_state is not None:
+        stage_state["stage"] = stage
+
+
+async def _generate_tailored_resume_data(
+    *,
+    resume: dict[str, Any],
+    job: dict[str, Any],
+    job_keywords: dict[str, Any],
+    language: str,
+    prompt_id: str,
+    resume_id: str,
+    job_id: str,
+    stage_state: dict[str, str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any] | None, list[str]]:
+    """Generate tailored resume data with a safe fallback from diff to full mode."""
+    original_resume_data = _get_original_resume_data(resume)
+    response_warnings: list[str] = []
+
+    if original_resume_data:
+        _set_stage(stage_state, "generate_resume_diffs")
+        try:
+            diff_result = await generate_resume_diffs(
+                original_resume=resume["content"],
+                job_description=job["content"],
+                job_keywords=job_keywords,
+                language=language,
+                prompt_id=prompt_id,
+                original_resume_data=original_resume_data,
+            )
+        except ValueError as exc:
+            logger.warning(
+                "Diff generation failed for resume %s / job %s; falling back to full-output tailoring: %s",
+                resume_id,
+                job_id,
+                exc,
+            )
+            response_warnings.append(
+                "Diff generation returned incomplete JSON; fell back to full resume generation."
+            )
+        else:
+            _set_stage(stage_state, "apply_resume_diffs")
+            improved_data, applied_changes, rejected_changes = apply_diffs(
+                original=original_resume_data,
+                changes=diff_result.changes,
+            )
+
+            _set_stage(stage_state, "verify_resume_diffs")
+            diff_warnings = verify_diff_result(
+                original=original_resume_data,
+                result=improved_data,
+                applied_changes=applied_changes,
+                job_keywords=job_keywords,
+            )
+            response_warnings.extend(diff_warnings)
+
+            if rejected_changes:
+                response_warnings.append(
+                    f"{len(rejected_changes)} change(s) rejected during verification"
+                )
+
+            logger.info(
+                "Diff-based improve: %d applied, %d rejected, %d warnings",
+                len(applied_changes),
+                len(rejected_changes),
+                len(diff_warnings),
+            )
+            return improved_data, original_resume_data, response_warnings
+
+    _set_stage(stage_state, "generate_full_resume")
+    improved_data = await improve_resume(
+        original_resume=resume["content"],
+        job_description=job["content"],
+        job_keywords=job_keywords,
+        language=language,
+        prompt_id=prompt_id,
+        original_resume_data=original_resume_data,
+    )
+    return improved_data, original_resume_data, response_warnings
 
 
 def _has_month(date_str: str) -> bool:
@@ -530,6 +729,8 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     Converts the file to Markdown and stores it in the database.
     Optionally parses to structured JSON if LLM is configured.
     """
+    request_id = str(uuid4())
+
     # Validate file type
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
@@ -571,22 +772,27 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     )
 
     # Try to parse to structured JSON (optional, may fail if LLM not configured)
-    try:
-        processed_data = await parse_resume_to_json(markdown_content)
-        db.update_resume(
-            resume["resume_id"],
-            {
-                "processed_data": processed_data,
-                "processing_status": "ready",
-            },
-        )
-        resume["processed_data"] = processed_data
-        resume["processing_status"] = "ready"
-    except Exception as e:
-        # LLM parsing failed, update status to failed
-        logger.warning(f"Resume parsing to JSON failed for {file.filename}: {e}")
-        db.update_resume(resume["resume_id"], {"processing_status": "failed"})
-        resume["processing_status"] = "failed"
+    with llm_trace_scope(
+        request_id,
+        "resumes.upload",
+        {"resume_id": resume["resume_id"], "filename": file.filename},
+    ):
+        try:
+            processed_data = await parse_resume_to_json(markdown_content)
+            db.update_resume(
+                resume["resume_id"],
+                {
+                    "processed_data": processed_data,
+                    "processing_status": "ready",
+                },
+            )
+            resume["processed_data"] = processed_data
+            resume["processing_status"] = "ready"
+        except Exception as e:
+            # LLM parsing failed, update status to failed
+            logger.warning(f"Resume parsing to JSON failed for {file.filename}: {e}")
+            db.update_resume(resume["resume_id"], {"processing_status": "failed"})
+            resume["processing_status"] = "failed"
 
     # Return accurate status to client (API-001 fix)
     return ResumeUploadResponse(
@@ -595,7 +801,7 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
             if resume["processing_status"] == "ready"
             else f"File {file.filename} uploaded but parsing failed"
         ),
-        request_id=str(uuid4()),
+        request_id=request_id,
         resume_id=resume["resume_id"],
         processing_status=resume["processing_status"],
         is_master=resume.get("is_master", False),
@@ -628,14 +834,9 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
     )
 
     # Get processed data if available (no more on-demand parsing)
-    processed_data = resume.get("processed_data")
-
-    # Apply lazy migration - add section metadata to old resumes
-    if processed_data:
-        processed_data = normalize_resume_data(processed_data)
-
-    processed_resume = (
-        ResumeData.model_validate(processed_data) if processed_data else None
+    processed_resume = _build_processed_resume(
+        resume.get("processed_data"),
+        resume_id=resume_id,
     )
 
     return ResumeFetchResponse(
@@ -649,7 +850,10 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
             parent_id=resume.get("parent_id"),
             title=resume.get("title"),
             application_pack_id=resume.get("application_pack_id"),
-            theme_settings=resume.get("theme_settings"),
+            theme_settings=_normalize_stored_theme_settings(
+                resume.get("theme_settings"),
+                resume_id=resume_id,
+            ),
         ),
     )
 
@@ -701,23 +905,31 @@ async def improve_resume_preview_endpoint(
     feature_config = _load_config()
     enable_cover_letter = feature_config.get("enable_cover_letter", False)
     enable_outreach = feature_config.get("enable_outreach_message", False)
+    request_id = str(uuid4())
 
-    stage = "load_job_keywords"
+    stage_state = {"stage": "load_job_keywords"}
     detail = "Failed to preview resume. Please try again."
     try:
-        return await asyncio.wait_for(
-            _improve_preview_flow(
-                request=request,
-                resume=resume,
-                job=job,
-                language=language,
-                prompt_id=prompt_id,
-                theme_settings=_resolve_render_theme_settings(request.theme_settings),
-                enable_cover_letter=enable_cover_letter,
-                enable_outreach=enable_outreach,
-            ),
-            timeout=240.0,  # 4-minute hard limit
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.improve_preview",
+            {"resume_id": request.resume_id, "job_id": request.job_id},
+        ):
+            return await asyncio.wait_for(
+                _improve_preview_flow(
+                    request=request,
+                    resume=resume,
+                    job=job,
+                    language=language,
+                    prompt_id=prompt_id,
+                    request_id=request_id,
+                    theme_settings=_resolve_render_theme_settings(request.theme_settings),
+                    enable_cover_letter=enable_cover_letter,
+                    enable_outreach=enable_outreach,
+                    stage_state=stage_state,
+                ),
+                timeout=240.0,  # 4-minute hard limit
+            )
     except asyncio.TimeoutError:
         logger.error(
             "Improve preview timed out after 240s for resume %s / job %s",
@@ -729,7 +941,7 @@ async def improve_resume_preview_endpoint(
             detail="Resume tailoring timed out. Please try again with a shorter job description or a simpler prompt.",
         )
     except Exception as e:
-        _raise_improve_error("preview", stage, e, detail)
+        _raise_improve_error("preview", stage_state["stage"], e, detail)
 
 
 async def _improve_preview_flow(
@@ -739,17 +951,20 @@ async def _improve_preview_flow(
     job: dict[str, Any],
     language: str,
     prompt_id: str,
+    request_id: str,
     theme_settings: RenderThemeProfile,
     enable_cover_letter: bool,
     enable_outreach: bool,
+    stage_state: dict[str, str] | None = None,
 ) -> ImproveResumeResponse:
     """Inner flow for improve/preview, extracted so it can be wrapped in wait_for."""
     job_keywords = job.get("job_keywords")
     job_keywords_hash = job.get("job_keywords_hash")
     content_hash = _hash_job_content(job["content"])
     if not job_keywords or job_keywords_hash != content_hash:
+        _set_stage(stage_state, "load_job_keywords")
         job_keywords = await extract_job_keywords(job["content"])
-        # Cache extracted keywords with a content hash for basic invalidation.
+        _set_stage(stage_state, "persist_job_keywords")
         try:
             updated_job = db.update_job(
                 request.job_id,
@@ -766,68 +981,21 @@ async def _improve_preview_flow(
                 request.job_id,
                 e,
             )
-    original_resume_data = _get_original_resume_data(resume)
-    critic_result = await run_critic_pass(
-        resume_data=original_resume_data,
-        job_description=job["content"],
-        language=language,
-    )
-    enriched_job_keywords = (
-        copy.deepcopy(job_keywords) if isinstance(job_keywords, dict) else {"keywords": job_keywords}
-    )
-    enriched_job_keywords["critic_priority_keywords"] = critic_result["priority_keywords"]
-    enriched_job_keywords["critic_gaps"] = critic_result["recruiter_gaps"]
-    enriched_job_keywords["critic_avoid_claims"] = critic_result["avoid_claims"]
-    # Collect warnings throughout the process
-    response_warnings: list[str] = []
-
-    # Diff-based improvement: generate targeted changes, apply with verification
-    if original_resume_data:
-        diff_result = await generate_resume_diffs(
-            original_resume=resume["content"],
-            job_description=job["content"],
-            job_keywords=enriched_job_keywords,
+    improved_data, original_resume_data, response_warnings = (
+        await _generate_tailored_resume_data(
+            resume=resume,
+            job=job,
+            job_keywords=job_keywords,
             language=language,
             prompt_id=prompt_id,
-            original_resume_data=original_resume_data,
+            resume_id=request.resume_id,
+            job_id=request.job_id,
+            stage_state=stage_state,
         )
-
-        improved_data, applied_changes, rejected_changes = apply_diffs(
-            original=original_resume_data,
-            changes=diff_result.changes,
-        )
-
-        diff_warnings = verify_diff_result(
-            original=original_resume_data,
-            result=improved_data,
-            applied_changes=applied_changes,
-            job_keywords=enriched_job_keywords,
-        )
-        response_warnings.extend(diff_warnings)
-
-        if rejected_changes:
-            response_warnings.append(
-                f"{len(rejected_changes)} change(s) rejected during verification"
-            )
-
-        logger.info(
-            "Diff-based improve: %d applied, %d rejected, %d warnings",
-            len(applied_changes),
-            len(rejected_changes),
-            len(diff_warnings),
-        )
-    else:
-        # Fallback to full-output mode when no structured data available
-        improved_data = await improve_resume(
-            original_resume=resume["content"],
-            job_description=job["content"],
-            job_keywords=enriched_job_keywords,
-            language=language,
-            prompt_id=prompt_id,
-            original_resume_data=original_resume_data,
-        )
+    )
 
     # Safety nets (defense in depth — should rarely activate with diff-based flow)
+    _set_stage(stage_state, "preserve_resume_metadata")
     improved_data, preserve_warnings = _preserve_personal_info(
         original_resume_data,
         improved_data,
@@ -841,12 +1009,11 @@ async def _improve_preview_flow(
     improved_data = _preserve_original_skills(original_resume_data, improved_data)
     improved_data = _protect_custom_sections(original_resume_data, improved_data)
 
-    # Multi-pass refinement: keyword injection, AI phrase removal, alignment validation
     refinement_stats: RefinementStats | None = None
     refinement_attempted = False
     refinement_successful = False
     try:
-        # Get master resume for alignment validation
+        _set_stage(stage_state, "refine_resume")
         master_resume = db.get_master_resume()
         master_data = (
             _get_original_resume_data(master_resume)
@@ -854,13 +1021,13 @@ async def _improve_preview_flow(
             else _get_original_resume_data(resume)
         )
         if master_data:
-            initial_match = calculate_keyword_match(improved_data, enriched_job_keywords)
+            initial_match = calculate_keyword_match(improved_data, job_keywords)
             refinement_attempted = True
             refinement_result = await refine_resume(
                 initial_tailored=improved_data,
                 master_resume=master_data,
                 job_description=job["content"],
-                job_keywords=enriched_job_keywords,
+                job_keywords=job_keywords,
                 config=RefinementConfig(),
             )
             improved_data = refinement_result.refined_data
@@ -891,7 +1058,7 @@ async def _improve_preview_flow(
                 "Refinement completed: %d passes, %d AI phrases removed",
                 refinement_result.passes_completed,
                 len(refinement_result.ai_phrases_removed),
-            )
+                )
     except Exception as e:
         logger.warning("Refinement failed, using unrefined result: %s", e)
         if refinement_attempted:
@@ -904,6 +1071,7 @@ async def _improve_preview_flow(
         preview_hashes = {}
     preview_hashes[prompt_id] = preview_hash
     # NOTE: preview_hashes updates are last-write-wins; concurrent previews can race.
+    _set_stage(stage_state, "persist_preview_hash")
     try:
         updated_job = db.update_job(
             request.job_id,
@@ -921,14 +1089,16 @@ async def _improve_preview_flow(
         logger.warning(
             "Failed to persist preview hash for job %s: %s", request.job_id, e
         )
+    _set_stage(stage_state, "calculate_diff")
     diff_summary, detailed_changes, diff_error = _calculate_diff_from_resume(
         resume,
         improved_data,
     )
     if diff_error:
         response_warnings.append(f"Could not calculate changes: {diff_error}")
-    improvements = generate_improvements(enriched_job_keywords)
+    improvements = generate_improvements(job_keywords)
 
+    _set_stage(stage_state, "generate_auxiliary_messages")
     (
         cover_letter,
         outreach_message,
@@ -942,7 +1112,9 @@ async def _improve_preview_flow(
         enable_outreach,
     )
     response_warnings.extend(aux_warnings)
+    llm_summary = db.summarize_llm_calls(trace_id=request_id)
 
+    _set_stage(stage_state, "create_application_pack")
     application_pack = db.create_application_pack(
         base_resume_id=request.resume_id,
         job_id=request.job_id,
@@ -959,12 +1131,9 @@ async def _improve_preview_flow(
         job_id=request.job_id,
         application_pack_id=application_pack["pack_id"],
         prompt_id=prompt_id,
-        request_payload={
-            "critic": critic_result,
-            "prompt_id": prompt_id,
-        },
+        request_payload={"prompt_id": prompt_id, "llm_trace_id": request_id},
         result_payload={
-            "critic": critic_result,
+            "llm_summary": llm_summary,
             "preview_hash": preview_hash,
             "diff_summary": diff_summary.model_dump() if diff_summary else None,
         },
@@ -972,6 +1141,7 @@ async def _improve_preview_flow(
     )
     artifacts: list[dict[str, Any]] = []
     try:
+        _set_stage(stage_state, "render_preview_artifacts")
         bundle = render_resume_bundle(
             improved_data,
             theme_settings,
@@ -990,12 +1160,13 @@ async def _improve_preview_flow(
         application_pack["pack_id"],
         {"generation_run_id": preview_run["generation_run_id"]},
     )
+    _set_stage(stage_state, "update_generation_run")
     db.update_generation_run(
         preview_run["generation_run_id"],
         {
             "warnings": response_warnings,
             "result_payload": {
-                "critic": critic_result,
+                "llm_summary": llm_summary,
                 "preview_hash": preview_hash,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
                 "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
@@ -1003,7 +1174,6 @@ async def _improve_preview_flow(
         },
     )
 
-    request_id = str(uuid4())
     return ImproveResumeResponse(
         request_id=request_id,
         data=ImproveResumeData(
@@ -1054,6 +1224,7 @@ async def improve_resume_confirm_endpoint(
     enable_outreach = feature_config.get("enable_outreach_message", False)
     language = get_content_language()
     theme_settings = _resolve_render_theme_settings(request.theme_settings)
+    request_id = str(uuid4())
 
     stage = "serialize_improved_data"
     detail = "Failed to confirm resume. Please try again."
@@ -1111,18 +1282,28 @@ async def improve_resume_confirm_endpoint(
             response_warnings.append(f"Could not calculate changes: {diff_error}")
 
         stage = "generate_auxiliary_messages"
-        (
-            cover_letter,
-            outreach_message,
-            title,
-            aux_warnings,
-        ) = await _generate_auxiliary_messages(
-            improved_data,
-            job["content"],
-            language,
-            enable_cover_letter,
-            enable_outreach,
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.improve_confirm",
+            {
+                "resume_id": request.resume_id,
+                "job_id": request.job_id,
+                "application_pack_id": request.application_pack_id,
+            },
+        ):
+            (
+                cover_letter,
+                outreach_message,
+                title,
+                aux_warnings,
+            ) = await _generate_auxiliary_messages(
+                improved_data,
+                job["content"],
+                language,
+                enable_cover_letter,
+                enable_outreach,
+            )
+            llm_summary = db.summarize_llm_calls(trace_id=request_id)
         response_warnings.extend(aux_warnings)
 
         stage = "create_resume"
@@ -1143,7 +1324,6 @@ async def improve_resume_confirm_endpoint(
 
         improvements_payload = [imp.model_dump() for imp in request.improvements]
         stage = "create_improvement"
-        request_id = str(uuid4())
         db.create_improvement(
             original_resume_id=request.resume_id,
             tailored_resume_id=tailored_resume["resume_id"],
@@ -1185,8 +1365,10 @@ async def improve_resume_confirm_endpoint(
             request_payload={
                 "preview_generation_run_id": request.generation_run_id,
                 "application_pack_id": application_pack_id,
+                "llm_trace_id": request_id,
             },
             result_payload={
+                "llm_summary": llm_summary,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
             },
             warnings=response_warnings,
@@ -1221,6 +1403,7 @@ async def improve_resume_confirm_endpoint(
             {
                 "warnings": response_warnings,
                 "result_payload": {
+                    "llm_summary": llm_summary,
                     "diff_summary": diff_summary.model_dump() if diff_summary else None,
                     "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
                 },
@@ -1280,65 +1463,45 @@ async def improve_resume_endpoint(
     enable_cover_letter = feature_config.get("enable_cover_letter", False)
     enable_outreach = feature_config.get("enable_outreach_message", False)
     language = get_content_language()
+    stage_state = {"stage": "load_job_keywords"}
+    detail = "Failed to improve resume. Please try again."
+    request_id = str(uuid4())
 
     try:
-        # Extract keywords from job description
-        job_keywords = await extract_job_keywords(job["content"])
+        _set_stage(stage_state, "load_job_keywords")
+        with llm_trace_scope(
+            request_id,
+            "resumes.improve",
+            {"resume_id": request.resume_id, "job_id": request.job_id},
+        ):
+            job_keywords = await extract_job_keywords(job["content"])
 
         # Generate improved resume in the configured language
         prompt_id = request.prompt_id or _get_default_prompt_id()
-
-        original_resume_data = _get_original_resume_data(resume)
-        # Collect warnings throughout the process
-        response_warnings: list[str] = []
-
-        # Diff-based improvement: generate targeted changes, apply with verification
-        if original_resume_data:
-            diff_result = await generate_resume_diffs(
-                original_resume=resume["content"],
-                job_description=job["content"],
-                job_keywords=job_keywords,
-                language=language,
-                prompt_id=prompt_id,
-                original_resume_data=original_resume_data,
-            )
-
-            improved_data, applied_changes, rejected_changes = apply_diffs(
-                original=original_resume_data,
-                changes=diff_result.changes,
-            )
-
-            diff_warnings = verify_diff_result(
-                original=original_resume_data,
-                result=improved_data,
-                applied_changes=applied_changes,
-                job_keywords=job_keywords,
-            )
-            response_warnings.extend(diff_warnings)
-
-            if rejected_changes:
-                response_warnings.append(
-                    f"{len(rejected_changes)} change(s) rejected during verification"
+        with llm_trace_scope(
+            request_id,
+            "resumes.improve",
+            {
+                "resume_id": request.resume_id,
+                "job_id": request.job_id,
+                "prompt_id": prompt_id,
+            },
+        ):
+            improved_data, original_resume_data, response_warnings = (
+                await _generate_tailored_resume_data(
+                    resume=resume,
+                    job=job,
+                    job_keywords=job_keywords,
+                    language=language,
+                    prompt_id=prompt_id,
+                    resume_id=request.resume_id,
+                    job_id=request.job_id,
+                    stage_state=stage_state,
                 )
-
-            logger.info(
-                "Diff-based improve (legacy): %d applied, %d rejected, %d warnings",
-                len(applied_changes),
-                len(rejected_changes),
-                len(diff_warnings),
-            )
-        else:
-            # Fallback to full-output mode when no structured data available
-            improved_data = await improve_resume(
-                original_resume=resume["content"],
-                job_description=job["content"],
-                job_keywords=job_keywords,
-                language=language,
-                prompt_id=prompt_id,
-                original_resume_data=original_resume_data,
             )
 
         # Safety nets (defense in depth)
+        _set_stage(stage_state, "preserve_resume_metadata")
         improved_data, preserve_warnings = _preserve_personal_info(
             original_resume_data,
             improved_data,
@@ -1352,12 +1515,11 @@ async def improve_resume_endpoint(
         improved_data = _preserve_original_skills(original_resume_data, improved_data)
         improved_data = _protect_custom_sections(original_resume_data, improved_data)
 
-        # Multi-pass refinement: keyword injection, AI phrase removal, alignment validation
         refinement_stats: RefinementStats | None = None
         refinement_attempted = False
         refinement_successful = False
         try:
-            # Get master resume for alignment validation
+            _set_stage(stage_state, "refine_resume")
             master_resume = db.get_master_resume()
             master_data = (
                 _get_original_resume_data(master_resume)
@@ -1367,13 +1529,22 @@ async def improve_resume_endpoint(
             if master_data:
                 initial_match = calculate_keyword_match(improved_data, job_keywords)
                 refinement_attempted = True
-                refinement_result = await refine_resume(
-                    initial_tailored=improved_data,
-                    master_resume=master_data,
-                    job_description=job["content"],
-                    job_keywords=job_keywords,
-                    config=RefinementConfig(),
-                )
+                with llm_trace_scope(
+                    request_id,
+                    "resumes.improve",
+                    {
+                        "resume_id": request.resume_id,
+                        "job_id": request.job_id,
+                        "prompt_id": prompt_id,
+                    },
+                ):
+                    refinement_result = await refine_resume(
+                        initial_tailored=improved_data,
+                        master_resume=master_data,
+                        job_description=job["content"],
+                        job_keywords=job_keywords,
+                        config=RefinementConfig(),
+                    )
                 improved_data = refinement_result.refined_data
                 refinement_stats = RefinementStats(
                     passes_completed=refinement_result.passes_completed,
@@ -1412,6 +1583,7 @@ async def improve_resume_endpoint(
         improved_text = json.dumps(improved_data, indent=2)
 
         # Calculate differences between original and improved resume
+        _set_stage(stage_state, "calculate_diff")
         diff_summary, detailed_changes, diff_error = _calculate_diff_from_resume(
             resume,
             improved_data,
@@ -1423,21 +1595,28 @@ async def improve_resume_endpoint(
         improvements = generate_improvements(job_keywords)
 
         # Generate cover letter, outreach message, and title in parallel if enabled
-        (
-            cover_letter,
-            outreach_message,
-            title,
-            aux_warnings,
-        ) = await _generate_auxiliary_messages(
-            improved_data,
-            job["content"],
-            language,
-            enable_cover_letter,
-            enable_outreach,
-        )
+        _set_stage(stage_state, "generate_auxiliary_messages")
+        with llm_trace_scope(
+            request_id,
+            "resumes.improve",
+            {"resume_id": request.resume_id, "job_id": request.job_id},
+        ):
+            (
+                cover_letter,
+                outreach_message,
+                title,
+                aux_warnings,
+            ) = await _generate_auxiliary_messages(
+                improved_data,
+                job["content"],
+                language,
+                enable_cover_letter,
+                enable_outreach,
+            )
         response_warnings.extend(aux_warnings)
 
         # Store the tailored resume with cover letter, outreach message, and title
+        _set_stage(stage_state, "create_resume")
         tailored_resume = db.create_resume(
             content=improved_text,
             content_type="json",
@@ -1452,7 +1631,7 @@ async def improve_resume_endpoint(
         )
 
         # Store improvement record
-        request_id = str(uuid4())
+        _set_stage(stage_state, "create_improvement")
         db.create_improvement(
             original_resume_id=request.resume_id,
             tailored_resume_id=tailored_resume["resume_id"],
@@ -1489,33 +1668,41 @@ async def improve_resume_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Resume improvement failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to improve resume. Please try again.",
-        )
+        _raise_improve_error("improve", stage_state["stage"], e, detail)
 
 
 @router.patch("/{resume_id}", response_model=ResumeFetchResponse)
 async def update_resume_endpoint(
-    resume_id: str, resume_data: ResumeData
+    resume_id: str, resume_payload: ResumeUpdateRequest | ResumeData
 ) -> ResumeFetchResponse:
     """Update a resume with new structured data."""
     existing = db.get_resume(resume_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Resume not found")
 
-    updated_data = resume_data.model_dump()
+    incoming_theme_settings: RenderThemeProfile | None = None
+    if isinstance(resume_payload, ResumeUpdateRequest):
+        updated_data = resume_payload.processed_resume.model_dump()
+        if resume_payload.theme_settings is not None:
+            incoming_theme_settings = _resolve_render_theme_settings(
+                resume_payload.theme_settings
+            )
+    else:
+        updated_data = resume_payload.model_dump()
     updated_content = json.dumps(updated_data, indent=2)
+
+    update_fields: dict[str, Any] = {
+        "content": updated_content,
+        "content_type": "json",
+        "processed_data": updated_data,
+        "processing_status": "ready",
+    }
+    if incoming_theme_settings is not None:
+        update_fields["theme_settings"] = incoming_theme_settings.to_dict()
 
     updated = db.update_resume(
         resume_id,
-        {
-            "content": updated_content,
-            "content_type": "json",
-            "processed_data": updated_data,
-            "processing_status": "ready",
-        },
+        update_fields,
     )
 
     if not updated:
@@ -1529,10 +1716,9 @@ async def update_resume_endpoint(
         processing_status=updated.get("processing_status", "pending"),
     )
 
-    processed_resume = (
-        ResumeData.model_validate(updated.get("processed_data"))
-        if updated.get("processed_data")
-        else None
+    processed_resume = _build_processed_resume(
+        updated.get("processed_data"),
+        resume_id=resume_id,
     )
 
     return ResumeFetchResponse(
@@ -1541,32 +1727,20 @@ async def update_resume_endpoint(
             resume_id=resume_id,
             raw_resume=raw_resume,
             processed_resume=processed_resume,
+            theme_settings=_normalize_stored_theme_settings(
+                updated.get("theme_settings"),
+                resume_id=resume_id,
+            ),
         ),
     )
 
 
-@router.get("/{resume_id}/pdf")
-async def download_resume_pdf(
+@router.post("/{resume_id}/pdf")
+async def download_resume_pdf_with_config(
     resume_id: str,
-    template: str = Query("swiss-single"),
-    pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
-    marginTop: int = Query(10, ge=5, le=25),
-    marginBottom: int = Query(10, ge=5, le=25),
-    marginLeft: int = Query(10, ge=5, le=25),
-    marginRight: int = Query(10, ge=5, le=25),
-    sectionSpacing: int = Query(3, ge=1, le=5),
-    itemSpacing: int = Query(2, ge=1, le=5),
-    lineHeight: int = Query(3, ge=1, le=5),
-    fontSize: int = Query(3, ge=1, le=5),
-    headerScale: int = Query(3, ge=1, le=5),
-    headerFont: str = Query("serif", pattern="^(serif|sans-serif|mono)$"),
-    bodyFont: str = Query("sans-serif", pattern="^(serif|sans-serif|mono)$"),
-    compactMode: bool = Query(False),
-    showContactIcons: bool = Query(False),
-    accentColor: str = Query("blue", pattern="^(blue|green|orange|red)$"),
-    lang: str | None = Query(None, pattern="^[a-z]{2}(-[A-Z]{2})?$"),
+    request: RenderResumeRequest,
 ) -> Response:
-    """Generate a PDF for a resume using RenderCV."""
+    """Generate a RenderCV PDF using the provided rich config."""
     resume = db.get_resume(resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -1578,20 +1752,7 @@ async def download_resume_pdf(
             detail="Resume has no structured data for RenderCV rendering.",
         )
 
-    theme_settings = legacy_to_theme_settings(
-        template=template,
-        page_size=pageSize,
-        compact_mode=compactMode,
-        section_spacing=sectionSpacing,
-        item_spacing=itemSpacing,
-        line_height=lineHeight,
-        accent_color=accentColor,
-        show_contact_icons=showContactIcons,
-        margin_top=marginTop,
-        margin_bottom=marginBottom,
-        margin_left=marginLeft,
-        margin_right=marginRight,
-    )
+    theme_settings = _resolve_render_theme_settings(request.theme_settings)
 
     try:
         bundle = render_resume_bundle(
@@ -1617,6 +1778,127 @@ async def download_resume_pdf(
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
 
 
+@router.get("/{resume_id}/pdf")
+async def download_resume_pdf(
+    resume_id: str,
+    template: str = Query("swiss-single"),
+    pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
+    marginTop: int = Query(10, ge=5, le=25),
+    marginBottom: int = Query(10, ge=5, le=25),
+    marginLeft: int = Query(10, ge=5, le=25),
+    marginRight: int = Query(10, ge=5, le=25),
+    sectionSpacing: int = Query(3, ge=1, le=5),
+    itemSpacing: int = Query(2, ge=1, le=5),
+    lineHeight: int = Query(3, ge=1, le=5),
+    fontSize: int = Query(3, ge=1, le=5),
+    headerScale: int = Query(3, ge=1, le=5),
+    headerFont: str = Query("serif", pattern="^(serif|sans-serif|mono)$"),
+    bodyFont: str = Query("sans-serif", pattern="^(serif|sans-serif|mono)$"),
+    compactMode: bool = Query(False),
+    showContactIcons: bool = Query(False),
+    accentColor: str = Query("blue", pattern="^(blue|green|orange|red)$"),
+    useSavedThemeSettings: bool = Query(False),
+    lang: str | None = Query(None, pattern="^[a-z]{2}(-[A-Z]{2})?$"),
+) -> Response:
+    """Generate a PDF for a resume using RenderCV."""
+    resume = db.get_resume(resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    resume_data = _get_original_resume_data(resume)
+    if not resume_data:
+        raise HTTPException(
+            status_code=409,
+            detail="Resume has no structured data for RenderCV rendering.",
+        )
+
+    if useSavedThemeSettings:
+        theme_settings = _stored_or_default_theme_settings(resume)
+    else:
+        theme_settings = legacy_to_theme_settings(
+            template=template,
+            page_size=pageSize,
+            compact_mode=compactMode,
+            section_spacing=sectionSpacing,
+            item_spacing=itemSpacing,
+            line_height=lineHeight,
+            accent_color=accentColor,
+            show_contact_icons=showContactIcons,
+            margin_top=marginTop,
+            margin_bottom=marginBottom,
+            margin_left=marginLeft,
+            margin_right=marginRight,
+        )
+
+    try:
+        bundle = render_resume_bundle(
+            resume_data,
+            theme_settings,
+            identifier=resume.get("title") or resume_id,
+        )
+        artifacts = store_rendercv_bundle(bundle, resume_id=resume_id)
+        pdf_artifact = next(
+            (artifact for artifact in artifacts if artifact["kind"] == "resume_pdf"),
+            None,
+        )
+        if pdf_artifact is None:
+            raise HTTPException(
+                status_code=500,
+                detail="RenderCV did not produce a PDF artifact.",
+            )
+        pdf_bytes = Path(pdf_artifact["storage_path"]).read_bytes()
+    except RenderCVRenderError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    headers = {"Content-Disposition": f'attachment; filename="resume_{resume_id}.pdf"'}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+@router.post("/{resume_id}/render-preview")
+async def render_resume_preview_with_config(
+    resume_id: str,
+    request: RenderResumeRequest,
+) -> dict:
+    """Render a preview using the provided rich RenderCV config."""
+    resume = db.get_resume(resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    resume_data = _get_original_resume_data(resume)
+    if not resume_data:
+        raise HTTPException(
+            status_code=409,
+            detail="Resume has no structured data for RenderCV rendering.",
+        )
+
+    theme_settings = _resolve_render_theme_settings(request.theme_settings)
+
+    try:
+        bundle = render_resume_bundle(
+            resume_data,
+            theme_settings,
+            identifier=resume.get("title") or resume_id,
+        )
+        artifacts = store_rendercv_bundle(bundle, resume_id=resume_id)
+    except RenderCVRenderError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    preview_artifacts = [
+        artifact for artifact in artifacts if artifact["kind"] == "resume_preview_png"
+    ]
+
+    return {
+        "resume_id": resume_id,
+        "theme_settings": theme_settings.to_dict(),
+        "artifacts": artifacts,
+        "preview_artifacts": preview_artifacts,
+        "pdf_artifact": next(
+            (artifact for artifact in artifacts if artifact["kind"] == "resume_pdf"),
+            None,
+        ),
+    }
+
+
 @router.get("/{resume_id}/render-preview")
 async def render_resume_preview(
     resume_id: str,
@@ -1632,6 +1914,7 @@ async def render_resume_preview(
     compactMode: bool = Query(False),
     showContactIcons: bool = Query(False),
     accentColor: str = Query("blue", pattern="^(blue|green|orange|red)$"),
+    useSavedThemeSettings: bool = Query(False),
 ) -> dict:
     resume = db.get_resume(resume_id)
     if not resume:
@@ -1644,20 +1927,23 @@ async def render_resume_preview(
             detail="Resume has no structured data for RenderCV rendering.",
         )
 
-    theme_settings = legacy_to_theme_settings(
-        template=template,
-        page_size=pageSize,
-        compact_mode=compactMode,
-        section_spacing=sectionSpacing,
-        item_spacing=itemSpacing,
-        line_height=lineHeight,
-        accent_color=accentColor,
-        show_contact_icons=showContactIcons,
-        margin_top=marginTop,
-        margin_bottom=marginBottom,
-        margin_left=marginLeft,
-        margin_right=marginRight,
-    )
+    if useSavedThemeSettings:
+        theme_settings = _stored_or_default_theme_settings(resume)
+    else:
+        theme_settings = legacy_to_theme_settings(
+            template=template,
+            page_size=pageSize,
+            compact_mode=compactMode,
+            section_spacing=sectionSpacing,
+            item_spacing=itemSpacing,
+            line_height=lineHeight,
+            accent_color=accentColor,
+            show_contact_icons=showContactIcons,
+            margin_top=marginTop,
+            margin_bottom=marginBottom,
+            margin_left=marginLeft,
+            margin_right=marginRight,
+        )
 
     try:
         bundle = render_resume_bundle(
@@ -1701,6 +1987,7 @@ async def retry_processing(resume_id: str) -> ResumeUploadResponse:
     Re-runs parse_resume_to_json() on the stored markdown content.
     Works for resumes with processing_status == "failed" or "processing".
     """
+    request_id = str(uuid4())
     resume = db.get_resume(resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -1718,32 +2005,37 @@ async def retry_processing(resume_id: str) -> ResumeUploadResponse:
             detail="Resume has no stored content to re-process.",
         )
 
-    try:
-        processed_data = await parse_resume_to_json(markdown_content)
-        db.update_resume(
-            resume_id,
-            {
-                "processed_data": processed_data,
-                "processing_status": "ready",
-            },
-        )
-        return ResumeUploadResponse(
-            message="Resume processing succeeded on retry",
-            request_id=str(uuid4()),
-            resume_id=resume_id,
-            processing_status="ready",
-            is_master=resume.get("is_master", False),
-        )
-    except Exception as e:
-        logger.warning(f"Retry processing failed for resume {resume_id}: {e}")
-        db.update_resume(resume_id, {"processing_status": "failed"})
-        return ResumeUploadResponse(
-            message="Retry processing failed",
-            request_id=str(uuid4()),
-            resume_id=resume_id,
-            processing_status="failed",
-            is_master=resume.get("is_master", False),
-        )
+    with llm_trace_scope(
+        request_id,
+        "resumes.retry_processing",
+        {"resume_id": resume_id},
+    ):
+        try:
+            processed_data = await parse_resume_to_json(markdown_content)
+            db.update_resume(
+                resume_id,
+                {
+                    "processed_data": processed_data,
+                    "processing_status": "ready",
+                },
+            )
+            return ResumeUploadResponse(
+                message="Resume processing succeeded on retry",
+                request_id=request_id,
+                resume_id=resume_id,
+                processing_status="ready",
+                is_master=resume.get("is_master", False),
+            )
+        except Exception as e:
+            logger.warning(f"Retry processing failed for resume {resume_id}: {e}")
+            db.update_resume(resume_id, {"processing_status": "failed"})
+            return ResumeUploadResponse(
+                message="Retry processing failed",
+                request_id=request_id,
+                resume_id=resume_id,
+                processing_status="failed",
+                is_master=resume.get("is_master", False),
+            )
 
 
 @router.patch("/{resume_id}/cover-letter")

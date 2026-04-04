@@ -75,7 +75,11 @@ def _get_prompt_options() -> list[PromptOption]:
 async def _log_llm_health_check(config: LLMConfig) -> None:
     """Run a best-effort health check and log outcome without affecting API responses."""
     try:
-        health = await check_llm_health(config)
+        health = await check_llm_health(
+            config,
+            use_cache=False,
+            source="config_save_background",
+        )
         if not health.get("healthy", False):
             logging.warning(
                 "LLM config saved but health check failed",
@@ -186,7 +190,13 @@ async def test_llm_connection(request: LLMConfigRequest | None = None) -> dict:
     )
 
     test_prompt = "Hi"
-    return await check_llm_health(config, include_details=True, test_prompt=test_prompt)
+    return await check_llm_health(
+        config,
+        include_details=True,
+        test_prompt=test_prompt,
+        use_cache=False,
+        source="config_test",
+    )
 
 
 @router.get("/features", response_model=FeatureConfigResponse)

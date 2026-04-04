@@ -1,0 +1,158 @@
+import { expect, test } from '@playwright/test';
+import {
+  collectBrowserProblems,
+  confirmedResult,
+  fulfillJson,
+  frontendBaseUrl,
+  gotoWithRetry,
+  installArtifactMocks,
+  jobDescriptionResponse,
+  masterResumeId,
+  masterResumeResponse,
+  pngArtifact,
+  previewResult,
+  statusPayload,
+  tailoredResumeId,
+  tailoredResumeResponse,
+  themeSettings,
+} from './playwright-fixtures';
+
+test('dashboard to tailor to tailored resume builder flow works with mocked AI seams', async ({
+  page,
+}) => {
+  const browserProblems = await collectBrowserProblems(page);
+  const uploadBodies: unknown[] = [];
+  const previewBodies: Array<Record<string, unknown>> = [];
+  const confirmBodies: Array<Record<string, unknown>> = [];
+
+  await installArtifactMocks(page);
+
+  await page.route('**/api/v1/status', async (route) => {
+    await fulfillJson(route, statusPayload());
+  });
+  await page.route('**/api/v1/config/prompts', async (route) => {
+    await fulfillJson(route, {
+      default_prompt_id: 'keywords',
+      prompt_options: [
+        { id: 'keywords', label: 'Keyword enhance', description: 'Tight ATS updates' },
+        { id: 'full', label: 'Full tailor', description: 'Rewrite for the role' },
+      ],
+    });
+  });
+  await page.route('**/api/v1/resumes/list?include_master=true', async (route) => {
+    await fulfillJson(route, {
+      data: [
+        {
+          resume_id: masterResumeId,
+          filename: 'master.pdf',
+          is_master: true,
+          parent_id: null,
+          processing_status: 'ready',
+          created_at: '2026-04-01T00:00:00Z',
+          updated_at: '2026-04-01T00:00:00Z',
+          title: 'Master Resume',
+        },
+      ],
+    });
+  });
+  await page.route(/\/api\/v1\/resumes\?resume_id=.*/, async (route) => {
+    const url = new URL(route.request().url());
+    const resumeId = url.searchParams.get('resume_id');
+    if (resumeId === tailoredResumeId) {
+      await fulfillJson(route, tailoredResumeResponse);
+      return;
+    }
+    await fulfillJson(route, masterResumeResponse);
+  });
+  await page.route('**/api/v1/jobs/upload', async (route) => {
+    uploadBodies.push(route.request().postDataJSON());
+    await fulfillJson(route, { job_id: ['job-123'] });
+  });
+  await page.route('**/api/v1/application-packs/preview', async (route) => {
+    previewBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfillJson(route, previewResult);
+  });
+  await page.route('**/api/v1/application-packs/confirm', async (route) => {
+    confirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfillJson(route, confirmedResult);
+  });
+  await page.route(/\/api\/v1\/resumes\/tailored-123\/job-description$/, async (route) => {
+    await fulfillJson(route, jobDescriptionResponse);
+  });
+  await page.route(/\/api\/v1\/resumes\/tailored-123\/render-preview(\?.*)?$/, async (route) => {
+    await fulfillJson(route, {
+      resume_id: tailoredResumeId,
+      theme_settings: themeSettings,
+      artifacts: [pngArtifact],
+      preview_artifacts: [pngArtifact],
+      pdf_artifact: null,
+    });
+  });
+
+  await page.addInitScript((resumeId: string) => {
+    window.localStorage.setItem('master_resume_id', resumeId);
+  }, masterResumeId);
+
+  await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);
+  await page.waitForLoadState('networkidle');
+  const createResumeCard = page.getByRole('button', { name: /create resume/i });
+  await expect(createResumeCard).toBeEnabled();
+  await gotoWithRetry(page, `${frontendBaseUrl}/tailor`);
+
+  await page.locator('textarea').fill(jobDescriptionResponse.content);
+  await page.getByRole('button', { name: /generate tailored resume/i }).click();
+
+  await expect(page.getByText(/review ai tailoring results/i)).toBeVisible();
+  await expect(page.getByAltText('preview.png').first()).toBeVisible();
+
+  await page.getByRole('button', { name: /confirm & save/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/resumes/${tailoredResumeId}$`));
+  await expect(page.getByText('RenderCV Preview')).toBeVisible();
+  await expect(page.getByAltText('preview.png')).toBeVisible();
+
+  await page.getByRole('button', { name: /edit resume/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/builder\\?id=${tailoredResumeId}$`));
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByRole('heading', { name: /resume builder/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /cover letter/i })).toBeEnabled();
+  await page.getByRole('button', { name: /cover letter/i }).click();
+  await expect(page.getByText(/tailored cover letter for the platform team/i).first()).toBeVisible();
+
+  await page.getByRole('button', { name: /outreach mail/i }).click();
+  await expect(page.getByText(/i am excited about this backend role/i).first()).toBeVisible();
+
+  await page.getByRole('button', { name: /jd match/i }).click();
+  await expect(page.getByText(/about jd match/i)).toBeVisible();
+
+  await page.getByRole('button', { name: /back to dashboard/i }).click();
+  await expect(page).toHaveURL(new RegExp('/dashboard$'));
+
+  expect(uploadBodies).toEqual([
+    {
+      job_descriptions: [jobDescriptionResponse.content],
+      resume_id: masterResumeId,
+    },
+  ]);
+  expect(previewBodies[0]).toMatchObject({
+    resume_id: masterResumeId,
+    job_id: 'job-123',
+    prompt_id: 'keywords',
+    theme_settings: {
+      ...themeSettings,
+      theme_id: 'classic',
+    },
+  });
+  expect(confirmBodies[0]).toMatchObject({
+    resume_id: masterResumeId,
+    job_id: 'job-123',
+    application_pack_id: 'pack-123',
+    generation_run_id: 'run-123',
+    theme_settings: themeSettings,
+  });
+
+  expect(browserProblems).toEqual({
+    consoleMessages: [],
+    pageErrors: [],
+    failedResponses: [],
+  });
+});

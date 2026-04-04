@@ -6,7 +6,9 @@
   "directories": {
     "doc": "docs"
   },
-  "scripts": {},
+  "scripts": {
+    "test:e2e": "E2E_FRONTEND_URL=http://127.0.0.1:3100 playwright test --project=chromium"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/srbhr/Resume-Matcher.git"

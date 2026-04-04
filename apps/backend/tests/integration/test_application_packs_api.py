@@ -66,18 +66,6 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
         patch("app.routers.resumes.db") as mock_db,
         patch("app.routers.resumes.extract_job_keywords", new=AsyncMock(return_value={"keywords": ["FastAPI"]})),
         patch(
-            "app.routers.resumes.run_critic_pass",
-            new=AsyncMock(
-                return_value={
-                    "priority_keywords": ["FastAPI"],
-                    "recruiter_gaps": ["Tighter summary"],
-                    "strengthen_bullets": ["API impact"],
-                    "avoid_claims": ["Kubernetes"],
-                    "summary": "Focus on platform work",
-                }
-            ),
-        ),
-        patch(
             "app.routers.resumes.generate_resume_diffs",
             new=AsyncMock(return_value=ImproveDiffResult(changes=[], strategy_notes="")),
         ),
@@ -135,6 +123,78 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     assert data["generation_run_id"] == "run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-preview-1"
     assert "BogusSkill" not in data["resume_preview"]["additional"]["technicalSkills"]
+
+
+@pytest.mark.asyncio
+async def test_preview_falls_back_to_full_resume_when_diff_generation_fails(
+    sample_resume: dict, client
+):
+    improved = copy.deepcopy(sample_resume)
+    improved["summary"] = "Fallback tailored summary"
+    fallback_improve = AsyncMock(return_value=improved)
+
+    with (
+        patch("app.routers.resumes.db") as mock_db,
+        patch("app.routers.resumes.extract_job_keywords", new=AsyncMock(return_value={"keywords": ["FastAPI"]})),
+        patch(
+            "app.routers.resumes.generate_resume_diffs",
+            new=AsyncMock(side_effect=ValueError("No JSON found in response")),
+        ),
+        patch("app.routers.resumes.improve_resume", new=fallback_improve),
+        patch("app.routers.resumes.calculate_keyword_match", return_value=55.0),
+        patch(
+            "app.routers.resumes.refine_resume",
+            new=AsyncMock(return_value=_fake_refinement_result(improved)),
+        ),
+        patch(
+            "app.routers.resumes.generate_improvements",
+            return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
+        ),
+        patch(
+            "app.routers.resumes._generate_auxiliary_messages",
+            new=AsyncMock(return_value=("Cover letter", "Outreach", "Tailored Title", [])),
+        ),
+        patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
+        patch(
+            "app.routers.resumes.store_rendercv_bundle",
+            return_value=[
+                {
+                    "artifact_id": "art-preview-1",
+                    "kind": "resume_preview_png",
+                    "mime_type": "image/png",
+                    "file_name": "preview.png",
+                    "url": "/api/v1/artifacts/art-preview-1",
+                }
+            ],
+        ),
+    ):
+        mock_db.get_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.get_job.return_value = {
+            "job_id": "job-123",
+            "content": "Senior Backend Engineer",
+            "preview_hashes": {},
+        }
+        mock_db.update_job.return_value = {"job_id": "job-123"}
+        mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.create_application_pack.return_value = {"pack_id": "pack-123"}
+        mock_db.create_generation_run.return_value = {"generation_run_id": "run-123"}
+        mock_db.update_generation_run.return_value = {"generation_run_id": "run-123"}
+        mock_db.update_application_pack.return_value = {"pack_id": "pack-123"}
+
+        async with client:
+            response = await client.post(
+                "/api/v1/application-packs/preview",
+                json={"resume_id": "res-123", "job_id": "job-123"},
+            )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["resume_preview"]["summary"] == "Fallback tailored summary"
+    assert any(
+        "fell back to full resume generation" in warning
+        for warning in data.get("warnings", [])
+    )
+    fallback_improve.assert_awaited_once()
 
 
 @pytest.mark.asyncio

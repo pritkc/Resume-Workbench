@@ -452,6 +452,11 @@ async def inject_keywords(
                 "fabricated content. Return only valid JSON matching the input schema."
             ),
             max_tokens=8192,
+            operation="resume_refine_keyword_injection",
+            metadata={
+                "keywords_to_inject": len(keywords_to_inject),
+                "job_description_chars": len(job_description),
+            },
         )
 
         # LLM-014: Validate the result maintains required structure
