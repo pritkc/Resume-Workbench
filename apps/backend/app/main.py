@@ -26,6 +26,7 @@ from app.routers import (
     enrichment_router,
     health_router,
     jobs_router,
+    llm_router,
     resumes_router,
     themes_router,
 )
@@ -89,6 +90,7 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(config_router, prefix="/api/v1")
 app.include_router(resumes_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(llm_router, prefix="/api/v1")
 app.include_router(enrichment_router, prefix="/api/v1")
 app.include_router(artifacts_router, prefix="/api/v1")
 app.include_router(application_packs_router, prefix="/api/v1")

@@ -115,7 +115,12 @@ async def analyze_resume(resume_id: str) -> AnalysisResponse:
 
     try:
         # Call LLM with increased max_tokens for non-English languages
-        result = await complete_json(prompt, max_tokens=8192)
+        result = await complete_json(
+            prompt,
+            max_tokens=8192,
+            operation="enrichment_analyze_resume",
+            metadata={"resume_id": resume_id},
+        )
 
         # Parse response into schema objects
         items_to_enrich = [
@@ -205,7 +210,12 @@ async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
         )
 
         try:
-            analysis_result = await complete_json(analysis_prompt, max_tokens=8192)
+            analysis_result = await complete_json(
+                analysis_prompt,
+                max_tokens=8192,
+                operation="enrichment_reanalyze_resume",
+                metadata={"resume_id": request.resume_id},
+            )
         except Exception as e:
             logger.error(f"Failed to re-analyze resume: {e}")
             raise HTTPException(
@@ -268,7 +278,11 @@ async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
         )
 
         try:
-            result = await complete_json(prompt)
+            result = await complete_json(
+                prompt,
+                operation="enrichment_generate_description",
+                metadata={"resume_id": request.resume_id, "item_id": item_id},
+            )
             # Get additional bullets from LLM (new key name)
             additional_bullets = result.get("additional_bullets", [])
             # Fallback to old key for backwards compatibility
@@ -404,7 +418,12 @@ async def _regenerate_experience_or_project(
         user_instruction=instruction,
     )
 
-    result = await complete_json(prompt, max_tokens=4096)
+    result = await complete_json(
+        prompt,
+        max_tokens=4096,
+        operation="enrichment_regenerate_item",
+        metadata={"item_id": item.item_id, "item_type": item.item_type},
+    )
 
     new_bullets = result.get("new_bullets", [])
     if not isinstance(new_bullets, list):
@@ -436,7 +455,12 @@ async def _regenerate_skills(
         user_instruction=instruction,
     )
 
-    result = await complete_json(prompt, max_tokens=2048)
+    result = await complete_json(
+        prompt,
+        max_tokens=2048,
+        operation="enrichment_regenerate_skills",
+        metadata={"item_id": item.item_id, "item_type": item.item_type},
+    )
 
     new_skills = result.get("new_skills", [])
     if not isinstance(new_skills, list):

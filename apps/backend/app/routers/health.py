@@ -12,7 +12,7 @@ router = APIRouter(tags=["Health"])
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """Basic health check endpoint."""
-    llm_status = await check_llm_health()
+    llm_status = await check_llm_health(source="health_endpoint")
 
     return HealthResponse(
         status="healthy" if llm_status["healthy"] else "degraded",
@@ -30,7 +30,7 @@ async def get_status() -> StatusResponse:
         - Database statistics
     """
     config = get_llm_config()
-    llm_status = await check_llm_health(config)
+    llm_status = await check_llm_health(config, source="status_endpoint")
     db_stats = db.get_stats()
 
     return StatusResponse(

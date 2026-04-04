@@ -51,3 +51,14 @@ export {
   type PromptConfig,
   type PromptConfigUpdate,
 } from './config';
+
+// LLM observability
+export {
+  fetchLlmCalls,
+  fetchLlmCallSummary,
+  type LLMCallRecord,
+  type LLMCallSummary,
+  type LLMOperationSummary,
+  type FetchLLMCallsParams,
+  type FetchLLMCallSummaryParams,
+} from './llm';

@@ -1,10 +1,17 @@
 """LiteLLM wrapper for multi-provider AI support."""
 
+import asyncio
+from contextlib import contextmanager
+from contextvars import ContextVar
+from datetime import datetime, timezone
 import json
 import logging
+import math
 import re
 import threading
+import time
 from typing import Any
+from uuid import uuid4
 
 import litellm
 from litellm import Router
@@ -29,10 +36,28 @@ _configure_litellm_logging()
 LLM_TIMEOUT_HEALTH_CHECK = 30
 LLM_TIMEOUT_COMPLETION = 120
 LLM_TIMEOUT_JSON = 180  # JSON completions may take longer
+LLM_HEALTH_CHECK_MAX_TOKENS = 64
+LLM_HEALTH_CHECK_PROMPT = "Reply with exactly OK."
 
 # JSON-010: JSON extraction safety limits
 MAX_JSON_EXTRACTION_RECURSION = 10
 MAX_JSON_CONTENT_SIZE = 1024 * 1024  # 1MB
+
+_LLM_TRACE_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar(
+    "llm_trace_context", default=None
+)
+
+_BUILTIN_PRICING: tuple[dict[str, Any], ...] = (
+    {
+        "model_prefix": "gemini/gemini-2.5-flash",
+        "input_per_1m": 0.30,
+        "output_per_1m": 2.50,
+        "source": "builtin:gemini-2.5-flash:2026-04-02",
+    },
+)
+
+_LLM_HEALTH_CACHE_LOCK = asyncio.Lock()
+_LLM_HEALTH_CACHE: dict[str, Any] | None = None
 
 
 class LLMConfig(BaseModel):
@@ -188,6 +213,302 @@ def _extract_choice_text(choice: Any) -> str | None:
                 return extracted
 
     return None
+
+
+@contextmanager
+def llm_trace_scope(
+    trace_id: str,
+    request_scope: str,
+    metadata: dict[str, Any] | None = None,
+):
+    """Attach a high-level trace context to nested LLM calls."""
+    previous = _LLM_TRACE_CONTEXT.get() or {}
+    merged_metadata = dict(previous.get("metadata") or {})
+    if metadata:
+        merged_metadata.update(metadata)
+    token = _LLM_TRACE_CONTEXT.set(
+        {
+            **previous,
+            "trace_id": trace_id,
+            "request_scope": request_scope,
+            "metadata": merged_metadata,
+        }
+    )
+    try:
+        yield _LLM_TRACE_CONTEXT.get()
+    finally:
+        _LLM_TRACE_CONTEXT.reset(token)
+
+
+def _estimate_tokens_from_text(text: str | None) -> int | None:
+    if not text:
+        return 0
+    return max(1, math.ceil(len(text) / 4))
+
+
+def _serialize_messages(messages: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for message in messages:
+        role = str(_safe_get(message, "role") or "unknown")
+        content = _join_text_parts(_extract_text_parts(_safe_get(message, "content"))) or ""
+        parts.append(f"[{role}] {content}")
+    return "\n\n".join(parts).strip()
+
+
+def _preview_text(text: str | None) -> str | None:
+    if text is None or not settings.llm_trace_store_content:
+        return None
+    limit = max(0, settings.llm_trace_preview_chars)
+    if limit == 0:
+        return None
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}\n...[truncated {len(text) - limit} chars]"
+
+
+def _health_cache_key(config: "LLMConfig") -> str:
+    return "|".join(
+        [
+            config.provider,
+            config.model,
+            config.api_base or "",
+            config.api_key or "",
+        ]
+    )
+
+
+def _clone_health_result(result: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(json.dumps(result))
+
+
+def _get_cached_health_result(config: "LLMConfig") -> dict[str, Any] | None:
+    ttl_seconds = max(0, settings.llm_health_cache_ttl_seconds)
+    if ttl_seconds == 0:
+        return None
+
+    cache = _LLM_HEALTH_CACHE
+    if not cache:
+        return None
+
+    if cache.get("key") != _health_cache_key(config):
+        return None
+
+    age_seconds = time.time() - float(cache.get("stored_at_epoch", 0))
+    if age_seconds > ttl_seconds:
+        return None
+
+    result = _clone_health_result(cache["result"])
+    result["cached"] = True
+    result["cache_age_seconds"] = int(max(0, age_seconds))
+    result["checked_at"] = cache.get("checked_at")
+    return result
+
+
+def _store_cached_health_result(config: "LLMConfig", result: dict[str, Any]) -> None:
+    global _LLM_HEALTH_CACHE
+    _LLM_HEALTH_CACHE = {
+        "key": _health_cache_key(config),
+        "result": _clone_health_result(result),
+        "stored_at_epoch": time.time(),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _extract_usage_metrics(response: Any) -> dict[str, int | None]:
+    usage = _safe_get(response, "usage")
+    if usage is None:
+        return {
+            "input_tokens": None,
+            "output_tokens": None,
+            "total_tokens": None,
+        }
+
+    return {
+        "input_tokens": _safe_get(usage, "prompt_tokens") or _safe_get(usage, "input_tokens"),
+        "output_tokens": _safe_get(usage, "completion_tokens") or _safe_get(usage, "output_tokens"),
+        "total_tokens": _safe_get(usage, "total_tokens"),
+    }
+
+
+def _extract_finish_reason(choice: Any) -> str | None:
+    finish_reason = _safe_get(choice, "finish_reason")
+    return str(finish_reason) if finish_reason is not None else None
+
+
+def _resolve_pricing(model_name: str) -> tuple[float | None, float | None, str | None]:
+    if (
+        settings.llm_cost_input_per_million_tokens is not None
+        and settings.llm_cost_output_per_million_tokens is not None
+    ):
+        return (
+            settings.llm_cost_input_per_million_tokens,
+            settings.llm_cost_output_per_million_tokens,
+            "settings_override",
+        )
+
+    for pricing in _BUILTIN_PRICING:
+        if model_name.startswith(str(pricing["model_prefix"])):
+            return (
+                float(pricing["input_per_1m"]),
+                float(pricing["output_per_1m"]),
+                str(pricing["source"]),
+            )
+
+    return None, None, None
+
+
+def _estimate_costs(
+    *,
+    model_name: str,
+    input_tokens: int | None,
+    output_tokens: int | None,
+) -> tuple[float | None, float | None, float | None, str | None]:
+    input_rate, output_rate, source = _resolve_pricing(model_name)
+    if input_rate is None or output_rate is None:
+        return None, None, None, source
+
+    input_cost = None if input_tokens is None else (input_tokens / 1_000_000) * input_rate
+    output_cost = None if output_tokens is None else (output_tokens / 1_000_000) * output_rate
+    total_cost = None
+    if input_cost is not None or output_cost is not None:
+        total_cost = (input_cost or 0.0) + (output_cost or 0.0)
+    return input_cost, output_cost, total_cost, source
+
+
+def _persist_llm_attempt(record: dict[str, Any]) -> None:
+    if not settings.llm_trace_enabled:
+        return
+    try:
+        from app.database import db
+
+        db.create_llm_call(**record)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Failed to persist LLM trace record",
+            exc_info=True,
+        )
+
+
+def _record_llm_attempt(
+    *,
+    call_group_id: str,
+    attempt: int,
+    operation: str,
+    request_kind: str,
+    messages: list[dict[str, Any]],
+    config: LLMConfig,
+    model_name: str,
+    max_tokens: int,
+    temperature: float | None,
+    reasoning_effort: str | None,
+    json_mode: bool,
+    started_at: float,
+    success: bool,
+    content: str | None = None,
+    response: Any = None,
+    finish_reason: str | None = None,
+    error: Exception | None = None,
+    extra_context: dict[str, Any] | None = None,
+) -> None:
+    prompt_text = _serialize_messages(messages)
+    prompt_chars = len(prompt_text)
+    prompt_tokens_est = _estimate_tokens_from_text(prompt_text)
+    response_chars = len(content) if content is not None else None
+    response_tokens_est = _estimate_tokens_from_text(content) if content is not None else None
+    usage = _extract_usage_metrics(response)
+    effective_input_tokens = usage["input_tokens"] or prompt_tokens_est
+    effective_output_tokens = usage["output_tokens"] or response_tokens_est
+    input_cost, output_cost, total_cost, pricing_source = _estimate_costs(
+        model_name=model_name,
+        input_tokens=effective_input_tokens,
+        output_tokens=effective_output_tokens,
+    )
+
+    trace_context = _LLM_TRACE_CONTEXT.get() or {}
+    trace_id = trace_context.get("trace_id") or call_group_id
+    request_scope = trace_context.get("request_scope")
+    request_context = dict(trace_context.get("metadata") or {})
+    if extra_context:
+        request_context.update(extra_context)
+    if pricing_source:
+        request_context["pricing_source"] = pricing_source
+
+    latency_ms = max(0, int((time.perf_counter() - started_at) * 1000))
+    record = {
+        "llm_call_id": str(uuid4()),
+        "call_group_id": call_group_id,
+        "trace_id": trace_id,
+        "request_scope": request_scope,
+        "operation": operation,
+        "provider": config.provider,
+        "model": config.model,
+        "model_name": model_name,
+        "response_model": _safe_get(response, "model"),
+        "request_kind": request_kind,
+        "success": success,
+        "attempt": attempt,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "reasoning_effort": reasoning_effort,
+        "json_mode": json_mode,
+        "latency_ms": latency_ms,
+        "finish_reason": finish_reason,
+        "prompt_chars": prompt_chars,
+        "prompt_tokens_est": prompt_tokens_est,
+        "response_chars": response_chars,
+        "response_tokens_est": response_tokens_est,
+        "usage_input_tokens": usage["input_tokens"],
+        "usage_output_tokens": usage["output_tokens"],
+        "usage_total_tokens": usage["total_tokens"],
+        "estimated_input_cost_usd": round(input_cost, 6) if input_cost is not None else None,
+        "estimated_output_cost_usd": round(output_cost, 6) if output_cost is not None else None,
+        "estimated_total_cost_usd": round(total_cost, 6) if total_cost is not None else None,
+        "error_type": type(error).__name__ if error else None,
+        "error_message": str(error)[:2000] if error else None,
+        "prompt_preview": _preview_text(prompt_text),
+        "response_preview": _preview_text(content),
+        "request_context": request_context or None,
+        "completed_at": datetime.now(timezone.utc),
+    }
+    _persist_llm_attempt(record)
+
+    log_level = logging.INFO if success else logging.WARNING
+    logging.log(
+        log_level,
+        (
+            "LLM call %s attempt=%d trace_id=%s scope=%s operation=%s provider=%s "
+            "model=%s max_tokens=%s finish_reason=%s latency_ms=%s input_tokens=%s "
+            "output_tokens=%s estimated_cost_usd=%s"
+        ),
+        "succeeded" if success else "failed",
+        attempt,
+        trace_id,
+        request_scope,
+        operation,
+        config.provider,
+        model_name,
+        max_tokens,
+        finish_reason,
+        latency_ms,
+        effective_input_tokens,
+        effective_output_tokens,
+        round(total_cost, 6) if total_cost is not None else None,
+    )
+
+    if (
+        success
+        and max_tokens > 0
+        and effective_output_tokens is not None
+        and effective_output_tokens >= int(max_tokens * settings.llm_near_limit_ratio)
+    ):
+        logging.warning(
+            "LLM output approached max_tokens: trace_id=%s operation=%s output_tokens=%s max_tokens=%s finish_reason=%s",
+            trace_id,
+            operation,
+            effective_output_tokens,
+            max_tokens,
+            finish_reason,
+        )
 
 
 def _to_code_block(content: str | None, language: str = "text") -> str:
@@ -399,6 +720,8 @@ async def check_llm_health(
     *,
     include_details: bool = False,
     test_prompt: str | None = None,
+    use_cache: bool | None = None,
+    source: str | None = None,
 ) -> dict[str, Any]:
     """Check if the LLM provider is accessible and working."""
     if config is None:
@@ -414,87 +737,211 @@ async def check_llm_health(
         }
 
     model_name = get_model_name(config)
+    if use_cache is None:
+        use_cache = not include_details and test_prompt is None
 
-    prompt = test_prompt or "Hi"
+    prompt = test_prompt or LLM_HEALTH_CHECK_PROMPT
+    reasoning_effort = _get_reasoning_effort(config.provider, model_name)
 
-    try:
-        # Make a minimal test call with timeout
-        # Pass API key directly to avoid race conditions with global os.environ
-        kwargs: dict[str, Any] = {
-            "model": model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 16,
-            "api_key": config.api_key,
-            "api_base": _normalize_api_base(config.provider, config.api_base),
-            "timeout": LLM_TIMEOUT_HEALTH_CHECK,
-        }
-        reasoning_effort = _get_reasoning_effort(config.provider, model_name)
-        if reasoning_effort:
-            kwargs["reasoning_effort"] = reasoning_effort
+    if use_cache:
+        cached_result = _get_cached_health_result(config)
+        if cached_result is not None:
+            if source:
+                cached_result["health_source"] = source
+            return cached_result
 
-        response = await litellm.acompletion(**kwargs)
-        content = _extract_choice_text(response.choices[0])
-        if not content:
-            # Check if the model responded with reasoning/thinking content
-            message = response.choices[0].message
-            has_reasoning = getattr(message, "reasoning_content", None) or getattr(
-                message, "thinking", None)
-            if not has_reasoning:
-                # LLM-003: Empty response should mark health check as unhealthy
-                logging.warning(
-                    "LLM health check returned empty content",
-                    extra={"provider": config.provider, "model": config.model},
+    async with _LLM_HEALTH_CACHE_LOCK:
+        if use_cache:
+            cached_result = _get_cached_health_result(config)
+            if cached_result is not None:
+                if source:
+                    cached_result["health_source"] = source
+                return cached_result
+
+        call_group_id = str(uuid4())
+        attempt_specs = [
+            (prompt, LLM_HEALTH_CHECK_MAX_TOKENS),
+            ("Answer with a single word: OK", 128),
+        ]
+        last_result: dict[str, Any] | None = None
+
+        for attempt_number, (attempt_prompt, max_tokens) in enumerate(attempt_specs, start=1):
+            messages = [{"role": "user", "content": attempt_prompt}]
+            started_at = time.perf_counter()
+            response = None
+            content: str | None = None
+            finish_reason: str | None = None
+
+            try:
+                kwargs: dict[str, Any] = {
+                    "model": model_name,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "api_key": config.api_key,
+                    "api_base": _normalize_api_base(config.provider, config.api_base),
+                    "timeout": LLM_TIMEOUT_HEALTH_CHECK,
+                }
+                if reasoning_effort:
+                    kwargs["reasoning_effort"] = reasoning_effort
+
+                response = await litellm.acompletion(**kwargs)
+                choice = response.choices[0]
+                finish_reason = _extract_finish_reason(choice)
+                content = _extract_choice_text(choice)
+
+                if not content:
+                    message = response.choices[0].message
+                    has_reasoning = getattr(message, "reasoning_content", None) or getattr(
+                        message, "thinking", None
+                    )
+                    if not has_reasoning:
+                        error = ValueError("LLM returned empty response")
+                        _record_llm_attempt(
+                            call_group_id=call_group_id,
+                            attempt=attempt_number,
+                            operation="llm_health_check",
+                            request_kind="text",
+                            messages=messages,
+                            config=config,
+                            model_name=model_name,
+                            max_tokens=max_tokens,
+                            temperature=None,
+                            reasoning_effort=reasoning_effort,
+                            json_mode=False,
+                            started_at=started_at,
+                            success=False,
+                            content=content,
+                            response=response,
+                            finish_reason=finish_reason,
+                            error=error,
+                            extra_context={
+                                "include_details": include_details,
+                                "health_source": source,
+                            },
+                        )
+
+                        last_result = {
+                            "healthy": False,
+                            "provider": config.provider,
+                            "model": config.model,
+                            "response_model": response.model if response else None,
+                            "error_code": "empty_content",
+                            "message": "LLM returned empty response",
+                        }
+                        if include_details:
+                            last_result["test_prompt"] = _to_code_block(attempt_prompt)
+                            last_result["model_output"] = _to_code_block(None)
+
+                        if attempt_number < len(attempt_specs) and finish_reason == "length":
+                            logging.warning(
+                                "LLM health check returned empty content with finish_reason=length; retrying with a larger token budget",
+                                extra={"provider": config.provider, "model": config.model},
+                            )
+                            continue
+
+                        if source:
+                            last_result["health_source"] = source
+                        if use_cache:
+                            _store_cached_health_result(config, last_result)
+                        return last_result
+
+                _record_llm_attempt(
+                    call_group_id=call_group_id,
+                    attempt=attempt_number,
+                    operation="llm_health_check",
+                    request_kind="text",
+                    messages=messages,
+                    config=config,
+                    model_name=model_name,
+                    max_tokens=max_tokens,
+                    temperature=None,
+                    reasoning_effort=reasoning_effort,
+                    json_mode=False,
+                    started_at=started_at,
+                    success=True,
+                    content=content,
+                    response=response,
+                    finish_reason=finish_reason,
+                    extra_context={
+                        "include_details": include_details,
+                        "health_source": source,
+                    },
                 )
-                result: dict[str, Any] = {
-                    "healthy": False,  # Fixed: empty content means unhealthy
+                result = {
+                    "healthy": True,
                     "provider": config.provider,
                     "model": config.model,
                     "response_model": response.model if response else None,
-                    "error_code": "empty_content",  # Changed from warning_code
-                    "message": "LLM returned empty response",
                 }
                 if include_details:
-                    result["test_prompt"] = _to_code_block(prompt)
-                    result["model_output"] = _to_code_block(None)
+                    result["test_prompt"] = _to_code_block(attempt_prompt)
+                    result["model_output"] = _to_code_block(content)
+                if source:
+                    result["health_source"] = source
+                if use_cache:
+                    _store_cached_health_result(config, result)
                 return result
+            except Exception as e:
+                _record_llm_attempt(
+                    call_group_id=call_group_id,
+                    attempt=attempt_number,
+                    operation="llm_health_check",
+                    request_kind="text",
+                    messages=messages,
+                    config=config,
+                    model_name=model_name,
+                    max_tokens=max_tokens,
+                    temperature=None,
+                    reasoning_effort=reasoning_effort,
+                    json_mode=False,
+                    started_at=started_at,
+                    success=False,
+                    content=content,
+                    response=response,
+                    finish_reason=finish_reason,
+                    error=e,
+                    extra_context={
+                        "include_details": include_details,
+                        "health_source": source,
+                    },
+                )
+                logging.exception(
+                    "LLM health check failed",
+                    extra={"provider": config.provider, "model": config.model},
+                )
 
-        result = {
-            "healthy": True,
-            "provider": config.provider,
-            "model": config.model,
-            "response_model": response.model if response else None,
-        }
-        if include_details:
-            result["test_prompt"] = _to_code_block(prompt)
-            result["model_output"] = _to_code_block(content)
-        return result
-    except Exception as e:
-        # Log full exception details server-side, but do not expose them to clients
-        logging.exception(
-            "LLM health check failed",
-            extra={"provider": config.provider, "model": config.model},
-        )
+                error_code = "health_check_failed"
+                message = str(e)
+                if "404" in message and "/v1/v1/" in message:
+                    error_code = "duplicate_v1_path"
+                elif "404" in message:
+                    error_code = "not_found_404"
+                elif "<!doctype html" in message.lower() or "<html" in message.lower():
+                    error_code = "html_response"
 
-        # Provide a minimal, actionable client-facing hint without leaking secrets.
-        error_code = "health_check_failed"
-        message = str(e)
-        if "404" in message and "/v1/v1/" in message:
-            error_code = "duplicate_v1_path"
-        elif "404" in message:
-            error_code = "not_found_404"
-        elif "<!doctype html" in message.lower() or "<html" in message.lower():
-            error_code = "html_response"
-        result = {
+                last_result = {
+                    "healthy": False,
+                    "provider": config.provider,
+                    "model": config.model,
+                    "error_code": error_code,
+                }
+                if include_details:
+                    last_result["test_prompt"] = _to_code_block(attempt_prompt)
+                    last_result["model_output"] = _to_code_block(None)
+                    last_result["error_detail"] = _to_code_block(message)
+                if attempt_number >= len(attempt_specs):
+                    if source:
+                        last_result["health_source"] = source
+                    if use_cache:
+                        _store_cached_health_result(config, last_result)
+                    return last_result
+
+        return last_result or {
             "healthy": False,
             "provider": config.provider,
             "model": config.model,
-            "error_code": error_code,
+            "error_code": "health_check_failed",
         }
-        if include_details:
-            result["test_prompt"] = _to_code_block(prompt)
-            result["model_output"] = _to_code_block(None)
-            result["error_detail"] = _to_code_block(message)
-        return result
 
 
 async def complete(
@@ -503,6 +950,8 @@ async def complete(
     config: LLMConfig | None = None,
     max_tokens: int = 4096,
     temperature: float = 0.7,
+    operation: str = "text_completion",
+    metadata: dict[str, Any] | None = None,
 ) -> str:
     """Make a completion request to the LLM.
 
@@ -515,6 +964,13 @@ async def complete(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
+    call_group_id = str(uuid4())
+    applied_temperature: float | None = None
+    reasoning_effort: str | None = None
+    started_at = time.perf_counter()
+    response = None
+    content: str | None = None
+    finish_reason: str | None = None
 
     try:
         kwargs: dict[str, Any] = {
@@ -525,13 +981,16 @@ async def complete(
         }
         if _supports_temperature(config.provider, model_name):
             kwargs["temperature"] = temperature
+            applied_temperature = temperature
         reasoning_effort = _get_reasoning_effort(config.provider, model_name)
         if reasoning_effort:
             kwargs["reasoning_effort"] = reasoning_effort
 
         response = await router.acompletion(**kwargs)
 
-        content = _extract_choice_text(response.choices[0])
+        choice = response.choices[0]
+        finish_reason = _extract_finish_reason(choice)
+        content = _extract_choice_text(choice)
         if not content:
             raise ValueError("Empty response from LLM")
         # Strip thinking tags from reasoning models (deepseek-r1, qwq, etc.)
@@ -539,8 +998,47 @@ async def complete(
             content = _strip_thinking_tags(content)
             if not content:
                 raise ValueError("Response contained only thinking content, no output")
+        _record_llm_attempt(
+            call_group_id=call_group_id,
+            attempt=1,
+            operation=operation,
+            request_kind="text",
+            messages=messages,
+            config=config,
+            model_name=model_name,
+            max_tokens=max_tokens,
+            temperature=applied_temperature,
+            reasoning_effort=reasoning_effort,
+            json_mode=False,
+            started_at=started_at,
+            success=True,
+            content=content,
+            response=response,
+            finish_reason=finish_reason,
+            extra_context=metadata,
+        )
         return content
     except Exception as e:
+        _record_llm_attempt(
+            call_group_id=call_group_id,
+            attempt=1,
+            operation=operation,
+            request_kind="text",
+            messages=messages,
+            config=config,
+            model_name=model_name,
+            max_tokens=max_tokens,
+            temperature=applied_temperature,
+            reasoning_effort=reasoning_effort,
+            json_mode=False,
+            started_at=started_at,
+            success=False,
+            content=content,
+            response=response,
+            finish_reason=finish_reason,
+            error=e,
+            extra_context=metadata,
+        )
         # Log the actual error server-side for debugging
         logging.error(f"LLM completion failed: {e}", extra={
                       "model": model_name})
@@ -751,6 +1249,8 @@ async def complete_json(
     config: LLMConfig | None = None,
     max_tokens: int = 4096,
     retries: int = 2,
+    operation: str = "json_completion",
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Make a completion request expecting JSON response.
 
@@ -772,8 +1272,15 @@ async def complete_json(
 
     # Check if we can use JSON mode
     use_json_mode = _supports_json_mode(model_name)
+    call_group_id = str(uuid4())
 
     for attempt in range(retries + 1):
+        started_at = time.perf_counter()
+        response = None
+        content: str | None = None
+        finish_reason: str | None = None
+        applied_temperature: float | None = None
+        reasoning_effort: str | None = None
         try:
             kwargs: dict[str, Any] = {
                 "model": "primary",
@@ -783,7 +1290,8 @@ async def complete_json(
             }
             if _supports_temperature(config.provider, model_name):
                 # LLM-002: Increase temperature on retry for variation
-                kwargs["temperature"] = _get_retry_temperature(attempt)
+                applied_temperature = _get_retry_temperature(attempt)
+                kwargs["temperature"] = applied_temperature
             reasoning_effort = _get_reasoning_effort(
                 config.provider, model_name)
             if reasoning_effort:
@@ -794,7 +1302,9 @@ async def complete_json(
                 kwargs["response_format"] = {"type": "json_object"}
 
             response = await router.acompletion(**kwargs)
-            content = _extract_choice_text(response.choices[0])
+            choice = response.choices[0]
+            finish_reason = _extract_finish_reason(choice)
+            content = _extract_choice_text(choice)
 
             if not content:
                 raise ValueError("Empty response from LLM")
@@ -809,6 +1319,27 @@ async def complete_json(
             # LLM-001: Check if parsed result appears truncated
             if isinstance(result, dict) and _appears_truncated(result):
                 if attempt < retries:
+                    error = ValueError("Parsed JSON appears truncated")
+                    _record_llm_attempt(
+                        call_group_id=call_group_id,
+                        attempt=attempt + 1,
+                        operation=operation,
+                        request_kind="json",
+                        messages=messages,
+                        config=config,
+                        model_name=model_name,
+                        max_tokens=max_tokens,
+                        temperature=applied_temperature,
+                        reasoning_effort=reasoning_effort,
+                        json_mode=use_json_mode,
+                        started_at=started_at,
+                        success=False,
+                        content=content,
+                        response=response,
+                        finish_reason=finish_reason,
+                        error=error,
+                        extra_context=metadata,
+                    )
                     logging.warning(
                         "Parsed JSON appears truncated (attempt %d/%d), retrying",
                         attempt + 1,
@@ -823,9 +1354,48 @@ async def complete_json(
                     "Parsed JSON appears truncated on final attempt, proceeding with result"
                 )
 
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="json",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=use_json_mode,
+                started_at=started_at,
+                success=True,
+                content=content,
+                response=response,
+                finish_reason=finish_reason,
+                extra_context=metadata,
+            )
             return result
 
         except json.JSONDecodeError as e:
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="json",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=use_json_mode,
+                started_at=started_at,
+                success=False,
+                content=content,
+                response=response,
+                finish_reason=finish_reason,
+                error=e,
+                extra_context=metadata,
+            )
             # Content quality — malformed JSON, retry with prompt hint
             logging.warning(f"JSON parse failed (attempt {attempt + 1}): {e}")
             if attempt < retries:
@@ -838,13 +1408,53 @@ async def complete_json(
                 f"Failed to parse JSON after {retries + 1} attempts: {e}")
 
         except ValueError as e:
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="json",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=use_json_mode,
+                started_at=started_at,
+                success=False,
+                content=content,
+                response=response,
+                finish_reason=finish_reason,
+                error=e,
+                extra_context=metadata,
+            )
             # Content quality — empty response, JSON extraction failure
             logging.warning(f"Content extraction failed (attempt {attempt + 1}): {e}")
             if attempt < retries:
                 continue
             raise
 
-        except Exception:
+        except Exception as e:
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="json",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=use_json_mode,
+                started_at=started_at,
+                success=False,
+                content=content,
+                response=response,
+                finish_reason=finish_reason,
+                error=e,
+                extra_context=metadata,
+            )
             # Transport errors — Router already retried with backoff.
             # Cooldowns are disabled (see _build_router); no additional
             # retry is attempted here.

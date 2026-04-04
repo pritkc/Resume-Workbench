@@ -15,11 +15,21 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.db.base import Base
-from app.db.models import ApplicationPack, Artifact, GenerationRun, Job, Resume, User, utcnow
+from app.db.models import (
+    ApplicationPack,
+    Artifact,
+    GenerationRun,
+    Job,
+    LLMCall,
+    Resume,
+    User,
+    utcnow,
+)
 from app.db.repositories import application_packs as application_pack_repo
 from app.db.repositories import artifacts as artifact_repo
 from app.db.repositories import generation_runs as generation_run_repo
 from app.db.repositories import jobs as job_repo
+from app.db.repositories import llm_calls as llm_call_repo
 from app.db.repositories import resumes as resume_repo
 from app.db.session import get_engine, get_session_factory
 
@@ -105,6 +115,47 @@ def _serialize_artifact(record: Artifact) -> dict[str, Any]:
         "storage_path": record.storage_path,
         "metadata": record.artifact_metadata,
         "created_at": _iso(record.created_at),
+    }
+
+
+def _serialize_llm_call(record: LLMCall) -> dict[str, Any]:
+    return {
+        "llm_call_id": record.llm_call_id,
+        "call_group_id": record.call_group_id,
+        "trace_id": record.trace_id,
+        "request_scope": record.request_scope,
+        "operation": record.operation,
+        "provider": record.provider,
+        "model": record.model,
+        "model_name": record.model_name,
+        "response_model": record.response_model,
+        "request_kind": record.request_kind,
+        "success": record.success,
+        "attempt": record.attempt,
+        "max_tokens": record.max_tokens,
+        "temperature": record.temperature,
+        "reasoning_effort": record.reasoning_effort,
+        "json_mode": record.json_mode,
+        "latency_ms": record.latency_ms,
+        "finish_reason": record.finish_reason,
+        "prompt_chars": record.prompt_chars,
+        "prompt_tokens_est": record.prompt_tokens_est,
+        "response_chars": record.response_chars,
+        "response_tokens_est": record.response_tokens_est,
+        "usage_input_tokens": record.usage_input_tokens,
+        "usage_output_tokens": record.usage_output_tokens,
+        "usage_total_tokens": record.usage_total_tokens,
+        "estimated_input_cost_usd": record.estimated_input_cost_usd,
+        "estimated_output_cost_usd": record.estimated_output_cost_usd,
+        "estimated_total_cost_usd": record.estimated_total_cost_usd,
+        "error_type": record.error_type,
+        "error_message": record.error_message,
+        "prompt_preview": record.prompt_preview,
+        "response_preview": record.response_preview,
+        "request_context": record.request_context,
+        "created_at": _iso(record.created_at),
+        "updated_at": _iso(record.updated_at),
+        "completed_at": _iso(record.completed_at),
     }
 
 
@@ -459,6 +510,46 @@ class Database:
                 session, tailored_resume_id
             )
             return _serialize_generation_run(record) if record else None
+
+    def create_llm_call(self, **values: Any) -> dict[str, Any]:
+        with self._session() as session:
+            record = llm_call_repo.create_llm_call(session, **values)
+            return _serialize_llm_call(record)
+
+    def list_llm_calls(
+        self,
+        *,
+        trace_id: str | None = None,
+        call_group_id: str | None = None,
+        request_scope: str | None = None,
+        operation: str | None = None,
+        success: bool | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        with self._session() as session:
+            records = llm_call_repo.list_llm_calls(
+                session,
+                trace_id=trace_id,
+                call_group_id=call_group_id,
+                request_scope=request_scope,
+                operation=operation,
+                success=success,
+                limit=limit,
+            )
+            return [_serialize_llm_call(record) for record in records]
+
+    def summarize_llm_calls(
+        self,
+        *,
+        trace_id: str | None = None,
+        request_scope: str | None = None,
+    ) -> dict[str, Any]:
+        with self._session() as session:
+            return llm_call_repo.summarize_llm_calls(
+                session,
+                trace_id=trace_id,
+                request_scope=request_scope,
+            )
 
     def get_stats(self) -> dict[str, Any]:
         with self._session() as session:

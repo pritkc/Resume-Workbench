@@ -49,6 +49,8 @@ htmlcov/
 # Backend local runtime state
 apps/backend/data/*.json
 !apps/backend/data/.gitkeep
+apps/backend/data/artifacts/
+apps/backend/data/rendercv/
 apps/backend/instance/
 *.sqlite3
 *.db

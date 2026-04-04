@@ -128,6 +128,13 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_api_base: str | None = None  # For Ollama or custom endpoints
     log_llm: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"] = "WARNING"
+    llm_trace_enabled: bool = True
+    llm_trace_store_content: bool = True
+    llm_trace_preview_chars: int = 50000
+    llm_near_limit_ratio: float = 0.8
+    llm_health_cache_ttl_seconds: int = 300
+    llm_cost_input_per_million_tokens: float | None = None
+    llm_cost_output_per_million_tokens: float | None = None
 
     @field_validator("llm_provider", mode="before")
     @classmethod
