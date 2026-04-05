@@ -169,10 +169,38 @@ def sample_changes():
             reason="Added CI/CD keyword from JD",
         ),
         ResumeChange(
-            path="additional.technicalSkills",
-            action="reorder",
+            path="additional.groups",
+            action="regroup",
             original=None,
-            value=["Python", "FastAPI", "Docker", "AWS", "PostgreSQL", "Redis"],
-            reason="Already in good order, no change needed",
+            value=[
+                {
+                    "id": "technicalSkills",
+                    "label": "Technical Skills",
+                    "items": [
+                        "Python",
+                        "FastAPI",
+                        "Docker",
+                        "AWS",
+                        "PostgreSQL",
+                        "Redis",
+                    ],
+                },
+                {
+                    "id": "languages",
+                    "label": "Languages",
+                    "items": ["English (Native)", "Spanish (Conversational)"],
+                },
+                {
+                    "id": "certificationsTraining",
+                    "label": "Training & Certifications",
+                    "items": ["AWS Solutions Architect Associate"],
+                },
+                {
+                    "id": "awards",
+                    "label": "Awards",
+                    "items": ["Employee of the Year 2022"],
+                },
+            ],
+            reason="Preserved grouped additional content",
         ),
     ]

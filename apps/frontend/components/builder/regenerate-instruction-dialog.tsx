@@ -72,7 +72,7 @@ export const RegenerateInstructionDialog: React.FC<RegenerateInstructionDialogPr
         return <Briefcase className="w-4 h-4" />;
       case 'project':
         return <FolderKanban className="w-4 h-4" />;
-      case 'skills':
+      case 'additionalGroup':
         return <Lightbulb className="w-4 h-4" />;
       default:
         return null;

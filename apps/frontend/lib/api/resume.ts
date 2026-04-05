@@ -1,5 +1,5 @@
 import { ImprovedResult } from '@/components/common/resume_previewer_context';
-import type { ResumeData } from '@/components/dashboard/resume-component';
+import type { AdditionalGroup, ResumeData } from '@/components/dashboard/resume-component';
 import {
   type RenderThemeSettings,
   type RenderPreviewResponse,
@@ -8,6 +8,7 @@ import {
   serializeRenderThemeSettings,
 } from '@/lib/types/render-theme';
 import { type Locale } from '@/i18n/config';
+import { normalizeResumeAdditional } from '@/lib/utils/additional-groups';
 import { API_BASE, apiPost, apiPatch, apiDelete, apiFetch } from './client';
 
 // Matches backend schemas/models.py ResumeData
@@ -59,6 +60,7 @@ interface ProcessedResume {
     description?: string[];
   }>;
   additional?: {
+    groups?: AdditionalGroup[];
     technicalSkills?: string[];
     languages?: string[];
     certificationsTraining?: string[];
@@ -191,6 +193,14 @@ function normalizeDraftValidationDetail(value: unknown): DraftValidationDetail |
     column: typeof raw.column === 'number' ? raw.column : null,
     path,
   };
+}
+
+function normalizeProcessedResume<T extends ProcessedResume | ResumeData | null>(value: T): T {
+  if (!value) {
+    return value;
+  }
+
+  return normalizeResumeAdditional(value) as T;
 }
 
 export function isDraftRequestError(error: unknown): error is DraftRequestError {
@@ -359,6 +369,7 @@ export async function fetchResume(resumeId: string): Promise<ResumeResponse['dat
   const payload = (await res.json()) as ResumeResponse;
   // Support both raw_resume content (initial) and processed_resume (if available)
   // The viewer/builder logic should prioritize processed data if present
+  payload.data.processed_resume = normalizeProcessedResume(payload.data.processed_resume);
   return payload.data;
 }
 
@@ -385,6 +396,7 @@ export async function updateResume(
     throw new Error(`Failed to update resume (status ${res.status}): ${text}`);
   }
   const payload = (await res.json()) as ResumeResponse;
+  payload.data.processed_resume = normalizeProcessedResume(payload.data.processed_resume);
   return payload.data;
 }
 

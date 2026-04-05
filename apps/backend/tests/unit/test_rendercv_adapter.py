@@ -40,7 +40,10 @@ def test_rendercv_yaml_sections_round_trip_to_resume_and_theme(sample_resume: di
 
     assert parsed_resume["personalInfo"]["name"] == sample_resume["personalInfo"]["name"]
     assert parsed_resume["workExperience"][0]["company"] == sample_resume["workExperience"][0]["company"]
-    assert parsed_resume["additional"]["technicalSkills"] == sample_resume["additional"]["technicalSkills"]
+    technical_group = next(
+        group for group in parsed_resume["additional"]["groups"] if group["id"] == "technicalSkills"
+    )
+    assert technical_group["items"] == sample_resume["additional"]["technicalSkills"]
     assert parsed_theme.theme_id == "engineeringresumes"
 
 

@@ -127,6 +127,16 @@
     },
     "additionalForm": {
       "instructions": "Enter items separated by new lines (press Enter for each item).",
+      "groupLabel": "Label",
+      "groupLabelPlaceholder": "e.g., Backend, ML, Infrastructure",
+      "groupValues": "Values",
+      "groupValuesPlaceholder": "Enter one value per line",
+      "addGroup": "Add Label Group",
+      "removeGroup": "Remove Label Group",
+      "moveUp": "Move label group up",
+      "moveDown": "Move label group down",
+      "emptyState": "No label groups yet. Add one to start organizing this section.",
+      "newGroupLabel": "New Label",
       "placeholders": {
         "technicalSkills": "React\nTypeScript\nNode.js",
         "languages": "English\nSpanish",
@@ -207,9 +217,10 @@
         "subtitle": "Choose which parts of your resume you want to improve",
         "experience": "Work Experience",
         "projects": "Projects",
+        "additionalGroups": "Additional Groups",
         "skills": "Technical Skills",
         "noItemsSelected": "Please select at least one item",
-        "noItemsAvailable": "No items available to regenerate. Add experience, projects, or skills first.",
+        "noItemsAvailable": "No items available to regenerate. Add experience, projects, or additional groups first.",
         "itemCount": {
           "one": "{count} item",
           "other": "{count} items"
@@ -532,20 +543,20 @@
       "title": "Review AI Tailoring Results",
       "subtitle": "Please carefully review the changes to ensure no false information has been added",
       "summary": "Change Summary",
-      "skillsAdded": "Skills Added",
-      "skillsRemoved": "Skills Removed",
+      "additionalItemsAdded": "Additional Items Added",
+      "additionalItemsRemoved": "Additional Items Removed",
       "descriptionsModified": "Descriptions Modified",
-      "certificationsAdded": "Certifications Added",
+      "additionalGroupsModified": "Additional Groups Modified",
       "highRiskChanges": "High Risk Changes",
       "warningTitle": "Detected {count} high-risk addition(s)",
       "warningMessage": "Please confirm these additions exist in your original resume or are reflected in your descriptions",
       "summaryChanges": "Summary Changes",
-      "skillChanges": "Skill Changes",
+      "additionalItemChanges": "Additional Item Changes",
+      "additionalGroupChanges": "Additional Group Changes",
       "descriptionChanges": "Experience Description Changes",
       "experienceChanges": "Experience Entry Changes",
       "educationChanges": "Education Changes",
       "projectChanges": "Project Changes",
-      "certificationChanges": "Certification Changes",
       "rejectButton": "Reject & Regenerate",
       "confirmButton": "Confirm & Save"
     },
@@ -757,6 +768,12 @@
     },
     "additional": {
       "technicalSkills": "Technical Skills"
+    },
+    "additionalDefaults": {
+      "technicalSkills": "Technical Skills",
+      "languages": "Languages",
+      "certificationsTraining": "Training & Certifications",
+      "awards": "Awards"
     },
     "additionalLabels": {
       "technicalSkills": "Technical Skills:",

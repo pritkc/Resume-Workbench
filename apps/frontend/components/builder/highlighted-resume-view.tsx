@@ -3,6 +3,10 @@
 import { useMemo } from 'react';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { segmentTextByKeywords } from '@/lib/utils/keyword-matcher';
+import {
+  getAdditionalGroupsWithContent,
+  getAdditionalGroupDisplayLabel,
+} from '@/lib/utils/additional-groups';
 import { FileUser, Briefcase, GraduationCap, FolderKanban, Wrench } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 
@@ -17,6 +21,10 @@ interface HighlightedResumeViewProps {
  */
 export function HighlightedResumeView({ resumeData, keywords }: HighlightedResumeViewProps) {
   const { t } = useTranslations();
+  const additionalGroups = useMemo(
+    () => getAdditionalGroupsWithContent(resumeData.additional),
+    [resumeData.additional]
+  );
 
   return (
     <div className="h-full flex flex-col">
@@ -125,50 +133,20 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
         )}
 
         {/* Skills */}
-        {resumeData.additional && (
+        {additionalGroups.length > 0 && (
           <Section title={t('resume.sections.skills')} icon={<Wrench className="w-4 h-4" />}>
-            {resumeData.additional.technicalSkills &&
-              resumeData.additional.technicalSkills.length > 0 && (
-                <div className="mb-3">
-                  <div className="text-xs font-mono uppercase text-gray-500 mb-1">
-                    {t('resume.additional.technicalSkills')}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {resumeData.additional.technicalSkills.map((skill, i) => (
-                      <SkillTag key={i} text={skill} keywords={keywords} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            {resumeData.additional.languages && resumeData.additional.languages.length > 0 && (
-              <div className="mb-3">
+            {additionalGroups.map((group) => (
+              <div key={group.id} className="mb-3">
                 <div className="text-xs font-mono uppercase text-gray-500 mb-1">
-                  {t('resume.sections.languages')}
+                  {getAdditionalGroupDisplayLabel(group, t)}
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {resumeData.additional.languages.map((lang, i) => (
-                    <SkillTag key={i} text={lang} keywords={keywords} />
+                  {group.items.map((item, index) => (
+                    <SkillTag key={`${group.id}-${index}`} text={item} keywords={keywords} />
                   ))}
                 </div>
               </div>
-            )}
-
-            {resumeData.additional.certificationsTraining &&
-              resumeData.additional.certificationsTraining.length > 0 && (
-                <div className="mb-3">
-                  <div className="text-xs font-mono uppercase text-gray-500 mb-1">
-                    {t('resume.sections.certifications')}
-                  </div>
-                  <ul className="list-disc list-inside space-y-1 text-sm">
-                    {resumeData.additional.certificationsTraining.map((cert, i) => (
-                      <li key={i} className="text-gray-700">
-                        <HighlightedText text={cert} keywords={keywords} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            ))}
           </Section>
         )}
       </div>

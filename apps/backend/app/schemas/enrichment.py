@@ -75,16 +75,17 @@ class ApplyEnhancementsRequest(BaseModel):
 # AI Regenerate Feature Schemas
 # ============================================
 
-RegenerateItemType = Literal["experience", "project", "skills"]
+RegenerateItemType = Literal["experience", "project", "additionalGroup"]
 
 
 class RegenerateItemInput(BaseModel):
     """Input for a single item to regenerate."""
 
-    item_id: str  # "exp_0", "proj_1", "skills"
+    item_id: str  # "exp_0", "proj_1", "additional_<group_id>"
     item_type: RegenerateItemType
     title: str
     subtitle: str | None = None
+    group_id: str | None = None
     current_content: list[str] = Field(default_factory=list)
 
 
@@ -104,6 +105,7 @@ class RegeneratedItem(BaseModel):
     item_type: RegenerateItemType
     title: str
     subtitle: str | None = None
+    group_id: str | None = None
     original_content: list[str] = Field(default_factory=list)
     new_content: list[str] = Field(default_factory=list)
     diff_summary: str = ""  # AI-generated summary of changes
@@ -116,6 +118,7 @@ class RegenerateItemError(BaseModel):
     item_type: RegenerateItemType
     title: str
     subtitle: str | None = None
+    group_id: str | None = None
     message: str
 
 

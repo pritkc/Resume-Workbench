@@ -69,6 +69,13 @@ import {
 import { useLanguage } from '@/lib/context/language-context';
 import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/utils/download';
 import { cn } from '@/lib/utils';
+import {
+  buildRegenerateItemIdForGroup,
+  createDefaultAdditionalInfo,
+  getAdditionalGroupDisplayLabel,
+  getAdditionalGroupsWithContent,
+  normalizeResumeAdditional,
+} from '@/lib/utils/additional-groups';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
 
 type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match';
@@ -109,12 +116,7 @@ const buildInitialData = (t: Translate): ResumeData => ({
   workExperience: [],
   education: [],
   personalProjects: [],
-  additional: {
-    technicalSkills: [],
-    languages: [],
-    certificationsTraining: [],
-    awards: [],
-  },
+  additional: createDefaultAdditionalInfo(),
 });
 
 const EMPTY_RAW_YAML: RawYamlSections = {
@@ -701,7 +703,7 @@ const ResumeBuilderContent = () => {
         // Update resume title for downloads
         setResumeTitle(data.title ?? null);
         if (data.processed_resume) {
-          const nextResumeData = data.processed_resume as ResumeData;
+          const nextResumeData = normalizeResumeAdditional(data.processed_resume as ResumeData);
           const nextThemeSettings = data.theme_settings
             ? normalizeRenderThemeSettings(data.theme_settings)
             : themeSettingsRef.current;
@@ -770,18 +772,15 @@ const ResumeBuilderContent = () => {
     }));
   }, [resumeData.personalProjects]);
 
-  const skillsItemForRegenerate: RegenerateItemInput | null = useMemo(() => {
-    const skills = resumeData.additional?.technicalSkills;
-    if (skills && skills.length > 0) {
-      return {
-        item_id: 'skills',
-        item_type: 'skills' as const,
-        title: t('builder.regenerate.selectDialog.skills'),
-        current_content: skills,
-      };
-    }
-    return null;
-  }, [resumeData.additional?.technicalSkills, t]);
+  const additionalGroupItemsForRegenerate: RegenerateItemInput[] = useMemo(() => {
+    return getAdditionalGroupsWithContent(resumeData.additional).map((group) => ({
+      item_id: buildRegenerateItemIdForGroup(group.id),
+      item_type: 'additionalGroup' as const,
+      title: getAdditionalGroupDisplayLabel(group, t),
+      group_id: group.id,
+      current_content: group.items,
+    }));
+  }, [resumeData.additional, t]);
 
   // Load template settings from localStorage on mount
   useEffect(() => {
@@ -857,13 +856,14 @@ const ResumeBuilderContent = () => {
           }
           // Prefer processed_resume if available
           if (data.processed_resume) {
-            setResumeData(data.processed_resume as ResumeData);
-            setLastSavedData(data.processed_resume as ResumeData);
+            const nextResumeData = normalizeResumeAdditional(data.processed_resume as ResumeData);
+            setResumeData(nextResumeData);
+            setLastSavedData(nextResumeData);
             setAutosaveState('saved');
             setYamlNeedsSync(true);
             seedHistory(
               buildDraftSnapshot({
-                resumeData: data.processed_resume as ResumeData,
+                resumeData: nextResumeData,
                 themeSettings: data.theme_settings
                   ? normalizeRenderThemeSettings(data.theme_settings)
                   : themeSettingsRef.current,
@@ -877,7 +877,7 @@ const ResumeBuilderContent = () => {
           // Fallback to parsing raw content
           if (data.raw_resume?.content) {
             try {
-              const parsed = JSON.parse(data.raw_resume.content);
+              const parsed = normalizeResumeAdditional(JSON.parse(data.raw_resume.content));
               setResumeData(parsed);
               setLastSavedData(parsed);
               setAutosaveState('saved');
@@ -905,8 +905,9 @@ const ResumeBuilderContent = () => {
 
       // Priority 2: Improved Data from Context (Tailor Flow)
       if (improvedPreview) {
-        setResumeData(improvedPreview);
-        setLastSavedData(improvedPreview);
+        const nextResumeData = normalizeResumeAdditional(improvedPreview);
+        setResumeData(nextResumeData);
+        setLastSavedData(nextResumeData);
         // Also load cover letter and outreach if present
         if (improvedCoverLetter) {
           setCoverLetter(improvedCoverLetter);
@@ -915,12 +916,12 @@ const ResumeBuilderContent = () => {
           setOutreachMessage(improvedOutreach);
         }
         // Persist to localStorage as backup
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(improvedPreview));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextResumeData));
         setAutosaveState('saved');
         setYamlNeedsSync(true);
         seedHistory(
           buildDraftSnapshot({
-            resumeData: improvedPreview,
+            resumeData: nextResumeData,
             themeSettings: improvedThemeSettings,
             yamlNeedsSync: true,
             editorMode: 'visual',
@@ -934,7 +935,7 @@ const ResumeBuilderContent = () => {
       const savedDraft = localStorage.getItem(STORAGE_KEY);
       if (savedDraft) {
         try {
-          const parsed = JSON.parse(savedDraft);
+          const parsed = normalizeResumeAdditional(JSON.parse(savedDraft));
           setResumeData(parsed);
           setLastSavedData(parsed);
           setHasUnsavedChanges(true); // Mark as unsaved since it's a draft
@@ -1129,13 +1130,14 @@ const ResumeBuilderContent = () => {
 
   const handleUpdate = useCallback(
     (newData: ResumeData) => {
-      setResumeData(newData);
+      const normalizedData = normalizeResumeAdditional(newData);
+      setResumeData(normalizedData);
       setRawYamlIssue(null);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedData));
       markDraftDirty('visual');
       queueHistoryCommit(
         buildDraftSnapshot({
-          resumeData: newData,
+          resumeData: normalizedData,
           yamlNeedsSync: true,
           editorMode: 'visual',
         })
@@ -2136,7 +2138,7 @@ const ResumeBuilderContent = () => {
         onStepChange={regenerateWizard.setStep}
         experienceItems={experienceItemsForRegenerate}
         projectItems={projectItemsForRegenerate}
-        skillsItem={skillsItemForRegenerate}
+        additionalGroupItems={additionalGroupItemsForRegenerate}
         selectedItems={regenerateWizard.selectedItems}
         onSelectionChange={regenerateWizard.setSelectedItems}
         instruction={regenerateWizard.instruction}

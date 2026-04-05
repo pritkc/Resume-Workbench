@@ -4,6 +4,7 @@ import type { ResumeData, ResumeSectionHeadings } from '@/components/dashboard/r
 import { getSortedSections, getSectionMeta } from '@/lib/utils/section-helpers';
 import { formatDateRange } from '@/lib/utils';
 import { DynamicResumeSection } from './dynamic-resume-section';
+import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
 import baseStyles from './styles/_base.module.css';
 import styles from './styles/swiss-two-column.module.css';
@@ -20,8 +21,8 @@ interface ResumeTwoColumnProps {
  * Two-column layout with experience-focused main column (left) and
  * supporting information sidebar (right).
  *
- * Main Column (62%): Summary, Experience, Projects, Certifications/Training, Custom Sections
- * Sidebar (38%): Education, Skills, Languages, Awards
+ * Main Column (62%): Summary, Experience, Projects, Custom Sections
+ * Sidebar (38%): Education, Additional Details, Links
  *
  * Best for technical roles with many projects, optimized for one-page resumes.
  */
@@ -334,25 +335,6 @@ export const ResumeTwoColumn: React.FC<ResumeTwoColumnProps> = ({
               </div>
             )}
 
-          {/* Certifications/Training - Main column */}
-          {isSectionVisible('additional') &&
-            additional?.certificationsTraining &&
-            additional.certificationsTraining.length > 0 && (
-              <div className={baseStyles['resume-section']}>
-                <h3 className={baseStyles['resume-section-title']}>
-                  {headingFallbacks.certifications}
-                </h3>
-                <ul className={`ml-4 ${baseStyles['resume-list']} ${baseStyles['resume-text-xs']}`}>
-                  {additional.certificationsTraining.map((cert, index) => (
-                    <li key={index} className="flex">
-                      <span className="mr-1.5 flex-shrink-0">•&nbsp;</span>
-                      <span>{cert}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
           {/* Custom Sections - Main column */}
           {customSections.map((section) => (
             <DynamicResumeSection key={section.id} sectionMeta={section} resumeData={data} />
@@ -395,46 +377,17 @@ export const ResumeTwoColumn: React.FC<ResumeTwoColumnProps> = ({
             </div>
           )}
 
-          {/* Skills Section */}
-          {isSectionVisible('additional') &&
-            additional?.technicalSkills &&
-            additional.technicalSkills.length > 0 && (
-              <div className={baseStyles['resume-section']}>
-                <h3 className={baseStyles['resume-section-title-sm']}>{headingFallbacks.skills}</h3>
-                <div className="flex flex-wrap gap-1">
-                  {additional.technicalSkills.map((skill, index) => (
-                    <span key={index} className={baseStyles['resume-skill-pill']}>
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          {/* Languages Section */}
-          {isSectionVisible('additional') &&
-            additional?.languages &&
-            additional.languages.length > 0 && (
-              <div className={baseStyles['resume-section']}>
-                <h3 className={baseStyles['resume-section-title-sm']}>
-                  {headingFallbacks.languages}
-                </h3>
-                <p className={baseStyles['resume-text-xs']}>{additional.languages.join(' • ')}</p>
-              </div>
-            )}
-
-          {/* Awards Section */}
-          {isSectionVisible('additional') && additional?.awards && additional.awards.length > 0 && (
-            <div className={baseStyles['resume-section']}>
-              <h3 className={baseStyles['resume-section-title-sm']}>{headingFallbacks.awards}</h3>
-              <ul className={baseStyles['resume-list']}>
-                {additional.awards.map((award, index) => (
-                  <li key={index} className={baseStyles['resume-text-xs']}>
-                    {award}
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {isSectionVisible('additional') && (
+            <AdditionalGroupSection
+              additional={additional}
+              displayName={getSectionDisplayName('additional', headingFallbacks.skills)}
+              className={baseStyles['resume-section']}
+              headingClassName={baseStyles['resume-section-title-sm']}
+              bodyClassName={baseStyles['resume-stack']}
+              rowClassName={`flex-col gap-0.5 ${baseStyles['resume-text-xs']}`}
+              labelClassName="font-bold"
+              valueClassName={baseStyles['sidebar-text-wrap']}
+            />
           )}
 
           {/* Links Section */}

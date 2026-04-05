@@ -8,14 +8,31 @@ from app.routers import enrichment as enrichment_router
 from app.schemas.enrichment import RegenerateItemInput, RegenerateRequest, RegeneratedItem
 
 
+def _additional_group_input() -> RegenerateItemInput:
+    return RegenerateItemInput(
+        item_id="additional_technicalSkills",
+        item_type="additionalGroup",
+        title="Technical Skills",
+        group_id="technicalSkills",
+        current_content=["Python"],
+    )
+
+
+def _additional_group_result() -> RegeneratedItem:
+    return RegeneratedItem(
+        item_id="additional_technicalSkills",
+        item_type="additionalGroup",
+        title="Technical Skills",
+        group_id="technicalSkills",
+        original_content=["Python"],
+        new_content=["Python", "TypeScript"],
+        diff_summary="Summary",
+    )
+
+
 class TestRegenerateSchemas(unittest.TestCase):
     def test_regenerate_request_instruction_max_length(self) -> None:
-        item = RegenerateItemInput(
-            item_id="skills",
-            item_type="skills",
-            title="Skills",
-            current_content=["Python"],
-        )
+        item = _additional_group_input()
 
         RegenerateRequest(
             resume_id="resume_1",
@@ -47,9 +64,10 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
                     current_content=["Old"],
                 ),
                 RegenerateItemInput(
-                    item_id="skills",
-                    item_type="skills",
+                    item_id="additional_technicalSkills",
+                    item_type="additionalGroup",
                     title="Technical Skills",
+                    group_id="technicalSkills",
                     current_content=["Python"],
                 ),
             ],
@@ -69,14 +87,7 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
             new_content=["New"],
             diff_summary="Summary",
         )
-        skills_item = RegeneratedItem(
-            item_id="skills",
-            item_type="skills",
-            title="Technical Skills",
-            original_content=["Python"],
-            new_content=["Python", "TypeScript"],
-            diff_summary="Summary",
-        )
+        skills_item = _additional_group_result()
 
         with (
             patch.object(enrichment_router, "db", mock_db),
@@ -87,7 +98,7 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
             ) as mock_regenerate_item,
             patch.object(
                 enrichment_router,
-                "_regenerate_skills",
+                "_regenerate_additional_group",
                 AsyncMock(return_value=skills_item),
             ) as mock_regenerate_skills,
         ):
@@ -95,7 +106,7 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             [item.item_id for item in response.regenerated_items],
-            ["exp_0", "skills"],
+            ["exp_0", "additional_technicalSkills"],
         )
         mock_regenerate_item.assert_awaited()
         mock_regenerate_skills.assert_awaited()
@@ -113,9 +124,10 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
                     current_content=["Old"],
                 ),
                 RegenerateItemInput(
-                    item_id="skills",
-                    item_type="skills",
+                    item_id="additional_technicalSkills",
+                    item_type="additionalGroup",
                     title="Technical Skills",
+                    group_id="technicalSkills",
                     current_content=["Python"],
                 ),
             ],
@@ -126,14 +138,7 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
         mock_db = MagicMock()
         mock_db.get_resume.return_value = {"processed_data": {"workExperience": [], "additional": {}}}
 
-        skills_item = RegeneratedItem(
-            item_id="skills",
-            item_type="skills",
-            title="Technical Skills",
-            original_content=["Python"],
-            new_content=["Python", "TypeScript"],
-            diff_summary="Summary",
-        )
+        skills_item = _additional_group_result()
 
         with (
             patch.object(enrichment_router, "db", mock_db),
@@ -144,13 +149,16 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
             ),
             patch.object(
                 enrichment_router,
-                "_regenerate_skills",
+                "_regenerate_additional_group",
                 AsyncMock(return_value=skills_item),
             ),
         ):
             response = await enrichment_router.regenerate_items(request)
 
-        self.assertEqual([item.item_id for item in response.regenerated_items], ["skills"])
+        self.assertEqual(
+            [item.item_id for item in response.regenerated_items],
+            ["additional_technicalSkills"],
+        )
         self.assertEqual([err.item_id for err in response.errors], ["exp_0"])
 
     async def test_apply_regenerated_falls_back_to_metadata_matching(self) -> None:
@@ -169,7 +177,7 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
                 },
             ],
             "personalProjects": [],
-            "additional": {"technicalSkills": ["Python"]},
+            "additional": {"groups": [{"id": "technicalSkills", "label": "Technical Skills", "items": ["Python"]}]},
         }
 
         mock_db = MagicMock()
@@ -207,7 +215,7 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
                 {"title": "Engineer", "company": "Google", "description": ["Bullet B"]},
             ],
             "personalProjects": [],
-            "additional": {"technicalSkills": ["Python"]},
+            "additional": {"groups": [{"id": "technicalSkills", "label": "Technical Skills", "items": ["Python"]}]},
         }
 
         mock_db = MagicMock()
@@ -242,7 +250,7 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
                 {"title": "Engineer", "company": "Acme", "description": ["Old"]},
             ],
             "personalProjects": [],
-            "additional": {"technicalSkills": ["Python"]},
+            "additional": {"groups": [{"id": "technicalSkills", "label": "Technical Skills", "items": ["Python"]}]},
         }
 
         mock_db = MagicMock()
@@ -267,22 +275,25 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 409)
         mock_db.update_resume.assert_not_called()
 
-    async def test_apply_regenerated_updates_skills_for_additional_and_legacy_paths(self) -> None:
+    async def test_apply_regenerated_updates_additional_group_for_grouped_and_legacy_nested_shapes(self) -> None:
         resume_id = "resume_1"
 
-        base_item = RegeneratedItem(
-            item_id="skills",
-            item_type="skills",
-            title="Technical Skills",
-            original_content=["Python"],
-            new_content=["Python", "TypeScript"],
-            diff_summary="Summary",
-        )
+        base_item = _additional_group_result()
 
-        # additional.technicalSkills path
+        # grouped additional path
         mock_db_additional = MagicMock()
         mock_db_additional.get_resume.return_value = {
-            "processed_data": {"additional": {"technicalSkills": ["Python"]}}
+            "processed_data": {
+                "additional": {
+                    "groups": [
+                        {
+                            "id": "technicalSkills",
+                            "label": "Technical Skills",
+                            "items": ["Python"],
+                        }
+                    ]
+                }
+            }
         }
         mock_db_additional.update_resume.return_value = None
 
@@ -291,11 +302,13 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["updated_items"], 1)
         updated = mock_db_additional.update_resume.call_args.args[1]["processed_data"]
-        self.assertEqual(updated["additional"]["technicalSkills"], ["Python", "TypeScript"])
+        self.assertEqual(updated["additional"]["groups"][0]["items"], ["Python", "TypeScript"])
 
-        # legacy technicalSkills path
+        # legacy nested additional path
         mock_db_legacy = MagicMock()
-        mock_db_legacy.get_resume.return_value = {"processed_data": {"technicalSkills": ["Python"]}}
+        mock_db_legacy.get_resume.return_value = {
+            "processed_data": {"additional": {"technicalSkills": ["Python"]}}
+        }
         mock_db_legacy.update_resume.return_value = None
 
         with patch.object(enrichment_router, "db", mock_db_legacy):
@@ -303,24 +316,15 @@ class TestRegenerateEndpoints(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["updated_items"], 1)
         updated = mock_db_legacy.update_resume.call_args.args[1]["processed_data"]
-        self.assertEqual(updated["technicalSkills"], ["Python", "TypeScript"])
+        self.assertEqual(updated["additional"]["groups"][0]["items"], ["Python", "TypeScript"])
 
-    async def test_apply_regenerated_skills_fails_when_no_supported_path_exists(self) -> None:
+    async def test_apply_regenerated_additional_group_fails_when_no_supported_path_exists(self) -> None:
         resume_id = "resume_1"
 
         mock_db = MagicMock()
         mock_db.get_resume.return_value = {"processed_data": {"workExperience": []}}
 
-        regenerated_items = [
-            RegeneratedItem(
-                item_id="skills",
-                item_type="skills",
-                title="Technical Skills",
-                original_content=["Python"],
-                new_content=["Python", "TypeScript"],
-                diff_summary="Summary",
-            )
-        ]
+        regenerated_items = [_additional_group_result()]
 
         with patch.object(enrichment_router, "db", mock_db):
             with self.assertRaises(HTTPException) as ctx:

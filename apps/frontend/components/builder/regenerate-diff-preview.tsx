@@ -73,8 +73,8 @@ export const RegenerateDiffPreview: React.FC<RegenerateDiffPreviewProps> = ({
   type ItemLabelSource = Pick<RegeneratedItem, 'item_id' | 'item_type' | 'title' | 'subtitle'>;
 
   const getItemLabel = (item: ItemLabelSource) => {
-    if (item.item_type === 'skills') {
-      return t('builder.regenerate.selectDialog.skills');
+    if (item.item_type === 'additionalGroup') {
+      return item.title?.trim() || t('builder.regenerate.selectDialog.additionalGroups');
     }
 
     const title = item.title?.trim();
@@ -93,7 +93,7 @@ export const RegenerateDiffPreview: React.FC<RegenerateDiffPreviewProps> = ({
         return <Briefcase className="w-4 h-4" />;
       case 'project':
         return <FolderKanban className="w-4 h-4" />;
-      case 'skills':
+      case 'additionalGroup':
         return <Lightbulb className="w-4 h-4" />;
       default:
         return null;

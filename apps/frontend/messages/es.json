@@ -127,6 +127,16 @@
     },
     "additionalForm": {
       "instructions": "Introduce elementos separados por saltos de línea (pulsa Enter para cada elemento).",
+      "groupLabel": "Etiqueta",
+      "groupLabelPlaceholder": "p. ej., Backend, ML, Infraestructura",
+      "groupValues": "Valores",
+      "groupValuesPlaceholder": "Introduce un valor por línea",
+      "addGroup": "Agregar Grupo",
+      "removeGroup": "Eliminar Grupo",
+      "moveUp": "Mover grupo hacia arriba",
+      "moveDown": "Mover grupo hacia abajo",
+      "emptyState": "Todavía no hay grupos. Agrega uno para organizar esta sección.",
+      "newGroupLabel": "Nueva Etiqueta",
       "placeholders": {
         "technicalSkills": "React\nTypeScript\nNode.js",
         "languages": "Español\nInglés",
@@ -207,9 +217,10 @@
         "subtitle": "Elige qué partes de tu currículum quieres mejorar",
         "experience": "Experiencia laboral",
         "projects": "Proyectos",
+        "additionalGroups": "Grupos Adicionales",
         "skills": "Habilidades técnicas",
         "noItemsSelected": "Selecciona al menos un elemento",
-        "noItemsAvailable": "No hay elementos disponibles para regenerar. Agrega experiencia, proyectos o habilidades primero.",
+        "noItemsAvailable": "No hay elementos disponibles para regenerar. Agrega experiencia, proyectos o grupos adicionales primero.",
         "itemCount": {
           "one": "{count} elemento",
           "other": "{count} elementos"
@@ -532,20 +543,20 @@
       "title": "Revisar resultados de ajuste de IA",
       "subtitle": "Revisa cuidadosamente los cambios para asegurar que no se haya agregado información falsa",
       "summary": "Resumen de cambios",
-      "skillsAdded": "Habilidades agregadas",
-      "skillsRemoved": "Habilidades eliminadas",
+      "additionalItemsAdded": "Elementos adicionales agregados",
+      "additionalItemsRemoved": "Elementos adicionales eliminados",
       "descriptionsModified": "Descripciones modificadas",
-      "certificationsAdded": "Certificaciones agregadas",
+      "additionalGroupsModified": "Grupos adicionales modificados",
       "highRiskChanges": "Cambios de alto riesgo",
       "warningTitle": "Se detectaron {count} habilidad(es) completamente nueva(s)",
       "warningMessage": "Por favor, confirma que estas habilidades realmente existen en tu currículum original o se reflejan en tus descripciones",
       "summaryChanges": "Cambios en resumen",
-      "skillChanges": "Cambios en habilidades",
+      "additionalItemChanges": "Cambios en elementos adicionales",
+      "additionalGroupChanges": "Cambios en grupos adicionales",
       "descriptionChanges": "Cambios en descripciones de experiencia",
       "experienceChanges": "Cambios en experiencia",
       "educationChanges": "Cambios en educación",
       "projectChanges": "Cambios en proyectos",
-      "certificationChanges": "Cambios en certificaciones",
       "rejectButton": "Rechazar y regenerar",
       "confirmButton": "Confirmar y guardar"
     },
@@ -757,6 +768,12 @@
     },
     "additional": {
       "technicalSkills": "Habilidades técnicas"
+    },
+    "additionalDefaults": {
+      "technicalSkills": "Habilidades técnicas",
+      "languages": "Idiomas",
+      "certificationsTraining": "Formación y Certificaciones",
+      "awards": "Premios"
     },
     "additionalLabels": {
       "technicalSkills": "Habilidades técnicas:",

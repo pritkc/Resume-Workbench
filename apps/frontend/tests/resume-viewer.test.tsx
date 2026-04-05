@@ -97,10 +97,28 @@ describe('ResumeViewerPage', () => {
         education: [],
         personalProjects: [],
         additional: {
-          technicalSkills: [],
-          languages: [],
-          certificationsTraining: [],
-          awards: [],
+          groups: [
+            {
+              id: 'technicalSkills',
+              label: 'Technical Skills',
+              items: [],
+            },
+            {
+              id: 'languages',
+              label: 'Languages',
+              items: [],
+            },
+            {
+              id: 'certificationsTraining',
+              label: 'Training & Certifications',
+              items: [],
+            },
+            {
+              id: 'awards',
+              label: 'Awards',
+              items: [],
+            },
+          ],
         },
       },
       parent_id: 'master-123',

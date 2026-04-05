@@ -80,6 +80,7 @@ from app.services.cover_letter import (
     generate_outreach_message,
     generate_resume_title,
 )
+from app.services.additional_groups import restore_missing_additional_items
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
 
 
@@ -773,53 +774,16 @@ def _preserve_original_skills(
     original_data: dict[str, Any] | None,
     improved_data: dict[str, Any],
 ) -> dict[str, Any]:
-    """Restore any skills, certs, languages, or awards dropped by the LLM.
-
-    This is a hard safety net: regardless of what the LLM returns, no
-    original item from these lists is ever lost.  Dropped items are
-    appended at the end of the improved list.
-    """
+    """Restore any original additional-group items dropped by the LLM."""
     if not original_data:
         return improved_data
 
     result = copy.deepcopy(improved_data)
-
-    orig_additional = original_data.get("additional", {})
-    if not isinstance(orig_additional, dict):
-        return result
-    result_additional = result.setdefault("additional", {})
-
-    list_fields = [
-        "technicalSkills",
-        "certificationsTraining",
-        "languages",
-        "awards",
-    ]
-    for field in list_fields:
-        orig_items = orig_additional.get(field, [])
-        if not isinstance(orig_items, list) or not orig_items:
-            continue
-        current_items = result_additional.get(field, [])
-        if not isinstance(current_items, list):
-            current_items = []
-
-        # Build a case-insensitive index of what the LLM kept
-        current_lower = {
-            item.casefold() for item in current_items if isinstance(item, str)
-        }
-
-        # Append any originals that were dropped
-        restored = 0
-        for item in orig_items:
-            if isinstance(item, str) and item.casefold() not in current_lower:
-                current_items.append(item)
-                current_lower.add(item.casefold())
-                restored += 1
-
-        if restored:
-            logger.info("Restored %d dropped items in additional.%s", restored, field)
-        result_additional[field] = current_items
-
+    restored = restore_missing_additional_items(
+        original_data.get("additional"),
+        result.get("additional"),
+    )
+    result["additional"] = restored
     return result
 
 

@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { extractKeywords, calculateMatchStats } from '@/lib/utils/keyword-matcher';
+import { flattenAdditionalItems } from '@/lib/utils/additional-groups';
 import { JDDisplay } from './jd-display';
 import { HighlightedResumeView } from './highlighted-resume-view';
 import { CheckCircle, Target } from 'lucide-react';
@@ -47,11 +48,7 @@ export function JDComparisonView({ jobDescription, resumeData }: JDComparisonVie
       proj.description?.forEach((d) => parts.push(d));
     });
 
-    if (resumeData.additional) {
-      resumeData.additional.technicalSkills?.forEach((s) => parts.push(s));
-      resumeData.additional.languages?.forEach((l) => parts.push(l));
-      resumeData.additional.certificationsTraining?.forEach((c) => parts.push(c));
-    }
+    flattenAdditionalItems(resumeData.additional).forEach((item) => parts.push(item));
 
     return parts.join(' ');
   }, [resumeData]);

@@ -78,10 +78,13 @@ const previewResult = {
       education: [],
       personalProjects: [],
       additional: {
-        technicalSkills: ['Python', 'FastAPI'],
-        languages: [],
-        certificationsTraining: [],
-        awards: [],
+        groups: [
+          {
+            id: 'technicalSkills',
+            label: 'Technical Skills',
+            items: ['Python', 'FastAPI'],
+          },
+        ],
       },
     },
     improvements: [{ suggestion: 'Focus on FastAPI', lineNumber: 1 }],
@@ -114,10 +117,10 @@ const previewResult = {
     },
     diff_summary: {
       total_changes: 1,
-      skills_added: 1,
-      skills_removed: 0,
+      additional_items_added: 1,
+      additional_items_removed: 0,
+      additional_groups_modified: 0,
       descriptions_modified: 0,
-      certifications_added: 0,
       high_risk_changes: 0,
     },
     detailed_changes: [

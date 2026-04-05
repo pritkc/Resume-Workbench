@@ -108,9 +108,10 @@ export async function applyEnhancements(
 
 export interface RegenerateItemInput {
   item_id: string;
-  item_type: 'experience' | 'project' | 'skills';
+  item_type: 'experience' | 'project' | 'additionalGroup';
   title: string;
   subtitle?: string;
+  group_id?: string;
   current_content: string[];
 }
 
@@ -123,9 +124,10 @@ export interface RegenerateRequest {
 
 export interface RegeneratedItem {
   item_id: string;
-  item_type: 'experience' | 'project' | 'skills';
+  item_type: 'experience' | 'project' | 'additionalGroup';
   title: string;
   subtitle?: string;
+  group_id?: string;
   original_content: string[];
   new_content: string[];
   diff_summary: string;
@@ -133,9 +135,10 @@ export interface RegeneratedItem {
 
 export interface RegenerateItemError {
   item_id: string;
-  item_type: 'experience' | 'project' | 'skills';
+  item_type: 'experience' | 'project' | 'additionalGroup';
   title: string;
   subtitle?: string;
+  group_id?: string;
   message: string;
 }
 

@@ -1,12 +1,9 @@
 import React from 'react';
 import { Mail, Phone, MapPin, Globe, Linkedin, Github, ExternalLink } from 'lucide-react';
-import type {
-  ResumeData,
-  SectionMeta,
-  AdditionalSectionLabels,
-} from '@/components/dashboard/resume-component';
+import type { ResumeData, SectionMeta } from '@/components/dashboard/resume-component';
 import { getSortedSections } from '@/lib/utils/section-helpers';
 import { formatDateRange } from '@/lib/utils';
+import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
 import baseStyles from './styles/_base.module.css';
 import styles from './styles/modern.module.css';
@@ -14,7 +11,6 @@ import styles from './styles/modern.module.css';
 interface ResumeModernProps {
   data: ResumeData;
   showContactIcons?: boolean;
-  additionalSectionLabels?: Partial<AdditionalSectionLabels>;
 }
 
 /**
@@ -26,11 +22,7 @@ interface ResumeModernProps {
  *
  * Section order: Determined by sectionMeta ordering
  */
-export const ResumeModern: React.FC<ResumeModernProps> = ({
-  data,
-  showContactIcons = false,
-  additionalSectionLabels,
-}) => {
+export const ResumeModern: React.FC<ResumeModernProps> = ({ data, showContactIcons = false }) => {
   const { personalInfo, summary, workExperience, education, personalProjects, additional } = data;
 
   // Get sorted visible sections
@@ -271,7 +263,6 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
             key={section.id}
             additional={additional}
             displayName={section.displayName}
-            labels={additionalSectionLabels}
           />
         );
 
@@ -363,62 +354,18 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
 const AdditionalSection: React.FC<{
   additional: ResumeData['additional'];
   displayName?: string;
-  labels?: Partial<AdditionalSectionLabels>;
-}> = ({ additional, displayName = 'Skills & Awards', labels }) => {
-  if (!additional) return null;
-
-  const {
-    technicalSkills = [],
-    languages = [],
-    certificationsTraining = [],
-    awards = [],
-  } = additional;
-
-  const mergedLabels: AdditionalSectionLabels = {
-    technicalSkills: labels?.technicalSkills ?? 'Technical Skills:',
-    languages: labels?.languages ?? 'Languages:',
-    certifications: labels?.certifications ?? 'Certifications:',
-    awards: labels?.awards ?? 'Awards:',
-  };
-
-  const hasContent =
-    technicalSkills.length > 0 ||
-    languages.length > 0 ||
-    certificationsTraining.length > 0 ||
-    awards.length > 0;
-
-  if (!hasContent) return null;
-
+}> = ({ additional, displayName = 'Skills & Awards' }) => {
   return (
-    <div className={baseStyles['resume-section']}>
-      <h3 className={styles['section-title-accent']}>{displayName}</h3>
-      <div className={`${baseStyles['resume-stack']} ${baseStyles['resume-text-sm']}`}>
-        {technicalSkills.length > 0 && (
-          <div className="flex">
-            <span className="font-bold w-32 shrink-0">{mergedLabels.technicalSkills}</span>
-            <span>{technicalSkills.join(', ')}</span>
-          </div>
-        )}
-        {languages.length > 0 && (
-          <div className="flex">
-            <span className="font-bold w-32 shrink-0">{mergedLabels.languages}</span>
-            <span>{languages.join(', ')}</span>
-          </div>
-        )}
-        {certificationsTraining.length > 0 && (
-          <div className="flex">
-            <span className="font-bold w-32 shrink-0">{mergedLabels.certifications}</span>
-            <span>{certificationsTraining.join(', ')}</span>
-          </div>
-        )}
-        {awards.length > 0 && (
-          <div className="flex">
-            <span className="font-bold w-32 shrink-0">{mergedLabels.awards}</span>
-            <span>{awards.join(', ')}</span>
-          </div>
-        )}
-      </div>
-    </div>
+    <AdditionalGroupSection
+      additional={additional}
+      displayName={displayName}
+      className={baseStyles['resume-section']}
+      headingClassName={styles['section-title-accent']}
+      bodyClassName={`${baseStyles['resume-stack']} ${baseStyles['resume-text-sm']}`}
+      rowClassName="gap-2"
+      labelClassName="w-32 shrink-0 font-bold"
+      valueClassName="min-w-0"
+    />
   );
 };
 

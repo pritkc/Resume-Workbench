@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.schemas.models import ImproveDiffResult
+from app.services.additional_groups import normalize_additional_groups
 
 
 @pytest.fixture
@@ -50,17 +51,24 @@ def _fake_refinement_result(refined_data: dict) -> SimpleNamespace:
     )
 
 
+def _group_items(resume_data: dict, group_id: str) -> list[str]:
+    resume_data["additional"] = normalize_additional_groups(resume_data.get("additional"))
+    for group in resume_data["additional"]["groups"]:
+        if group["id"] == group_id:
+            return group["items"]
+    raise AssertionError(f"Missing additional group: {group_id}")
+
+
 @pytest.mark.asyncio
 async def test_preview_generates_application_pack_metadata(sample_resume: dict, client):
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Tailored summary"
-    improved["additional"]["technicalSkills"] = improved["additional"]["technicalSkills"] + [
-        "BogusSkill"
-    ]
+    _group_items(improved, "technicalSkills").append("BogusSkill")
     refined = copy.deepcopy(improved)
-    refined["additional"]["technicalSkills"] = [
-        skill for skill in refined["additional"]["technicalSkills"] if skill != "BogusSkill"
-    ]
+    refined["additional"] = normalize_additional_groups(refined.get("additional"))
+    for group in refined["additional"]["groups"]:
+        if group["id"] == "technicalSkills":
+            group["items"] = [skill for skill in group["items"] if skill != "BogusSkill"]
 
     with (
         patch("app.routers.resumes.db") as mock_db,
@@ -123,7 +131,12 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     assert data["application_pack_id"] == "pack-123"
     assert data["generation_run_id"] == "run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-preview-1"
-    assert "BogusSkill" not in data["resume_preview"]["additional"]["technicalSkills"]
+    technical_group = next(
+        group
+        for group in data["resume_preview"]["additional"]["groups"]
+        if group["id"] == "technicalSkills"
+    )
+    assert "BogusSkill" not in technical_group["items"]
 
 
 @pytest.mark.asyncio

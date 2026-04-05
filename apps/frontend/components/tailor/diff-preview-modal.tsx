@@ -37,7 +37,7 @@ export function DiffPreviewModal({
 }: DiffPreviewModalProps) {
   const { t } = useTranslations();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['summary', 'skills', 'descriptions', 'experience'])
+    new Set(['summary', 'additionalItems', 'descriptions', 'experience'])
   );
 
   // Elapsed timer while confirming
@@ -114,9 +114,9 @@ export function DiffPreviewModal({
 
   // Group changes by type
   const summaryChanges = detailedChanges.filter((c) => c.field_type === 'summary');
-  const skillChanges = detailedChanges.filter((c) => c.field_type === 'skill');
+  const additionalItemChanges = detailedChanges.filter((c) => c.field_type === 'additional_item');
+  const additionalGroupChanges = detailedChanges.filter((c) => c.field_type === 'additional_group');
   const descChanges = detailedChanges.filter((c) => c.field_type === 'description');
-  const certChanges = detailedChanges.filter((c) => c.field_type === 'certification');
   const experienceChanges = detailedChanges.filter((c) => c.field_type === 'experience');
   const educationChanges = detailedChanges.filter((c) => c.field_type === 'education');
   const projectChanges = detailedChanges.filter((c) => c.field_type === 'project');
@@ -152,18 +152,18 @@ export function DiffPreviewModal({
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <StatCard
-              label={t('tailor.diffModal.skillsAdded')}
-              value={diffSummary.skills_added}
+              label={t('tailor.diffModal.additionalItemsAdded')}
+              value={diffSummary.additional_items_added}
               variant="success"
             />
             <StatCard
-              label={t('tailor.diffModal.skillsRemoved')}
-              value={diffSummary.skills_removed}
+              label={t('tailor.diffModal.additionalItemsRemoved')}
+              value={diffSummary.additional_items_removed}
               variant="warning"
             />
             <StatCard
-              label={t('tailor.diffModal.certificationsAdded')}
-              value={diffSummary.certifications_added}
+              label={t('tailor.diffModal.additionalGroupsModified')}
+              value={diffSummary.additional_groups_modified}
               variant="info"
             />
             <StatCard
@@ -221,15 +221,29 @@ export function DiffPreviewModal({
             </ChangeSection>
           )}
 
-          {/* Skill changes */}
-          {skillChanges.length > 0 && (
+          {/* Additional item changes */}
+          {additionalItemChanges.length > 0 && (
             <ChangeSection
-              title={t('tailor.diffModal.skillChanges')}
-              count={skillChanges.length}
-              isExpanded={expandedSections.has('skills')}
-              onToggle={() => toggleSection('skills')}
+              title={t('tailor.diffModal.additionalItemChanges')}
+              count={additionalItemChanges.length}
+              isExpanded={expandedSections.has('additionalItems')}
+              onToggle={() => toggleSection('additionalItems')}
             >
-              {skillChanges.map((change, idx) => (
+              {additionalItemChanges.map((change, idx) => (
+                <ChangeItem key={idx} change={change} />
+              ))}
+            </ChangeSection>
+          )}
+
+          {/* Additional group changes */}
+          {additionalGroupChanges.length > 0 && (
+            <ChangeSection
+              title={t('tailor.diffModal.additionalGroupChanges')}
+              count={additionalGroupChanges.length}
+              isExpanded={expandedSections.has('additionalGroups')}
+              onToggle={() => toggleSection('additionalGroups')}
+            >
+              {additionalGroupChanges.map((change, idx) => (
                 <ChangeItem key={idx} change={change} />
               ))}
             </ChangeSection>
@@ -286,20 +300,6 @@ export function DiffPreviewModal({
               onToggle={() => toggleSection('project')}
             >
               {projectChanges.map((change, idx) => (
-                <ChangeItem key={idx} change={change} />
-              ))}
-            </ChangeSection>
-          )}
-
-          {/* Certification changes */}
-          {certChanges.length > 0 && (
-            <ChangeSection
-              title={t('tailor.diffModal.certificationChanges')}
-              count={certChanges.length}
-              isExpanded={expandedSections.has('certifications')}
-              onToggle={() => toggleSection('certifications')}
-            >
-              {certChanges.map((change, idx) => (
                 <ChangeItem key={idx} change={change} />
               ))}
             </ChangeSection>

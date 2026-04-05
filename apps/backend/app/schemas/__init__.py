@@ -1,6 +1,7 @@
 """Pydantic schemas for request/response models."""
 
 from app.schemas.models import (
+    AdditionalGroup,
     AdditionalInfo,
     ArtifactSummary,
     ApplicationPackListResponse,
@@ -75,6 +76,7 @@ __all__ = [
     "Education",
     "Project",
     "AdditionalInfo",
+    "AdditionalGroup",
     "ArtifactSummary",
     "ApplicationPackSummary",
     "ApplicationPackListResponse",

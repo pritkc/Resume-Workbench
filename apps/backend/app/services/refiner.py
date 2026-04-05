@@ -27,6 +27,12 @@ from app.schemas.refinement import (
     RefinementConfig,
     RefinementResult,
 )
+from app.services.additional_groups import (
+    additional_items_counter,
+    extract_additional_groups,
+    flatten_additional_items,
+    normalize_additional_groups,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -273,67 +279,52 @@ def validate_master_alignment(
     """
     violations: list[AlignmentViolation] = []
 
-    # Check skills - use full resume text for broader matching
-    tailored_skills = set(
-        s.lower()
-        for s in tailored.get("additional", {}).get("technicalSkills", [])
-        if isinstance(s, str)
-    )
-    master_skills = set(
-        s.lower()
-        for s in master.get("additional", {}).get("technicalSkills", [])
-        if isinstance(s, str)
-    )
+    # Check all additional-group items against the source resume
+    tailored_groups = extract_additional_groups(tailored.get("additional"))
+    master_groups = extract_additional_groups(master.get("additional"))
+    tailored_items = additional_items_counter(tailored_groups)
+    master_items = additional_items_counter(master_groups)
     master_full_text = _extract_all_text(master).lower()
 
-    for skill in tailored_skills - master_skills:
-        # Check substring/containment: e.g. "Python" in "Python 3.x"
-        has_substring_match = any(
-            skill in ms or ms in skill for ms in master_skills if ms
-        )
-        # Check if skill appears anywhere in master resume text
-        found_in_text = _keyword_in_text(skill, master_full_text)
+    for group in tailored_groups:
+        group_id = str(group.get("id", "")).strip()
+        field_path = f"additional.groups[{group_id or 'unknown'}]"
+        for item in group.get("items", []):
+            if not isinstance(item, str) or not item.strip():
+                continue
+            key = item.casefold()
+            if tailored_items.get(key, 0) <= master_items.get(key, 0):
+                continue
 
-        if has_substring_match or found_in_text:
-            violations.append(
-                AlignmentViolation(
-                    field_path="additional.technicalSkills",
-                    violation_type="skill_variant",
-                    value=skill,
-                    severity="info",
+            master_matches = [
+                master_item
+                for master_item in flatten_additional_items(master_groups)
+                if master_item
+            ]
+            has_substring_match = any(
+                key in master_item.casefold() or master_item.casefold() in key
+                for master_item in master_matches
+            )
+            found_in_text = _keyword_in_text(key, master_full_text)
+
+            if has_substring_match or found_in_text:
+                violations.append(
+                    AlignmentViolation(
+                        field_path=field_path,
+                        violation_type="additional_item_variant",
+                        value=item,
+                        severity="info",
+                    )
                 )
-            )
-        else:
-            violations.append(
-                AlignmentViolation(
-                    field_path="additional.technicalSkills",
-                    violation_type="fabricated_skill",
-                    value=skill,
-                    severity="critical",
+            else:
+                violations.append(
+                    AlignmentViolation(
+                        field_path=field_path,
+                        violation_type="fabricated_additional_item",
+                        value=item,
+                        severity="critical",
+                    )
                 )
-            )
-
-    # Check certifications
-    tailored_certs = set(
-        c.lower()
-        for c in tailored.get("additional", {}).get("certificationsTraining", [])
-        if isinstance(c, str)
-    )
-    master_certs = set(
-        c.lower()
-        for c in master.get("additional", {}).get("certificationsTraining", [])
-        if isinstance(c, str)
-    )
-
-    for cert in tailored_certs - master_certs:
-        violations.append(
-            AlignmentViolation(
-                field_path="additional.certificationsTraining",
-                violation_type="fabricated_cert",
-                value=cert,
-                severity="critical",
-            )
-        )
 
     # Check work experience companies (should not add new companies)
     tailored_companies = set(
@@ -498,17 +489,21 @@ def fix_alignment_violations(
         if violation.severity != "critical":
             continue
 
-        if violation.violation_type == "fabricated_skill":
-            skills = fixed.get("additional", {}).get("technicalSkills", [])
-            fixed.setdefault("additional", {})["technicalSkills"] = [
-                s for s in skills if s.lower() != violation.value.lower()
-            ]
-
-        elif violation.violation_type == "fabricated_cert":
-            certs = fixed.get("additional", {}).get("certificationsTraining", [])
-            fixed.setdefault("additional", {})["certificationsTraining"] = [
-                c for c in certs if c.lower() != violation.value.lower()
-            ]
+        if violation.violation_type == "fabricated_additional_item":
+            additional = normalize_additional_groups(fixed.get("additional"))
+            groups = additional.get("groups", [])
+            for group in groups:
+                items = group.get("items", [])
+                if isinstance(items, list):
+                    group["items"] = [
+                        item
+                        for item in items
+                        if not (
+                            isinstance(item, str)
+                            and item.casefold() == violation.value.casefold()
+                        )
+                    ]
+            fixed["additional"] = additional
 
         elif violation.violation_type == "fabricated_company":
             # SVC-002: Remove the fabricated work experience entry
@@ -616,18 +611,7 @@ def _extract_all_text_cached(data_json: str) -> str:
     # Additional
     additional = data.get("additional", {})
     if isinstance(additional, dict):
-        skills = additional.get("technicalSkills", [])
-        if isinstance(skills, list):
-            parts.extend(str(s) for s in skills)
-        certs = additional.get("certificationsTraining", [])
-        if isinstance(certs, list):
-            parts.extend(str(c) for c in certs)
-        languages = additional.get("languages", [])
-        if isinstance(languages, list):
-            parts.extend(str(lang) for lang in languages)
-        awards = additional.get("awards", [])
-        if isinstance(awards, list):
-            parts.extend(str(a) for a in awards)
+        parts.extend(flatten_additional_items(additional))
 
     # Custom sections
     custom_sections = data.get("customSections", {})

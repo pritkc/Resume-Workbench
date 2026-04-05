@@ -62,19 +62,21 @@ export interface Project {
   description?: string[];
 }
 
+export interface AdditionalGroup {
+  id: string;
+  label: string;
+  items: string[];
+}
+
 export interface AdditionalInfo {
+  groups?: AdditionalGroup[];
   technicalSkills?: string[];
   languages?: string[];
   certificationsTraining?: string[];
   awards?: string[];
 }
 
-export interface AdditionalSectionLabels {
-  technicalSkills: string;
-  languages: string;
-  certifications: string;
-  awards: string;
-}
+export type AdditionalSectionLabels = Record<string, string>;
 
 export interface ResumeSectionHeadings {
   summary: string;
@@ -140,7 +142,6 @@ interface ResumeProps {
   resumeData: ResumeData;
   template?: TemplateType;
   settings?: TemplateSettings;
-  additionalSectionLabels?: Partial<AdditionalSectionLabels>;
   sectionHeadings?: Partial<ResumeSectionHeadings>;
   fallbackLabels?: Partial<ResumeFallbackLabels>;
 }
@@ -161,7 +162,6 @@ const Resume: React.FC<ResumeProps> = ({
   resumeData,
   template = 'swiss-single',
   settings,
-  additionalSectionLabels,
   sectionHeadings,
   fallbackLabels,
 }) => {
@@ -188,11 +188,7 @@ const Resume: React.FC<ResumeProps> = ({
       style={cssVars}
     >
       {mergedSettings.template === 'swiss-single' && (
-        <ResumeSingleColumn
-          data={resumeData}
-          showContactIcons={mergedSettings.showContactIcons}
-          additionalSectionLabels={additionalSectionLabels}
-        />
+        <ResumeSingleColumn data={resumeData} showContactIcons={mergedSettings.showContactIcons} />
       )}
       {mergedSettings.template === 'swiss-two-column' && (
         <ResumeTwoColumn
@@ -202,11 +198,7 @@ const Resume: React.FC<ResumeProps> = ({
         />
       )}
       {mergedSettings.template === 'modern' && (
-        <ResumeModern
-          data={resumeData}
-          showContactIcons={mergedSettings.showContactIcons}
-          additionalSectionLabels={additionalSectionLabels}
-        />
+        <ResumeModern data={resumeData} showContactIcons={mergedSettings.showContactIcons} />
       )}
       {mergedSettings.template === 'modern-two-column' && (
         <ResumeModernTwoColumn

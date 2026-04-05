@@ -127,6 +127,16 @@
     },
     "additionalForm": {
       "instructions": "每行输入一条内容（按 Enter 换行）。",
+      "groupLabel": "标签",
+      "groupLabelPlaceholder": "例如：Backend、ML、Infrastructure",
+      "groupValues": "内容",
+      "groupValuesPlaceholder": "每行输入一个值",
+      "addGroup": "添加标签组",
+      "removeGroup": "删除标签组",
+      "moveUp": "上移标签组",
+      "moveDown": "下移标签组",
+      "emptyState": "还没有标签组。添加一个来组织此板块。",
+      "newGroupLabel": "新标签",
       "placeholders": {
         "technicalSkills": "React\nTypeScript\nNode.js",
         "languages": "中文\n英语",
@@ -207,9 +217,10 @@
         "subtitle": "选择您想要改进的简历部分",
         "experience": "工作经历",
         "projects": "项目经历",
+        "additionalGroups": "附加分组",
         "skills": "技术技能",
         "noItemsSelected": "请至少选择一个项目",
-        "noItemsAvailable": "没有可重新生成的项目。请先添加工作经历、项目经历或技能。",
+        "noItemsAvailable": "没有可重新生成的项目。请先添加工作经历、项目经历或附加分组。",
         "itemCount": {
           "one": "{count} 条",
           "other": "{count} 条"
@@ -532,20 +543,20 @@
       "title": "审核 AI 定制结果",
       "subtitle": "请仔细检查以下变更，确保不包含虚假内容",
       "summary": "变更摘要",
-      "skillsAdded": "新增技能",
-      "skillsRemoved": "删除技能",
+      "additionalItemsAdded": "新增附加项",
+      "additionalItemsRemoved": "删除附加项",
       "descriptionsModified": "修改描述",
-      "certificationsAdded": "新增认证",
+      "additionalGroupsModified": "修改附加分组",
       "highRiskChanges": "高风险变更",
       "warningTitle": "检测到 {count} 项高风险新增内容",
       "warningMessage": "请确认这些新增内容确实存在于您的原始简历中，或在描述中有所体现",
       "summaryChanges": "摘要变更",
-      "skillChanges": "技能变更",
+      "additionalItemChanges": "附加项变更",
+      "additionalGroupChanges": "附加分组变更",
       "descriptionChanges": "经历描述变更",
       "experienceChanges": "经历条目变更",
       "educationChanges": "教育变更",
       "projectChanges": "项目变更",
-      "certificationChanges": "认证变更",
       "rejectButton": "拒绝并重新生成",
       "confirmButton": "确认并保存"
     },
@@ -757,6 +768,12 @@
     },
     "additional": {
       "technicalSkills": "技术技能"
+    },
+    "additionalDefaults": {
+      "technicalSkills": "技术技能",
+      "languages": "语言能力",
+      "certificationsTraining": "培训与证书",
+      "awards": "荣誉奖项"
     },
     "additionalLabels": {
       "technicalSkills": "技术技能：",

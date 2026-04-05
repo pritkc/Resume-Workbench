@@ -40,6 +40,10 @@ import {
   createCustomSection,
   DEFAULT_SECTION_META,
 } from '@/lib/utils/section-helpers';
+import {
+  createDefaultAdditionalInfo,
+  normalizeAdditionalInfo,
+} from '@/lib/utils/additional-groups';
 import { useTranslations } from '@/lib/i18n';
 
 interface ResumeFormProps {
@@ -256,15 +260,10 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
         case 'additional':
           return (
             <AdditionalForm
-              data={
-                resumeData.additional || {
-                  technicalSkills: [],
-                  languages: [],
-                  certificationsTraining: [],
-                  awards: [],
-                }
+              data={normalizeAdditionalInfo(resumeData.additional || createDefaultAdditionalInfo())}
+              onChange={(data) =>
+                onUpdate({ ...resumeData, additional: normalizeAdditionalInfo(data) })
               }
-              onChange={(data) => onUpdate({ ...resumeData, additional: data })}
             />
           );
 

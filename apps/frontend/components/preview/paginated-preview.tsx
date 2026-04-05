@@ -35,15 +35,6 @@ export function PaginatedPreview({ resumeData, settings }: PaginatedPreviewProps
     margins: { top: 0, bottom: 0, left: 0, right: 0 },
   };
 
-  const additionalSectionLabels = React.useMemo(
-    () => ({
-      technicalSkills: t('resume.additionalLabels.technicalSkills'),
-      languages: t('resume.additionalLabels.languages'),
-      certifications: t('resume.additionalLabels.certifications'),
-      awards: t('resume.additionalLabels.awards'),
-    }),
-    [t]
-  );
   const sectionHeadings = React.useMemo(
     () => ({
       summary: t('resume.sections.summary'),
@@ -185,7 +176,6 @@ export function PaginatedPreview({ resumeData, settings }: PaginatedPreviewProps
             resumeData={resumeData}
             template={settings.template}
             settings={resumeSettings}
-            additionalSectionLabels={additionalSectionLabels}
             sectionHeadings={sectionHeadings}
             fallbackLabels={fallbackLabels}
           />
@@ -218,7 +208,6 @@ export function PaginatedPreview({ resumeData, settings }: PaginatedPreviewProps
                   resumeData={resumeData}
                   template={settings.template}
                   settings={resumeSettings}
-                  additionalSectionLabels={additionalSectionLabels}
                   sectionHeadings={sectionHeadings}
                   fallbackLabels={fallbackLabels}
                 />

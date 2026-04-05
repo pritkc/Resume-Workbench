@@ -1,0 +1,198 @@
+'use client';
+
+import React from 'react';
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import type { AdditionalGroup, AdditionalInfo } from '@/components/dashboard/resume-component';
+import {
+  formatAdditionalGroupItems,
+  generateAdditionalGroupId,
+  getAdditionalGroupDisplayLabel,
+  normalizeAdditionalGroups,
+  normalizeAdditionalInfo,
+  parseAdditionalGroupItems,
+} from '@/lib/utils/additional-groups';
+import { useTranslations } from '@/lib/i18n';
+
+interface AdditionalGroupsFormProps {
+  data: AdditionalInfo;
+  onChange: (data: AdditionalInfo) => void;
+}
+
+function updateGroups(groups: AdditionalGroup[], onChange: (data: AdditionalInfo) => void): void {
+  onChange(
+    normalizeAdditionalInfo(
+      {
+        groups,
+      },
+      { seedDefaultsIfEmpty: false }
+    )
+  );
+}
+
+export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data, onChange }) => {
+  const { t } = useTranslations();
+  const groups = React.useMemo(() => normalizeAdditionalGroups(data), [data]);
+
+  const handleLabelChange = (index: number, label: string) => {
+    updateGroups(
+      groups.map((group, currentIndex) =>
+        currentIndex === index
+          ? {
+              ...group,
+              label,
+            }
+          : group
+      ),
+      onChange
+    );
+  };
+
+  const handleItemsChange = (index: number, value: string) => {
+    updateGroups(
+      groups.map((group, currentIndex) =>
+        currentIndex === index
+          ? {
+              ...group,
+              items: parseAdditionalGroupItems(value),
+            }
+          : group
+      ),
+      onChange
+    );
+  };
+
+  const handleRemove = (index: number) => {
+    updateGroups(
+      groups.filter((_, currentIndex) => currentIndex !== index),
+      onChange
+    );
+  };
+
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= groups.length) {
+      return;
+    }
+
+    const nextGroups = [...groups];
+    const [movedGroup] = nextGroups.splice(index, 1);
+    nextGroups.splice(targetIndex, 0, movedGroup);
+    updateGroups(nextGroups, onChange);
+  };
+
+  const handleAdd = () => {
+    const nextGroups = [
+      ...groups,
+      {
+        id: generateAdditionalGroupId(groups, t('builder.additionalForm.newGroupLabel')),
+        label: t('builder.additionalForm.newGroupLabel'),
+        items: [],
+      },
+    ];
+    updateGroups(nextGroups, onChange);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter') {
+      event.stopPropagation();
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="font-mono text-xs text-gray-500">{t('builder.additionalForm.instructions')}</p>
+
+      <div className="space-y-4">
+        {groups.map((group, index) => {
+          const displayLabel = getAdditionalGroupDisplayLabel(group, t);
+
+          return (
+            <div key={group.id} className="border border-black bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-black bg-[#F0F0E8] px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <Label className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                    {t('builder.additionalForm.groupLabel')}
+                  </Label>
+                  <Input
+                    value={displayLabel}
+                    onChange={(event) => handleLabelChange(index, event.target.value)}
+                    placeholder={t('builder.additionalForm.groupLabelPlaceholder')}
+                    className="mt-2 bg-white"
+                  />
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2 pt-5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => handleMove(index, -1)}
+                    disabled={index === 0}
+                    aria-label={t('builder.additionalForm.moveUp')}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => handleMove(index, 1)}
+                    disabled={index === groups.length - 1}
+                    aria-label={t('builder.additionalForm.moveDown')}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon-sm"
+                    onClick={() => handleRemove(index)}
+                    aria-label={t('builder.additionalForm.removeGroup')}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-4">
+                <Label
+                  htmlFor={`additional-group-items-${group.id}`}
+                  className="font-mono text-[11px] uppercase tracking-wider text-gray-500"
+                >
+                  {t('builder.additionalForm.groupValues')}
+                </Label>
+                <Textarea
+                  id={`additional-group-items-${group.id}`}
+                  value={formatAdditionalGroupItems(group.items)}
+                  onChange={(event) => handleItemsChange(index, event.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t('builder.additionalForm.groupValuesPlaceholder')}
+                  className="mt-2 min-h-[104px] rounded-none border-black bg-white text-black focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {groups.length === 0 && (
+        <div className="border border-dashed border-black bg-white px-4 py-6 text-center">
+          <p className="font-mono text-xs text-gray-500">
+            {t('builder.additionalForm.emptyState')}
+          </p>
+        </div>
+      )}
+
+      <Button type="button" variant="outline" onClick={handleAdd} className="rounded-none">
+        <Plus className="h-4 w-4" />
+        {t('builder.additionalForm.addGroup')}
+      </Button>
+    </div>
+  );
+};
+
+export default AdditionalGroupsForm;

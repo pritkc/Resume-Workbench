@@ -3,6 +3,7 @@
 import copy
 import pytest
 
+from app.services.additional_groups import normalize_additional_groups
 from app.services.refiner import (
     analyze_keyword_gaps,
     calculate_keyword_match,
@@ -11,6 +12,18 @@ from app.services.refiner import (
     validate_master_alignment,
 )
 from app.schemas.refinement import AlignmentViolation
+
+
+def _normalize_additional(data: dict) -> None:
+    data["additional"] = normalize_additional_groups(data.get("additional"))
+
+
+def _group_items(data: dict, group_id: str) -> list[str]:
+    _normalize_additional(data)
+    for group in data["additional"]["groups"]:
+        if group["id"] == group_id:
+            return group["items"]
+    raise AssertionError(f"Missing additional group: {group_id}")
 
 
 class TestRemoveAiPhrases:
@@ -79,17 +92,21 @@ class TestValidateMasterAlignment:
 
     def test_detects_fabricated_skill(self, sample_resume, master_resume):
         tailored = copy.deepcopy(sample_resume)
-        tailored["additional"]["technicalSkills"].append("Kubernetes")
+        _group_items(tailored, "technicalSkills").append("Kubernetes")
         report = validate_master_alignment(tailored, master_resume)
-        skill_violations = [v for v in report.violations if "skill" in v.violation_type]
+        skill_violations = [
+            v for v in report.violations if v.violation_type == "fabricated_additional_item"
+        ]
         assert len(skill_violations) >= 1
         assert any("kubernetes" in v.value.lower() for v in skill_violations)
 
     def test_detects_fabricated_certification(self, sample_resume, master_resume):
         tailored = copy.deepcopy(sample_resume)
-        tailored["additional"]["certificationsTraining"].append("Google Cloud Professional")
+        _group_items(tailored, "certificationsTraining").append("Google Cloud Professional")
         report = validate_master_alignment(tailored, master_resume)
-        cert_violations = [v for v in report.violations if v.violation_type == "fabricated_cert"]
+        cert_violations = [
+            v for v in report.violations if v.violation_type == "fabricated_additional_item"
+        ]
         assert len(cert_violations) >= 1
 
     def test_detects_fabricated_company(self, sample_resume, master_resume):
@@ -109,19 +126,19 @@ class TestValidateMasterAlignment:
         """A variant of an existing skill (e.g. 'Python 3') should be info, not critical."""
         tailored = copy.deepcopy(sample_resume)
         # Master has "Python", tailored adds "Python 3" — substring match should be non-critical
-        tailored["additional"]["technicalSkills"].append("Python 3")
+        _group_items(tailored, "technicalSkills").append("Python 3")
         report = validate_master_alignment(tailored, master_resume)
         python3_violations = [
             v for v in report.violations
             if "python 3" in v.value.lower()
         ]
-        # Should be info/variant, NOT critical fabricated_skill
+        # Should be info/variant, NOT a critical fabricated item
         for v in python3_violations:
-            assert v.severity != "critical" or v.violation_type == "skill_variant"
+            assert v.severity != "critical" or v.violation_type == "additional_item_variant"
 
     def test_confidence_decreases_with_violations(self, sample_resume, master_resume):
         tailored = copy.deepcopy(sample_resume)
-        tailored["additional"]["technicalSkills"].extend(["Kotlin", "Scala", "Haskell"])
+        _group_items(tailored, "technicalSkills").extend(["Kotlin", "Scala", "Haskell"])
         report = validate_master_alignment(tailored, master_resume)
         assert report.confidence_score < 1.0
 
@@ -131,45 +148,45 @@ class TestFixAlignmentViolations:
 
     def test_removes_fabricated_skill(self, sample_resume):
         tailored = copy.deepcopy(sample_resume)
-        tailored["additional"]["technicalSkills"].append("FakeSkill")
+        _group_items(tailored, "technicalSkills").append("FakeSkill")
         violations = [
             AlignmentViolation(
-                field_path="additional.technicalSkills",
-                violation_type="fabricated_skill",
+                field_path="additional.groups[technicalSkills]",
+                violation_type="fabricated_additional_item",
                 value="FakeSkill",
                 severity="critical",
             )
         ]
         fixed = fix_alignment_violations(tailored, violations)
-        assert "FakeSkill" not in fixed["additional"]["technicalSkills"]
+        assert "FakeSkill" not in _group_items(fixed, "technicalSkills")
 
     def test_removes_fabricated_cert(self, sample_resume):
         tailored = copy.deepcopy(sample_resume)
-        tailored["additional"]["certificationsTraining"].append("Fake Cert")
+        _group_items(tailored, "certificationsTraining").append("Fake Cert")
         violations = [
             AlignmentViolation(
-                field_path="additional.certificationsTraining",
-                violation_type="fabricated_cert",
+                field_path="additional.groups[certificationsTraining]",
+                violation_type="fabricated_additional_item",
                 value="Fake Cert",
                 severity="critical",
             )
         ]
         fixed = fix_alignment_violations(tailored, violations)
-        assert "Fake Cert" not in fixed["additional"]["certificationsTraining"]
+        assert "Fake Cert" not in _group_items(fixed, "certificationsTraining")
 
     def test_skips_non_critical_violations(self, sample_resume):
         tailored = copy.deepcopy(sample_resume)
-        original_skills = list(tailored["additional"]["technicalSkills"])
+        original_skills = list(_group_items(tailored, "technicalSkills"))
         violations = [
             AlignmentViolation(
-                field_path="additional.technicalSkills",
-                violation_type="skill_variant",
+                field_path="additional.groups[technicalSkills]",
+                violation_type="additional_item_variant",
                 value="Python",
                 severity="info",
             )
         ]
         fixed = fix_alignment_violations(tailored, violations)
-        assert fixed["additional"]["technicalSkills"] == original_skills
+        assert _group_items(fixed, "technicalSkills") == original_skills
 
 
 class TestAnalyzeKeywordGaps:

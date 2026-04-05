@@ -15,8 +15,8 @@ from app.llm import complete_json
 from app.prompts.enrichment import (
     ANALYZE_RESUME_PROMPT,
     ENHANCE_DESCRIPTION_PROMPT,
+    REGENERATE_ADDITIONAL_GROUP_PROMPT,
     REGENERATE_ITEM_PROMPT,
-    REGENERATE_SKILLS_PROMPT,
 )
 from app.prompts.templates import get_language_name
 from app.schemas.enrichment import (
@@ -34,6 +34,7 @@ from app.schemas.enrichment import (
     RegenerateResponse,
     RegeneratedItem,
 )
+from app.services.additional_groups import normalize_additional_groups
 
 logger = logging.getLogger(__name__)
 
@@ -441,39 +442,42 @@ async def _regenerate_experience_or_project(
     )
 
 
-async def _regenerate_skills(
+async def _regenerate_additional_group(
     item: RegenerateItemInput,
     instruction: str,
     output_language: str,
 ) -> RegeneratedItem:
-    """Regenerate the skills section."""
-    current_skills_text = ", ".join(item.current_content) if item.current_content else "(No skills)"
+    """Regenerate a flexible additional label/value group."""
+    current_values_text = ", ".join(item.current_content) if item.current_content else "(No values)"
 
-    prompt = REGENERATE_SKILLS_PROMPT.format(
+    prompt = REGENERATE_ADDITIONAL_GROUP_PROMPT.format(
         output_language=output_language,
-        current_skills=current_skills_text,
+        group_label=item.title or "Additional",
+        current_values=current_values_text,
         user_instruction=instruction,
     )
 
     result = await complete_json(
         prompt,
         max_tokens=2048,
-        operation="enrichment_regenerate_skills",
+        operation="enrichment_regenerate_additional_group",
         metadata={"item_id": item.item_id, "item_type": item.item_type},
     )
 
-    new_skills = result.get("new_skills", [])
-    if not isinstance(new_skills, list):
-        new_skills = []
-    new_skills = [str(s) for s in new_skills if s]
+    new_values = result.get("new_values", [])
+    if not isinstance(new_values, list):
+        new_values = []
+    new_values = [str(s) for s in new_values if s]
+    new_label = str(result.get("group_label") or item.title or "Additional").strip()
 
     return RegeneratedItem(
         item_id=item.item_id,
         item_type=item.item_type,
-        title=item.title,
+        title=new_label,
         subtitle=item.subtitle,
+        group_id=item.group_id,
         original_content=item.current_content,
-        new_content=new_skills,
+        new_content=new_values,
         diff_summary=str(result.get("change_summary") or ""),
     )
 
@@ -482,7 +486,7 @@ async def _regenerate_skills(
 async def regenerate_items(request: RegenerateRequest) -> RegenerateResponse:
     """Regenerate selected resume items based on user feedback.
 
-    Takes selected items (experience, projects, skills) and a user instruction,
+    Takes selected items (experience, projects, additional groups) and a user instruction,
     then uses AI to rewrite the content addressing the user's concerns.
     """
     # Validate resume exists
@@ -499,8 +503,10 @@ async def regenerate_items(request: RegenerateRequest) -> RegenerateResponse:
     # Process all items in parallel for better performance
     tasks = []
     for item in request.items:
-        if item.item_type == "skills":
-            tasks.append(_regenerate_skills(item, request.instruction, output_language))
+        if item.item_type == "additionalGroup":
+            tasks.append(
+                _regenerate_additional_group(item, request.instruction, output_language)
+            )
         else:
             tasks.append(_regenerate_experience_or_project(item, request.instruction, output_language))
 
@@ -522,6 +528,7 @@ async def regenerate_items(request: RegenerateRequest) -> RegenerateResponse:
                     item_type=item.item_type,
                     title=item.title,
                     subtitle=item.subtitle,
+                    group_id=item.group_id,
                     message="Failed to regenerate this item. Please try again.",
                 )
             )
@@ -748,24 +755,54 @@ async def apply_regenerated_items(
             else:
                 apply_failures.append(item_id)
 
-        elif item_type == "skills":
-            # Update technical skills (stored in additional.technicalSkills)
+        elif item_type == "additionalGroup":
             expected_original_content = item.original_content
+            additional = normalize_additional_groups(updated_data.get("additional"))
+            groups = additional.get("groups", [])
+            resolved_group: dict | None = None
+            target_group_id = item.group_id or item_id.replace("additional_", "", 1)
 
-            additional = updated_data.get("additional")
-            if isinstance(additional, dict) and "technicalSkills" in additional:
-                if not _lines_equal(additional.get("technicalSkills"), expected_original_content):
-                    apply_failures.append(item_id)
+            for group in groups:
+                if not isinstance(group, dict):
                     continue
-                additional["technicalSkills"] = new_content
-            elif "technicalSkills" in updated_data:
-                # Fallback for legacy data structure
-                if not _lines_equal(updated_data.get("technicalSkills"), expected_original_content):
-                    apply_failures.append(item_id)
-                    continue
-                updated_data["technicalSkills"] = new_content
-            else:
+                group_id = str(group.get("id", "")).strip()
+                if group_id and group_id == target_group_id:
+                    resolved_group = group
+                    break
+
+            if resolved_group is None:
+                matching_groups = []
+                for group in groups:
+                    if not isinstance(group, dict):
+                        continue
+                    if _lines_equal(group.get("items"), expected_original_content):
+                        matching_groups.append(group)
+                if len(matching_groups) == 1:
+                    resolved_group = matching_groups[0]
+
+            if resolved_group is None:
+                matching_groups = []
+                for group in groups:
+                    if not isinstance(group, dict):
+                        continue
+                    if _normalize_match_value(str(group.get("label", ""))) == _normalize_match_value(
+                        item.title
+                    ):
+                        matching_groups.append(group)
+                if len(matching_groups) == 1:
+                    resolved_group = matching_groups[0]
+
+            if resolved_group is None:
                 apply_failures.append(item_id)
+                continue
+
+            if not _lines_equal(resolved_group.get("items"), expected_original_content):
+                apply_failures.append(item_id)
+                continue
+
+            resolved_group["label"] = item.title
+            resolved_group["items"] = new_content
+            updated_data["additional"] = additional
 
     if apply_failures:
         logger.warning(

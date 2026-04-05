@@ -9,6 +9,13 @@ from urllib.parse import urlparse
 
 import yaml
 
+from app.services.additional_groups import (
+    DEFAULT_ADDITIONAL_GROUP_LABELS_BY_ID,
+    default_additional_info,
+    extract_additional_groups,
+    generate_additional_group_id,
+    normalize_additional_groups,
+)
 from app.rendering.theme_profiles import (
     RenderThemeSettings,
     build_design,
@@ -217,12 +224,11 @@ def _project_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _skills_sections(additional: dict[str, Any]) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
-    technical = additional.get("technicalSkills") or []
-    languages = additional.get("languages") or []
-    if technical:
-        entries.append({"label": "Technical Skills", "details": ", ".join(technical)})
-    if languages:
-        entries.append({"label": "Languages", "details": ", ".join(languages)})
+    for group in extract_additional_groups(additional):
+        label = _clean_text(str(group.get("label") or ""))
+        items = [item for item in group.get("items") or [] if isinstance(item, str) and item.strip()]
+        if label and items:
+            entries.append({"label": label, "details": ", ".join(items)})
     return entries
 
 
@@ -283,14 +289,6 @@ def resume_to_rendercv_payload(
     skills = _skills_sections(additional)
     if skills:
         sections["skills"] = skills
-
-    certifications = _bullet_entries(additional.get("certificationsTraining") or [])
-    if certifications:
-        sections["certifications"] = certifications
-
-    awards = _bullet_entries(additional.get("awards") or [])
-    if awards:
-        sections["awards"] = awards
 
     for section_title, values in _custom_sections(resume_data.get("customSections") or {}).items():
         sections[section_title] = values
@@ -501,6 +499,31 @@ def _parse_custom_section_items(items: list[Any]) -> dict[str, Any]:
     return {"sectionType": "stringList", "strings": _text_list(items)}
 
 
+def _default_group_label_for_id(group_id: str, base_resume_data: dict[str, Any] | None) -> str:
+    if base_resume_data:
+        for group in extract_additional_groups(base_resume_data.get("additional")):
+            if str(group.get("id", "")).strip() == group_id:
+                label = _clean_text(str(group.get("label") or ""))
+                if label:
+                    return label
+    return DEFAULT_ADDITIONAL_GROUP_LABELS_BY_ID[group_id]
+
+
+def _group_id_from_label(label: str) -> str | None:
+    normalized = label.strip().strip(":").casefold()
+    if not normalized:
+        return None
+    if normalized in {"technical skills", "skills", "core skills"} or "skill" in normalized:
+        return "technicalSkills"
+    if "language" in normalized:
+        return "languages"
+    if "cert" in normalized or "training" in normalized:
+        return "certificationsTraining"
+    if "award" in normalized or "honor" in normalized:
+        return "awards"
+    return None
+
+
 def rendercv_cv_to_resume_data(
     cv_payload: dict[str, Any],
     *,
@@ -534,17 +557,70 @@ def rendercv_cv_to_resume_data(
 
     summary_items = _text_list(sections.get("summary"))
     skills_entries = sections.get("skills") if isinstance(sections.get("skills"), list) else []
-    technical_skills: list[str] = []
-    languages: list[str] = []
+    additional_groups: list[dict[str, Any]] = []
+    existing_group_ids: set[str] = set()
+
     for entry in skills_entries:
+        if isinstance(entry, str):
+            group_id = "technicalSkills" if "technicalSkills" not in existing_group_ids else generate_additional_group_id(existing_group_ids, "Technical Skills")
+            existing_group_ids.add(group_id)
+            additional_groups.append(
+                {
+                    "id": group_id,
+                    "label": _default_group_label_for_id("technicalSkills", base_resume_data),
+                    "items": _split_csv(entry),
+                }
+            )
+            continue
+
         if not isinstance(entry, dict):
             continue
-        label = str(entry.get("label", "")).strip().lower()
-        details = _split_csv(_clean_text(entry.get("details")))
-        if "language" in label:
-            languages.extend(details)
+
+        label = _clean_text(str(entry.get("label") or entry.get("title") or "")) or "Additional"
+        details = _split_csv(_clean_text(entry.get("details")) or "")
+        if not details:
+            details = _text_list(entry.get("items"))
+
+        default_group_id = _group_id_from_label(label)
+        if default_group_id and default_group_id not in existing_group_ids:
+            group_id = default_group_id
         else:
-            technical_skills.extend(details)
+            group_id = generate_additional_group_id(existing_group_ids, label)
+
+        existing_group_ids.add(group_id)
+        additional_groups.append(
+            {
+                "id": group_id,
+                "label": (
+                    _default_group_label_for_id(group_id, base_resume_data)
+                    if group_id in DEFAULT_ADDITIONAL_GROUP_LABELS_BY_ID and default_group_id
+                    else label
+                ),
+                "items": details,
+            }
+        )
+
+    certifications = _text_list(sections.get("certifications"))
+    if certifications:
+        additional_groups.append(
+            {
+                "id": "certificationsTraining",
+                "label": _default_group_label_for_id("certificationsTraining", base_resume_data),
+                "items": certifications,
+            }
+        )
+        existing_group_ids.add("certificationsTraining")
+
+    awards = _text_list(sections.get("awards"))
+    if awards:
+        additional_groups.append(
+            {
+                "id": "awards",
+                "label": _default_group_label_for_id("awards", base_resume_data),
+                "items": awards,
+            }
+        )
+        existing_group_ids.add("awards")
 
     work_experience = []
     for index, item in enumerate(sections.get("experience") or [], start=1):
@@ -640,12 +716,11 @@ def rendercv_cv_to_resume_data(
             "workExperience": work_experience,
             "education": education,
             "personalProjects": projects,
-            "additional": {
-                "technicalSkills": technical_skills,
-                "languages": languages,
-                "certificationsTraining": _text_list(sections.get("certifications")),
-                "awards": _text_list(sections.get("awards")),
-            },
+            "additional": normalize_additional_groups(
+                {"groups": additional_groups}
+                if additional_groups
+                else resume_data.get("additional") or default_additional_info()
+            ),
             "customSections": custom_sections,
             "sectionMeta": section_meta,
         }

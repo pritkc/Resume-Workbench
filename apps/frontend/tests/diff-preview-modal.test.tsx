@@ -14,10 +14,10 @@ vi.mock('@/lib/i18n', () => ({
 
 const diffSummary: ResumeDiffSummary = {
   total_changes: 2,
-  skills_added: 1,
-  skills_removed: 0,
+  additional_items_added: 1,
+  additional_items_removed: 0,
+  additional_groups_modified: 0,
   descriptions_modified: 1,
-  certifications_added: 0,
   high_risk_changes: 1,
 };
 
@@ -31,8 +31,8 @@ const detailedChanges: ResumeFieldDiff[] = [
     confidence: 'medium',
   },
   {
-    field_path: 'additional.technicalSkills',
-    field_type: 'skill',
+    field_path: 'additional.groups[technicalSkills].items',
+    field_type: 'additional_item',
     change_type: 'added',
     new_value: 'Go',
     confidence: 'high',

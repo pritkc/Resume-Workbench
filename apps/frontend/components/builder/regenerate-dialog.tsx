@@ -20,7 +20,7 @@ interface RegenerateDialogProps {
   onOpenChange: (open: boolean) => void;
   experienceItems: RegenerateItemInput[];
   projectItems: RegenerateItemInput[];
-  skillsItem: RegenerateItemInput | null;
+  additionalGroupItems: RegenerateItemInput[];
   selectedItems: RegenerateItemInput[];
   onSelectionChange: (items: RegenerateItemInput[]) => void;
   onContinue: () => void;
@@ -38,14 +38,14 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
   onOpenChange,
   experienceItems,
   projectItems,
-  skillsItem,
+  additionalGroupItems = [],
   selectedItems,
   onSelectionChange,
   onContinue,
 }) => {
   const { t } = useTranslations();
   const [expandedSections, setExpandedSections] = React.useState<Set<string>>(
-    new Set(['experience', 'projects', 'skills'])
+    new Set(['experience', 'projects', 'additional'])
   );
 
   const toggleSection = (section: string) => {
@@ -70,7 +70,8 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
     }
   };
 
-  const hasItems = experienceItems.length > 0 || projectItems.length > 0 || skillsItem !== null;
+  const hasItems =
+    experienceItems.length > 0 || projectItems.length > 0 || additionalGroupItems.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -167,34 +168,40 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
             </div>
           )}
 
-          {/* Skills Section */}
-          {skillsItem && (
+          {/* Additional Groups Section */}
+          {additionalGroupItems.length > 0 && (
             <div className="border border-black">
               <button
                 type="button"
-                onClick={() => toggleSection('skills')}
-                aria-expanded={expandedSections.has('skills')}
+                onClick={() => toggleSection('additional')}
+                aria-expanded={expandedSections.has('additional')}
                 className="w-full p-4 flex items-center justify-between bg-[#F0F0E8] hover:bg-[#E5E5E0] transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Lightbulb className="w-5 h-5" />
                   <span className="font-mono text-sm uppercase tracking-wider font-medium">
-                    {t('builder.regenerate.selectDialog.skills')}
+                    {t('builder.regenerate.selectDialog.additionalGroups')}
+                  </span>
+                  <span className="font-mono text-xs text-gray-500">
+                    ({additionalGroupItems.length})
                   </span>
                 </div>
-                {expandedSections.has('skills') ? (
+                {expandedSections.has('additional') ? (
                   <ChevronDown className="w-4 h-4" />
                 ) : (
                   <ChevronRight className="w-4 h-4" />
                 )}
               </button>
-              {expandedSections.has('skills') && (
+              {expandedSections.has('additional') && (
                 <div className="border-t border-black">
-                  <ItemRow
-                    item={skillsItem}
-                    isSelected={isSelected(skillsItem)}
-                    onToggle={() => toggleItem(skillsItem)}
-                  />
+                  {additionalGroupItems.map((item) => (
+                    <ItemRow
+                      key={item.item_id}
+                      item={item}
+                      isSelected={isSelected(item)}
+                      onToggle={() => toggleItem(item)}
+                    />
+                  ))}
                 </div>
               )}
             </div>

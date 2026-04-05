@@ -7,9 +7,13 @@ import re
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID
+from app.services.additional_groups import (
+    default_additional_groups,
+    normalize_additional_groups,
+)
 
 _TEXT_VALUE_KEYS = (
     "text",
@@ -186,24 +190,33 @@ class Project(BaseModel):
         return _coerce_string_list(value)
 
 
+class AdditionalGroup(BaseModel):
+    """Flexible label/value group inside the additional section."""
+
+    id: str = ""
+    label: str = ""
+    items: list[str] = Field(default_factory=list)
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def _normalize_label(cls, value: Any) -> str:
+        return _coerce_text(value)
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def _normalize_items(cls, value: Any) -> list[str]:
+        return _coerce_string_list(value)
+
+
 class AdditionalInfo(BaseModel):
     """Additional information section."""
 
-    technicalSkills: list[str] = Field(default_factory=list)
-    languages: list[str] = Field(default_factory=list)
-    certificationsTraining: list[str] = Field(default_factory=list)
-    awards: list[str] = Field(default_factory=list)
+    groups: list[AdditionalGroup] = Field(default_factory=default_additional_groups)
 
-    @field_validator(
-        "technicalSkills",
-        "languages",
-        "certificationsTraining",
-        "awards",
-        mode="before",
-    )
+    @model_validator(mode="before")
     @classmethod
-    def _normalize_string_fields(cls, value: Any) -> list[str]:
-        return _coerce_string_list(value)
+    def _normalize_groups(cls, value: Any) -> dict[str, Any]:
+        return normalize_additional_groups(value)
 
 
 # Section Metadata Models for dynamic section management
@@ -492,10 +505,10 @@ class ResumeFieldDiff(BaseModel):
 
     field_path: str  # Example: "workExperience[0].description[2]"
     field_type: Literal[
-        "skill",
+        "additional_item",
+        "additional_group",
         "description",
         "summary",
-        "certification",
         "experience",
         "education",
         "project",
@@ -510,10 +523,10 @@ class ResumeDiffSummary(BaseModel):
     """Change summary stats."""
 
     total_changes: int
-    skills_added: int
-    skills_removed: int
+    additional_items_added: int
+    additional_items_removed: int
+    additional_groups_modified: int
     descriptions_modified: int
-    certifications_added: int
     high_risk_changes: int  # High-risk additions
 
 
@@ -958,11 +971,11 @@ class ResumeChange(BaseModel):
     path: str = Field(
         description="Dot+bracket path, e.g. 'workExperience[0].description[1]'"
     )
-    action: Literal["replace", "append", "reorder"]
+    action: Literal["replace", "append", "reorder", "regroup"]
     original: str | None = Field(
         default=None, description="Current text at path — for verification"
     )
-    value: str | list[str] = Field(description="New content")
+    value: str | list[str] | list[dict[str, Any]] = Field(description="New content")
     reason: str = Field(description="Why this change helps match the JD")
 
 

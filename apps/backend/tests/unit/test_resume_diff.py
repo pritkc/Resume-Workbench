@@ -1,34 +1,50 @@
 from app.services.improver import calculate_resume_diff
 
 
-def test_skill_add_remove_case_insensitive() -> None:
-    original = {"additional": {"technicalSkills": ["Python", "React"]}}
-    improved = {"additional": {"technicalSkills": ["python", "Go"]}}
+def _additional(*groups: tuple[str, str, list[str]]) -> dict:
+    return {
+        "additional": {
+            "groups": [
+                {"id": group_id, "label": label, "items": items}
+                for group_id, label, items in groups
+            ]
+        }
+    }
+
+
+def test_additional_item_add_remove_case_insensitive() -> None:
+    original = _additional(("technicalSkills", "Technical Skills", ["Python", "React"]))
+    improved = _additional(("technicalSkills", "Technical Skills", ["python", "Go"]))
 
     summary, changes = calculate_resume_diff(original, improved)
 
-    added = [c for c in changes if c.field_type == "skill" and c.change_type == "added"]
+    added = [
+        c for c in changes if c.field_type == "additional_item" and c.change_type == "added"
+    ]
     removed = [
-        c for c in changes if c.field_type == "skill" and c.change_type == "removed"
+        c for c in changes if c.field_type == "additional_item" and c.change_type == "removed"
     ]
 
     assert [c.new_value for c in added] == ["Go"]
     assert [c.original_value for c in removed] == ["React"]
-    assert summary.skills_added == 1
-    assert summary.skills_removed == 1
+    assert summary.additional_items_added == 1
+    assert summary.additional_items_removed == 1
     assert summary.high_risk_changes == 1
 
 
-def test_skill_order_is_ignored() -> None:
-    original = {"additional": {"technicalSkills": ["Go", "Python"]}}
-    improved = {"additional": {"technicalSkills": ["Python", "Go"]}}
+def test_additional_group_relabel_counts_as_group_change() -> None:
+    original = _additional(("technicalSkills", "Technical Skills", ["Python", "Go"]))
+    improved = _additional(("technicalSkills", "Backend", ["Python", "Go"]))
 
     summary, changes = calculate_resume_diff(original, improved)
 
-    skill_changes = [c for c in changes if c.field_type == "skill"]
-    assert skill_changes == []
-    assert summary.skills_added == 0
-    assert summary.skills_removed == 0
+    group_changes = [
+        c for c in changes if c.field_type == "additional_group" and c.change_type == "modified"
+    ]
+    assert len(group_changes) == 1
+    assert summary.additional_items_added == 0
+    assert summary.additional_items_removed == 0
+    assert summary.additional_groups_modified == 1
 
 
 def test_description_modified_count_is_strict() -> None:
@@ -44,62 +60,43 @@ def test_description_modified_count_is_strict() -> None:
     assert summary.descriptions_modified == 1
 
 
-def test_handles_malformed_lists_gracefully() -> None:
+def test_handles_malformed_additional_lists_gracefully() -> None:
     original = {
-        "additional": {"technicalSkills": ["Python", {"name": "Go"}, None, 123]},
+        "additional": {
+            "groups": [
+                {
+                    "id": "technicalSkills",
+                    "label": "Technical Skills",
+                    "items": ["Python", {"name": "Go"}, None, 123],
+                }
+            ]
+        },
         "workExperience": [{"description": "Not a list"}],
     }
-    improved = {"additional": {"technicalSkills": ["Python"]}}
+    improved = _additional(("technicalSkills", "Technical Skills", ["Python"]))
 
     summary, changes = calculate_resume_diff(original, improved)
 
     removed = [
-        c for c in changes if c.field_type == "skill" and c.change_type == "removed"
+        c for c in changes if c.field_type == "additional_item" and c.change_type == "removed"
     ]
-    assert [c.original_value for c in removed] == ["Go"]
-    assert summary.skills_removed == 1
+    assert [c.original_value for c in removed] == ["Go", "123"]
+    assert summary.additional_items_removed == 2
 
 
-def test_high_risk_skill_addition() -> None:
-    original = {"additional": {"technicalSkills": []}}
-    improved = {"additional": {"technicalSkills": ["Rust"]}}
+def test_high_risk_additional_item_addition() -> None:
+    original = _additional(("technicalSkills", "Technical Skills", []))
+    improved = _additional(("technicalSkills", "Technical Skills", ["Rust"]))
 
     summary, changes = calculate_resume_diff(original, improved)
 
     assert summary.high_risk_changes == 1
     assert any(
-        c.change_type == "added" and c.field_type == "skill" and c.confidence == "high"
+        c.change_type == "added"
+        and c.field_type == "additional_item"
+        and c.confidence == "high"
         for c in changes
     )
-
-
-# --- Certification diffs ---
-
-
-def test_certification_added() -> None:
-    original = {"additional": {"certificationsTraining": ["AWS SAA"]}}
-    improved = {"additional": {"certificationsTraining": ["AWS SAA", "CKA"]}}
-
-    summary, changes = calculate_resume_diff(original, improved)
-
-    cert_added = [c for c in changes if c.field_type == "certification" and c.change_type == "added"]
-    assert len(cert_added) == 1
-    assert cert_added[0].new_value == "CKA"
-    assert summary.certifications_added == 1
-
-
-def test_certification_removed() -> None:
-    original = {"additional": {"certificationsTraining": ["AWS SAA", "CKA"]}}
-    improved = {"additional": {"certificationsTraining": ["AWS SAA"]}}
-
-    summary, changes = calculate_resume_diff(original, improved)
-
-    cert_removed = [c for c in changes if c.field_type == "certification" and c.change_type == "removed"]
-    assert len(cert_removed) == 1
-    assert cert_removed[0].original_value == "CKA"
-
-
-# --- Summary diffs ---
 
 
 def test_summary_modified() -> None:
@@ -145,9 +142,6 @@ def test_summary_unchanged() -> None:
     assert len(summary_changes) == 0
 
 
-# --- Entry-level add/remove/modify ---
-
-
 def test_experience_entry_added() -> None:
     original = {"workExperience": [{"title": "Dev", "company": "A", "years": "2020", "description": []}]}
     improved = {
@@ -174,23 +168,51 @@ def test_experience_entry_removed() -> None:
 
     summary, changes = calculate_resume_diff(original, improved)
 
-    exp_removed = [c for c in changes if c.field_type == "experience" and c.change_type == "removed"]
+    exp_removed = [
+        c for c in changes if c.field_type == "experience" and c.change_type == "removed"
+    ]
     assert len(exp_removed) == 1
 
 
 def test_experience_entry_modified() -> None:
-    original = {"workExperience": [{"title": "Dev", "company": "A", "location": "NY", "years": "2020", "description": []}]}
-    improved = {"workExperience": [{"title": "Dev", "company": "A", "location": "Remote", "years": "2020", "description": []}]}
+    original = {
+        "workExperience": [
+            {
+                "title": "Dev",
+                "company": "A",
+                "location": "NY",
+                "years": "2020",
+                "description": [],
+            }
+        ]
+    }
+    improved = {
+        "workExperience": [
+            {
+                "title": "Dev",
+                "company": "A",
+                "location": "Remote",
+                "years": "2020",
+                "description": [],
+            }
+        ]
+    }
 
     summary, changes = calculate_resume_diff(original, improved)
 
-    exp_modified = [c for c in changes if c.field_type == "experience" and c.change_type == "modified"]
+    exp_modified = [
+        c for c in changes if c.field_type == "experience" and c.change_type == "modified"
+    ]
     assert len(exp_modified) == 1
 
 
 def test_project_entry_added() -> None:
     original = {"personalProjects": []}
-    improved = {"personalProjects": [{"name": "Tool", "role": "Creator", "years": "2021", "description": []}]}
+    improved = {
+        "personalProjects": [
+            {"name": "Tool", "role": "Creator", "years": "2021", "description": []}
+        ]
+    }
 
     summary, changes = calculate_resume_diff(original, improved)
 
@@ -200,7 +222,9 @@ def test_project_entry_added() -> None:
 
 def test_education_entry_added() -> None:
     original = {"education": []}
-    improved = {"education": [{"institution": "MIT", "degree": "BS", "years": "2020", "description": None}]}
+    improved = {
+        "education": [{"institution": "MIT", "degree": "BS", "years": "2020", "description": None}]
+    }
 
     summary, changes = calculate_resume_diff(original, improved)
 
@@ -211,10 +235,26 @@ def test_education_entry_added() -> None:
 def test_no_changes_returns_empty() -> None:
     original = {
         "summary": "Same.",
-        "workExperience": [{"title": "Dev", "company": "A", "years": "2020", "description": ["Built stuff"]}],
-        "additional": {"technicalSkills": ["Python"], "certificationsTraining": []},
+        "workExperience": [
+            {"title": "Dev", "company": "A", "years": "2020", "description": ["Built stuff"]}
+        ],
+        "additional": {
+            "groups": [
+                {"id": "technicalSkills", "label": "Technical Skills", "items": ["Python"]}
+            ]
+        },
     }
-    improved = original.copy()
+    improved = {
+        "summary": "Same.",
+        "workExperience": [
+            {"title": "Dev", "company": "A", "years": "2020", "description": ["Built stuff"]}
+        ],
+        "additional": {
+            "groups": [
+                {"id": "technicalSkills", "label": "Technical Skills", "items": ["Python"]}
+            ]
+        },
+    }
 
     summary, changes = calculate_resume_diff(original, improved)
 

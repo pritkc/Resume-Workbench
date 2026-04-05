@@ -63,10 +63,28 @@ RESUME_SCHEMA_EXAMPLE = """{
     }
   ],
   "additional": {
-    "technicalSkills": ["Python", "JavaScript", "AWS", "Docker"],
-    "languages": ["English (Native)", "Spanish (Conversational)"],
-    "certificationsTraining": ["AWS Solutions Architect"],
-    "awards": ["Employee of the Year 2022"]
+    "groups": [
+      {
+        "id": "technicalSkills",
+        "label": "Technical Skills",
+        "items": ["Python", "JavaScript", "AWS", "Docker"]
+      },
+      {
+        "id": "languages",
+        "label": "Languages",
+        "items": ["English (Native)", "Spanish (Conversational)"]
+      },
+      {
+        "id": "certificationsTraining",
+        "label": "Training & Certifications",
+        "items": ["AWS Solutions Architect"]
+      },
+      {
+        "id": "awards",
+        "label": "Awards",
+        "items": ["Employee of the Year 2022"]
+      }
+    ]
   },
   "customSections": {
     "publications": {
@@ -126,10 +144,28 @@ IMPROVE_SCHEMA_EXAMPLE = """{
     }
   ],
   "additional": {
-    "technicalSkills": ["Python", "JavaScript", "AWS", "Docker"],
-    "languages": ["English (Native)", "Spanish (Conversational)"],
-    "certificationsTraining": ["AWS Solutions Architect"],
-    "awards": ["Employee of the Year 2022"]
+    "groups": [
+      {
+        "id": "technicalSkills",
+        "label": "Technical Skills",
+        "items": ["Python", "JavaScript", "AWS", "Docker"]
+      },
+      {
+        "id": "languages",
+        "label": "Languages",
+        "items": ["English (Native)", "Spanish (Conversational)"]
+      },
+      {
+        "id": "certificationsTraining",
+        "label": "Training & Certifications",
+        "items": ["AWS Solutions Architect"]
+      },
+      {
+        "id": "awards",
+        "label": "Awards",
+        "items": ["Employee of the Year 2022"]
+      }
+    ]
   },
   "customSections": {
     "publications": {
@@ -166,6 +202,7 @@ Custom section types:
 Rules:
 - Use "" for missing text fields, [] for missing arrays, null for optional fields
 - Number IDs starting from 1
+- For `additional.groups`, use the most natural category labels you find in the resume (for example: Backend, ML, Infra, Languages, Certifications)
 - Format dates preserving the original precision. Keep months when present: "Jan 2020 - Dec 2023", "May 2021 - Present". Use "YYYY - YYYY" only when the source has no months.
 - Use snake_case for custom section keys (e.g., "volunteer_work", "publications")
 - Preserve the original section name as a descriptive key
@@ -204,7 +241,7 @@ CRITICAL_TRUTHFULNESS_RULES_TEMPLATE = """CRITICAL TRUTHFULNESS RULES - NEVER VI
 6. DO NOT extend employment dates or change timelines. Copy date ranges exactly as they appear, including months.
 7. {rule_7}
 8. Preserve factual accuracy - only use information provided by the candidate
-9. NEVER remove existing skills, certifications, languages, or awards. You may reorder by relevance, but every original item must remain.
+9. NEVER remove existing additional-group items. You may regroup or relabel them by relevance, but every original item must remain.
 
 Violation of these rules could cause serious problems for the candidate in job interviews.
 """
@@ -241,6 +278,7 @@ Rules:
 - Preserve original bullet count and ordering within each section
 - Keep proper nouns (names, company names, locations) unchanged
 - For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
+- For additional.groups: preserve every original item. You may relabel, reorder, or regroup items into clearer categories, but do NOT invent or drop values.
 - Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
 - If the resume is non-technical, do NOT add technical jargon
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
@@ -270,6 +308,7 @@ Rules:
 - Do NOT introduce new skills, tools, or certifications not in the resume
 - Do NOT change role, industry, or seniority level
 - For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
+- For additional.groups: preserve every original item. You may relabel, reorder, or regroup items into clearer categories, but do NOT invent or drop values.
 - Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
 - If resume is non-technical, keep language non-technical while still aligning keywords
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
@@ -300,6 +339,7 @@ Rules:
 - Keep proper nouns (names, company names, locations) unchanged
 - Translate job titles, descriptions, and skills to {output_language}
 - For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
+- For additional.groups: preserve every original item. You may relabel, reorder, or regroup items into clearer categories, but do NOT invent or drop values.
 - Improve custom section content the same way as standard sections
 - Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
 - Calculate and emphasize total relevant experience duration when it matches requirements
@@ -431,6 +471,7 @@ RULES:
 7. Generate all new text in {output_language}
 8. Do not use em dash characters
 9. Keep changes minimal and targeted — do not rewrite content that already aligns well
+10. If you use "additional.groups", preserve the exact same item set while regrouping/relabeling
 
 PATHS you can target:
 - "summary" — the resume summary text
@@ -438,7 +479,7 @@ PATHS you can target:
 - "workExperience[i].description" — append a new bullet (action: "append")
 - "personalProjects[i].description[j]" — a specific project bullet
 - "personalProjects[i].description" — append a new project bullet
-- "additional.technicalSkills" — reorder the skills list (action: "reorder")
+- "additional.groups" — regroup, relabel, or reorder additional label/value groups (action: "regroup")
 
 Do NOT target: personalInfo, dates/years, company names, education, customSections.
 
@@ -469,11 +510,22 @@ Output this exact JSON format, nothing else:
       "reason": "why this change helps"
     }},
     {{
-      "path": "additional.technicalSkills",
-      "action": "reorder",
+      "path": "additional.groups",
+      "action": "regroup",
       "original": null,
-      "value": ["most relevant skill first", "then next", "..."],
-      "reason": "reordered to prioritize JD-relevant skills"
+      "value": [
+        {{
+          "id": "backend",
+          "label": "Backend",
+          "items": ["Python", "FastAPI", "PostgreSQL"]
+        }},
+        {{
+          "id": "infra",
+          "label": "Infra",
+          "items": ["AWS", "Docker"]
+        }}
+      ],
+      "reason": "regrouped the same items into clearer JD-aligned categories"
     }}
   ],
   "strategy_notes": "brief summary of the tailoring approach"

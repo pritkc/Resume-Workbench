@@ -1,6 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import type {
+  AdditionalGroup,
+  AdditionalInfo as ResumeAdditionalInfo,
+} from '@/components/dashboard/resume-component';
 import type { ArtifactSummary, RenderThemeSettings } from '@/lib/types/render-theme';
 
 export interface PersonalInfo {
@@ -39,29 +43,26 @@ export interface ProjectEntry {
   description: string[];
 }
 
-export interface AdditionalInfo {
-  technicalSkills: string[];
-  languages: string[];
-  certificationsTraining: string[];
-  awards: string[];
+export interface AdditionalInfo extends ResumeAdditionalInfo {
+  groups?: AdditionalGroup[];
 }
 
 export interface ResumeDiffSummary {
   total_changes: number;
-  skills_added: number;
-  skills_removed: number;
+  additional_items_added: number;
+  additional_items_removed: number;
+  additional_groups_modified: number;
   descriptions_modified: number;
-  certifications_added: number;
   high_risk_changes: number;
 }
 
 export interface ResumeFieldDiff {
   field_path: string;
   field_type:
-    | 'skill'
+    | 'additional_item'
+    | 'additional_group'
     | 'description'
     | 'summary'
-    | 'certification'
     | 'experience'
     | 'education'
     | 'project';

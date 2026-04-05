@@ -172,24 +172,30 @@ RULES:
 - Use past tense for past roles, present tense for current"""
 
 
-REGENERATE_SKILLS_PROMPT = """You are a professional resume writer. Rewrite the technical skills section based on user feedback.
+REGENERATE_ADDITIONAL_GROUP_PROMPT = """You are a professional resume writer. Rewrite this resume label/value group based on user feedback.
 
 IMPORTANT: Generate ALL output text in {output_language}.
 
-CURRENT SKILLS:
-{current_skills}
+GROUP LABEL:
+{group_label}
+
+CURRENT VALUES:
+{current_values}
 
 USER'S FEEDBACK:
 {user_instruction}
 
 OUTPUT FORMAT (JSON only):
 {{
-  "new_skills": ["Skill 1", "Skill 2", "Skill 3"],
+  "group_label": "Updated label if appropriate",
+  "new_values": ["Value 1", "Value 2", "Value 3"],
   "change_summary": "Brief explanation"
 }}
 
 RULES:
-- Keep skills concise and industry-standard
-- Group similar technologies if appropriate
-- Prioritize most relevant skills based on feedback
-- Only include skills that already exist in CURRENT SKILLS or are explicitly provided in USER'S FEEDBACK"""
+- Keep values concise and resume-friendly
+- You may rename the label if the feedback asks for clearer grouping
+- Prioritize the most relevant ordering based on feedback
+- Only include values that already exist in CURRENT VALUES or are explicitly provided in USER'S FEEDBACK
+- Do not invent new resume facts or certifications
+- Preserve the same overall item set unless the user explicitly asks to remove or regroup items"""

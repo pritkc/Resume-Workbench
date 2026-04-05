@@ -127,6 +127,16 @@
     },
     "additionalForm": {
       "instructions": "Insira os itens separados por novas linhas (pressione Enter para cada item).",
+      "groupLabel": "Rótulo",
+      "groupLabelPlaceholder": "ex.: Backend, ML, Infraestrutura",
+      "groupValues": "Valores",
+      "groupValuesPlaceholder": "Insira um valor por linha",
+      "addGroup": "Adicionar Grupo",
+      "removeGroup": "Remover Grupo",
+      "moveUp": "Mover grupo para cima",
+      "moveDown": "Mover grupo para baixo",
+      "emptyState": "Ainda não há grupos. Adicione um para organizar esta seção.",
+      "newGroupLabel": "Novo Rótulo",
       "placeholders": {
         "technicalSkills": "React\nTypeScript\nNode.js",
         "languages": "Inglês\nEspanhol",
@@ -207,9 +217,10 @@
         "subtitle": "Escolha quais partes do seu currículo você quer melhorar",
         "experience": "Experiência profissional",
         "projects": "Projetos",
+        "additionalGroups": "Grupos Adicionais",
         "skills": "Habilidades técnicas",
         "noItemsSelected": "Selecione pelo menos um item",
-        "noItemsAvailable": "Não há itens disponíveis para regenerar. Adicione experiência, projetos ou habilidades primeiro.",
+        "noItemsAvailable": "Não há itens disponíveis para regenerar. Adicione experiência, projetos ou grupos adicionais primeiro.",
         "itemCount": {
           "one": "{count} item",
           "other": "{count} itens"
@@ -532,20 +543,20 @@
       "title": "Revisar resultados da personalização com IA",
       "subtitle": "Revise cuidadosamente as alterações para garantir que nenhuma informação falsa tenha sido adicionada",
       "summary": "Resumo das alterações",
-      "skillsAdded": "Habilidades adicionadas",
-      "skillsRemoved": "Habilidades removidas",
+      "additionalItemsAdded": "Itens adicionais adicionados",
+      "additionalItemsRemoved": "Itens adicionais removidos",
       "descriptionsModified": "Descrições modificadas",
-      "certificationsAdded": "Certificações adicionadas",
+      "additionalGroupsModified": "Grupos adicionais modificados",
       "highRiskChanges": "Alterações de alto risco",
       "warningTitle": "Detectadas {count} adições de alto risco",
       "warningMessage": "Confirme que estas adições existem no seu currículo original ou estão refletidas nas descrições",
       "summaryChanges": "Alterações do resumo",
-      "skillChanges": "Alterações de habilidades",
+      "additionalItemChanges": "Alterações em itens adicionais",
+      "additionalGroupChanges": "Alterações em grupos adicionais",
       "descriptionChanges": "Alterações nas descrições de experiência",
       "experienceChanges": "Alterações de experiência",
       "educationChanges": "Alterações de educação",
       "projectChanges": "Alterações de projetos",
-      "certificationChanges": "Alterações de certificações",
       "rejectButton": "Rejeitar e regenerar",
       "confirmButton": "Confirmar e salvar"
     },
@@ -757,6 +768,12 @@
     },
     "additional": {
       "technicalSkills": "Habilidades Técnicas"
+    },
+    "additionalDefaults": {
+      "technicalSkills": "Habilidades Técnicas",
+      "languages": "Idiomas",
+      "certificationsTraining": "Treinamentos e Certificações",
+      "awards": "Prêmios"
     },
     "additionalLabels": {
       "technicalSkills": "Habilidades Técnicas:",

@@ -105,32 +105,66 @@ class TestApplyDiffsAppend:
         assert len(result["personalProjects"][0]["description"]) == original_count + 1
 
 
-class TestApplyDiffsReorder:
-    """Tests for the 'reorder' action."""
+class TestApplyDiffsRegroup:
+    """Tests for the 'regroup' action."""
 
-    def test_reorder_skills(self, sample_resume):
+    def test_regroup_additional_groups(self, sample_resume):
         original_skills = sample_resume["additional"]["technicalSkills"]
-        reordered = list(reversed(original_skills))
+        regrouped = [
+            {
+                "id": "backend",
+                "label": "Backend",
+                "items": list(reversed(original_skills[:3])),
+            },
+            {
+                "id": "platform",
+                "label": "Platform",
+                "items": original_skills[3:],
+            },
+            {
+                "id": "languages",
+                "label": "Languages",
+                "items": sample_resume["additional"]["languages"],
+            },
+            {
+                "id": "certificationsTraining",
+                "label": "Training & Certifications",
+                "items": sample_resume["additional"]["certificationsTraining"],
+            },
+            {
+                "id": "awards",
+                "label": "Awards",
+                "items": sample_resume["additional"]["awards"],
+            },
+        ]
         changes = [
             ResumeChange(
-                path="additional.technicalSkills",
-                action="reorder",
+                path="additional.groups",
+                action="regroup",
                 original=None,
-                value=reordered,
-                reason="Prioritized relevant skills",
+                value=regrouped,
+                reason="Split skills into clearer categories",
             )
         ]
         result, applied, rejected = apply_diffs(sample_resume, changes)
         assert len(applied) == 1
-        assert result["additional"]["technicalSkills"] == reordered
+        assert len(rejected) == 0
+        assert result["additional"]["groups"][0]["label"] == "Backend"
+        assert result["additional"]["groups"][0]["items"] == list(reversed(original_skills[:3]))
 
-    def test_reorder_rejects_different_items(self, sample_resume):
+    def test_regroup_rejects_different_items(self, sample_resume):
         changes = [
             ResumeChange(
-                path="additional.technicalSkills",
-                action="reorder",
+                path="additional.groups",
+                action="regroup",
                 original=None,
-                value=["Python", "Kubernetes", "Go"],  # Different items
+                value=[
+                    {
+                        "id": "technicalSkills",
+                        "label": "Technical Skills",
+                        "items": ["Python", "Kubernetes", "Go"],
+                    }
+                ],
                 reason="test",
             )
         ]
@@ -138,15 +172,35 @@ class TestApplyDiffsReorder:
         assert len(applied) == 0
         assert len(rejected) == 1
 
-    def test_reorder_case_insensitive_matching(self, sample_resume):
+    def test_regroup_case_insensitive_matching(self, sample_resume):
         original_skills = sample_resume["additional"]["technicalSkills"]
-        reordered = [s.lower() for s in reversed(original_skills)]
         changes = [
             ResumeChange(
-                path="additional.technicalSkills",
-                action="reorder",
+                path="additional.groups",
+                action="regroup",
                 original=None,
-                value=reordered,
+                value=[
+                    {
+                        "id": "technicalSkills",
+                        "label": "Technical Skills",
+                        "items": [skill.lower() for skill in reversed(original_skills)],
+                    },
+                    {
+                        "id": "languages",
+                        "label": "Languages",
+                        "items": [item.lower() for item in sample_resume["additional"]["languages"]],
+                    },
+                    {
+                        "id": "certificationsTraining",
+                        "label": "Training & Certifications",
+                        "items": sample_resume["additional"]["certificationsTraining"],
+                    },
+                    {
+                        "id": "awards",
+                        "label": "Awards",
+                        "items": sample_resume["additional"]["awards"],
+                    },
+                ],
                 reason="test",
             )
         ]
@@ -356,7 +410,9 @@ class TestApplyDiffsIntegrity:
         result, applied, rejected = apply_diffs(sample_resume, [])
         assert len(applied) == 0
         assert len(rejected) == 0
-        assert result == sample_resume
+        assert result["summary"] == sample_resume["summary"]
+        assert result["additional"]["groups"][0]["id"] == "technicalSkills"
+        assert result["additional"]["groups"][0]["items"] == sample_resume["additional"]["technicalSkills"]
 
     def test_all_changes_applied(self, sample_resume, sample_changes):
         result, applied, rejected = apply_diffs(sample_resume, sample_changes)
@@ -397,11 +453,11 @@ class TestApplyDiffsEdgeCases:
         assert len(rejected) == 1
 
     def test_reorder_with_non_list_value_rejected(self, sample_resume):
-        """Reorder where value is a string instead of list should be rejected."""
+        """Regroup where value is a string instead of list should be rejected."""
         changes = [
             ResumeChange(
-                path="additional.technicalSkills",
-                action="reorder",
+                path="additional.groups",
+                action="regroup",
                 original=None,
                 value="Python, Docker",  # type: ignore[arg-type]
                 reason="test",
@@ -411,13 +467,25 @@ class TestApplyDiffsEdgeCases:
         assert len(rejected) == 1
 
     def test_reorder_with_duplicates_rejected(self, sample_resume):
-        """Reorder that adds duplicates not in original should be rejected."""
+        """Regroup that changes the flattened item set should be rejected."""
         changes = [
             ResumeChange(
-                path="additional.technicalSkills",
-                action="reorder",
+                path="additional.groups",
+                action="regroup",
                 original=None,
-                value=["Python", "Python", "Docker", "AWS", "PostgreSQL"],  # Python duplicated, Redis missing
+                value=[
+                    {
+                        "id": "technicalSkills",
+                        "label": "Technical Skills",
+                        "items": [
+                            "Python",
+                            "Python",
+                            "Docker",
+                            "AWS",
+                            "PostgreSQL",
+                        ],
+                    }
+                ],
                 reason="test",
             )
         ]

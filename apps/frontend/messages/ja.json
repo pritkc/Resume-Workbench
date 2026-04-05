@@ -127,6 +127,16 @@
     },
     "additionalForm": {
       "instructions": "各項目を改行で区切って入力してください（1行につき1項目）。",
+      "groupLabel": "ラベル",
+      "groupLabelPlaceholder": "例: Backend、ML、Infrastructure",
+      "groupValues": "値",
+      "groupValuesPlaceholder": "1行に1つずつ入力",
+      "addGroup": "ラベルグループを追加",
+      "removeGroup": "ラベルグループを削除",
+      "moveUp": "グループを上へ移動",
+      "moveDown": "グループを下へ移動",
+      "emptyState": "まだラベルグループがありません。追加してこのセクションを整理しましょう。",
+      "newGroupLabel": "新しいラベル",
       "placeholders": {
         "technicalSkills": "React\nTypeScript\nNode.js",
         "languages": "日本語\n英語",
@@ -207,9 +217,10 @@
         "subtitle": "改善したい履歴書の部分を選択してください",
         "experience": "職務経験",
         "projects": "プロジェクト",
+        "additionalGroups": "追加グループ",
         "skills": "技術スキル",
         "noItemsSelected": "少なくとも1つ選択してください",
-        "noItemsAvailable": "再生成できる項目がありません。まず職務経験、プロジェクト、またはスキルを追加してください。",
+        "noItemsAvailable": "再生成できる項目がありません。まず職務経験、プロジェクト、または追加グループを追加してください。",
         "itemCount": {
           "one": "{count}件",
           "other": "{count}件"
@@ -532,20 +543,20 @@
       "title": "AI調整結果の確認",
       "subtitle": "虚偽の情報が追加されていないか、変更内容を慎重に確認してください",
       "summary": "変更の概要",
-      "skillsAdded": "追加されたスキル",
-      "skillsRemoved": "削除されたスキル",
+      "additionalItemsAdded": "追加された追加項目",
+      "additionalItemsRemoved": "削除された追加項目",
       "descriptionsModified": "変更された説明",
-      "certificationsAdded": "追加された資格",
+      "additionalGroupsModified": "変更された追加グループ",
       "highRiskChanges": "高リスクの変更",
       "warningTitle": "高リスクな追加が {count} 件検出されました",
       "warningMessage": "これらのスキルが元の履歴書に実際に存在する、または説明内に反映されていることを確認してください",
       "summaryChanges": "概要の変更",
-      "skillChanges": "スキルの変更",
+      "additionalItemChanges": "追加項目の変更",
+      "additionalGroupChanges": "追加グループの変更",
       "descriptionChanges": "職歴説明の変更",
       "experienceChanges": "職歴の変更",
       "educationChanges": "学歴の変更",
       "projectChanges": "プロジェクトの変更",
-      "certificationChanges": "資格の変更",
       "rejectButton": "拒否して再生成",
       "confirmButton": "確認して保存"
     },
@@ -757,6 +768,12 @@
     },
     "additional": {
       "technicalSkills": "技術スキル"
+    },
+    "additionalDefaults": {
+      "technicalSkills": "技術スキル",
+      "languages": "言語",
+      "certificationsTraining": "研修・資格",
+      "awards": "受賞歴"
     },
     "additionalLabels": {
       "technicalSkills": "技術スキル：",

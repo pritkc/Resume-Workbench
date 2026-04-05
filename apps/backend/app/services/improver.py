@@ -21,6 +21,12 @@ from app.prompts import (
 from app.prompts.templates import IMPROVE_SCHEMA_EXAMPLE
 from app.schemas import ResumeData, ResumeFieldDiff, ResumeDiffSummary
 from app.schemas.models import ImproveDiffResult, ResumeChange
+from app.services.additional_groups import (
+    additional_items_match,
+    extract_additional_groups,
+    flatten_additional_items,
+    normalize_additional_groups,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +86,7 @@ _ALLOWED_PATH_PATTERNS = [
     re.compile(r"^summary$"),
     re.compile(r"^workExperience\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^personalProjects\[\d+\]\.description(\[\d+\])?$"),
-    re.compile(r"^additional\.technicalSkills$"),
+    re.compile(r"^additional\.groups$"),
 ]
 
 # Blocked path prefixes — always rejected
@@ -232,6 +238,11 @@ def apply_diffs(
         (result_dict, applied_changes, rejected_changes)
     """
     result = copy.deepcopy(original)
+    if isinstance(result.get("additional"), dict):
+        result["additional"] = normalize_additional_groups(
+            result.get("additional"),
+            seed_defaults_if_empty=False,
+        )
     applied: list[ResumeChange] = []
     rejected: list[ResumeChange] = []
 
@@ -316,6 +327,29 @@ def apply_diffs(
                     originals = casefold_to_originals.get(item.casefold(), [])
                     reordered.append(originals.pop(0) if originals else item)
             if not _set_at_path(result, path, reordered):
+                rejected.append(change)
+                continue
+            applied.append(change)
+
+        elif action == "regroup":
+            if path != "additional.groups":
+                logger.info("Diff rejected (regroup path unsupported): %s", path)
+                rejected.append(change)
+                continue
+            if not isinstance(actual_value, list) or not isinstance(change.value, list):
+                rejected.append(change)
+                continue
+
+            regrouped = normalize_additional_groups(
+                {"groups": change.value},
+                seed_defaults_if_empty=False,
+            )
+            if not additional_items_match({"groups": actual_value}, regrouped):
+                logger.info("Diff rejected (regroup items mismatch): %s", path)
+                rejected.append(change)
+                continue
+
+            if not _set_at_path(result, path, regrouped.get("groups", [])):
                 rejected.append(change)
                 continue
             applied.append(change)
@@ -834,6 +868,27 @@ def _build_string_index(value: Any, field_name: str) -> dict[str, str]:
     return index
 
 
+def _build_additional_item_index(value: Any) -> dict[str, tuple[str, str]]:
+    """Map case-folded additional items to `(original_value, group_id)`."""
+    index: dict[str, tuple[str, str]] = {}
+    for group in extract_additional_groups(value):
+        group_id = str(group.get("id", "")).strip()
+        for item in _normalize_string_list(group.get("items", []), f"additional.groups[{group_id}]"):
+            key = item.casefold()
+            if key not in index:
+                index[key] = (item, group_id)
+    return index
+
+
+def _format_additional_groups(value: Any) -> str:
+    parts: list[str] = []
+    for group in extract_additional_groups(value):
+        label = str(group.get("label") or group.get("id") or "Additional").strip()
+        items = _normalize_string_list(group.get("items", []), f"{label}.items")
+        parts.append(f"{label}: {', '.join(items)}" if items else label)
+    return " | ".join(parts)
+
+
 def _extract_description_list(entry: Any) -> list[str]:
     if not isinstance(entry, dict):
         return []
@@ -954,34 +1009,49 @@ def calculate_resume_diff(
             )
         )
 
-    # 2. Compare skills (order changes are intentionally ignored)
-    orig_skills = _build_string_index(
-        original.get("additional", {}).get("technicalSkills", []),
-        "additional.technicalSkills",
-    )
-    new_skills = _build_string_index(
-        improved.get("additional", {}).get("technicalSkills", []),
-        "additional.technicalSkills",
-    )
-    orig_skill_keys = set(orig_skills)
-    new_skill_keys = set(new_skills)
-    for skill_key in new_skill_keys - orig_skill_keys:
-        changes.append(ResumeFieldDiff(
-            field_path="additional.technicalSkills",
-            field_type="skill",
-            change_type="added",
-            new_value=new_skills[skill_key],
-            confidence="high"  # Newly added skills are high risk
-        ))
+    # 2. Compare flexible additional groups
+    orig_additional_items = _build_additional_item_index(original.get("additional"))
+    new_additional_items = _build_additional_item_index(improved.get("additional"))
+    orig_additional_keys = set(orig_additional_items)
+    new_additional_keys = set(new_additional_items)
 
-    for skill_key in orig_skill_keys - new_skill_keys:
-        changes.append(ResumeFieldDiff(
-            field_path="additional.technicalSkills",
-            field_type="skill",
-            change_type="removed",
-            original_value=orig_skills[skill_key],
-            confidence="medium"
-        ))
+    for item_key in new_additional_keys - orig_additional_keys:
+        item_value, group_id = new_additional_items[item_key]
+        changes.append(
+            ResumeFieldDiff(
+                field_path=f"additional.groups[{group_id}].items",
+                field_type="additional_item",
+                change_type="added",
+                new_value=item_value,
+                confidence="high",
+            )
+        )
+
+    for item_key in orig_additional_keys - new_additional_keys:
+        item_value, group_id = orig_additional_items[item_key]
+        changes.append(
+            ResumeFieldDiff(
+                field_path=f"additional.groups[{group_id}].items",
+                field_type="additional_item",
+                change_type="removed",
+                original_value=item_value,
+                confidence="medium",
+            )
+        )
+
+    if _format_additional_groups(original.get("additional")) != _format_additional_groups(
+        improved.get("additional")
+    ):
+        changes.append(
+            ResumeFieldDiff(
+                field_path="additional.groups",
+                field_type="additional_group",
+                change_type="modified",
+                original_value=_format_additional_groups(original.get("additional")) or None,
+                new_value=_format_additional_groups(improved.get("additional")) or None,
+                confidence="medium",
+            )
+        )
 
     # 3. Compare work experience descriptions
     original_experiences = original.get("workExperience", [])
@@ -1006,36 +1076,7 @@ def calculate_resume_diff(
             confidences=confidences,
         )
 
-    # 4. Compare certifications (order changes are intentionally ignored)
-    orig_certs = _build_string_index(
-        original.get("additional", {}).get("certificationsTraining", []),
-        "additional.certificationsTraining",
-    )
-    new_certs = _build_string_index(
-        improved.get("additional", {}).get("certificationsTraining", []),
-        "additional.certificationsTraining",
-    )
-    orig_cert_keys = set(orig_certs)
-    new_cert_keys = set(new_certs)
-    for cert_key in new_cert_keys - orig_cert_keys:
-        changes.append(ResumeFieldDiff(
-            field_path="additional.certificationsTraining",
-            field_type="certification",
-            change_type="added",
-            new_value=new_certs[cert_key],
-            confidence="high"
-        ))
-
-    for cert_key in orig_cert_keys - new_cert_keys:
-        changes.append(ResumeFieldDiff(
-            field_path="additional.certificationsTraining",
-            field_type="certification",
-            change_type="removed",
-            original_value=orig_certs[cert_key],
-            confidence="medium"
-        ))
-
-    # 5. Compare added/removed/modified entries
+    # 4. Compare added/removed/modified entries
     # Descriptions are diffed separately; ignore them when detecting entry-level changes.
     _append_entry_changes(
         changes,
@@ -1063,11 +1104,30 @@ def calculate_resume_diff(
         _format_project_entry,
     )
 
-    # 6. Build summary
+    # 5. Build summary
     summary = ResumeDiffSummary(
         total_changes=len(changes),
-        skills_added=len([c for c in changes if c.field_type == "skill" and c.change_type == "added"]),
-        skills_removed=len([c for c in changes if c.field_type == "skill" and c.change_type == "removed"]),
+        additional_items_added=len(
+            [
+                c
+                for c in changes
+                if c.field_type == "additional_item" and c.change_type == "added"
+            ]
+        ),
+        additional_items_removed=len(
+            [
+                c
+                for c in changes
+                if c.field_type == "additional_item" and c.change_type == "removed"
+            ]
+        ),
+        additional_groups_modified=len(
+            [
+                c
+                for c in changes
+                if c.field_type == "additional_group" and c.change_type == "modified"
+            ]
+        ),
         descriptions_modified=len(
             [
                 c
@@ -1075,7 +1135,6 @@ def calculate_resume_diff(
                 if c.field_type == "description" and c.change_type == "modified"
             ]
         ),
-        certifications_added=len([c for c in changes if c.field_type == "certification" and c.change_type == "added"]),
         high_risk_changes=len([c for c in changes if c.confidence == "high"])
     )
 
