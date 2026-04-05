@@ -11,6 +11,7 @@ import yaml
 
 from app.services.additional_groups import (
     DEFAULT_ADDITIONAL_GROUP_LABELS_BY_ID,
+    coerce_string_list,
     default_additional_info,
     extract_additional_groups,
     generate_additional_group_id,
@@ -374,6 +375,26 @@ def _split_csv(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _skill_entry_items(entry: dict[str, Any]) -> list[str]:
+    details = entry.get("details")
+    if isinstance(details, str):
+        parsed = _split_csv(_clean_text(details))
+        if parsed:
+            return parsed
+    elif details is not None:
+        parsed = coerce_string_list(details)
+        if parsed:
+            return parsed
+
+    items = entry.get("items")
+    if items is not None:
+        parsed = coerce_string_list(items)
+        if parsed:
+            return parsed
+
+    return []
+
+
 def _parse_markdown_link(value: str | None) -> tuple[str | None, str | None]:
     cleaned = _clean_text(value)
     if not cleaned:
@@ -562,7 +583,11 @@ def rendercv_cv_to_resume_data(
 
     for entry in skills_entries:
         if isinstance(entry, str):
-            group_id = "technicalSkills" if "technicalSkills" not in existing_group_ids else generate_additional_group_id(existing_group_ids, "Technical Skills")
+            group_id = (
+                "technicalSkills"
+                if "technicalSkills" not in existing_group_ids
+                else generate_additional_group_id(existing_group_ids, "Technical Skills")
+            )
             existing_group_ids.add(group_id)
             additional_groups.append(
                 {
@@ -577,9 +602,7 @@ def rendercv_cv_to_resume_data(
             continue
 
         label = _clean_text(str(entry.get("label") or entry.get("title") or "")) or "Additional"
-        details = _split_csv(_clean_text(entry.get("details")) or "")
-        if not details:
-            details = _text_list(entry.get("items"))
+        details = _skill_entry_items(entry)
 
         default_group_id = _group_id_from_label(label)
         if default_group_id and default_group_id not in existing_group_ids:
@@ -591,11 +614,7 @@ def rendercv_cv_to_resume_data(
         additional_groups.append(
             {
                 "id": group_id,
-                "label": (
-                    _default_group_label_for_id(group_id, base_resume_data)
-                    if group_id in DEFAULT_ADDITIONAL_GROUP_LABELS_BY_ID and default_group_id
-                    else label
-                ),
+                "label": label,
                 "items": details,
             }
         )

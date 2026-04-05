@@ -143,7 +143,7 @@ export function normalizeAdditionalGroups(
       const rawGroup = group as Partial<AdditionalGroup>;
       return {
         id: typeof rawGroup.id === 'string' ? rawGroup.id.trim() : '',
-        label: typeof rawGroup.label === 'string' ? rawGroup.label.trim() : '',
+        label: typeof rawGroup.label === 'string' ? rawGroup.label : '',
         items: toStringList(rawGroup.items),
       };
     }) ?? buildLegacyGroups(additional);
@@ -232,11 +232,12 @@ export function getDefaultAdditionalGroupLabel(
 }
 
 export function getAdditionalGroupDisplayLabel(group: AdditionalGroup, t?: Translator): string {
-  const rawLabel = group.label?.trim() || '';
+  const rawLabel = typeof group.label === 'string' ? group.label : '';
+  const normalizedRawLabel = rawLabel.trim();
   const defaultLabel = getDefaultAdditionalGroupLabel(group.id, t);
   const defaultEnglish = isDefaultGroupId(group.id) ? DEFAULT_LABEL_BY_ID[group.id] : undefined;
 
-  if (!rawLabel) {
+  if (!normalizedRawLabel) {
     return defaultLabel || prettifyGroupLabel(group.id);
   }
 

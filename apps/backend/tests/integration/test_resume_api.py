@@ -272,6 +272,43 @@ class TestDraftResumeFlows:
         assert payload["yaml_sections"]["cv"].startswith("cv:")
         assert payload["yaml_sections"]["design"].startswith("design:")
 
+    @patch("app.routers.resumes.db")
+    async def test_normalize_resume_draft_preserves_custom_additional_group_labels_from_yaml(
+        self, mock_db, client, mock_resume_record
+    ):
+        mock_db.get_resume.return_value = mock_resume_record
+
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/draft/normalize",
+                json={
+                    "resume_id": "res-123",
+                    "yaml_sections": {
+                        "cv": (
+                            "cv:\n"
+                            "  name: Jane Doe\n"
+                            "  sections:\n"
+                            "    skills:\n"
+                            "      - label: Languages & Frameworks\n"
+                            "        details:\n"
+                            "          - English\n"
+                            "          - Python\n"
+                        ),
+                        "design": "design:\n  theme: classic\n",
+                        "locale": "locale:\n  language: english\n",
+                        "settings": "settings:\n  current_date: today\n",
+                    },
+                },
+            )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        groups = payload["data"]["processed_resume"]["additional"]["groups"]
+        languages_group = next(group for group in groups if group["id"] == "languages")
+        assert languages_group["label"] == "Languages & Frameworks"
+        assert languages_group["items"] == ["English", "Python"]
+        assert "Languages & Frameworks" in payload["yaml_sections"]["cv"]
+
     @patch("app.routers.resumes.store_rendercv_bundle")
     @patch("app.routers.resumes.render_resume_bundle")
     async def test_render_resume_draft_preview_accepts_yaml_sections(

@@ -47,6 +47,61 @@ def test_rendercv_yaml_sections_round_trip_to_resume_and_theme(sample_resume: di
     assert parsed_theme.theme_id == "engineeringresumes"
 
 
+def test_rendercv_yaml_sections_preserve_custom_skill_group_labels(sample_resume: dict) -> None:
+    sections = {
+        "cv": (
+            "cv:\n"
+            "  name: Jane Doe\n"
+            "  sections:\n"
+            "    skills:\n"
+            "      - label: Languages & Frameworks\n"
+            "        details: English, Python\n"
+        ),
+        "design": "design:\n  theme: classic\n",
+        "locale": "locale:\n  language: english\n",
+        "settings": "settings:\n  current_date: today\n",
+    }
+
+    parsed_resume, _ = parse_rendercv_yaml_sections(
+        sections,
+        base_resume_data=sample_resume,
+        base_theme_settings=RenderThemeSettings(theme_id="classic"),
+    )
+
+    languages_group = next(
+        group for group in parsed_resume["additional"]["groups"] if group["id"] == "languages"
+    )
+    assert languages_group["label"] == "Languages & Frameworks"
+    assert languages_group["items"] == ["English", "Python"]
+
+
+def test_rendercv_yaml_sections_support_skill_details_as_yaml_lists() -> None:
+    sections = {
+        "cv": (
+            "cv:\n"
+            "  name: Jane Doe\n"
+            "  sections:\n"
+            "    skills:\n"
+            "      - label: ML\n"
+            "        details:\n"
+            "          - PyTorch\n"
+            "          - TensorFlow\n"
+        ),
+        "design": "design:\n  theme: classic\n",
+        "locale": "locale:\n  language: english\n",
+        "settings": "settings:\n  current_date: today\n",
+    }
+
+    parsed_resume, _ = parse_rendercv_yaml_sections(
+        sections,
+        base_theme_settings=RenderThemeSettings(theme_id="classic"),
+    )
+
+    assert parsed_resume["additional"]["groups"] == [
+        {"id": "ml", "label": "ML", "items": ["PyTorch", "TensorFlow"]}
+    ]
+
+
 def test_rendercv_social_round_trip_keeps_dedicated_networks_out_of_generic_list(
     sample_resume_copy: dict,
 ) -> None:
