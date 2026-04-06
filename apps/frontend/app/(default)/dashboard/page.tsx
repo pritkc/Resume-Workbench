@@ -322,6 +322,16 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-3 py-4 md:px-4 md:py-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
+          {t('dashboard.title')}
+        </p>
+        <Button variant="outline" size="xs" onClick={() => router.push('/settings')}>
+          <Settings className="h-4 w-4" />
+          {t('nav.settings')}
+        </Button>
+      </div>
+
       {masterResumeId && !isLlmConfigured && !statusLoading && (
         <div className="flex items-start justify-between gap-3 border border-amber-500 bg-amber-50 px-3 py-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
           <div className="flex items-start gap-3">

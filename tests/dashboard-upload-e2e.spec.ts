@@ -250,3 +250,127 @@ test("dashboard filters and sorts tailored resumes in the row view", async ({
     failedResponses: [],
   });
 });
+
+test("dashboard keeps a settings shortcut available in the main workspace state", async ({
+  page,
+}) => {
+  const browserProblems = await collectBrowserProblems(page);
+
+  await page.route("**/api/v1/status", async (route) => {
+    await fulfillJson(route, statusPayload());
+  });
+  await page.route(
+    "**/api/v1/resumes/list?include_master=true",
+    async (route) => {
+      await fulfillJson(route, {
+        data: [
+          {
+            resume_id: "master-123",
+            filename: "master.pdf",
+            is_master: true,
+            parent_id: null,
+            processing_status: "ready",
+            created_at: "2026-04-01T00:00:00Z",
+            updated_at: "2026-04-01T00:00:00Z",
+            title: "Master Resume",
+            target_company: null,
+            target_role: null,
+            target_location: null,
+          },
+        ],
+      });
+    },
+  );
+  await page.route(
+    /\/api\/v1\/resumes\?resume_id=master-123$/,
+    async (route) => {
+      await fulfillJson(route, {
+        request_id: "req-master",
+        data: {
+          resume_id: "master-123",
+          raw_resume: {
+            id: null,
+            content: "{}",
+            content_type: "json",
+            created_at: "2026-04-01T00:00:00Z",
+            processing_status: "ready",
+          },
+          processed_resume: {
+            personalInfo: {
+              name: "Master Resume",
+              title: "Engineer",
+              email: "master@example.com",
+              phone: "555-0100",
+              location: "San Francisco, CA",
+            },
+            summary: "Summary",
+            workExperience: [],
+            education: [],
+            personalProjects: [],
+            additional: {
+              technicalSkills: [],
+              languages: [],
+              certificationsTraining: [],
+              awards: [],
+            },
+          },
+          cover_letter: null,
+          outreach_message: null,
+          parent_id: null,
+          title: "Master Resume",
+          application_pack_id: null,
+          theme_settings: null,
+        },
+      });
+    },
+  );
+  await page.route("**/api/v1/config/llm-api-key", async (route) => {
+    await fulfillJson(route, {
+      provider: "openai",
+      model: "gpt-5-mini",
+      api_key: "",
+      api_base: null,
+    });
+  });
+  await page.route("**/api/v1/config/prompts", async (route) => {
+    await fulfillJson(route, {
+      default_prompt_id: "keywords",
+      prompt_options: [
+        {
+          id: "keywords",
+          label: "Keyword enhance",
+          description: "Tight ATS updates",
+        },
+      ],
+    });
+  });
+  await page.route("**/api/v1/config/language", async (route) => {
+    await fulfillJson(route, {
+      content_language: "en",
+      ui_language: "en",
+    });
+  });
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem("master_resume_id", "master-123");
+  });
+
+  await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);
+  await page.waitForLoadState("networkidle");
+
+  await expect(
+    page.getByRole("button", { name: /^settings$/i }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^settings$/i }).click();
+
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(
+    page.getByRole("heading", { name: "Settings", exact: true }),
+  ).toBeVisible();
+
+  expect(browserProblems).toEqual({
+    consoleMessages: [],
+    pageErrors: [],
+    failedResponses: [],
+  });
+});
