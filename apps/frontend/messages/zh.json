@@ -614,6 +614,7 @@
     "statusValues": {
       "healthy": "健康",
       "offline": "离线",
+      "notChecked": "未检查",
       "connected": "已连接",
       "configured": "已配置",
       "notSet": "未设置"

@@ -137,6 +137,7 @@ export default function SettingsPage() {
   // Translations
   const { t } = useTranslations();
   const providerInfo = PROVIDER_INFO[provider] ?? PROVIDER_INFO['openai'];
+  const requiresApiKey = providerInfo.requiresKey ?? true;
   const fallbackPromptOptions = useMemo<PromptOption[]>(
     () => [
       {
@@ -220,6 +221,38 @@ export default function SettingsPage() {
       healthCheck.warning
     );
   }, [healthCheck, t]);
+  const llmStatusIndicator = useMemo(() => {
+    const healthStatus = systemStatus?.llm_health_status;
+
+    switch (healthStatus) {
+      case 'healthy':
+        return {
+          icon: CheckCircle2,
+          iconClassName: 'text-green-600',
+          label: t('settings.statusValues.healthy'),
+        };
+      case 'unhealthy':
+        return {
+          icon: XCircle,
+          iconClassName: 'text-red-500',
+          label: t('settings.statusValues.offline'),
+        };
+      case 'not_configured':
+        return {
+          icon: AlertTriangle,
+          iconClassName: 'text-amber-500',
+          label: t('settings.statusValues.notSet'),
+        };
+      case 'unchecked':
+      default:
+        return {
+          icon: AlertTriangle,
+          iconClassName: 'text-amber-500',
+          label: t('settings.statusValues.notChecked'),
+        };
+    }
+  }, [systemStatus?.llm_health_status, t]);
+  const LlmStatusIcon = llmStatusIndicator.icon;
 
   // Load LLM config and prompt config on mount
   useEffect(() => {
@@ -460,7 +493,6 @@ export default function SettingsPage() {
     return t('settings.systemStatus.lastFetched.hoursAgo', { hours: Math.floor(diff / 3600) });
   };
 
-  const requiresApiKey = providerInfo.requiresKey ?? true;
   const sectionCardClass =
     'border border-black bg-white px-3 py-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]';
 
@@ -572,15 +604,9 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {systemStatus.llm_healthy ? (
-                      <CheckCircle2 className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-red-500" />
-                    )}
+                    <LlmStatusIcon className={`w-5 h-5 ${llmStatusIndicator.iconClassName}`} />
                     <span className="font-mono text-sm font-bold">
-                      {systemStatus.llm_healthy
-                        ? t('settings.statusValues.healthy')
-                        : t('settings.statusValues.offline')}
+                      {llmStatusIndicator.label}
                     </span>
                   </div>
                 </div>

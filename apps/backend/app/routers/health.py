@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from app.database import db
-from app.llm import check_llm_health, get_llm_config
+from app.llm import get_llm_config, get_llm_health_snapshot
 from app.schemas import HealthResponse, StatusResponse
 
 router = APIRouter(tags=["Health"])
@@ -11,11 +11,20 @@ router = APIRouter(tags=["Health"])
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
-    """Basic health check endpoint."""
-    llm_status = await check_llm_health(source="health_endpoint")
+    """Basic health check endpoint.
+
+    This endpoint intentionally avoids live provider probes. Use
+    `/config/llm-test` for an explicit connectivity check.
+    """
+    config = get_llm_config()
+    llm_status = get_llm_health_snapshot(config, source="health_endpoint")
 
     return HealthResponse(
-        status="healthy" if llm_status["healthy"] else "degraded",
+        status=(
+            "degraded"
+            if llm_status["checked"] and not llm_status["healthy"]
+            else "healthy"
+        ),
         llm=llm_status,
     )
 
@@ -30,13 +39,24 @@ async def get_status() -> StatusResponse:
         - Database statistics
     """
     config = get_llm_config()
-    llm_status = await check_llm_health(config, source="status_endpoint")
+    llm_status = get_llm_health_snapshot(config, source="status_endpoint")
     db_stats = db.get_stats()
+    llm_configured = bool(config.api_key) or config.provider == "ollama"
+    llm_checked = bool(llm_status["checked"])
+    llm_healthy = bool(llm_status["healthy"]) if llm_checked else False
+    status = "ready"
+    if not llm_configured or not db_stats["has_master_resume"]:
+        status = "setup_required"
+    elif llm_checked and not llm_healthy:
+        status = "setup_required"
 
     return StatusResponse(
-        status="ready" if llm_status["healthy"] and db_stats["has_master_resume"] else "setup_required",
-        llm_configured=bool(config.api_key) or config.provider == "ollama",
-        llm_healthy=llm_status["healthy"],
+        status=status,
+        llm_configured=llm_configured,
+        llm_healthy=llm_healthy,
+        llm_health_status=str(llm_status["status"]),
+        llm_health_checked=llm_checked,
+        llm_health_checked_at=llm_status.get("checked_at"),
         has_master_resume=db_stats["has_master_resume"],
         database_stats=db_stats,
     )

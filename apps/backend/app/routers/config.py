@@ -1,10 +1,9 @@
 """LLM configuration endpoints."""
 
 import json
-import logging
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 
 from app.config import settings
 from app.llm import check_llm_health, LLMConfig, resolve_api_key
@@ -99,26 +98,6 @@ def _normalize_generation_defaults(stored: dict) -> GenerationDefaultsResponse:
     )
 
 
-async def _log_llm_health_check(config: LLMConfig) -> None:
-    """Run a best-effort health check and log outcome without affecting API responses."""
-    try:
-        health = await check_llm_health(
-            config,
-            use_cache=False,
-            source="config_save_background",
-        )
-        if not health.get("healthy", False):
-            logging.warning(
-                "LLM config saved but health check failed",
-                extra={"provider": config.provider, "model": config.model},
-            )
-    except Exception:
-        logging.exception(
-            "LLM config saved but health check raised exception",
-            extra={"provider": config.provider, "model": config.model},
-        )
-
-
 @router.get("/llm-api-key", response_model=LLMConfigResponse)
 async def get_llm_config_endpoint() -> LLMConfigResponse:
     """Get current LLM configuration (API key masked)."""
@@ -136,7 +115,6 @@ async def get_llm_config_endpoint() -> LLMConfigResponse:
 @router.put("/llm-api-key", response_model=LLMConfigResponse)
 async def update_llm_config(
     request: LLMConfigRequest,
-    background_tasks: BackgroundTasks,
 ) -> LLMConfigResponse:
     """Update LLM configuration.
 
@@ -159,7 +137,7 @@ async def update_llm_config(
     if request.api_base is not None:
         stored["api_base"] = request.api_base
 
-    # Build normalized config for response and background health check
+    # Build normalized config for response
     resolved_provider = stored.get("provider", settings.llm_provider)
     test_config = LLMConfig(
         provider=resolved_provider,
@@ -170,9 +148,6 @@ async def update_llm_config(
 
     # Save config regardless of health check outcome (see docstring).
     _save_config(stored)
-
-    # Best-effort health check for server-side logs/diagnostics (do not block response).
-    background_tasks.add_task(_log_llm_health_check, test_config)
 
     return LLMConfigResponse(
         provider=test_config.provider,

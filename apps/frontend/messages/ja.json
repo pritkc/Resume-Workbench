@@ -614,6 +614,7 @@
     "statusValues": {
       "healthy": "正常",
       "offline": "オフライン",
+      "notChecked": "未確認",
       "connected": "接続済み",
       "configured": "設定済み",
       "notSet": "未設定"

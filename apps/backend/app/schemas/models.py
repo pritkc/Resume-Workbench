@@ -873,6 +873,9 @@ class StatusResponse(BaseModel):
     status: str
     llm_configured: bool
     llm_healthy: bool
+    llm_health_status: str = "unchecked"
+    llm_health_checked: bool = False
+    llm_health_checked_at: str | None = None
     has_master_resume: bool
     database_stats: dict[str, Any]
 

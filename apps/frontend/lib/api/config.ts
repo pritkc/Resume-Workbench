@@ -28,6 +28,9 @@ export interface SystemStatus {
   status: 'ready' | 'setup_required';
   llm_configured: boolean;
   llm_healthy: boolean;
+  llm_health_status?: 'healthy' | 'unhealthy' | 'unchecked' | 'not_configured';
+  llm_health_checked?: boolean;
+  llm_health_checked_at?: string | null;
   has_master_resume: boolean;
   database_stats: DatabaseStats;
 }

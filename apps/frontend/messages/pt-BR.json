@@ -614,6 +614,7 @@
     "statusValues": {
       "healthy": "Conectado",
       "offline": "Offline",
+      "notChecked": "Não verificado",
       "connected": "Conectado",
       "configured": "Configurado",
       "notSet": "Não configurado"

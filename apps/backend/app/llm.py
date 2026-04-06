@@ -281,6 +281,21 @@ def _clone_health_result(result: dict[str, Any]) -> dict[str, Any]:
     return json.loads(json.dumps(result))
 
 
+def _cacheable_health_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Strip request-specific health-check details before caching."""
+    allowed_keys = (
+        "healthy",
+        "provider",
+        "model",
+        "response_model",
+        "error_code",
+        "message",
+        "warning",
+        "warning_code",
+    )
+    return {key: result[key] for key in allowed_keys if key in result}
+
+
 def _get_cached_health_result(config: "LLMConfig") -> dict[str, Any] | None:
     ttl_seconds = max(0, settings.llm_health_cache_ttl_seconds)
     if ttl_seconds == 0:
@@ -308,10 +323,81 @@ def _store_cached_health_result(config: "LLMConfig", result: dict[str, Any]) -> 
     global _LLM_HEALTH_CACHE
     _LLM_HEALTH_CACHE = {
         "key": _health_cache_key(config),
-        "result": _clone_health_result(result),
+        "result": _cacheable_health_result(result),
         "stored_at_epoch": time.time(),
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def get_cached_llm_health(
+    config: LLMConfig | None = None,
+    *,
+    source: str | None = None,
+) -> dict[str, Any] | None:
+    """Return the last cached LLM health result without probing the provider."""
+    if config is None:
+        config = get_llm_config()
+
+    cached_result = _get_cached_health_result(config)
+    if cached_result is not None and source:
+        cached_result["health_source"] = source
+    return cached_result
+
+
+def get_llm_health_snapshot(
+    config: LLMConfig | None = None,
+    *,
+    source: str | None = None,
+) -> dict[str, Any]:
+    """Return a cached-only view of LLM health for status endpoints."""
+    if config is None:
+        config = get_llm_config()
+
+    llm_configured = bool(config.api_key) or config.provider == "ollama"
+    cached_result = get_cached_llm_health(config, source=source)
+    snapshot: dict[str, Any] = {
+        "provider": config.provider,
+        "model": config.model,
+        "configured": llm_configured,
+        "checked": False,
+        "healthy": False,
+        "status": "not_configured" if not llm_configured else "unchecked",
+        "checked_at": None,
+        "cached": False,
+    }
+
+    if not llm_configured:
+        snapshot["error_code"] = "api_key_missing"
+
+    if cached_result is None:
+        return snapshot
+
+    snapshot.update(
+        {
+            "checked": True,
+            "healthy": bool(cached_result.get("healthy", False)),
+            "status": (
+                "healthy"
+                if cached_result.get("healthy", False)
+                else "unhealthy"
+            ),
+            "checked_at": cached_result.get("checked_at"),
+            "cached": bool(cached_result.get("cached", False)),
+        }
+    )
+    for key in (
+        "response_model",
+        "error_code",
+        "message",
+        "warning",
+        "warning_code",
+        "cache_age_seconds",
+        "health_source",
+    ):
+        if key in cached_result:
+            snapshot[key] = cached_result[key]
+
+    return snapshot
 
 
 def _extract_usage_metrics(response: Any) -> dict[str, int | None]:
@@ -841,8 +927,7 @@ async def check_llm_health(
 
                         if source:
                             last_result["health_source"] = source
-                        if use_cache:
-                            _store_cached_health_result(config, last_result)
+                        _store_cached_health_result(config, last_result)
                         return last_result
 
                 _record_llm_attempt(
@@ -878,8 +963,7 @@ async def check_llm_health(
                     result["model_output"] = _to_code_block(content)
                 if source:
                     result["health_source"] = source
-                if use_cache:
-                    _store_cached_health_result(config, result)
+                _store_cached_health_result(config, result)
                 return result
             except Exception as e:
                 _record_llm_attempt(
@@ -932,8 +1016,7 @@ async def check_llm_health(
                 if attempt_number >= len(attempt_specs):
                     if source:
                         last_result["health_source"] = source
-                    if use_cache:
-                        _store_cached_health_result(config, last_result)
+                    _store_cached_health_result(config, last_result)
                     return last_result
 
         return last_result or {
