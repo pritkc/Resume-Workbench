@@ -168,6 +168,15 @@ class Settings(BaseSettings):
             raise ValueError(f"Invalid LOG_LEVEL: {value}. Allowed: {ALLOWED_LOG_LEVELS}")
         return value
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: Any) -> str | None:
+        """Treat blank database URLs as unset."""
+        if v is None:
+            return None
+        value = str(v).strip()
+        return value or None
+
     # CORS Configuration
     cors_origins: list[str] = [
         "http://localhost:3000",
@@ -192,16 +201,14 @@ class Settings(BaseSettings):
     rendercv_timeout_seconds: int = 120
 
     @property
-    def db_path(self) -> Path:
-        """Path to TinyDB database file."""
-        return self.data_dir / "database.json"
-
-    @property
     def effective_database_url(self) -> str:
-        """Database URL with a local SQLite fallback for tests/bootstrap."""
+        """Database URL required for SQL-backed storage."""
         if self.database_url:
             return self.database_url
-        return f"sqlite:///{(self.data_dir / 'resume_matcher.db').resolve()}"
+        raise RuntimeError(
+            "DATABASE_URL is required. Configure the local Postgres connection before "
+            "starting the backend or running Alembic."
+        )
 
     @property
     def config_path(self) -> Path:

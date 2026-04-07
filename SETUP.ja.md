@@ -66,10 +66,12 @@ pip install uv
 git clone https://github.com/srbhr/Resume-Matcher.git
 cd Resume-Matcher
 
-# 2. バックエンド起動（ターミナル 1）
+# 2. Postgres とバックエンドを起動（ターミナル 1）
+docker compose up -d postgres
 cd apps/backend
 cp .env.example .env        # テンプレートから設定を作成
 uv sync                      # Python 依存関係をインストール
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 
 # 3. フロントエンド起動（ターミナル 2）
@@ -134,6 +136,7 @@ LLM_API_KEY=sk-your-api-key-here
 # ローカル開発では既定のままで OK
 HOST=0.0.0.0
 PORT=8000
+DATABASE_URL=postgresql+psycopg://resume_matcher:resume_matcher@localhost:5432/resume_matcher
 FRONTEND_BASE_URL=http://localhost:3000
 CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
 ```
@@ -499,4 +502,3 @@ Resume-Matcher/
 ---
 
 楽しい履歴書づくりを！Resume Matcher が役立ったら、[リポジトリに Star](https://github.com/srbhr/Resume-Matcher) と [Discord 参加](https://dsc.gg/resume-matcher) をぜひ。
-

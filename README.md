@@ -69,6 +69,7 @@ uv run uvicorn app.main:app --reload --port 8000
 
 - Serves the FastAPI app on `http://127.0.0.1:8000`
 - Frontend rewrites `/api/*` to this backend by default
+- Requires `DATABASE_URL` in `apps/backend/.env`; for local development, start Postgres with `docker compose up -d postgres` and run `uv run alembic upgrade head`
 
 ## Recommended Workflow After Major Changes
 

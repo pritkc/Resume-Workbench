@@ -15,20 +15,14 @@ _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
 
 
-def _connect_args(database_url: str) -> dict[str, object]:
-    if database_url.startswith("sqlite"):
-        return {"check_same_thread": False}
-    return {}
-
-
 def get_engine() -> Engine:
     global _engine
     if _engine is None:
+        database_url = settings.effective_database_url
         _engine = create_engine(
-            settings.effective_database_url,
+            database_url,
             future=True,
             pool_pre_ping=True,
-            connect_args=_connect_args(settings.effective_database_url),
         )
     return _engine
 

@@ -64,10 +64,12 @@ If you're familiar with development tools and want to get running quickly:
 git clone https://github.com/srbhr/Resume-Matcher.git
 cd Resume-Matcher
 
-# 2. Start the backend (Terminal 1)
+# 2. Start Postgres and the backend (Terminal 1)
+docker compose up -d postgres
 cd apps/backend
 cp .env.example .env        # Create config from template
 uv sync                      # Install Python dependencies
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 
 # 3. Start the frontend (Terminal 2)
@@ -129,6 +131,7 @@ LLM_API_KEY=sk-your-api-key-here
 # Keep these as default for local development
 HOST=0.0.0.0
 PORT=8000
+DATABASE_URL=postgresql+psycopg://resume_matcher:resume_matcher@localhost:5432/resume_matcher
 FRONTEND_BASE_URL=http://localhost:3000
 CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
 ```
@@ -137,6 +140,20 @@ CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
 
 ```bash
 uv sync
+```
+
+#### Start local Postgres and run migrations
+
+From the repo root in one terminal:
+
+```bash
+docker compose up -d postgres
+```
+
+Then from `apps/backend`:
+
+```bash
+uv run alembic upgrade head
 ```
 
 This creates a virtual environment and installs all required packages.

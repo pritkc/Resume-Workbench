@@ -185,9 +185,11 @@ git clone https://github.com/srbhr/Resume-Matcher.git
 cd Resume-Matcher
 
 # 后端（终端 1）
+docker compose up -d postgres
 cd apps/backend
 cp .env.example .env        # 配置你的 AI 提供商
 uv sync                      # 安装依赖
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 
 # 前端（终端 2）

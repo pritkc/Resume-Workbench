@@ -66,10 +66,12 @@ Si ya estás familiarizado con herramientas de desarrollo y quieres arrancar rá
 git clone https://github.com/srbhr/Resume-Matcher.git
 cd Resume-Matcher
 
-# 2. Inicia el backend (Terminal 1)
+# 2. Inicia Postgres y el backend (Terminal 1)
+docker compose up -d postgres
 cd apps/backend
 cp .env.example .env        # Crea la configuración a partir de la plantilla
 uv sync                      # Instala dependencias de Python
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 
 # 3. Inicia el frontend (Terminal 2)
@@ -134,6 +136,7 @@ LLM_API_KEY=sk-your-api-key-here
 # Mantén estos valores por defecto para desarrollo local
 HOST=0.0.0.0
 PORT=8000
+DATABASE_URL=postgresql+psycopg://resume_matcher:resume_matcher@localhost:5432/resume_matcher
 FRONTEND_BASE_URL=http://localhost:3000
 CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
 ```
@@ -499,4 +502,3 @@ Resume-Matcher/
 ---
 
 ¡Feliz creación de currículums! Si Resume Matcher te resulta útil, considera [darle una estrella al repo](https://github.com/srbhr/Resume-Matcher) y [unirte a nuestro Discord](https://dsc.gg/resume-matcher).
-

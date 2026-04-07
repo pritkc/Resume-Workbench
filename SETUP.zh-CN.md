@@ -66,10 +66,12 @@ pip install uv
 git clone https://github.com/srbhr/Resume-Matcher.git
 cd Resume-Matcher
 
-# 2. 启动后端（终端 1）
+# 2. 启动 Postgres 和后端（终端 1）
+docker compose up -d postgres
 cd apps/backend
 cp .env.example .env        # 从模板创建配置
 uv sync                      # 安装 Python 依赖
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 
 # 3. 启动前端（终端 2）
@@ -134,6 +136,7 @@ LLM_API_KEY=sk-your-api-key-here
 # 本地开发建议保持默认
 HOST=0.0.0.0
 PORT=8000
+DATABASE_URL=postgresql+psycopg://resume_matcher:resume_matcher@localhost:5432/resume_matcher
 FRONTEND_BASE_URL=http://localhost:3000
 CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
 ```
@@ -499,4 +502,3 @@ Resume-Matcher/
 ---
 
 祝你简历制作顺利！如果 Resume Matcher 对你有帮助，欢迎 [给仓库点个 Star](https://github.com/srbhr/Resume-Matcher)，以及 [加入我们的 Discord](https://dsc.gg/resume-matcher)。
-
