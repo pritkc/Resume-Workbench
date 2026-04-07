@@ -1,95 +1,91 @@
 # Backend Guide
 
-> Lean, local-first FastAPI app for resume tailoring.
+> Where to make changes, depending on the task.
 
-## Tech Stack
+## If You Are Changing...
 
-| Component | Technology |
-|-----------|------------|
-| Framework | FastAPI |
-| Database | TinyDB (JSON file) |
-| AI | LiteLLM (100+ providers) |
-| Doc Parsing | markitdown |
-| Validation | Pydantic |
+### Prompt text or prompt selection
 
-## Directory Structure
+Touch:
 
-```
-apps/backend/app/
-├── main.py         # Entry point
-├── config.py       # Settings from env/file
-├── database.py     # TinyDB wrapper
-├── llm.py          # Multi-provider LLM
-├── routers/        # health, config, resumes, jobs
-├── services/       # parser, improver, cover_letter
-├── schemas/        # Pydantic models
-└── prompts/        # templates.py
-```
+- `apps/backend/app/prompts/templates.py`
+- `apps/backend/app/prompts/enrichment.py`
+- `apps/backend/app/prompts/refinement.py`
+- `apps/backend/app/services/improver.py`
+- `apps/backend/app/routers/config.py`
 
-## Database Operations
+Also update:
 
-```python
-db.create_resume(content, content_type, filename, is_master, processed_data)
-db.get_resume(resume_id) → dict | None
-db.list_resumes() → list[dict]
-db.update_resume(resume_id, updates)
-db.delete_resume(resume_id) → bool
-db.set_master_resume(resume_id)
-db.create_job(content, resume_id)
-```
+- `docs/agent/llm-prompt-inventory.md`
+- any affected API docs if request or config behavior changed
 
-## LLM Features
+### LLM call behavior
 
-| Feature | Description |
-|---------|-------------|
-| API Key Passing | Direct to litellm (avoids race conditions) |
-| JSON Mode | Auto-enabled for supported providers |
-| Retry Logic | 2 retries, temperature 0.1→0.0 |
-| Timeouts | 30s (health), 120s (completion), 180s (JSON) |
+Touch:
 
-## Prompt Guidelines
+- `apps/backend/app/llm.py`
+- the caller in `services/*` or `routers/enrichment.py`
 
-1. Use `{variable}` for substitution (single braces)
-2. Include JSON schema examples
-3. End with "Output ONLY the JSON object"
+Rules:
 
-## API Endpoints Quick Ref
+- keep a stable `operation` string
+- pass useful `metadata`
+- use `llm_trace_scope()` in top-level request flows
 
-```
-GET  /api/v1/health          # LLM check
-GET  /api/v1/status          # Full status
-GET/PUT /api/v1/config/llm-api-key
-POST /api/v1/resumes/upload  # PDF/DOCX
-POST /api/v1/resumes/improve # Tailor (LLM)
-GET  /api/v1/resumes/{id}/pdf
-DELETE /api/v1/resumes/{id}
-```
+### SQL schema or persistence
 
-## Data Flow
+Touch:
 
-**Upload:** File → markitdown → Markdown → LLM parse → JSON → TinyDB
+- `apps/backend/app/db/models.py`
+- `apps/backend/app/db/repositories/*`
+- `apps/backend/app/database.py`
+- a new Alembic revision in `apps/backend/alembic/versions/`
 
-**Improve:** Resume + Job → Extract keywords (LLM) → Tailor (LLM) → Store
+Do not add new persistence only to `app/database.py` without updating the SQL model layer.
 
-## Error Handling
+### Resume tailoring flow
 
-Log details server-side, generic messages to clients:
-```python
-except Exception as e:
-    logger.error(f"Failed: {e}")
-    raise HTTPException(500, "Operation failed.")
-```
+Touch:
 
-## Running
+- `apps/backend/app/routers/resumes.py`
+- `apps/backend/app/services/improver.py`
+- `apps/backend/app/services/refiner.py`
+- `apps/backend/app/services/cover_letter.py`
 
-```bash
-cd apps/backend
-cp .env.example .env
-uv run uvicorn app.main:app --reload --port 8000
-```
+Important current behavior:
 
-## Adding New Endpoints
+- diff-first generation
+- full-generation fallback
+- local refinement after tailoring
+- preview/confirm hash validation for application packs
 
-1. Create router in `app/routers/`
-2. Add Pydantic models to `app/schemas/models.py`
-3. Register router in `app/main.py`
+### RenderCV output or theme behavior
+
+Touch:
+
+- `apps/backend/app/rendering/rendercv_adapter.py`
+- `apps/backend/app/rendering/rendercv_engine.py`
+- `apps/backend/app/rendering/theme_profiles.py`
+- `apps/backend/app/services/artifact_service.py`
+
+Coordinate with frontend:
+
+- `apps/frontend/lib/types/render-theme.ts`
+- `apps/frontend/components/rendercv/*`
+
+### Draft normalization or raw YAML
+
+Touch:
+
+- `apps/backend/app/rendering/rendercv_adapter.py`
+- `apps/backend/app/routers/resumes.py`
+- `apps/frontend/components/builder/raw-yaml-editor.tsx`
+- `apps/frontend/components/builder/resume-builder.tsx`
+
+## Common Gotchas
+
+- `app/database.py` is not the schema source of truth.
+- resume PDFs come from RenderCV, not Playwright.
+- cover-letter PDFs still come from Playwright.
+- `additional.groups` is canonical even if older resumes still deserialize from legacy keys.
+- enrichment flows currently call LLMs directly from the router layer.

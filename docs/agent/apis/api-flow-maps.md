@@ -1,87 +1,113 @@
 # API Flow Maps
 
-> Request/response flows for all Resume Matcher endpoints.
+> End-to-end request flows for the current backend.
 
 ## Resume Upload
 
-```
+```text
 POST /api/v1/resumes/upload
-├── Validate file (PDF/DOCX, ≤4MB)
-├── parse_document() → Markdown
-├── db.create_resume(status="processing")
-├── parse_resume_to_json() → LLM
-│   ├── Success: status="ready"
-│   └── Failure: status="failed"
-└── Return {resume_id}
+├── validate file type and size
+├── parse_document() -> markdown
+├── db.create_resume_atomic_master(status="processing")
+├── llm_trace_scope(trace_id=request_id, request_scope="resumes.upload")
+├── parse_resume_to_json() -> LLM
+├── db.update_resume(processed_data, processing_status)
+└── return {request_id, resume_id, processing_status, is_master}
 ```
 
-## Resume Improvement
+## Application-Pack Preview
 
+```text
+POST /api/v1/application-packs/preview
+├── fetch resume + job
+├── resolve prompt_id and generation flags
+├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve_preview")
+├── extract_job_keywords() if missing/stale
+├── _generate_tailored_resume_data()
+│   ├── generate_resume_diffs() -> LLM
+│   ├── apply_diffs()
+│   ├── verify_diff_result()
+│   └── fallback improve_resume() -> LLM if diff mode fails
+├── refine_resume() -> mixed LLM + local passes
+├── generate title / cover letter / outreach
+├── create application_pack + generation_run
+├── render_resume_bundle() -> RenderCV artifacts
+└── return preview data, artifacts, warnings, diff summary, request_id
 ```
+
+## Application-Pack Confirm
+
+```text
+POST /api/v1/application-packs/confirm
+├── fetch resume + job
+├── canonicalize improved_data
+├── validate preview hash against stored preview_hash / preview_hashes
+├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve_confirm")
+├── regenerate title / cover letter / outreach as needed
+├── create tailored resume
+├── create legacy improvement generation_run
+├── create or update application_pack
+├── create confirm generation_run
+├── render_resume_bundle() -> final artifacts
+└── return tailored resume id + artifacts
+```
+
+## Direct Improve
+
+```text
 POST /api/v1/resumes/improve
-├── Fetch resume + job from DB
-├── extract_job_keywords() → LLM
-├── improve_resume() → LLM
-├── [If enabled] generate_cover_letter() → LLM
-├── [If enabled] generate_outreach_message() → LLM
-├── db.create_resume(improved)
-├── db.create_improvement()
-└── Return {data, cover_letter, outreach_message}
+├── fetch resume + job
+├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve")
+├── extract_job_keywords() -> LLM
+├── diff-first tailoring with full-output fallback
+├── refine_resume()
+├── generate title / cover letter / outreach
+├── create tailored resume
+├── create legacy improvement record
+└── return tailored resume payload
 ```
 
-## PDF Generation
+## Draft Normalize / Save / Preview
 
-```
-GET /api/v1/resumes/{id}/pdf
-├── Fetch resume from DB
-├── Build URL: {frontend}/print/resumes/{id}?{params}
-├── Playwright render (wait for .resume-print)
-└── Return PDF bytes
-```
-
-## Health Check
-
-```
-GET /api/v1/health
-├── check_llm_health() → 30s timeout
-└── Return {healthy, provider, model}
+```text
+POST /api/v1/resumes/draft/normalize
+PATCH /api/v1/resumes/{resume_id}/draft
+POST /api/v1/resumes/draft/render-preview
+├── resolve base resume + base theme settings
+├── normalize structured payload or parse raw YAML sections
+├── return normalized resume data + YAML sections
+└── optionally render RenderCV artifacts for preview
 ```
 
-## System Status
+## Resume PDF And Render Preview
 
-```
-GET /api/v1/status
-├── get_llm_config()
-├── check_llm_health()
-├── db.get_stats()
-└── Return {status, llm_healthy, database_stats}
-```
-
-## Configuration Update
-
-```
-PUT /api/v1/config/llm-api-key
-├── _load_config()
-├── Merge new values
-├── check_llm_health() → Validate
-├── _save_config()
-└── Return masked config
+```text
+POST /api/v1/resumes/{resume_id}/pdf
+GET  /api/v1/resumes/{resume_id}/pdf
+POST /api/v1/resumes/{resume_id}/render-preview
+GET  /api/v1/resumes/{resume_id}/render-preview
+├── fetch stored structured resume
+├── resolve theme settings from payload, query params, or saved state
+├── render_resume_bundle()
+├── persist artifacts
+└── return PDF bytes or artifact summaries
 ```
 
-## Job Upload
+## Cover-Letter PDF
 
+```text
+GET /api/v1/resumes/{resume_id}/cover-letter/pdf
+├── fetch stored cover letter
+├── build frontend print URL
+├── render_resume_pdf() via Playwright
+└── return PDF bytes
 ```
-POST /api/v1/jobs/upload
-├── For each description:
-│   └── db.create_job()
-└── Return {job_id[]}
+
+## LLM Trace Queries
+
+```text
+GET /api/v1/llm/calls
+GET /api/v1/llm/calls/summary
+├── filter by trace_id / request_scope / operation / success
+└── return raw call rows or aggregate summaries
 ```
-
-## Resume Operations
-
-| Endpoint | Flow |
-|----------|------|
-| `GET /resumes?id=` | db.get_resume() |
-| `GET /resumes/list` | db.list_resumes() |
-| `PATCH /resumes/{id}` | db.update_resume() |
-| `DELETE /resumes/{id}` | db.delete_resume() |

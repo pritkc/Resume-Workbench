@@ -1,73 +1,69 @@
-# Workflow: Commits, PRs, and Testing
+# Workflow
 
-> **Git workflow, testing guidelines, and PR conventions.**
+> Day-to-day expectations for code, tests, and doc updates.
 
-## Commit Guidelines
+## Local Change Checklist
 
-- Use concise, sentence-style subjects (e.g., `Add custom funding link to FUNDING.yml`)
-- Keep messages short
-- If using prefixes, stick to `type: summary` in the imperative
-- Reference issues with `Fixes #123`
+1. Identify the active surface area first.
+   - storage or migrations
+   - prompts or LLM operations
+   - RenderCV adapter or theme settings
+   - application-pack flow
+   - frontend builder, viewer, or settings
+2. Update the corresponding docs under `docs/agent/` when behavior changes.
+3. Run the narrowest relevant verification, then widen only if the change is risky.
 
-### Examples
+## Recommended Verification
 
-```
-Add resume enrichment wizard component
-Fix PDF generation timeout on large resumes
-Refactor LLM provider configuration
-```
-
-## Pull Request Guidelines
-
-1. **Reference issues**: `Fixes #123` in the description
-2. **Call out schema or prompt changes** so reviewers can smoke-test downstream agents
-3. **List local verification commands** you ran
-4. **Attach screenshots** for UI or API changes
-
-## Testing Guidelines
-
-### Frontend Testing
-
-- All contributions must pass `npm run lint`
-- Add Jest or Playwright suites beneath `apps/frontend/__tests__/`
-- Name test files `*.test.tsx`
+Frontend:
 
 ```bash
-# Run linter
+cd apps/frontend
 npm run lint
-
-# Format code
-npm run format
+npm run test
 ```
 
-### Backend Testing
-
-- Tests belong in `apps/backend/tests/`
-- Use `test_*.py` naming convention
-- Seed anonymized resume/job fixtures
+Backend:
 
 ```bash
-# Run tests
 cd apps/backend
 uv run pytest
 ```
 
-## Definition of Done
+E2E:
 
-Before marking a PR as ready:
+```bash
+npm run test:e2e
+```
 
-- [ ] Code compiles without errors
-- [ ] `npm run lint` passes
-- [ ] New features have tests (or documented reason why not)
-- [ ] UI changes follow [Swiss International Style](design/style-guide.md)
-- [ ] Schema/prompt changes are called out in PR description
-- [ ] Screenshots attached for UI changes
-- [ ] Verified locally with commands listed in PR
+## Changes That Should Always Be Called Out
 
-## Code Review Checklist
+- Alembic or SQL model changes
+- prompt changes or prompt-selection behavior
+- API contract changes
+- RenderCV output or artifact-shape changes
+- new LLM `operation` names or request scopes
 
-- [ ] Type hints on all Python functions
-- [ ] Proper error handling (generic to clients, detailed in logs)
-- [ ] No exposed secrets or API keys
-- [ ] Follows existing patterns in the codebase
-- [ ] Documentation updated if needed
+## PR Notes
+
+Include:
+
+- what changed for users
+- which routes, prompts, or schemas changed
+- what you verified locally
+- screenshots for UI work when helpful
+
+## Helpful Repo-Level Commands
+
+See current delta over upstream:
+
+```bash
+git diff --name-status upstream/main...HEAD
+```
+
+Run migrations locally:
+
+```bash
+cd apps/backend
+uv run alembic upgrade head
+```

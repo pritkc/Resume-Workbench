@@ -1,77 +1,81 @@
 # Frontend API Client
 
-> API client layer for Resume Matcher frontend.
+> Current client modules under `apps/frontend/lib/api/`.
 
-## Base Client (`lib/api/client.ts`)
+## Base Client
 
-```typescript
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-export const API_BASE = `${API_URL}/api/v1`;
+`client.ts` exports:
 
-export async function apiFetch(endpoint: string, options?: RequestInit);
-export async function apiPost<T>(endpoint: string, body: T);
-export async function apiPatch<T>(endpoint: string, body: T);
-export async function apiPut<T>(endpoint: string, body: T);
-export async function apiDelete(endpoint: string);
-export function getUploadUrl(): string;
-```
+- `API_URL`
+- `API_BASE`
+- `apiFetch`
+- `apiPost`
+- `apiPatch`
+- `apiPut`
+- `apiDelete`
+- `getUploadUrl`
 
-## Resume Operations (`lib/api/resume.ts`)
+## Resume API
 
-```typescript
-// Job descriptions
-uploadJobDescriptions(descriptions: string[], resumeId: string) → job_id
+`resume.ts` now covers:
 
-// Resume improvement
-improveResume(resumeId: string, jobId: string) → ImprovedResult
+- job upload
+- direct improve
+- application-pack preview
+- application-pack confirm
+- resume fetch/list/update/delete
+- draft normalize/save/render-preview
+- RenderCV PDF and preview calls
+- retry-processing
+- cover-letter and outreach updates
+- title rename
+- cover-letter and outreach generation
+- job-description fetch for JD Match
 
-// CRUD
-fetchResume(resumeId: string) → ResumeResponse['data']
-fetchResumeList(includeMaster?: boolean) → ResumeListItem[]
-updateResume(resumeId: string, data: ResumeData) → ResumeResponse['data']
-deleteResume(resumeId: string) → void
+Important types exported from this file include:
 
-// PDF
-downloadResumePdf(resumeId: string, settings?: TemplateSettings) → Blob
-downloadCoverLetterPdf(resumeId: string, pageSize?: string) → Blob
+- `ResumeUploadResponse`
+- `ResumeListItem`
+- `ResumeDraftRequest`
+- `ResumeDraftResponse`
+- `DraftValidationDetail`
+- `DraftRequestError`
+- `RawYamlSections`
 
-// Content updates
-updateCoverLetter(resumeId: string, content: string) → void
-updateOutreachMessage(resumeId: string, content: string) → void
-```
+## Config API
 
-## Config Operations (`lib/api/config.ts`)
+`config.ts` covers:
 
-```typescript
-fetchLlmConfig() → LLMConfig
-updateLlmConfig(config: LLMConfigUpdate) → LLMConfig
-testLlmConnection() → LLMHealthCheck
-fetchSystemStatus() → SystemStatus
+- provider/model/api-base config
+- LLM health tests
+- system status
+- feature flags
+- language config
+- prompt config
+- generation defaults
+- provider-specific API-key management
+- database reset
 
-// Feature flags
-fetchFeatureConfig() → FeatureConfig
-updateFeatureConfig(config: FeatureConfigUpdate) → FeatureConfig
+Important config types:
 
-// Language
-fetchLanguageConfig() → LanguageConfig
-updateLanguageConfig(language: string) → LanguageConfig
-```
+- `LLMConfig`
+- `PromptConfig`
+- `GenerationDefaults`
+- `ApiKeyStatusResponse`
 
-## Provider Info
+## LLM Observability API
 
-```typescript
-export const PROVIDER_INFO = {
-  openai: { name: 'OpenAI', defaultModel: 'gpt-5-nano-2025-08-07', requiresKey: true },
-  anthropic: { name: 'Anthropic', defaultModel: 'claude-haiku-4-5-20251001', requiresKey: true },
-  openrouter: { name: 'OpenRouter', defaultModel: 'deepseek/deepseek-chat', requiresKey: true },
-  gemini: { name: 'Google Gemini', defaultModel: 'gemini-3-flash-preview', requiresKey: true },
-  deepseek: { name: 'DeepSeek', defaultModel: 'deepseek-chat', requiresKey: true },
-  ollama: { name: 'Ollama (Local)', defaultModel: 'gemma3:4b', requiresKey: false },
-};
-```
+`llm.ts` exports:
 
-## Usage
+- `fetchLlmCalls()`
+- `fetchLlmCallSummary()`
 
-```typescript
-import { fetchResume, API_BASE, PROVIDER_INFO } from '@/lib/api';
-```
+Core record types:
+
+- `LLMCallRecord`
+- `LLMCallSummary`
+- `LLMOperationSummary`
+
+## Current Provider Defaults
+
+Provider defaults live in `config.ts::PROVIDER_INFO`, and the Settings page uses them to seed model suggestions when a provider changes.

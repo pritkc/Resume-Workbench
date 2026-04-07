@@ -1,46 +1,45 @@
 # Scope and Principles
 
-> **Canonical source for agent behavior rules in Resume Matcher.**
+> Canonical operating rules for agents working in this workspace.
 
 ## What This Repo Is
 
-Resume Matcher is an AI-powered application that helps users tailor resumes to job descriptions. It consists of:
+Resume Workbench is a Resume-Matcher-derived product with major local additions:
 
-- **Backend**: FastAPI + Python 3.11+ with multi-provider LLM support via LiteLLM
-- **Frontend**: Next.js 15 + React 19 with Swiss International Style design
-- **Database**: TinyDB (JSON file storage)
-- **PDF Generation**: Headless Chromium via Playwright
+- FastAPI backend with LiteLLM, SQLAlchemy/Alembic, RenderCV, and LLM trace persistence
+- Next.js frontend with builder, RenderCV preview controls, application-pack flow, and observability UI
+- SQL-backed storage through `app/db/*`, exposed to the rest of the app through the compatibility facade in `app/database.py`
 
-## Non-Negotiable Rules
+## Non-Negotiable Current Truths
 
-### Code Quality
+1. RenderCV is the source of truth for resume preview artifacts and resume PDFs.
+2. The old frontend print route for resume PDFs is retired. Do not reintroduce it.
+3. `app/database.py` is a compatibility wrapper over SQLAlchemy repositories, not a TinyDB implementation.
+4. `additional.groups` is the canonical additional-info shape. Legacy flat keys are normalized in and out.
+5. Tailoring is diff-first, with full-resume generation as a fallback, followed by local refinement.
+6. LLM tracing is part of the product now. New LLM-backed work should preserve useful `operation`, `metadata`, and request-scope context.
+7. `application-packs/preview` and `application-packs/confirm` are the newest JD workflow surfaces. `POST /resumes/improve` still exists, but it is not the full pack workflow.
 
-1. **All frontend changes** MUST follow the Swiss International Style in [style-guide.md](design/style-guide.md)
-2. **All backend functions** MUST have type hints
-3. **Run `npm run lint`** before committing frontend changes
-4. **Run Prettier** (`npm run format`) before committing
+## Working Rules
 
-### Error Handling
+### Backend
 
-- **Backend**: Log detailed errors server-side, return generic messages to clients
-- **Frontend**: Use proper error boundaries and user-friendly error states
+- Keep prompts in `apps/backend/app/prompts/` unless there is a very strong reason not to.
+- Add or update Alembic migrations when changing SQL models.
+- Prefer repository-layer changes in `app/db/repositories/*` over ad hoc SQL in routers.
+- Keep client-facing errors concise and log full context server-side.
 
-### Security
+### Frontend
 
-- Never expose API keys or sensitive data in client responses
-- Use `asyncio.Lock()` for shared resource initialization
-- Always use `copy.deepcopy()` for mutable default values
+- Keep new UI aligned with the existing visual language unless the task explicitly changes design direction.
+- Treat RenderCV preview state as authoritative for rendering work.
+- Preserve builder autosave, raw-YAML validation, and application-pack review flows when making UI changes.
 
-## Out of Scope
+### Docs
 
-The agent should NOT:
+- If a change touches prompts, routes, storage, rendering, or LLM observability, update `docs/agent/`.
+- When docs and code drift, the code wins, and the docs should be corrected in the same line of work when practical.
 
-- Modify GitHub workflow files (`.github/workflows/`)
-- Change CI/CD configuration without explicit request
-- Alter Docker build behavior without explicit request
-- Remove or disable tests
+## Historical Docs
 
-## Related Docs
-
-- [quickstart.md](quickstart.md) - Build, run, test commands
-- [workflow.md](workflow.md) - Git workflow, PRs, commits
+Some older docs in `docs/agent/design/` still describe the pre-RenderCV CSS template system. They are reference material, not the current architecture.

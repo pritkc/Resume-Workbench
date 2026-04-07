@@ -1,42 +1,114 @@
-# Resume Enrichment Feature
+# Enrichment
 
-> **AI-powered resume improvement with targeted questions.**
+> "Enrichment" now covers two AI-assisted editing flows: question-based enhancement and targeted regeneration.
 
-## Overview
+## 1. Question-Based Enhancement Flow
 
-The enrichment feature helps users improve their master resume with more detailed content by:
+This is the older wizard surfaced from the resume detail page.
 
-1. Analyzing the resume for weak/generic descriptions
-2. Asking targeted questions about their experience
-3. Generating additional bullet points based on answers
+Frontend:
 
-## How It Works
+- `apps/frontend/components/enrichment/enrichment-modal.tsx`
+- `apps/frontend/hooks/use-enrichment-wizard.ts`
 
-1. User clicks "Enhance Resume" on the master resume page
-2. AI analyzes the resume and identifies weak/generic descriptions
-3. User answers targeted questions (max 6 questions total) about their experience
-4. AI generates additional bullet points based on user answers
-5. New bullets are **added** to existing content (not replaced)
+Backend endpoints:
 
-## Key Design Decisions
+- `POST /api/v1/enrichment/analyze/{resume_id}`
+- `POST /api/v1/enrichment/enhance`
+- `POST /api/v1/enrichment/apply/{resume_id}`
 
-- **Maximum 6 questions**: To avoid overwhelming users, the AI generates at most 6 questions across all items
-- **Additive enhancement**: Original bullet points are preserved; new enhanced bullets are appended after them
-- **Question prioritization**: AI prioritizes the most impactful questions that will yield the best improvements
+Behavior:
 
-## Key Files
+1. analyze the resume for weak experience/project descriptions
+2. ask targeted follow-up questions
+3. generate additional bullets from the answers
+4. append those bullets to the existing description instead of replacing it
 
-| File | Purpose |
-|------|---------|
-| `apps/backend/app/prompts/enrichment.py` | AI prompts for analysis and enhancement |
-| `apps/backend/app/routers/enrichment.py` | API endpoints for enrichment workflow |
-| `apps/frontend/hooks/use-enrichment-wizard.ts` | React state management for wizard flow |
-| `apps/frontend/components/enrichment/*.tsx` | UI components for enrichment modal |
+Prompt/operation mapping:
 
-## API Endpoints
+- `ANALYZE_RESUME_PROMPT` -> `enrichment_analyze_resume`
+- legacy re-analysis path uses `ANALYZE_RESUME_PROMPT` -> `enrichment_reanalyze_resume`
+- `ENHANCE_DESCRIPTION_PROMPT` -> `enrichment_generate_description`
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /enrichment/analyze/{resume_id}` | Analyze resume and generate questions |
-| `POST /enrichment/enhance` | Generate enhanced descriptions from answers |
-| `POST /enrichment/apply/{resume_id}` | Apply enhancements to resume |
+Important implementation detail:
+
+- if answers already include valid `item_id` values, the backend skips the expensive re-analysis call and derives item context directly from `processed_data`
+
+## 2. Builder Regenerate Flow
+
+This is the newer targeted rewrite flow exposed from the builder via the sparkles action.
+
+Frontend:
+
+- `apps/frontend/components/builder/regenerate-wizard.tsx`
+- `apps/frontend/hooks/use-regenerate-wizard.ts`
+- `apps/frontend/lib/api/enrichment.ts`
+
+Backend endpoints:
+
+- `POST /api/v1/enrichment/regenerate`
+- `POST /api/v1/enrichment/apply-regenerated/{resume_id}`
+
+Supported item types:
+
+- `experience`
+- `project`
+- `additionalGroup`
+
+Behavior:
+
+1. user selects specific items
+2. user supplies freeform rewrite instructions
+3. backend regenerates selected items in parallel with `asyncio.gather`
+4. user reviews diff summaries
+5. apply step replaces the chosen content
+
+Prompt/operation mapping:
+
+- `REGENERATE_ITEM_PROMPT` -> `enrichment_regenerate_item`
+- `REGENERATE_ADDITIONAL_GROUP_PROMPT` -> `enrichment_regenerate_additional_group`
+
+## Apply Semantics
+
+Question-based enhancement:
+
+- additive
+- only appends bullets to experience/project descriptions
+
+Regenerate:
+
+- replacement
+- all-or-nothing apply to avoid partially corrupting resume state
+
+`apply-regenerated` uses several guards before it writes:
+
+- item id parsing
+- title/subtitle matching
+- original-content matching
+- fallback metadata disambiguation when indices drift
+
+If the current resume no longer matches the reviewed payload, the endpoint returns `409` and asks the user to regenerate again.
+
+## Key Backend File
+
+- `apps/backend/app/routers/enrichment.py`
+
+## Prompt Inventory
+
+Prompt definitions live in:
+
+- `apps/backend/app/prompts/enrichment.py`
+
+This file is part of the upcoming prompt-refactor surface and should stay aligned with `docs/agent/llm-prompt-inventory.md`.
+
+## Current Observability Gap
+
+Individual enrichment calls are persisted through normal LLM tracing, but the enrichment routes do not currently wrap the workflow in a higher-level `llm_trace_scope()` request scope the way tailoring does.
+
+If you work on enrichment tracing, that is a real gap to close rather than a docs bug.
+
+## Agent Notes
+
+- If item ids or resume section shapes change, update enrichment matching, regenerate payload builders, and backend apply logic together.
+- Additional-group regeneration depends on the canonical `additional.groups` schema.
+- Changes here usually need test updates in both integration and unit coverage because apply safety is strict by design.

@@ -1,39 +1,41 @@
-# JD Match Feature
+# JD Match
 
-> **Shows how well a tailored resume matches the original job description.**
+> JD Match is a builder-side comparison view for saved tailored resumes. It is not an LLM feature.
 
-## Overview
+## Current Behavior
 
-The Resume Builder includes a "JD Match" tab that shows how well a tailored resume matches the original job description.
+The builder shows a JD Match tab only when it can load the original job description for the current resume.
 
-## How It Works
+Backend endpoint:
 
-1. User tailors a resume against a job description
-2. Opens the tailored resume in the Builder
-3. "JD MATCH" tab appears (only for tailored resumes)
-4. Shows side-by-side comparison:
-   - **Left panel**: Original job description (read-only)
-   - **Right panel**: Resume with matching keywords highlighted in yellow
+- `GET /api/v1/resumes/{resume_id}/job-description`
 
-## Features
+That endpoint only works when:
 
-- **Keyword extraction**: Extracts significant keywords from JD (filters common stop words)
-- **Case-insensitive matching**: Matches keywords regardless of case
-- **Match statistics**: Shows total keywords, matches found, and match percentage
-- **Color-coded percentage**: Green (≥50%), yellow (≥30%), red (<30%)
+- the resume is tailored (`parent_id` exists)
+- an improvement record still links the resume to a stored job description
+
+If an older tailored resume predates job tracking or the link is missing, the endpoint returns an error and JD Match is unavailable.
+
+## UI Behavior
+
+The view shows:
+
+- the original job description
+- the current resume with matched keywords highlighted
+- simple keyword/match statistics
+
+Matching is client-side and case-insensitive. No LLM call is involved.
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `apps/frontend/lib/utils/keyword-matcher.ts` | Keyword extraction and matching utilities |
-| `apps/frontend/components/builder/jd-comparison-view.tsx` | Main split-view component |
-| `apps/frontend/components/builder/jd-display.tsx` | Read-only JD display |
-| `apps/frontend/components/builder/highlighted-resume-view.tsx` | Resume with keyword highlighting |
-| `apps/backend/app/routers/resumes.py` | `GET /{resume_id}/job-description` endpoint |
+- `apps/frontend/lib/utils/keyword-matcher.ts`
+- `apps/frontend/components/builder/jd-comparison-view.tsx`
+- `apps/frontend/components/builder/jd-display.tsx`
+- `apps/frontend/components/builder/highlighted-resume-view.tsx`
+- `apps/backend/app/routers/resumes.py`
 
-## API Endpoint
+## Agent Notes
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /resumes/{resume_id}/job-description` | Fetch JD used to tailor a resume |
+- If you change how tailored resumes are linked to jobs, update `get_job_description_for_resume()` and the builder gating logic together.
+- JD Match is derived from persisted job content plus client-side keyword matching, so prompt/config changes should not affect it directly.

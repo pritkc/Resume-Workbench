@@ -1,88 +1,75 @@
 # Frontend Workflow
 
-> User flows and state management for Resume Matcher.
+> Current user and state flows across dashboard, tailor, viewer, and builder.
 
-## Core User Flow
+## Core Product Loop
 
+```text
+Dashboard
+  -> upload master resume
+  -> Tailor page preview
+  -> diff review + application-pack preview
+  -> confirm tailored resume
+  -> Resume viewer
+  -> Builder for edits, YAML, RenderCV preview, cover letter, outreach, JD match
 ```
-Dashboard → Upload Master Resume → Tailor for Job → View/Edit → Download PDF
-```
 
-## Pages
+## Tailor Flow
 
-### 1. Dashboard (`/dashboard`)
-- **No master:** "Initialize Master Resume" card
-- **Has master:** "Master Resume" card + tailored tiles
-- **Create:** "+" card opens `/tailor`
-- Auto-refreshes on window focus
+1. Load master resume id from `localStorage`.
+2. Fetch prompt options and generation defaults.
+3. Upload the job description with `POST /jobs/upload`.
+4. Preview via `POST /application-packs/preview`.
+5. Show diff review modal.
+6. Confirm via `POST /application-packs/confirm`.
+7. Navigate to `/resumes/[id]`.
 
-### 2. Resume Viewer (`/resumes/[id]`)
-- Read-only display at 250mm width
-- Actions: Back, Edit, Download PDF, Delete
-- Delete shows confirmation + success dialogs
+Important current behavior:
 
-### 3. Tailor (`/tailor`)
-- Job description textarea (min 50 chars)
-- Process: Upload JD → Improve → Redirect to viewer
+- preview creates an application pack and preview artifacts before a tailored resume exists
+- preview response carries `request_id`, which is also used as the trace id for `/llm-traces`
 
-### 4. Builder (`/builder`)
-- **Left panel:** Editor (forms + formatting)
-- **Right panel:** WYSIWYG preview
-- **Tabs:** Resume | Cover Letter | Outreach
-- Data priority: URL param → Context → localStorage → defaults
+## Viewer Flow
 
-### 5. Settings (`/settings`)
-- System status (cached)
-- LLM configuration (6 providers)
-- Last fetched indicator + manual refresh
+`/resumes/[id]` loads:
 
-## Pagination Rules
+- processed resume data
+- title
+- theme settings
+- RenderCV preview artifacts on demand
 
-- Sections CAN span pages
-- Individual items stay together
-- Pages ≥50% full before break
-- Headers never orphaned
+Master resumes expose enrichment. Tailored resumes expose JD Match once opened in the builder.
 
-## State Management
+## Builder Flow
 
-### localStorage
-| Key | Purpose |
-|-----|---------|
-| `master_resume_id` | Master resume UUID |
-| `resume_builder_draft` | Auto-saved form |
-| `resume_builder_settings` | Template prefs |
+The builder has two editing modes for the resume tab:
 
-### StatusCache Context
-- Initial fetch on app start
-- 30-min auto-refresh
-- Optimistic counter updates
+- visual form editing
+- raw RenderCV YAML editing across `cv`, `design`, `locale`, and `settings`
 
-## Delete Flow
+Other important behavior:
 
-1. Click Delete → Confirmation dialog
-2. API: `DELETE /resumes/{id}`
-3. Clear localStorage if master
-4. Success dialog → Redirect to dashboard
+- autosaves draft changes
+- supports undo/redo history
+- keeps raw YAML and structured data in sync through normalize/save endpoints
+- refreshes RenderCV preview from the same draft payload shape used for persistence
+- manages cover-letter and outreach edit/generate flows
 
-## Section Management
+## Settings Flow
 
-| Action | Result |
-|--------|--------|
-| Rename | Click pencil icon |
-| Reorder | Up/down arrows |
-| Hide | Eye icon (hidden sections still editable) |
-| Delete | Hides default, removes custom |
-| Add | "Add Section" button |
+Settings owns:
 
-## API Client
+- provider/model/api-base state
+- prompt-default state
+- language preferences
+- system-health checks
+- destructive actions like clearing keys or resetting the database
 
-```typescript
-import { fetchResume, API_BASE } from '@/lib/api';
+## Observability Flow
 
-// Resume operations
-fetchResume, fetchResumeList, updateResume, deleteResume
-uploadJobDescriptions, improveResume, downloadResumePdf
+The application-pack panel links into `/llm-traces` with:
 
-// Config operations  
-fetchLlmConfig, updateLlmConfig, testLlmConnection
-```
+- `trace_id`
+- `request_scope=resumes.improve_preview`
+
+That is the quickest way to inspect a broken preview or a suspicious prompt result.

@@ -1,55 +1,107 @@
 # Quickstart Guide
 
-> Essential commands to build, run, and test Resume Matcher.
+> Fast path for getting the current workspace running.
 
 ## Prerequisites
 
-- Node.js 18+
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- Node.js compatible with the frontend's Next.js 16 setup
+- Python 3.13+
+- [`uv`](https://docs.astral.sh/uv/)
+- Docker, for the local Postgres setup
 
-## Installation
+## Install
 
-```bash
-npm run install    # Installs frontend (npm) + backend (uv sync)
-```
-
-## Development
+Frontend:
 
 ```bash
-npm run dev           # Start both servers
-npm run dev:backend   # FastAPI on :8000
-npm run dev:frontend  # Next.js on :3000
+cd apps/frontend
+npm install
 ```
 
-## Quality Checks
+Backend:
 
 ```bash
-npm run lint     # Lint frontend
-npm run format   # Prettier
+cd apps/backend
+uv sync --extra dev
 ```
 
-## Backend Commands
+Root tooling for Playwright E2E:
+
+```bash
+npm install
+```
+
+## Environment Files
+
+```bash
+cp apps/backend/.env.sample apps/backend/.env
+cp apps/frontend/.env.sample apps/frontend/.env.local
+```
+
+## Database
+
+Recommended local database:
+
+```bash
+docker compose up -d postgres
+cd apps/backend
+uv run alembic upgrade head
+```
+
+Notes:
+
+- `DATABASE_URL` must point at Postgres. `apps/backend/.env.sample` already uses the default local Docker connection string.
+- Alembic migrations are still the canonical schema history for SQL-backed environments.
+
+## Run The App
+
+Backend:
 
 ```bash
 cd apps/backend
 uv run uvicorn app.main:app --reload --port 8000
+```
+
+Frontend:
+
+```bash
+cd apps/frontend
+npm run dev
+```
+
+Useful URLs:
+
+- Frontend: `http://localhost:3000`
+- Backend API docs: `http://localhost:8000/docs`
+- Settings: `http://localhost:3000/settings`
+- LLM traces: `http://localhost:3000/llm-traces`
+
+## Verify
+
+Frontend:
+
+```bash
+cd apps/frontend
+npm run lint
+npm run test
+```
+
+Backend:
+
+```bash
+cd apps/backend
 uv run pytest
 ```
 
-## Environment Setup
+Root E2E:
 
 ```bash
-# Backend
-cp apps/backend/.env.example apps/backend/.env
-
-# Frontend
-cp apps/frontend/.env.sample apps/frontend/.env.local
+npm run test:e2e
 ```
 
-## First-Time Setup
+## First-Time Product Setup
 
-1. Open http://localhost:3000/settings
-2. Select AI provider + enter API key
-3. Click "Test Connection"
-4. Upload your first resume!
+1. Open `/settings`.
+2. Pick an LLM provider and save credentials.
+3. Upload a master resume on `/dashboard`.
+4. Use `/tailor` to generate an application-pack preview.

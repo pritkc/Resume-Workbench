@@ -1,122 +1,120 @@
 # LLM Integration Guide
 
-> **Multi-provider AI support, JSON handling, and prompt guidelines.**
+> How the live LiteLLM layer, prompt selection, and trace persistence work today.
 
-## Multi-Provider Support
+## Core Files
 
-Backend uses LiteLLM to support multiple providers through a unified API:
-
-| Provider | Type | Notes |
-|----------|------|-------|
-| **Ollama** | Local | Free, runs on your machine |
-| **OpenAI** | Cloud | GPT-4o, GPT-4o-mini |
-| **Anthropic** | Cloud | Claude 3.5 Sonnet |
-| **Google Gemini** | Cloud | Gemini 1.5 Flash/Pro |
-| **OpenRouter** | Cloud | Access to multiple models |
-| **DeepSeek** | Cloud | DeepSeek Chat |
-
-## API Key Handling
-
-API keys are passed directly to `litellm.acompletion()` via the `api_key` parameter (not via `os.environ`) to avoid race conditions in async contexts.
-
-```python
-# Correct
-await litellm.acompletion(
-    model=model,
-    messages=messages,
-    api_key=api_key  # Direct parameter
-)
-
-# Incorrect - don't use os.environ in async code
-os.environ["OPENAI_API_KEY"] = key  # Race condition risk
-```
-
-## JSON Mode
-
-The `complete_json()` function automatically enables `response_format={"type": "json_object"}` for providers that support it:
-
-- OpenAI
-- Anthropic
-- Gemini
-- DeepSeek
-- Major OpenRouter models
-
-## Retry Logic
-
-JSON completions include 2 automatic retries with progressively lower temperature:
-
-- Attempt 1: temperature 0.1
-- Attempt 2: temperature 0.0
-
-## JSON Extraction
-
-Robust bracket-matching algorithm in `_extract_json()` handles:
-
-- Malformed responses
-- Markdown code blocks
-- Edge cases
-- Infinite recursion protection when content starts with `{` but matching fails
-
-## Error Handling Pattern
-
-LLM functions log detailed errors server-side but return generic messages to clients:
-
-```python
-except Exception as e:
-    logger.error(f"LLM completion failed: {e}")
-    raise ValueError("LLM completion failed. Please check your API configuration.")
-```
-
-## Adding Prompts
-
-Add new prompt templates to `apps/backend/app/prompts/templates.py`.
-
-### Prompt Guidelines
-
-1. Use `{variable}` for substitution (single braces)
-2. Include example JSON schemas for structured outputs
-3. Keep instructions concise: "Output ONLY the JSON object, no other text"
-
-### Example
-
-```python
-IMPROVE_BULLET = """
-Improve this resume bullet point for a {job_title} position.
-
-Current: {current_bullet}
-
-Output ONLY the improved bullet point, no explanations.
-"""
-```
+| File | Responsibility |
+|------|----------------|
+| `apps/backend/app/llm.py` | LiteLLM router, health checks, retries, JSON extraction, trace persistence |
+| `apps/backend/app/config.py` | runtime settings, API-key fallback, trace/cost knobs |
+| `apps/backend/app/prompts/templates.py` | core parse/tailor/cover-letter/outreach prompts plus job metadata extraction |
+| `apps/backend/app/prompts/enrichment.py` | enrichment and regenerate prompts |
+| `apps/backend/app/prompts/refinement.py` | refinement prompt plus local AI-phrase cleanup rules |
 
 ## Provider Configuration
 
-Users configure their preferred AI provider via:
+The backend supports:
 
-- Settings page: `/settings`
-- API: `PUT /api/v1/config/llm-api-key`
+- `openai`
+- `anthropic`
+- `openrouter`
+- `gemini`
+- `deepseek`
+- `ollama`
+
+Configuration is resolved from:
+
+1. env-backed settings defaults
+2. `apps/backend/data/config.json`
+3. provider-specific API-key storage in `config.json["api_keys"]`
+4. request updates through `/api/v1/config/llm-api-key` and `/api/v1/config/api-keys`
+
+## Router Model
+
+`app/llm.py` builds and caches a single LiteLLM `Router` keyed by provider/model/api-key/api-base fingerprint.
+
+Current retry policy:
+
+- auth errors: no retry
+- bad requests: no retry
+- timeouts: retry
+- rate limits: retry
+- internal server errors: retry
+
+`_normalize_api_base()` also strips duplicated `/v1` segments for providers where LiteLLM appends them internally.
+
+## Completion APIs
+
+`complete()`
+
+- text output
+- uses the cached Router
+- suppresses `temperature` for GPT-5-family models
+- injects `reasoning_effort="minimal"` for GPT-5-family models
+
+`complete_json()`
+
+- appends a JSON-only system instruction
+- enables `response_format={"type": "json_object"}` when the target model supports it
+- retries malformed or truncated content at the application layer
+- records every attempt in `llm_calls`
+
+## JSON Handling
+
+`complete_json()` currently does all of the following:
+
+- strips code fences and `<think>` tags
+- extracts the first balanced JSON object from mixed output
+- rejects obviously truncated responses
+- retries parse/extraction failures
+- uses adaptive timeouts based on provider and `max_tokens`
 
 ## Health Checks
 
-The `/api/v1/health` endpoint validates LLM connectivity.
+`check_llm_health()`:
 
-> **Note**: Docker health checks must use `/api/v1/health` (not `/health`).
+- uses direct LiteLLM completion, not the shared Router path
+- caches successful and failed health results by provider/model/key/base fingerprint
+- stores health-check attempts in `llm_calls`
+- powers `/api/v1/health`, `/api/v1/status`, and `/api/v1/config/llm-test`
 
-## Timeouts
+## Observability
 
-All LLM calls have configurable timeouts:
+Every successful or failed LLM attempt can persist:
 
-| Operation | Timeout |
-|-----------|---------|
-| Health checks | 30s |
-| Completions | 120s |
-| JSON operations | 180s |
+- `trace_id`
+- `call_group_id`
+- `request_scope`
+- `operation`
+- prompt and response previews
+- token usage and fallback estimates
+- estimated costs
+- retry attempt number and finish reason
 
-## Key Files
+Top-level flows attach request context with `llm_trace_scope()`. See [llm-observability.md](llm-observability.md).
 
-| File | Purpose |
-|------|---------|
-| `apps/backend/app/llm.py` | LiteLLM wrapper with JSON mode |
-| `apps/backend/app/prompts/templates.py` | Prompt templates |
-| `apps/backend/app/prompts/enrichment.py` | Enrichment-specific prompts |
-| `apps/backend/app/config.py` | Provider configuration |
+## Prompt Selection
+
+Only the resume-tailoring strategy is currently runtime-configurable:
+
+- `nudge`
+- `keywords`
+- `full`
+
+Selection precedence:
+
+1. request-level `prompt_id`
+2. saved generation defaults
+3. saved global default prompt
+4. fallback constant `DEFAULT_IMPROVE_PROMPT_ID`
+
+See [llm-prompt-inventory.md](llm-prompt-inventory.md) for the full prompt map.
+
+## Current Guidance For New LLM Work
+
+- Put reusable prompt text in `app/prompts/`.
+- Use `complete_json()` for structured outputs and `complete()` for plain text.
+- Always set a stable `operation` name.
+- Pass useful `metadata` so traces are debuggable.
+- If the call is part of a top-level request flow, make sure it runs inside an appropriate `llm_trace_scope()`.

@@ -1,119 +1,96 @@
 # Frontend Architecture
 
-> Next.js 15 + React 19 | TypeScript | Tailwind | Swiss International Style
+> Next.js app-router frontend with builder, application-pack review, RenderCV preview, and observability UI.
 
-## Directory Structure
+## Route Map
 
-```
-apps/frontend/
-├── app/
-│   ├── (default)/           # Main app routes
-│   │   ├── page.tsx         # Landing (/)
-│   │   ├── dashboard/       # /dashboard
-│   │   ├── builder/         # /builder
-│   │   ├── tailor/          # /tailor
-│   │   ├── settings/        # /settings
-│   │   └── resumes/[id]/    # /resumes/[id]
-│   └── print/               # Print routes for PDF
-├── components/
-│   ├── ui/                  # Button, Input, Dialog, etc.
-│   ├── builder/             # ResumeBuilder, forms/
-│   ├── preview/             # PaginatedPreview, usePagination
-│   └── resume/              # Templates (single, two-column)
-├── lib/
-│   ├── api/                 # client.ts, resume.ts, config.ts
-│   ├── context/             # status-cache.tsx, language-context.tsx
-│   └── constants/           # page-dimensions.ts
-└── messages/                # i18n translations
+```text
+apps/frontend/app/(default)/
+├── dashboard/
+├── builder/
+├── llm-traces/
+├── resumes/[id]/
+├── settings/
+└── tailor/
 ```
 
-## Pages
+Other live route:
 
-### Dashboard (`/dashboard`)
-- Master resume card + tailored resume tiles
-- States: `loading | pending | processing | ready | failed`
-- Auto-refreshes on window focus
-- localStorage: `master_resume_id`
+- `app/print/cover-letter/[id]` for Playwright cover-letter PDF generation
 
-### Builder (`/builder`)
-- Left: Editor Panel (forms + formatting controls)
-- Right: WYSIWYG PaginatedPreview
-- Tabs: Resume | Cover Letter | Outreach
-- Auto-saves to localStorage
+## Current Product Surfaces
 
-### Tailor (`/tailor`)
-- Job description textarea
-- Calls: `POST /jobs/upload` → `POST /resumes/improve`
-- Redirects to `/resumes/[new_id]`
+### `/dashboard`
 
-### Settings (`/settings`)
-- Provider selection (6 providers)
-- API key input
-- System status (cached, 30-min refresh)
+- master-resume upload and state tracking
+- tailored resume history
+- retry-processing for failed uploads
+- filtering by company, role, date, and search
 
-### Print Routes (`/print/resumes/[id]`, `/print/cover-letter/[id]`)
-- Headless Chrome renders these for PDF
-- Query params: template, pageSize, margins, spacing
+### `/tailor`
 
-## UI Components
+- job-description entry
+- prompt selector backed by `/config/prompts` and `/config/generation-defaults`
+- application-pack preview flow
+- diff review before confirm
 
-**Button variants:** default (blue), destructive (red), success (green), warning (orange), outline, secondary
+### `/resumes/[id]`
 
-**Styling:** `rounded-none`, hard shadows, `font-mono` for labels
+- resume detail view
+- RenderCV preview panel
+- rename, download, delete
+- enrichment entry point for the master resume
 
-## Context Providers
+### `/builder`
 
-### StatusCacheProvider
-```typescript
-const { status, refreshStatus, incrementResumes, decrementResumes } = useStatusCache();
-```
-- Caches system status, 30-min auto-refresh
-- Optimistic counter updates on user actions
+- visual editor and raw YAML editor
+- cover-letter and outreach editing
+- JD Match tab for tailored resumes
+- RenderCV theme, locale, and runtime controls
+- autosave, undo/redo, and raw-YAML validation handling
 
-### LanguageProvider
-```typescript
-const { contentLanguage, setContentLanguage } = useLanguage();
-```
-- Content generation language (en, es, zh, ja)
+### `/settings`
 
-## API Client (`lib/api/`)
+- provider/model/api-base management
+- prompt default selection
+- language settings
+- system status and danger-zone actions
 
-```typescript
-import { fetchResume, API_BASE } from '@/lib/api';
+### `/llm-traces`
 
-// client.ts exports
-API_URL, API_BASE, apiFetch, apiPost, apiPatch, apiDelete
+- internal observability page for `llm_calls`
 
-// resume.ts
-uploadJobDescriptions, improveResume, fetchResume, fetchResumeList
-updateResume, downloadResumePdf, deleteResume
+## Important Component Areas
 
-// config.ts
-fetchLlmConfig, updateLlmConfig, testLlmConnection, fetchSystemStatus
-```
+| Area | Files |
+|------|-------|
+| Builder shell | `components/builder/resume-builder.tsx` |
+| Resume forms | `components/builder/forms/*` |
+| Tailor review | `components/tailor/diff-preview-modal.tsx` |
+| RenderCV UI | `components/rendercv/*` |
+| LLM observability UI | `components/observability/llm-trace-viewer.tsx` |
+| Enrichment UI | `components/enrichment/*` |
 
-## localStorage Keys
+## State And Persistence
+
+Context providers:
+
+- `StatusCacheProvider`
+- `LanguageProvider`
+- `ResumePreviewerContext`
+
+Important local storage keys:
 
 | Key | Purpose |
 |-----|---------|
-| `master_resume_id` | Master resume UUID |
-| `resume_builder_draft` | Auto-saved form data |
-| `resume_builder_settings` | Template preferences |
+| `master_resume_id` | active master resume |
+| `resume_builder_draft` | builder draft snapshot |
+| `resume_builder_settings` | RenderCV theme settings snapshot |
+| `resume_builder_raw_yaml` | raw YAML sections in builder |
+| `resume_tailor_generation_defaults` | local mirror of latest tailor defaults |
+| `resume_builder_ui_layout` | builder pane mode and split ratio |
 
-## Pagination System
+## Rendering Truth
 
-`usePagination` hook calculates page breaks:
-- Respects `.resume-item` boundaries
-- Prevents orphaned headers
-- 150ms debounce for performance
-
-## Critical CSS Rule
-
-For PDF generation, `globals.css` must whitelist print classes:
-```css
-@media print {
-  body * { visibility: hidden !important; }
-  .resume-print, .resume-print * { visibility: visible !important; }
-  .cover-letter-print, .cover-letter-print * { visibility: visible !important; }
-}
-```
+- RenderCV preview artifacts are the current rendering truth for saved preview and resume PDF work.
+- The older React resume components still exist in the repo for UI features such as JD highlighting and legacy preview logic, but they are not the authoritative output path for the current product.

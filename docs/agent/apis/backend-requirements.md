@@ -1,93 +1,117 @@
 # Backend API Requirements
 
-> API contract specifications for Resume Matcher.
+> Current route inventory for the live backend.
 
 ## Base URL
 
-```
+```text
 http://localhost:8000/api/v1
 ```
 
 ## Authentication
 
-Currently none (local-first design).
+None. This is still a local-first single-user app surface.
 
-## Endpoints
+## Route Groups
 
-### Health & Status
+### Health
 
-```
-GET /health           → {healthy, provider, model, error?}
-GET /status           → {status, llm_configured, llm_healthy, database_stats}
-```
+- `GET /health`
+- `GET /status`
 
-### Configuration
+### Config
 
-```
-GET /config/llm-api-key    → {provider, model, api_key(masked), api_base?}
-PUT /config/llm-api-key    ← {provider, model, api_key, api_base?}
-POST /config/llm-test      → {healthy, provider, model}
-GET /config/features       → {enable_cover_letter, enable_outreach_message}
-PUT /config/features       ← {enable_cover_letter?, enable_outreach_message?}
-```
-
-### Resumes
-
-```
-POST /resumes/upload       ← multipart/form-data {file}
-                           → {resume_id}
-GET /resumes?resume_id=    → Resume object
-GET /resumes/list          → [{resume_id, filename, is_master, created_at}]
-PATCH /resumes/{id}        ← {processed_data, cover_letter?, outreach_message?}
-DELETE /resumes/{id}       → {message}
-GET /resumes/{id}/pdf      → application/pdf
-POST /resumes/improve      ← {resume_id, job_id}
-                           → {data, cover_letter?, outreach_message?}
-```
+- `GET /config/llm-api-key`
+- `PUT /config/llm-api-key`
+- `POST /config/llm-test`
+- `GET /config/features`
+- `PUT /config/features`
+- `GET /config/generation-defaults`
+- `PUT /config/generation-defaults`
+- `GET /config/language`
+- `PUT /config/language`
+- `GET /config/prompts`
+- `PUT /config/prompts`
+- `GET /config/api-keys`
+- `POST /config/api-keys`
+- `DELETE /config/api-keys`
+- `DELETE /config/api-keys/{provider}`
+- `POST /config/reset`
 
 ### Jobs
 
-```
-POST /jobs/upload          ← {job_descriptions: [], resume_id?}
-                           → {job_id: []}
-GET /jobs/{id}             → {job_id, content, created_at}
-```
+- `POST /jobs/upload`
+- `GET /jobs/{job_id}`
 
-## Request/Response Formats
+### Resumes
 
-### Resume Object
-```json
-{
-  "resume_id": "uuid",
-  "content": "markdown or json",
-  "processed_data": {
-    "personalInfo": {...},
-    "summary": "...",
-    "workExperience": [...],
-    "education": [...],
-    "additional": {...}
-  },
-  "is_master": true,
-  "processing_status": "ready|processing|failed",
-  "cover_letter": "text or null",
-  "outreach_message": "text or null"
-}
-```
+- `POST /resumes/upload`
+- `GET /resumes?resume_id=...`
+- `GET /resumes/list`
+- `POST /resumes/draft/normalize`
+- `POST /resumes/draft/render-preview`
+- `POST /resumes/improve/preview`
+- `POST /resumes/improve/confirm`
+- `POST /resumes/improve`
+- `PATCH /resumes/{resume_id}`
+- `PATCH /resumes/{resume_id}/draft`
+- `POST /resumes/{resume_id}/pdf`
+- `GET /resumes/{resume_id}/pdf`
+- `POST /resumes/{resume_id}/render-preview`
+- `GET /resumes/{resume_id}/render-preview`
+- `DELETE /resumes/{resume_id}`
+- `POST /resumes/{resume_id}/retry-processing`
+- `PATCH /resumes/{resume_id}/cover-letter`
+- `PATCH /resumes/{resume_id}/outreach-message`
+- `PATCH /resumes/{resume_id}/title`
+- `POST /resumes/{resume_id}/generate-cover-letter`
+- `POST /resumes/{resume_id}/generate-outreach`
+- `GET /resumes/{resume_id}/job-description`
+- `GET /resumes/{resume_id}/cover-letter/pdf`
 
-### Error Response
-```json
-{
-  "detail": "Error message"
-}
-```
+### Application Packs And Artifacts
 
-## Status Codes
+- `GET /application-packs`
+- `POST /application-packs/preview`
+- `POST /application-packs/confirm`
+- `GET /artifacts/{artifact_id}`
+- `GET /themes`
 
-| Code | Meaning |
-|------|---------|
-| 400 | Bad request |
-| 404 | Not found |
-| 413 | File too large (>4MB) |
-| 422 | Parsing failed |
-| 500 | Server error |
-| 503 | PDF rendering failed |
+### LLM Observability
+
+- `GET /llm/calls`
+- `GET /llm/calls/summary`
+
+### Enrichment
+
+- `POST /enrichment/analyze/{resume_id}`
+- `POST /enrichment/enhance`
+- `POST /enrichment/apply/{resume_id}`
+- `POST /enrichment/regenerate`
+- `POST /enrichment/apply-regenerated/{resume_id}`
+
+## Response Shape Notes
+
+- most structured responses include a `request_id`
+- LLM-backed tailor preview/confirm/direct-improve responses use `request_id` as the trace id for observability
+- resume fetch responses include:
+  - `raw_resume`
+  - `processed_resume`
+  - optional `cover_letter`
+  - optional `outreach_message`
+  - optional `application_pack_id`
+  - optional `theme_settings`
+- draft validation failures can return structured `detail` with `section`, `line`, `column`, and `path`
+
+## Important Status Codes
+
+| Code | Typical meaning |
+|------|-----------------|
+| `400` | invalid request, preview hash mismatch, bad prompt id, invalid language |
+| `404` | missing resume, job, artifact, or cover letter |
+| `409` | resume missing structured data for RenderCV rendering |
+| `413` | upload too large |
+| `422` | upload parse failure |
+| `500` | unexpected server error |
+| `503` | RenderCV or Playwright rendering failure |
+| `504` | tailor preview timeout |

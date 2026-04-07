@@ -1,68 +1,85 @@
-# Custom Sections System
+# Custom Sections
 
-> **Dynamic resume sections with full customization.**
+> Custom sections still exist, but they now have to round-trip through RenderCV and survive LLM tailoring safely.
 
-## Section Types
+## Canonical Data Model
 
-| Type | Description | Example Uses |
-|------|-------------|--------------|
-| `personalInfo` | Special type for header (always first) | Name, contact details |
-| `text` | Single text block | Summary, objective, statement |
-| `itemList` | Array of items with title, subtitle, years, description | Experience, projects, publications |
-| `stringList` | Simple array of strings | Skills, languages, hobbies |
+Custom section state lives in two places:
 
-## Section Features
+- `sectionMeta`
+- `customSections`
 
-- **Rename sections**: Change display names (e.g., "Education" → "Academic Background")
-- **Reorder sections**: Up/down buttons to change section order
-- **Hide sections**: Toggle visibility (hidden sections still editable, just not in PDF)
-- **Delete sections**: Remove custom sections entirely
-- **Add custom sections**: Create new sections with any name and type
+`sectionMeta` controls:
 
-## Section Controls (UI)
+- order
+- visibility
+- display name
+- section type
+- whether a section is built-in or custom
 
-Each section (except Personal Info) has these controls in the header:
+`customSections` stores the actual content keyed by the custom section key.
 
-| Control | Icon | Function |
-|---------|------|----------|
-| Visibility | 👁 Eye / EyeOff | Toggle show/hide in PDF preview |
-| Move Up | ⬆ ChevronUp | Move section earlier in order |
-| Move Down | ⬇ ChevronDown | Move section later in order |
-| Rename | ✏️ Pencil | Edit section display name |
-| Delete | 🗑 Trash | Hide (default) or delete (custom) |
+Supported section types:
 
-## Hidden Section Behavior
+- `personalInfo`
+- `text`
+- `itemList`
+- `stringList`
 
-- Hidden sections appear in the form with:
-  - Dashed border and 60% opacity
-  - "Hidden from PDF" badge (amber)
-- Hidden sections are still editable
-- Only PDF/preview hides them (uses `getSortedSections` which filters by visibility)
-- Form shows all sections (uses `getAllSections`)
+The schema lives in `apps/backend/app/schemas/models.py`.
 
-## Key Files
+## Current Editor Behavior
 
-| File | Purpose |
-|------|---------|
-| `apps/backend/app/schemas/models.py` | `SectionType`, `SectionMeta`, `CustomSection` models |
-| `apps/frontend/lib/utils/section-helpers.ts` | Section management utilities |
-| `apps/frontend/components/builder/section-header.tsx` | Section controls UI |
-| `apps/frontend/components/builder/add-section-dialog.tsx` | Add custom section dialog |
-| `apps/frontend/components/builder/resume-form.tsx` | Dynamic form rendering |
-| `apps/frontend/components/resume/dynamic-resume-section.tsx` | Renders custom sections in templates |
+The visual builder still supports:
 
-## Data Structure
+- renaming sections
+- reordering sections
+- toggling visibility
+- deleting custom sections
+- adding new custom sections
 
-```typescript
-interface ResumeData {
-  // ... existing fields (personalInfo, summary, etc.)
-  sectionMeta?: SectionMeta[];  // Section order, names, visibility
-  customSections?: Record<string, CustomSection>;  // Custom section data
-}
-```
+Primary frontend files:
 
-## Migration
+- `apps/frontend/components/builder/resume-form.tsx`
+- `apps/frontend/components/builder/section-header.tsx`
+- `apps/frontend/components/builder/add-section-dialog.tsx`
+- `apps/frontend/lib/utils/section-helpers.ts`
 
-Existing resumes are automatically migrated via lazy normalization - default section metadata is added when a resume is fetched if `sectionMeta` is missing.
+Existing resumes are lazily normalized with `normalize_resume_data()` so missing `sectionMeta` and `customSections` are backfilled on read.
 
-> **Important**: The `normalize_resume_data()` function uses `copy.deepcopy(DEFAULT_SECTION_META)` to avoid shared mutable reference bugs. Always use deep copies when assigning default mutable values.
+## RenderCV Round-Trip
+
+Custom sections are no longer just a frontend rendering concern.
+
+The RenderCV adapter now:
+
+- emits custom sections into RenderCV `cv.sections`
+- reconstructs custom sections when YAML is parsed back
+- rebuilds `sectionMeta` for custom sections using display names and existing keys when possible
+
+Relevant file:
+
+- `apps/backend/app/rendering/rendercv_adapter.py`
+
+Important implication:
+
+- changing custom-section naming, keys, or shape can break raw-YAML round trips unless the adapter and section-meta rebuilding logic are updated together
+
+## LLM Safety Guards
+
+Tailoring routes explicitly protect custom sections after generation.
+
+`apps/backend/app/routers/resumes.py` currently:
+
+- restores custom sections that the LLM removed
+- trims hallucinated extra items from `itemList` custom sections
+- removes fabricated descriptions when the original custom item had an empty description
+- restores month-level date strings for `itemList` custom sections if the LLM degrades them
+
+The main guard is `_protect_custom_sections()`.
+
+## Agent Notes
+
+- Treat `sectionMeta.key` as the durable link between metadata and `customSections`.
+- Display-name changes are allowed, but key stability matters for saves, raw YAML parsing, and LLM post-processing.
+- If you introduce new custom-section behavior, update visual builder code, schema normalization, RenderCV adapter round-trip logic, and tailoring safeguards together.

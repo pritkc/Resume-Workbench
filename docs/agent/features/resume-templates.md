@@ -1,68 +1,98 @@
-# Resume Template Settings
+# RenderCV Themes And Preview Settings
 
-> **Template types and extensive formatting controls.**
+> Resume rendering is now driven by RenderCV theme settings, not frontend JSX template components.
 
-## Template Types
+## Current Theme IDs
 
-| Template | Description |
-|----------|-------------|
-| `swiss-single` | Traditional single-column layout with maximum content density |
-| `swiss-two-column` | 65%/35% split with experience in main column, skills in sidebar |
-| `modern` | Single-column with colorful accent headers and customizable theme colors |
-| `modern-two-column` | Two-column layout combining modern accents with space-efficient design |
+Supported theme ids:
 
-## Formatting Controls
+- `classic`
+- `moderncv`
+- `sb2nov`
+- `engineeringresumes`
+- `engineeringclassic`
+- `harvard`
+- `opal`
+- `ember`
+- `ink`
 
-| Control | Range | Default | Effect |
-|---------|-------|---------|--------|
-| Margins | 5-25mm | 8mm | Page margins |
-| Section Spacing | 1-5 | 3 | Gap between major sections |
-| Item Spacing | 1-5 | 2 | Gap between items within sections |
-| Line Height | 1-5 | 3 | Text line height |
-| Base Font Size | 1-5 | 3 | Overall text scale (11-16px) |
-| Header Scale | 1-5 | 3 | Name/section header size multiplier |
-| Header Font | serif/sans-serif/mono | serif | Font family for headers |
-| Body Font | serif/sans-serif/mono | sans-serif | Font family for body text |
-| Compact Mode | boolean | false | Apply 0.6x spacing multiplier (spacing only; margins unchanged) |
-| Contact Icons | boolean | false | Show icons next to contact info |
-| Accent Color | blue/green/orange/red | blue | Accent color for Modern templates (modern, modern-two-column) |
+The canonical source for options is shared across frontend and backend.
 
-## Key Files
+## Canonical Theme Settings Shape
 
-| File | Purpose |
-|------|---------|
-| `apps/frontend/lib/types/template-settings.ts` | Type definitions, defaults, CSS variable mapping |
-| `apps/frontend/components/resume/styles/_tokens.css` | Global design tokens (colors) |
-| `apps/frontend/components/resume/styles/_base.module.css` | Shared typography and layout styles |
-| `apps/frontend/components/builder/formatting-controls.tsx` | UI controls for template settings |
-| `apps/frontend/components/resume/resume-single-column.tsx` | Single column template |
-| `apps/frontend/components/resume/resume-two-column.tsx` | Two column template |
-| `apps/frontend/components/resume/resume-modern.tsx` | Modern single column template |
-| `apps/frontend/components/resume/resume-modern-two-column.tsx` | Modern two column template |
-| `apps/backend/app/routers/resumes.py` | PDF generation endpoint with accentColor support |
+Primary settings live in `RenderThemeSettings` and include:
 
-## CSS Variables
+- `theme_id`
+- `page_size`
+- `density_profile`
+- `bold_keywords`
+- `accent_color`
+- `show_contact_icons`
+- `margins_mm`
+- `design`
+- `theme_profiles`
+- `locale`
+- `settings`
 
-Templates use CSS custom properties for styling:
+Important detail:
 
-- `--section-gap`, `--item-gap`, `--line-height` - Spacing
-- `--font-size-base`, `--header-scale`, `--section-header-scale` - Typography
-- `--header-font` - Header font family
-- `--body-font` - Body text font family
-- `--margin-top/bottom/left/right` - Page margins
-- `--accent-primary`, `--accent-light` - Accent colors for Modern templates
+- `theme_profiles` stores sparse per-theme overrides so switching themes does not permanently destroy theme-specific edits
 
-> **Note**: Templates should use the styles exported from `apps/frontend/components/resume/styles/_base.module.css` (e.g., `baseStyles['resume-section']`, `baseStyles['resume-item-subtitle']`) to ensure all spacing and typography respond to template settings.
+## Where Rendering Comes From
 
-### Typography Classes
+Resume preview and PDF generation use:
 
-The base stylesheet includes specialized classes for improved subtitle visibility:
+- `apps/backend/app/rendering/theme_profiles.py`
+- `apps/backend/app/rendering/rendercv_adapter.py`
+- `apps/backend/app/rendering/rendercv_engine.py`
 
-| Class | Font Size | Weight | Usage |
-|-------|-----------|--------|-------|
-| `resume-item-subtitle` | 0.95× base | 600 | Company names, education degrees, project roles |
-| `resume-item-subtitle-sm` | 0.88× base | 600 | Same fields in compact two-column layouts |
+The builder and resume detail page edit/view those settings through:
 
-These classes provide **better visibility** than the generic `resume-meta` class (0.82× base, weight 400), making subtitles 13-16% larger and semi-bold.
+- `apps/frontend/components/rendercv/render-theme-controls.tsx`
+- `apps/frontend/components/rendercv/render-preview-panel.tsx`
+- `apps/frontend/app/(default)/resumes/[id]/page.tsx`
+- `apps/frontend/components/builder/resume-builder.tsx`
 
-Formatting controls include an "Effective Output" summary that reflects compact-mode adjustments for spacing/line-height.
+Theme baselines live in:
+
+- `apps/frontend/lib/rendercv/theme-baselines.json`
+
+## Available Control Surface
+
+The current UI supports much richer control than the old template docs described, including:
+
+- theme switching
+- page size
+- page margins
+- typography and alignment
+- colors
+- header/contact presentation
+- section and entry spacing
+- advanced template/design overrides
+- locale text
+- runtime settings like PDF title and current date
+
+Raw YAML editing is the escape hatch for settings that do not fit the structured controls.
+
+## Rendering Boundaries
+
+- Resume preview artifacts and resume PDFs come from RenderCV.
+- Cover-letter PDFs still use the Playwright/HTML pipeline in `apps/backend/app/pdf.py`.
+- Application-pack preview and confirm both persist RenderCV artifacts.
+
+## Testing Expectations
+
+Relevant test areas:
+
+- `apps/backend/tests/unit/test_theme_profiles.py`
+- `apps/backend/tests/unit/test_rendercv_adapter.py`
+- `apps/backend/tests/unit/test_rendercv_engine.py`
+- `apps/frontend/tests/render-theme-controls.test.tsx`
+
+The backend includes ATS-oriented coverage for supported themes. Keep that intact when changing design defaults or generated PDF behavior.
+
+## Agent Notes
+
+- If you add a new theme, update frontend type unions, frontend option lists/baselines, backend theme normalization, and RenderCV tests together.
+- Do not revive the old frontend resume template/PDF path unless that is an explicit product decision.
+- Some older docs and translation strings still refer to legacy templates; for the live rendering stack, trust the RenderCV files above.

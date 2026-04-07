@@ -225,7 +225,7 @@ Important files:
 | `reference/Resume-Matcher/apps/backend/app/services/parser.py` | Parses uploaded files into markdown, then into structured JSON with an LLM | Directly relevant to your import pipeline |
 | `reference/Resume-Matcher/apps/backend/app/services/improver.py` | Main JD-based tailoring flow | Strong base for patch-oriented rewrite generation |
 | `reference/Resume-Matcher/apps/backend/app/services/refiner.py` | Multi-pass refinement and keyword injection | Closest match to your prompt-layer ideas |
-| `reference/Resume-Matcher/apps/backend/app/prompts/templates.py` | Core tailoring, keyword, diff, cover-letter, title prompts | Main prompt library to study and adapt |
+| `reference/Resume-Matcher/apps/backend/app/prompts/templates.py` | Core tailoring, keyword, diff, and auxiliary prompts | Main prompt library to study and adapt |
 | `reference/Resume-Matcher/apps/backend/app/prompts/enrichment.py` | Weak-bullet analysis, candidate Q&A, regenerate flows | Useful for enrichment and manual review loops |
 | `reference/Resume-Matcher/apps/backend/app/prompts/refinement.py` | AI phrase blacklist and final polish prompts | Useful post-processing discipline |
 | `reference/Resume-Matcher/apps/backend/app/routers/resumes.py` | Preview / confirm tailoring workflow | Good example of materializing changes after review |
