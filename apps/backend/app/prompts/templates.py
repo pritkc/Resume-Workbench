@@ -106,87 +106,6 @@ RESUME_SCHEMA_EXAMPLE = """{
   }
 }"""
 
-# Schema for improve prompts - excludes personalInfo (preserved from original)
-IMPROVE_SCHEMA_EXAMPLE = """{
-  "summary": "Experienced software engineer with 5+ years...",
-  "workExperience": [
-    {
-      "id": 1,
-      "title": "Senior Software Engineer",
-      "company": "Tech Corp",
-      "location": "San Francisco, CA",
-      "years": "Jan 2020 - Present",
-      "description": [
-        "Led development of microservices architecture",
-        "Improved system performance by 40%"
-      ]
-    }
-  ],
-  "education": [
-    {
-      "id": 1,
-      "institution": "University of California",
-      "degree": "B.S. Computer Science",
-      "years": "2014 - 2018",
-      "description": "Graduated with honors"
-    }
-  ],
-  "personalProjects": [
-    {
-      "id": 1,
-      "name": "Open Source Tool",
-      "role": "Creator & Maintainer",
-      "years": "Mar 2021 - Present",
-      "description": [
-        "Built CLI tool with 1000+ GitHub stars",
-        "Used by 50+ companies worldwide"
-      ]
-    }
-  ],
-  "additional": {
-    "groups": [
-      {
-        "id": "technicalSkills",
-        "label": "Technical Skills",
-        "items": ["Python", "JavaScript", "AWS", "Docker"]
-      },
-      {
-        "id": "languages",
-        "label": "Languages",
-        "items": ["English (Native)", "Spanish (Conversational)"]
-      },
-      {
-        "id": "certificationsTraining",
-        "label": "Training & Certifications",
-        "items": ["AWS Solutions Architect"]
-      },
-      {
-        "id": "awards",
-        "label": "Awards",
-        "items": ["Employee of the Year 2022"]
-      }
-    ]
-  },
-  "customSections": {
-    "publications": {
-      "sectionType": "itemList",
-      "items": [
-        {
-          "id": 1,
-          "title": "Paper Title",
-          "subtitle": "Journal Name",
-          "years": "Jun 2023",
-          "description": ["Brief description of the publication"]
-        }
-      ]
-    },
-    "volunteer_work": {
-      "sectionType": "text",
-      "text": "Description of volunteer activities..."
-    }
-  }
-}"""
-
 PARSE_RESUME_PROMPT = """Parse this resume into JSON. Output ONLY the JSON object, no other text.
 
 Map content to standard sections when possible. For non-standard sections (like Publications, Volunteer Work, Research, Hobbies), add them to customSections with an appropriate type.
@@ -271,99 +190,76 @@ CRITICAL_TRUTHFULNESS_RULES = {
     ),
 }
 
-IMPROVE_RESUME_PROMPT_NUDGE = """Lightly nudge this resume toward the job description. Output ONLY the JSON object, no other text.
+IMPROVE_STRATEGY_GUIDANCE = {
+    "nudge": {
+        "primary_goal": (
+            "Make minimal, conservative wording adjustments only where the resume "
+            "already strongly supports the job."
+        ),
+        "description_rule": (
+            "Keep every description array the same length and preserve bullet ordering."
+        ),
+    },
+    "keywords": {
+        "primary_goal": (
+            "Weave in supported job keywords naturally while keeping the original "
+            "scope, voice, and structure."
+        ),
+        "description_rule": (
+            "Keep every description array the same length and preserve bullet ordering."
+        ),
+    },
+    "full": {
+        "primary_goal": (
+            "Make targeted, high-signal tailoring adjustments while staying fully "
+            "grounded in the original resume."
+        ),
+        "description_rule": (
+            "Keep description arrays close to the original size. You may add at most "
+            "one supported bullet within an existing work or project entry when it "
+            "directly elaborates on evidence already present in that same entry."
+        ),
+    },
+}
+
+IMPROVE_RESUME_PROMPT_TEMPLATE = """Tailor this resume for the target job. Output ONLY one complete JSON object.
 
 {critical_truthfulness_rules}
 
-IMPORTANT: Generate ALL text content (summary, descriptions, skills) in {output_language}.
-Do NOT include personalInfo in your output - it will be preserved from the original resume.
+PRIMARY STRATEGY:
+{strategy_primary_goal}
 
-Rules:
-- Make minimal, conservative edits only where there is a clear existing match
-- Do NOT change the candidate's role, industry, or seniority level
-- Do NOT introduce new tools, technologies, or certifications not already present
-- Do NOT add new bullet points or sections
-- Preserve original bullet count and ordering within each section
-- Keep proper nouns (names, company names, locations) unchanged
-- For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
-- For additional.groups: preserve every original item. You may relabel, reorder, or regroup items into clearer categories, but do NOT invent or drop values.
-- Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
-- If the resume is non-technical, do NOT add technical jargon
-- Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
+IMPORTANT:
+- Generate all rewritten text in {output_language}
+- Return one complete JSON object that follows the output plan exactly
+- Do NOT return personalInfo
+- Keep proper nouns and identity fields unchanged
+- Do NOT use em dash ("—") anywhere in the output
 
-Job Description:
+HARD STRUCTURE RULES:
+- Copy every top-level key shown in the output plan
+- Do not add extra top-level keys
+- Keep workExperience, education, and personalProjects entry counts unchanged
+- {strategy_description_rule}
+- Keep ids, titles, company names, institutions, roles, locations, and years exactly as in the original resume JSON
+- For additional.groups keep every original item exactly once; you may reorder, regroup, or relabel, but never add, drop, or rename the items themselves
+- For customSections preserve the same keys, sectionType values, item counts, ids, titles, subtitles, and years
+- If a custom section item's original description is [] keep it []
+- If a field is unchanged, copy it through unchanged
+- Output valid JSON only with double-quoted keys and strings
+- No markdown fences, comments, explanations, or trailing commas
+
+JOB ANALYSIS:
+{job_analysis}
+
+JOB DESCRIPTION EXCERPT:
 {job_description}
 
-Keywords to emphasize (only if already supported by resume content):
-{job_keywords}
-
-Original Resume:
+ORIGINAL RESUME JSON:
 {original_resume}
 
-Output in this JSON format:
-{schema}"""
-
-IMPROVE_RESUME_PROMPT_KEYWORDS = """Enhance this resume with relevant keywords from the job description. Output ONLY the JSON object, no other text.
-
-{critical_truthfulness_rules}
-
-IMPORTANT: Generate ALL text content (summary, descriptions, skills) in {output_language}.
-Do NOT include personalInfo in your output - it will be preserved from the original resume.
-
-Rules:
-- Strengthen alignment by weaving in relevant keywords where evidence already exists
-- You may rephrase bullet points to include keyword phrasing
-- Do NOT introduce new skills, tools, or certifications not in the resume
-- Do NOT change role, industry, or seniority level
-- For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
-- For additional.groups: preserve every original item. You may relabel, reorder, or regroup items into clearer categories, but do NOT invent or drop values.
-- Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
-- If resume is non-technical, keep language non-technical while still aligning keywords
-- Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
-
-Job Description:
-{job_description}
-
-Keywords to emphasize:
-{job_keywords}
-
-Original Resume:
-{original_resume}
-
-Output in this JSON format:
-{schema}"""
-
-IMPROVE_RESUME_PROMPT_FULL = """Tailor this resume for the job. Output ONLY the JSON object, no other text.
-
-{critical_truthfulness_rules}
-
-IMPORTANT: Generate ALL text content (summary, descriptions, skills) in {output_language}.
-Do NOT include personalInfo in your output - it will be preserved from the original resume.
-
-Rules:
-- Make targeted adjustments to bullet points to align with job description phrasing. Preserve the candidate's original details and voice - adjust wording, do not rewrite entirely.
-- DO NOT invent new information
-- Preserve existing action verbs. Do not invent quantifiable achievements not in the original.
-- Keep proper nouns (names, company names, locations) unchanged
-- Translate job titles, descriptions, and skills to {output_language}
-- For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
-- For additional.groups: preserve every original item. You may relabel, reorder, or regroup items into clearer categories, but do NOT invent or drop values.
-- Improve custom section content the same way as standard sections
-- Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
-- Calculate and emphasize total relevant experience duration when it matches requirements
-- Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
-
-Job Description:
-{job_description}
-
-Keywords to emphasize:
-{job_keywords}
-
-Original Resume:
-{original_resume}
-
-Output in this JSON format:
-{schema}"""
+OUTPUT PLAN:
+{resume_output_plan}"""
 
 IMPROVE_PROMPT_OPTIONS = [
     {
@@ -383,16 +279,9 @@ IMPROVE_PROMPT_OPTIONS = [
     },
 ]
 
-IMPROVE_RESUME_PROMPTS = {
-    "nudge": IMPROVE_RESUME_PROMPT_NUDGE,
-    "keywords": IMPROVE_RESUME_PROMPT_KEYWORDS,
-    "full": IMPROVE_RESUME_PROMPT_FULL,
-}
-
 DEFAULT_IMPROVE_PROMPT_ID = "keywords"
 
-# Backward-compatible alias
-IMPROVE_RESUME_PROMPT = IMPROVE_RESUME_PROMPT_FULL
+IMPROVE_RESUME_PROMPT = IMPROVE_RESUME_PROMPT_TEMPLATE
 
 COVER_LETTER_PROMPT = """Write a brief cover letter for this job application.
 
@@ -442,83 +331,3 @@ Output plain text only. No JSON, no markdown formatting."""
 
 # Alias for backward compatibility
 RESUME_SCHEMA = RESUME_SCHEMA_EXAMPLE
-
-# Diff-based improvement: outputs targeted changes instead of full resume
-
-DIFF_STRATEGY_INSTRUCTIONS = {
-    "nudge": "Make minimal edits. Only rephrase where there is a clear match. Do not add new bullet points.",
-    "keywords": "Weave in relevant keywords where evidence already exists. You may rephrase bullets but do not add new ones.",
-    "full": "Make targeted adjustments. You may rephrase bullets and add new ones that elaborate on existing work, but do not invent new responsibilities.",
-}
-
-DIFF_IMPROVE_PROMPT = """Given this resume and job description, output a JSON object with targeted changes to better align the resume with the job.
-
-RULES:
-1. Only modify content — never change names, companies, dates, institutions, or degrees
-2. Do not invent skills, metrics, or achievements not supported by the original resume text
-3. Do not add new work entries, education entries, or project entries
-4. {strategy_instruction}
-5. Each change MUST include the original text (copied exactly) so it can be verified
-6. For each change, explain WHY it helps match the job description
-7. Generate all new text in {output_language}
-8. Do not use em dash characters
-9. Keep changes minimal and targeted — do not rewrite content that already aligns well
-10. If you use "additional.groups", preserve the exact same item set while regrouping/relabeling
-
-PATHS you can target:
-- "summary" — the resume summary text
-- "workExperience[i].description[j]" — a specific bullet (i = entry index, j = bullet index)
-- "workExperience[i].description" — append a new bullet (action: "append")
-- "personalProjects[i].description[j]" — a specific project bullet
-- "personalProjects[i].description" — append a new project bullet
-- "additional.groups" — regroup, relabel, or reorder additional label/value groups (action: "regroup")
-
-Do NOT target: personalInfo, dates/years, company names, education, customSections.
-
-Keywords to emphasize (only if already supported by resume content):
-{job_keywords}
-
-Job Description:
-{job_description}
-
-Original Resume:
-{original_resume}
-
-Output this exact JSON format, nothing else:
-{{
-  "changes": [
-    {{
-      "path": "workExperience[0].description[1]",
-      "action": "replace",
-      "original": "the exact original text at this path",
-      "value": "the improved text",
-      "reason": "why this change helps"
-    }},
-    {{
-      "path": "summary",
-      "action": "replace",
-      "original": "the current summary text",
-      "value": "the improved summary",
-      "reason": "why this change helps"
-    }},
-    {{
-      "path": "additional.groups",
-      "action": "regroup",
-      "original": null,
-      "value": [
-        {{
-          "id": "backend",
-          "label": "Backend",
-          "items": ["Python", "FastAPI", "PostgreSQL"]
-        }},
-        {{
-          "id": "infra",
-          "label": "Infra",
-          "items": ["AWS", "Docker"]
-        }}
-      ],
-      "reason": "regrouped the same items into clearer JD-aligned categories"
-    }}
-  ],
-  "strategy_notes": "brief summary of the tailoring approach"
-}}"""

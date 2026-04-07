@@ -8,9 +8,9 @@ Only resume tailoring currently exposes prompt IDs:
 
 | Prompt ID | Meaning | Source |
 |-----------|---------|--------|
-| `nudge` | minimal edits | `IMPROVE_RESUME_PROMPTS["nudge"]` |
-| `keywords` | keyword-forward tailoring | `IMPROVE_RESUME_PROMPTS["keywords"]` |
-| `full` | broader rewrite within truthfulness rules | `IMPROVE_RESUME_PROMPTS["full"]` |
+| `nudge` | minimal edits | `IMPROVE_STRATEGY_GUIDANCE["nudge"]` |
+| `keywords` | keyword-forward tailoring | `IMPROVE_STRATEGY_GUIDANCE["keywords"]` |
+| `full` | broader rewrite within truthfulness rules | `IMPROVE_STRATEGY_GUIDANCE["full"]` |
 
 Selection precedence in `apps/backend/app/routers/resumes.py`:
 
@@ -27,9 +27,8 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 |--------------------|---------|---------------|
 | `PARSE_RESUME_PROMPT` | `services/parser.py` | `resume_parse_json` |
 | `EXTRACT_KEYWORDS_PROMPT` | `services/improver.py` | `job_extract_keywords` (also extracts core title, company, location) |
-| `IMPROVE_RESUME_PROMPT_*` | `services/improver.py` | `resume_generate_full` |
-| `DIFF_IMPROVE_PROMPT` | `services/improver.py` | `resume_generate_diffs` |
-| `DIFF_STRATEGY_INSTRUCTIONS` | `services/improver.py` | folded into `resume_generate_diffs` |
+| `IMPROVE_RESUME_PROMPT` | `services/improver.py` | `resume_generate_full` |
+| `IMPROVE_STRATEGY_GUIDANCE` | `services/improver.py` | folded into `resume_generate_full` |
 | `CRITICAL_TRUTHFULNESS_RULES` | `services/improver.py` | folded into `resume_generate_full` |
 | `COVER_LETTER_PROMPT` | `services/cover_letter.py` | `cover_letter_generate` |
 | `OUTREACH_MESSAGE_PROMPT` | `services/cover_letter.py` | `outreach_generate` |
@@ -47,7 +46,7 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 
 | Prompt or constant | Used by | LLM operation |
 |--------------------|---------|---------------|
-| `KEYWORD_INJECTION_PROMPT` | `services/refiner.py` | `resume_refine_keyword_injection` |
+| `KEYWORD_INJECTION_PROMPT` | `services/refiner.py` | retained for experiments only, not used in the active tailoring path |
 | `AI_PHRASE_BLACKLIST` | `services/refiner.py` | local-only, no LLM call |
 | `AI_PHRASE_REPLACEMENTS` | `services/refiner.py` | local-only, no LLM call |
 
@@ -57,16 +56,16 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 
 1. `job_extract_keywords`
    - prompt: `EXTRACT_KEYWORDS_PROMPT`
-2. `resume_generate_diffs`
-   - prompt: `DIFF_IMPROVE_PROMPT`
-   - strategy text injected from `DIFF_STRATEGY_INSTRUCTIONS[prompt_id]`
-3. fallback only when diff generation fails:
-   - `resume_generate_full`
-   - prompt: `IMPROVE_RESUME_PROMPTS[prompt_id]`
-4. refinement pass:
-   - `resume_refine_keyword_injection`
-   - prompt: `KEYWORD_INJECTION_PROMPT`
-5. auxiliary generation:
+2. `resume_generate_full`
+   - prompt: `IMPROVE_RESUME_PROMPT`
+   - strategy text injected from `IMPROVE_STRATEGY_GUIDANCE[prompt_id]`
+   - prompt also receives compact `job_analysis`, supported JD keywords from the source resume, a trimmed JD excerpt, and a `resume_output_plan`
+3. local post-processing:
+   - preserve personal info, dates, additional items, and custom sections
+   - remove unsupported additions and AI-style phrasing locally
+   - compute local warnings with `verify_generated_resume_result(...)`
+   - compute preview diffs locally with `calculate_resume_diff(...)`
+4. auxiliary generation:
    - local title derivation from extracted job metadata
    - optional `cover_letter_generate`
    - optional `outreach_generate`
@@ -88,7 +87,7 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 
 - parse prompt
 - keyword extraction prompt
-- refinement prompt
+- refinement prompt (inactive in the current tailoring path)
 - cover-letter prompt
 - outreach prompt
 - enrichment and regenerate prompts
@@ -122,3 +121,4 @@ The safest next-step split is:
 - only tailoring has a first-class prompt registry
 - prompt versioning is implicit, not explicit
 - enrichment uses router-level LLM calls without top-level trace scopes
+- `services/refiner.py` still contains an older keyword-injection prompt that is no longer part of the active tailoring runtime

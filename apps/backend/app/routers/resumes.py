@@ -65,15 +65,16 @@ from app.schemas import (
 from app.services.parser import parse_document, parse_resume_to_json, restore_dates_from_markdown
 from app.services.improver import (
     MONTH_PATTERN,
-    apply_diffs,
     extract_job_keywords,
     generate_improvements,
-    generate_resume_diffs,
     improve_resume,
-    verify_diff_result,
+    verify_generated_resume_result,
 )
-from app.services.refiner import refine_resume, calculate_keyword_match
-from app.schemas.refinement import RefinementConfig
+from app.services.refiner import (
+    fix_alignment_violations,
+    remove_ai_phrases,
+    validate_master_alignment,
+)
 from app.services.cover_letter import (
     build_job_target_title,
     extract_job_target_metadata,
@@ -631,60 +632,8 @@ async def _generate_tailored_resume_data(
     job_id: str,
     stage_state: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None, list[str]]:
-    """Generate tailored resume data with a safe fallback from diff to full mode."""
+    """Generate tailored resume data through the primary full-resume prompt."""
     original_resume_data = _get_original_resume_data(resume)
-    response_warnings: list[str] = []
-
-    if original_resume_data:
-        _set_stage(stage_state, "generate_resume_diffs")
-        try:
-            diff_result = await generate_resume_diffs(
-                original_resume=resume["content"],
-                job_description=job["content"],
-                job_keywords=job_keywords,
-                language=language,
-                prompt_id=prompt_id,
-                original_resume_data=original_resume_data,
-            )
-        except ValueError as exc:
-            logger.warning(
-                "Diff generation failed for resume %s / job %s; falling back to full-output tailoring: %s",
-                resume_id,
-                job_id,
-                exc,
-            )
-            response_warnings.append(
-                "Diff generation returned incomplete JSON; fell back to full resume generation."
-            )
-        else:
-            _set_stage(stage_state, "apply_resume_diffs")
-            improved_data, applied_changes, rejected_changes = apply_diffs(
-                original=original_resume_data,
-                changes=diff_result.changes,
-            )
-
-            _set_stage(stage_state, "verify_resume_diffs")
-            diff_warnings = verify_diff_result(
-                original=original_resume_data,
-                result=improved_data,
-                applied_changes=applied_changes,
-                job_keywords=job_keywords,
-            )
-            response_warnings.extend(diff_warnings)
-
-            if rejected_changes:
-                response_warnings.append(
-                    f"{len(rejected_changes)} change(s) rejected during verification"
-                )
-
-            logger.info(
-                "Diff-based improve: %d applied, %d rejected, %d warnings",
-                len(applied_changes),
-                len(rejected_changes),
-                len(diff_warnings),
-            )
-            return improved_data, original_resume_data, response_warnings
-
     _set_stage(stage_state, "generate_full_resume")
     improved_data = await improve_resume(
         original_resume=resume["content"],
@@ -694,7 +643,7 @@ async def _generate_tailored_resume_data(
         prompt_id=prompt_id,
         original_resume_data=original_resume_data,
     )
-    return improved_data, original_resume_data, response_warnings
+    return improved_data, original_resume_data, []
 
 
 def _has_month(date_str: str) -> bool:
@@ -864,6 +813,38 @@ def _protect_custom_sections(
 
     result["customSections"] = result_custom
     return result
+
+
+def _apply_local_resume_cleanup(
+    source_data: dict[str, Any] | None,
+    improved_data: dict[str, Any],
+    job_content: str,
+) -> tuple[dict[str, Any], list[str]]:
+    """Apply local-only cleanup so unsupported additions do not leak through."""
+    warnings: list[str] = []
+    result = improved_data
+
+    cleaned_data, removed_ai_phrases = remove_ai_phrases(result, job_content)
+    if removed_ai_phrases:
+        result = cleaned_data
+        warnings.append(
+            "Removed AI-style phrasing: " + ", ".join(sorted(removed_ai_phrases))
+        )
+
+    if source_data:
+        alignment_report = validate_master_alignment(result, source_data)
+        critical_violations = [
+            violation
+            for violation in alignment_report.violations
+            if violation.severity == "critical"
+        ]
+        if critical_violations:
+            result = fix_alignment_violations(result, critical_violations)
+            warnings.append(
+                f"Removed {len(critical_violations)} unsupported addition(s) from tailored resume"
+            )
+
+    return result, warnings
 
 
 def _preserve_personal_info(
@@ -1381,7 +1362,7 @@ async def _improve_preview_flow(
         )
     )
 
-    # Safety nets (defense in depth — should rarely activate with diff-based flow)
+    # Safety nets (defense in depth after primary full-resume generation)
     _set_stage(stage_state, "preserve_resume_metadata")
     improved_data, preserve_warnings = _preserve_personal_info(
         original_resume_data,
@@ -1395,61 +1376,33 @@ async def _improve_preview_flow(
         improved_data = restore_dates_from_markdown(improved_data, original_markdown)
     improved_data = _preserve_original_skills(original_resume_data, improved_data)
     improved_data = _protect_custom_sections(original_resume_data, improved_data)
+    master_resume = db.get_master_resume()
+    cleanup_source_data = (
+        _get_original_resume_data(master_resume)
+        if master_resume
+        else original_resume_data
+    )
+    improved_data, cleanup_warnings = _apply_local_resume_cleanup(
+        cleanup_source_data,
+        improved_data,
+        job["content"],
+    )
+    response_warnings.extend(cleanup_warnings)
 
     refinement_stats: RefinementStats | None = None
     refinement_attempted = False
     refinement_successful = False
-    try:
-        _set_stage(stage_state, "refine_resume")
-        master_resume = db.get_master_resume()
-        master_data = (
-            _get_original_resume_data(master_resume)
-            if master_resume
-            else _get_original_resume_data(resume)
+
+    if original_resume_data:
+        _set_stage(stage_state, "verify_generated_resume")
+        response_warnings.extend(
+            verify_generated_resume_result(
+                original_resume_data,
+                improved_data,
+                job_keywords,
+                prompt_id=prompt_id,
+            )
         )
-        if master_data:
-            initial_match = calculate_keyword_match(improved_data, job_keywords)
-            refinement_attempted = True
-            refinement_result = await refine_resume(
-                initial_tailored=improved_data,
-                master_resume=master_data,
-                job_description=job["content"],
-                job_keywords=job_keywords,
-                config=RefinementConfig(),
-            )
-            improved_data = refinement_result.refined_data
-            refinement_stats = RefinementStats(
-                passes_completed=refinement_result.passes_completed,
-                keywords_injected=(
-                    len(refinement_result.keyword_analysis.injectable_keywords)
-                    if refinement_result.keyword_analysis
-                    else 0
-                ),
-                ai_phrases_removed=refinement_result.ai_phrases_removed,
-                alignment_violations_fixed=(
-                    len(
-                        [
-                            v
-                            for v in refinement_result.alignment_report.violations
-                            if v.severity == "critical"
-                        ]
-                    )
-                    if refinement_result.alignment_report
-                    else 0
-                ),
-                initial_match_percentage=initial_match,
-                final_match_percentage=refinement_result.final_match_percentage,
-            )
-            refinement_successful = True
-            logger.info(
-                "Refinement completed: %d passes, %d AI phrases removed",
-                refinement_result.passes_completed,
-                len(refinement_result.ai_phrases_removed),
-                )
-    except Exception as e:
-        logger.warning("Refinement failed, using unrefined result: %s", e)
-        if refinement_attempted:
-            response_warnings.append(f"Refinement failed: {str(e)}")
 
     improved_data = _canonicalize_improved_resume_data(improved_data)
     improved_text = json.dumps(improved_data, indent=2)
@@ -1933,70 +1886,32 @@ async def improve_resume_endpoint(
             improved_data = restore_dates_from_markdown(improved_data, original_markdown)
         improved_data = _preserve_original_skills(original_resume_data, improved_data)
         improved_data = _protect_custom_sections(original_resume_data, improved_data)
+        master_resume = db.get_master_resume()
+        cleanup_source_data = (
+            _get_original_resume_data(master_resume)
+            if master_resume
+            else original_resume_data
+        )
+        improved_data, cleanup_warnings = _apply_local_resume_cleanup(
+            cleanup_source_data,
+            improved_data,
+            job["content"],
+        )
+        response_warnings.extend(cleanup_warnings)
 
         refinement_stats: RefinementStats | None = None
         refinement_attempted = False
         refinement_successful = False
-        try:
-            _set_stage(stage_state, "refine_resume")
-            master_resume = db.get_master_resume()
-            master_data = (
-                _get_original_resume_data(master_resume)
-                if master_resume
-                else _get_original_resume_data(resume)
+        if original_resume_data:
+            _set_stage(stage_state, "verify_generated_resume")
+            response_warnings.extend(
+                verify_generated_resume_result(
+                    original_resume_data,
+                    improved_data,
+                    job_keywords,
+                    prompt_id=prompt_id,
+                )
             )
-            if master_data:
-                initial_match = calculate_keyword_match(improved_data, job_keywords)
-                refinement_attempted = True
-                with llm_trace_scope(
-                    request_id,
-                    "resumes.improve",
-                    {
-                        "resume_id": request.resume_id,
-                        "job_id": request.job_id,
-                        "prompt_id": prompt_id,
-                    },
-                ):
-                    refinement_result = await refine_resume(
-                        initial_tailored=improved_data,
-                        master_resume=master_data,
-                        job_description=job["content"],
-                        job_keywords=job_keywords,
-                        config=RefinementConfig(),
-                    )
-                improved_data = refinement_result.refined_data
-                refinement_stats = RefinementStats(
-                    passes_completed=refinement_result.passes_completed,
-                    keywords_injected=(
-                        len(refinement_result.keyword_analysis.injectable_keywords)
-                        if refinement_result.keyword_analysis
-                        else 0
-                    ),
-                    ai_phrases_removed=refinement_result.ai_phrases_removed,
-                    alignment_violations_fixed=(
-                        len(
-                            [
-                                v
-                                for v in refinement_result.alignment_report.violations
-                                if v.severity == "critical"
-                            ]
-                        )
-                        if refinement_result.alignment_report
-                        else 0
-                    ),
-                    initial_match_percentage=initial_match,
-                    final_match_percentage=refinement_result.final_match_percentage,
-                )
-                refinement_successful = True
-                logger.info(
-                    "Refinement completed: %d passes, %d AI phrases removed",
-                    refinement_result.passes_completed,
-                    len(refinement_result.ai_phrases_removed),
-                )
-        except Exception as e:
-            logger.warning("Refinement failed, using unrefined result: %s", e)
-            if refinement_attempted:
-                response_warnings.append(f"Refinement failed: {str(e)}")
 
         # Convert improved data to JSON string for storage
         improved_text = json.dumps(improved_data, indent=2)

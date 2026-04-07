@@ -12,15 +12,13 @@ from app.llm import complete_json
 from app.prompts import (
     CRITICAL_TRUTHFULNESS_RULES,
     DEFAULT_IMPROVE_PROMPT_ID,
-    DIFF_IMPROVE_PROMPT,
-    DIFF_STRATEGY_INSTRUCTIONS,
     EXTRACT_KEYWORDS_PROMPT,
-    IMPROVE_RESUME_PROMPTS,
+    IMPROVE_RESUME_PROMPT,
+    IMPROVE_STRATEGY_GUIDANCE,
     get_language_name,
 )
-from app.prompts.templates import IMPROVE_SCHEMA_EXAMPLE
 from app.schemas import ResumeData, ResumeFieldDiff, ResumeDiffSummary
-from app.schemas.models import ImproveDiffResult, ResumeChange
+from app.schemas.models import ResumeChange
 from app.services.cover_letter import extract_job_target_metadata
 from app.services.additional_groups import (
     additional_items_match,
@@ -42,6 +40,9 @@ _INJECTION_PATTERNS = [
     r"\[\s*INST\s*\]",
     r"\[\s*/\s*INST\s*\]",
 ]
+
+_MAX_PROMPT_JD_CHARS = 4000
+_MAX_PROMPT_LIST_ITEMS = 12
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,295 @@ def _check_for_truncation(data: dict[str, Any]) -> None:
         logger.warning(
             "Resume has empty workExperience - possible truncation or unusual resume"
         )
+
+
+def _normalize_prompt_list(value: Any, *, limit: int = _MAX_PROMPT_LIST_ITEMS) -> list[str]:
+    """Normalize prompt lists to a short, deduplicated string list."""
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(text)
+        if len(normalized) >= limit:
+            break
+    return normalized
+
+
+def _collect_job_keywords(job_keywords: dict[str, Any]) -> list[str]:
+    """Return a stable list of JD keywords worth covering if supported."""
+    combined: list[str] = []
+    for key in ("required_skills", "preferred_skills", "keywords"):
+        combined.extend(_normalize_prompt_list(job_keywords.get(key)))
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for keyword in combined:
+        lowered = keyword.casefold()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        deduped.append(keyword)
+    return deduped
+
+
+def _keyword_in_text(keyword: str, text: str) -> bool:
+    """Check for a whole-keyword match."""
+    pattern = rf"\b{re.escape(keyword.casefold())}\b"
+    return bool(re.search(pattern, text.casefold()))
+
+
+def _extract_resume_text(value: Any) -> str:
+    """Flatten nested resume JSON into searchable text."""
+    parts: list[str] = []
+
+    def visit(node: Any) -> None:
+        if isinstance(node, str):
+            stripped = node.strip()
+            if stripped:
+                parts.append(stripped)
+            return
+        if isinstance(node, list):
+            for item in node:
+                visit(item)
+            return
+        if isinstance(node, dict):
+            for item in node.values():
+                visit(item)
+
+    visit(value)
+    return "\n".join(parts)
+
+
+def _find_supported_keywords(job_keywords: dict[str, Any], resume_source: Any) -> list[str]:
+    """Return JD keywords that are already supported by the source resume."""
+    resume_text = _extract_resume_text(resume_source)
+    return [
+        keyword
+        for keyword in _collect_job_keywords(job_keywords)
+        if _keyword_in_text(keyword, resume_text)
+    ]
+
+
+def _canonicalize_prompt_resume_data(
+    original_resume_data: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize resume JSON for prompt use and strip personal info noise."""
+    if original_resume_data is None:
+        return None
+
+    try:
+        canonical = ResumeData.model_validate(original_resume_data).model_dump()
+    except Exception as exc:
+        logger.warning("Falling back to raw resume JSON for prompt payload: %s", exc)
+        if not isinstance(original_resume_data, dict):
+            return None
+        canonical = copy.deepcopy(original_resume_data)
+
+    canonical.pop("personalInfo", None)
+    additional = canonical.get("additional")
+    if isinstance(additional, dict):
+        canonical["additional"] = normalize_additional_groups(additional)
+    return canonical
+
+
+def _collect_dict_keys(entries: list[Any]) -> list[str]:
+    """Preserve first-seen key order across a list of dict entries."""
+    ordered_keys: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        for key in entry:
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered_keys.append(key)
+    return ordered_keys
+
+
+def _build_resume_output_plan(
+    resume_data: dict[str, Any] | None,
+    *,
+    prompt_id: str,
+) -> str:
+    """Build a compact, unambiguous output contract for resume tailoring."""
+    if resume_data is None:
+        return (
+            'Return these top-level keys only: ["summary", "workExperience", '
+            '"education", "personalProjects", "additional", "sectionMeta", '
+            '"customSections"].\n'
+            "- summary: string\n"
+            "- workExperience: array of objects copied from the input shape; tailor description only\n"
+            "- education: array of objects copied from the input shape\n"
+            "- personalProjects: array of objects copied from the input shape; tailor description only\n"
+            '- additional: object with "groups" array; keep every original item exactly once\n'
+            "- sectionMeta: copy through unchanged\n"
+            "- customSections: preserve the same keys and structure from the input"
+        )
+
+    lines: list[str] = []
+    top_level_keys = [
+        "summary",
+        "workExperience",
+        "education",
+        "personalProjects",
+        "additional",
+        "sectionMeta",
+        "customSections",
+    ]
+    lines.append(
+        "Return these top-level keys only: "
+        + json.dumps(top_level_keys, ensure_ascii=True)
+    )
+    lines.append("- summary: string")
+
+    work_entries = resume_data.get("workExperience", [])
+    lines.append(
+        f"- workExperience: {len(work_entries)} entries; keep keys "
+        f"{json.dumps(_collect_dict_keys(work_entries), ensure_ascii=True)}; "
+        "copy id/title/company/location/years exactly; tailor description only"
+    )
+
+    education_entries = resume_data.get("education", [])
+    lines.append(
+        f"- education: {len(education_entries)} entries; keep keys "
+        f"{json.dumps(_collect_dict_keys(education_entries), ensure_ascii=True)}; "
+        "copy id/institution/degree/location/years exactly"
+    )
+
+    project_entries = resume_data.get("personalProjects", [])
+    lines.append(
+        f"- personalProjects: {len(project_entries)} entries; keep keys "
+        f"{json.dumps(_collect_dict_keys(project_entries), ensure_ascii=True)}; "
+        "copy id/name/role/location/years exactly; tailor description only"
+    )
+
+    additional_groups = []
+    additional = resume_data.get("additional")
+    if isinstance(additional, dict):
+        additional_groups = additional.get("groups", [])
+    lines.append(
+        f"- additional.groups: {len(additional_groups)} group objects; each needs "
+        '["id", "label", "items"]; keep every original item exactly once; '
+        "you may reorder, regroup, or relabel"
+    )
+
+    section_meta = resume_data.get("sectionMeta", [])
+    lines.append(
+        f"- sectionMeta: {len(section_meta)} entries; copy exactly as-is"
+    )
+
+    custom_sections = resume_data.get("customSections", {})
+    if isinstance(custom_sections, dict) and custom_sections:
+        section_keys = list(custom_sections.keys())
+        lines.append(
+            "- customSections: preserve these keys exactly: "
+            + json.dumps(section_keys, ensure_ascii=True)
+        )
+        for section_key, section_value in custom_sections.items():
+            if not isinstance(section_value, dict):
+                continue
+            section_type = str(section_value.get("sectionType", "")).strip() or "unknown"
+            if section_type == "itemList":
+                item_count = len(section_value.get("items", []))
+                lines.append(
+                    f'- customSections["{section_key}"]: itemList with {item_count} items; '
+                    "preserve item count, ids, titles, subtitles, and years"
+                )
+            elif section_type == "text":
+                lines.append(
+                    f'- customSections["{section_key}"]: text section; keep sectionType "text" '
+                    "and refine only the text value if needed"
+                )
+            else:
+                lines.append(
+                    f'- customSections["{section_key}"]: preserve the original structure exactly'
+                )
+    else:
+        lines.append("- customSections: {}")
+
+    if prompt_id in {"nudge", "keywords"}:
+        lines.append("- description arrays: keep the same length and ordering as the input")
+    else:
+        lines.append(
+            "- description arrays: keep them close to the input size; add at most one supported bullet per work/project entry"
+        )
+
+    return "\n".join(lines)
+
+
+def _prepare_job_analysis_for_prompt(
+    job_keywords: dict[str, Any],
+    *,
+    supported_keywords: list[str],
+) -> str:
+    """Build a concise job-analysis block for the primary tailoring prompt."""
+    analysis: dict[str, Any] = {}
+    for key in ("core_title", "company_name", "location", "experience_years", "seniority_level"):
+        value = job_keywords.get(key)
+        if value not in (None, "", []):
+            analysis[key] = value
+
+    for key in (
+        "required_skills",
+        "preferred_skills",
+        "keywords",
+        "key_responsibilities",
+        "experience_requirements",
+        "education_requirements",
+    ):
+        values = _normalize_prompt_list(job_keywords.get(key))
+        if values:
+            analysis[key] = values
+
+    if supported_keywords:
+        analysis["supported_keywords_from_resume"] = supported_keywords
+
+    return json.dumps(analysis or {}, indent=2, ensure_ascii=True)
+
+
+def _prepare_job_description_for_prompt(job_description: str) -> str:
+    """Trim long job descriptions so the prompt stays focused."""
+    if len(job_description) <= _MAX_PROMPT_JD_CHARS:
+        return job_description
+    logger.info(
+        "Truncating job description for primary tailoring prompt (%d -> %d chars)",
+        len(job_description),
+        _MAX_PROMPT_JD_CHARS,
+    )
+    return job_description[:_MAX_PROMPT_JD_CHARS]
+
+
+def _build_resume_retry_hint(resume_data: dict[str, Any] | None) -> str:
+    """Return a prompt-specific retry hint for full resume generation."""
+    top_level_keys = [
+        "summary",
+        "workExperience",
+        "education",
+        "personalProjects",
+        "additional",
+        "sectionMeta",
+        "customSections",
+    ]
+    if isinstance(resume_data, dict):
+        top_level_keys = [key for key in top_level_keys if key in resume_data]
+    return (
+        "Output the COMPLETE JSON object with these top-level keys only: "
+        f"{json.dumps(top_level_keys, ensure_ascii=True)}. "
+        "Do not include personalInfo. Start with { and end with }. "
+        "Do not omit arrays or objects, even when they are empty."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -455,106 +745,6 @@ def verify_diff_result(
     return warnings
 
 
-async def generate_resume_diffs(
-    original_resume: str,
-    job_description: str,
-    job_keywords: dict[str, Any],
-    language: str = "en",
-    prompt_id: str | None = None,
-    original_resume_data: dict[str, Any] | None = None,
-) -> ImproveDiffResult:
-    """Generate targeted resume diffs via LLM.
-
-    Instead of asking the LLM for the full resume, asks for a list of
-    targeted changes. Each change specifies a path, action, and new value.
-
-    Args:
-        original_resume: Resume content (markdown)
-        job_description: Target job description
-        job_keywords: Extracted job keywords
-        language: Output language code (en, es, zh, ja)
-        prompt_id: Strategy id (nudge/keywords/full)
-        original_resume_data: Structured resume JSON
-
-    Returns:
-        ImproveDiffResult with list of changes and strategy notes
-    """
-    keywords_str = _prepare_keywords_for_prompt(job_keywords)
-    output_language = get_language_name(language)
-
-    selected_id = prompt_id or DEFAULT_IMPROVE_PROMPT_ID
-    if selected_id not in DIFF_STRATEGY_INSTRUCTIONS:
-        logger.warning(
-            "Unknown prompt_id '%s'; using default diff strategy.",
-            selected_id,
-        )
-    strategy_instruction = DIFF_STRATEGY_INSTRUCTIONS.get(
-        selected_id, DIFF_STRATEGY_INSTRUCTIONS[DEFAULT_IMPROVE_PROMPT_ID]
-    )
-
-    # LLM-011: Sanitize job description
-    sanitized_jd = _sanitize_user_input(job_description)
-
-    # Use structured JSON if available with month precision, else markdown
-    if original_resume_data is not None:
-        if _has_month_in_dates(original_resume_data):
-            resume_input = json.dumps(original_resume_data)
-        else:
-            resume_input = original_resume
-    else:
-        resume_input = original_resume
-
-    prompt = DIFF_IMPROVE_PROMPT.format(
-        strategy_instruction=strategy_instruction,
-        output_language=output_language,
-        job_keywords=keywords_str,
-        job_description=sanitized_jd,
-        original_resume=resume_input,
-    )
-
-    result = await complete_json(
-        prompt=prompt,
-        system_prompt="You are an expert resume editor. Output only valid JSON with targeted changes.",
-        max_tokens=8192,
-        retries=3,
-        operation="resume_generate_diffs",
-        metadata={
-            "prompt_id": selected_id,
-            "job_description_chars": len(job_description),
-        },
-    )
-
-    # Parse result — handle LLM ignoring diff format gracefully
-    raw_changes = result.get("changes", [])
-    if not isinstance(raw_changes, list):
-        logger.warning("LLM returned non-list changes: %s", type(raw_changes))
-        raw_changes = []
-
-    changes: list[ResumeChange] = []
-    for raw in raw_changes:
-        if not isinstance(raw, dict):
-            continue
-        try:
-            changes.append(
-                ResumeChange(
-                    path=str(raw.get("path", "")),
-                    action=raw.get("action", "replace"),
-                    original=raw.get("original"),
-                    value=raw.get("value", ""),
-                    reason=str(raw.get("reason", "")),
-                )
-            )
-        except Exception as e:
-            logger.warning("Skipping malformed change: %s — %s", raw, e)
-
-    strategy_notes = str(result.get("strategy_notes", ""))
-    if not raw_changes and "changes" not in result:
-        strategy_notes = "LLM output had no changes key — returned zero diffs"
-        logger.warning("LLM output missing 'changes' key: %s", list(result.keys()))
-
-    return ImproveDiffResult(changes=changes, strategy_notes=strategy_notes)
-
-
 async def extract_job_keywords(job_description: str) -> dict[str, Any]:
     """Extract keywords and requirements from job description.
 
@@ -593,58 +783,6 @@ MONTH_PATTERN = re.compile(
 )
 
 
-def _has_month_in_dates(data: dict[str, Any]) -> bool:
-    """Check whether any years field in the structured data includes a month."""
-    for section_key in ("workExperience", "education", "personalProjects"):
-        entries = data.get(section_key, [])
-        if not isinstance(entries, list):
-            continue
-        for entry in entries:
-            if isinstance(entry, dict):
-                years = entry.get("years", "")
-                if isinstance(years, str) and MONTH_PATTERN.search(years):
-                    return True
-    custom_sections = data.get("customSections", {})
-    if isinstance(custom_sections, dict):
-        for section in custom_sections.values():
-            if isinstance(section, dict) and section.get("sectionType") == "itemList":
-                items = section.get("items", [])
-                if not isinstance(items, list):
-                    continue
-                for item in items:
-                    if isinstance(item, dict):
-                        years = item.get("years", "")
-                        if isinstance(years, str) and MONTH_PATTERN.search(years):
-                            return True
-    return False
-
-
-def _prepare_keywords_for_prompt(job_keywords: dict[str, Any]) -> str:
-    """Format job keywords as a focused, readable list for the LLM prompt.
-
-    Extracts only actionable fields (skills and keywords) and drops
-    informational fields that add noise without helping the LLM tailor.
-    """
-    sections: list[str] = []
-
-    required = job_keywords.get("required_skills", [])
-    if required:
-        sections.append("Required skills to emphasize:\n- " + "\n- ".join(str(s) for s in required))
-
-    preferred = job_keywords.get("preferred_skills", [])
-    if preferred:
-        sections.append(
-            "Preferred skills (include only if resume supports them):\n- "
-            + "\n- ".join(str(s) for s in preferred)
-        )
-
-    keywords = job_keywords.get("keywords", [])
-    if keywords:
-        sections.append("Additional keywords to weave in naturally:\n- " + "\n- ".join(str(k) for k in keywords))
-
-    return "\n\n".join(sections) if sections else "No specific keywords extracted."
-
-
 async def improve_resume(
     original_resume: str,
     job_description: str,
@@ -670,12 +808,12 @@ async def improve_resume(
     LLM-006: Validates for truncation before Pydantic validation.
     LLM-011: Sanitizes job description to prevent prompt injection.
     """
-    keywords_str = _prepare_keywords_for_prompt(job_keywords)
     output_language = get_language_name(language)
 
     selected_prompt_id = prompt_id or DEFAULT_IMPROVE_PROMPT_ID
-    prompt_template = IMPROVE_RESUME_PROMPTS.get(
-        selected_prompt_id, IMPROVE_RESUME_PROMPTS[DEFAULT_IMPROVE_PROMPT_ID]
+    strategy_guidance = IMPROVE_STRATEGY_GUIDANCE.get(
+        selected_prompt_id,
+        IMPROVE_STRATEGY_GUIDANCE[DEFAULT_IMPROVE_PROMPT_ID],
     )
     if selected_prompt_id not in CRITICAL_TRUTHFULNESS_RULES:
         logger.warning(
@@ -685,43 +823,59 @@ async def improve_resume(
     truthfulness_rules = CRITICAL_TRUTHFULNESS_RULES.get(
         selected_prompt_id, CRITICAL_TRUTHFULNESS_RULES[DEFAULT_IMPROVE_PROMPT_ID]
     )
+    if selected_prompt_id not in IMPROVE_STRATEGY_GUIDANCE:
+        logger.warning(
+            "Unknown prompt_id '%s'; using default tailoring guidance.",
+            selected_prompt_id,
+        )
 
     # LLM-011: Sanitize job description to prevent prompt injection
-    sanitized_jd = _sanitize_user_input(job_description)
+    sanitized_jd = _prepare_job_description_for_prompt(
+        _sanitize_user_input(job_description)
+    )
 
-    # Use structured JSON when available for higher-fidelity LLM input,
-    # but fall back to raw markdown if the structured data has truncated
-    # (year-only) dates — the markdown preserves months from the original PDF.
-    if original_resume_data is not None:
-        if _has_month_in_dates(original_resume_data):
-            resume_input = json.dumps(original_resume_data)
-        else:
-            logger.info(
-                "Structured resume data has year-only dates; using raw markdown "
-                "to preserve month precision."
-            )
-            resume_input = original_resume
+    prompt_resume_data = _canonicalize_prompt_resume_data(original_resume_data)
+    supported_keywords = _find_supported_keywords(
+        job_keywords,
+        prompt_resume_data if prompt_resume_data is not None else original_resume,
+    )
+    job_analysis = _prepare_job_analysis_for_prompt(
+        job_keywords,
+        supported_keywords=supported_keywords,
+    )
+    resume_output_plan = _build_resume_output_plan(
+        prompt_resume_data,
+        prompt_id=selected_prompt_id,
+    )
+    if prompt_resume_data is not None:
+        resume_input = json.dumps(prompt_resume_data, indent=2, ensure_ascii=True)
     else:
         resume_input = original_resume
 
-    prompt = prompt_template.format(
+    prompt = IMPROVE_RESUME_PROMPT.format(
         job_description=sanitized_jd,
-        job_keywords=keywords_str,
+        job_analysis=job_analysis,
         original_resume=resume_input,
-        schema=IMPROVE_SCHEMA_EXAMPLE,
+        resume_output_plan=resume_output_plan,
         output_language=output_language,
         critical_truthfulness_rules=truthfulness_rules,
+        strategy_primary_goal=strategy_guidance["primary_goal"],
+        strategy_description_rule=strategy_guidance["description_rule"],
     )
 
     result = await complete_json(
         prompt=prompt,
         system_prompt="You are an expert resume editor. Output only valid JSON.",
         max_tokens=8192,
+        retries=1,
         operation="resume_generate_full",
         metadata={
             "prompt_id": selected_prompt_id,
             "job_description_chars": len(job_description),
+            "supported_keywords_count": len(supported_keywords),
+            "structured_resume_input": prompt_resume_data is not None,
         },
+        retry_hint=_build_resume_retry_hint(prompt_resume_data),
     )
 
     # LLM-006: Pre-validation check for truncation signs
@@ -1151,6 +1305,107 @@ def calculate_resume_diff(
     )
 
     return summary, changes
+
+
+def verify_generated_resume_result(
+    original: dict[str, Any],
+    result: dict[str, Any],
+    job_keywords: dict[str, Any],
+    *,
+    prompt_id: str | None = None,
+) -> list[str]:
+    """Run local quality checks on the primary full-resume output."""
+    warnings: list[str] = []
+    _, changes = calculate_resume_diff(original, result)
+
+    if not changes:
+        warnings.append("No material changes were applied — resume returned nearly unchanged")
+        return warnings
+
+    for key, label in [
+        ("workExperience", "work experience"),
+        ("education", "education"),
+        ("personalProjects", "project"),
+    ]:
+        orig_count = len(original.get(key, []))
+        result_count = len(result.get(key, []))
+        if orig_count != result_count:
+            warnings.append(
+                f"Section count changed: {label} ({orig_count} → {result_count})"
+            )
+
+    for key, id_fields in [
+        ("workExperience", ["company", "title", "location", "years"]),
+        ("education", ["institution", "degree", "location", "years"]),
+        ("personalProjects", ["name", "role", "location", "years"]),
+    ]:
+        orig_entries = original.get(key, [])
+        result_entries = result.get(key, [])
+        for index, (orig_entry, result_entry) in enumerate(zip(orig_entries, result_entries)):
+            if not isinstance(orig_entry, dict) or not isinstance(result_entry, dict):
+                continue
+            for field in id_fields:
+                original_value = str(orig_entry.get(field, "")).strip()
+                result_value = str(result_entry.get(field, "")).strip()
+                if original_value and original_value != result_value:
+                    warnings.append(
+                        f"Identity field changed: {key}[{index}].{field} "
+                        f"('{original_value}' → '{result_value}')"
+                    )
+
+    original_words = _count_description_words(original)
+    result_words = _count_description_words(result)
+    if original_words > 0 and result_words > original_words * 1.8:
+        warnings.append(
+            "Word count increased significantly: "
+            f"{original_words} → {result_words} ({result_words / original_words:.1f}x)"
+        )
+
+    for change in changes:
+        new_text = change.new_value or ""
+        if not new_text:
+            continue
+        new_metrics = set(_METRIC_RE.findall(new_text))
+        original_metrics = set(_METRIC_RE.findall(change.original_value or ""))
+        invented_metrics = new_metrics - original_metrics
+        if invented_metrics:
+            warnings.append(
+                f"Possible invented metric in {change.field_path}: "
+                f"{', '.join(sorted(invented_metrics))} (not in original)"
+            )
+
+    if prompt_id == "nudge":
+        if any(
+            change.change_type in {"added", "removed"}
+            and change.field_type in {"description", "experience", "education", "project"}
+            for change in changes
+        ):
+            warnings.append("Nudge mode introduced structural content changes")
+
+    if prompt_id == "keywords":
+        if any(
+            change.change_type in {"added", "removed"}
+            and change.field_type in {"description", "experience", "education", "project"}
+            for change in changes
+        ):
+            warnings.append("Keyword mode changed section structure more than expected")
+
+    if prompt_id in {"keywords", "full"}:
+        supported_keywords = _find_supported_keywords(job_keywords, original)
+        if supported_keywords:
+            result_text = _extract_resume_text(result)
+            missing_keywords = [
+                keyword
+                for keyword in supported_keywords
+                if not _keyword_in_text(keyword, result_text)
+            ]
+            if missing_keywords:
+                warnings.append(
+                    "Supported job keywords still missing after tailoring: "
+                    + ", ".join(missing_keywords[:8])
+                )
+
+    return warnings
 
 
 def generate_improvements(job_keywords: dict[str, Any]) -> list[dict[str, Any]]:

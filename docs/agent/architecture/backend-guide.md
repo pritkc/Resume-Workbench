@@ -10,7 +10,7 @@ Touch:
 
 - `apps/backend/app/prompts/templates.py`
 - `apps/backend/app/prompts/enrichment.py`
-- `apps/backend/app/prompts/refinement.py`
+- `apps/backend/app/prompts/refinement.py` if you are changing the older inactive refinement prompt or local cleanup constants
 - `apps/backend/app/services/improver.py`
 - `apps/backend/app/routers/config.py`
 
@@ -54,9 +54,10 @@ Touch:
 
 Important current behavior:
 
-- diff-first generation
-- full-generation fallback
-- local refinement after tailoring
+- one primary `resume_generate_full` tailoring call
+- compact job analysis plus trimmed JD excerpt in the prompt
+- local cleanup and verification after tailoring
+- local diff generation for preview UI
 - preview/confirm hash validation for application packs
 
 ### RenderCV output or theme behavior

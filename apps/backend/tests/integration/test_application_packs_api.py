@@ -11,7 +11,6 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.schemas.models import ImproveDiffResult
 from app.services.additional_groups import normalize_additional_groups
 
 
@@ -40,17 +39,6 @@ def _fake_resume_record(sample_resume: dict) -> dict:
     }
 
 
-def _fake_refinement_result(refined_data: dict) -> SimpleNamespace:
-    return SimpleNamespace(
-        refined_data=refined_data,
-        passes_completed=1,
-        keyword_analysis=SimpleNamespace(injectable_keywords=[]),
-        ai_phrases_removed=[],
-        alignment_report=SimpleNamespace(violations=[]),
-        final_match_percentage=88.0,
-    )
-
-
 def _group_items(resume_data: dict, group_id: str) -> list[str]:
     resume_data["additional"] = normalize_additional_groups(resume_data.get("additional"))
     for group in resume_data["additional"]["groups"]:
@@ -64,26 +52,11 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Tailored summary"
     _group_items(improved, "technicalSkills").append("BogusSkill")
-    refined = copy.deepcopy(improved)
-    refined["additional"] = normalize_additional_groups(refined.get("additional"))
-    for group in refined["additional"]["groups"]:
-        if group["id"] == "technicalSkills":
-            group["items"] = [skill for skill in group["items"] if skill != "BogusSkill"]
 
     with (
         patch("app.routers.resumes.db") as mock_db,
         patch("app.routers.resumes.extract_job_keywords", new=AsyncMock(return_value={"keywords": ["FastAPI"]})),
-        patch(
-            "app.routers.resumes.generate_resume_diffs",
-            new=AsyncMock(return_value=ImproveDiffResult(changes=[], strategy_notes="")),
-        ),
-        patch("app.routers.resumes.apply_diffs", return_value=(improved, [], [])),
-        patch("app.routers.resumes.verify_diff_result", return_value=[]),
-        patch("app.routers.resumes.calculate_keyword_match", return_value=55.0),
-        patch(
-            "app.routers.resumes.refine_resume",
-            new=AsyncMock(return_value=_fake_refinement_result(refined)),
-        ),
+        patch("app.routers.resumes.improve_resume", new=AsyncMock(return_value=improved)),
         patch(
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
@@ -145,7 +118,6 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
 ):
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Tailored summary"
-    refined = copy.deepcopy(improved)
     auxiliary_messages = AsyncMock(
         return_value=("Cover letter", None, "Tailored Title", [])
     )
@@ -167,17 +139,7 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
             "app.routers.resumes.extract_job_keywords",
             new=AsyncMock(return_value={"keywords": ["FastAPI"]}),
         ),
-        patch(
-            "app.routers.resumes.generate_resume_diffs",
-            new=AsyncMock(return_value=ImproveDiffResult(changes=[], strategy_notes="")),
-        ),
-        patch("app.routers.resumes.apply_diffs", return_value=(improved, [], [])),
-        patch("app.routers.resumes.verify_diff_result", return_value=[]),
-        patch("app.routers.resumes.calculate_keyword_match", return_value=55.0),
-        patch(
-            "app.routers.resumes.refine_resume",
-            new=AsyncMock(return_value=_fake_refinement_result(refined)),
-        ),
+        patch("app.routers.resumes.improve_resume", new=AsyncMock(return_value=improved)),
         patch(
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
@@ -217,26 +179,17 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
 
 
 @pytest.mark.asyncio
-async def test_preview_falls_back_to_full_resume_when_diff_generation_fails(
+async def test_preview_uses_primary_full_generation(
     sample_resume: dict, client
 ):
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Fallback tailored summary"
-    fallback_improve = AsyncMock(return_value=improved)
+    primary_improve = AsyncMock(return_value=improved)
 
     with (
         patch("app.routers.resumes.db") as mock_db,
         patch("app.routers.resumes.extract_job_keywords", new=AsyncMock(return_value={"keywords": ["FastAPI"]})),
-        patch(
-            "app.routers.resumes.generate_resume_diffs",
-            new=AsyncMock(side_effect=ValueError("No JSON found in response")),
-        ),
-        patch("app.routers.resumes.improve_resume", new=fallback_improve),
-        patch("app.routers.resumes.calculate_keyword_match", return_value=55.0),
-        patch(
-            "app.routers.resumes.refine_resume",
-            new=AsyncMock(return_value=_fake_refinement_result(improved)),
-        ),
+        patch("app.routers.resumes.improve_resume", new=primary_improve),
         patch(
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
@@ -282,11 +235,9 @@ async def test_preview_falls_back_to_full_resume_when_diff_generation_fails(
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["resume_preview"]["summary"] == "Fallback tailored summary"
-    assert any(
-        "fell back to full resume generation" in warning
-        for warning in data.get("warnings", [])
-    )
-    fallback_improve.assert_awaited_once()
+    assert data["refinement_attempted"] is False
+    assert data["refinement_successful"] is False
+    primary_improve.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -298,10 +249,6 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
     improved["personalInfo"].pop("website", None)
     improved["personalInfo"].pop("linkedin", None)
     improved["personalInfo"].pop("github", None)
-    refined = copy.deepcopy(sample_resume)
-    refined["summary"] = improved["summary"]
-    refined.pop("sectionMeta", None)
-    refined.pop("customSections", None)
 
     job_record = {
         "job_id": "job-123",
@@ -323,17 +270,7 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
             "app.routers.resumes.extract_job_keywords",
             new=AsyncMock(return_value={"keywords": ["FastAPI"]}),
         ),
-        patch(
-            "app.routers.resumes.generate_resume_diffs",
-            new=AsyncMock(return_value=ImproveDiffResult(changes=[], strategy_notes="")),
-        ),
-        patch("app.routers.resumes.apply_diffs", return_value=(improved, [], [])),
-        patch("app.routers.resumes.verify_diff_result", return_value=[]),
-        patch("app.routers.resumes.calculate_keyword_match", return_value=55.0),
-        patch(
-            "app.routers.resumes.refine_resume",
-            new=AsyncMock(return_value=_fake_refinement_result(refined)),
-        ),
+        patch("app.routers.resumes.improve_resume", new=AsyncMock(return_value=improved)),
         patch(
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],

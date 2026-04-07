@@ -29,10 +29,11 @@ Preview work in `apps/backend/app/routers/resumes.py`:
 
 - resolves `prompt_id`
 - extracts job keywords
-- runs diff-first tailoring
-- falls back to full-resume generation if diff generation fails
+- runs one primary full-resume tailoring call
+- shapes that prompt with compact job analysis, supported keywords from the source resume, a trimmed JD excerpt, and a compact output plan
 - preserves personal info, dates, skills, and custom sections
-- runs refinement
+- removes unsupported additions and AI-style phrasing locally
+- computes local warnings and local diff data for the review UI
 - optionally generates cover letter and outreach, while deriving title locally from extracted job metadata
 - creates an `application_packs` row with `status="preview_ready"`
 - creates a `generation_runs` row with `run_kind="application_pack_preview"`
@@ -75,9 +76,7 @@ Prompt selection is part of pack creation. The active `prompt_id` comes from:
 The preview pipeline currently touches these LLM operations:
 
 - `job_extract_keywords`
-- `resume_generate_diffs`
-- fallback `resume_generate_full`
-- `resume_refine_keyword_injection`
+- `resume_generate_full`
 - optional `cover_letter_generate`
 - optional `outreach_generate`
 
@@ -121,6 +120,7 @@ Behavior to remember:
 - Tailor now previews before saving a tailored resume.
 - Missing diff data triggers an explicit confirm dialog instead of silently saving.
 - prompt selection, cover-letter toggle, and outreach toggle are persisted as generation defaults.
+- The diff preview is computed locally from original vs tailored structured resume JSON, not authored by the LLM.
 
 ## Key Backend Files
 

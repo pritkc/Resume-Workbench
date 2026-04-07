@@ -11,7 +11,7 @@ Core fields:
 - `trace_id`: request-level grouping id
 - `call_group_id`: groups retries for one logical completion call
 - `request_scope`: coarse flow label such as `resumes.improve_preview`
-- `operation`: task label such as `resume_generate_diffs`
+- `operation`: task label such as `resume_generate_full`
 - `success`, `attempt`, `finish_reason`, `latency_ms`
 - token usage, estimated token counts, and estimated costs
 - `prompt_preview` and `response_preview`
@@ -79,15 +79,19 @@ If content storage is disabled, previews will be empty even though call metadata
 2. open `/llm-traces?trace_id=<request_id>&request_scope=resumes.improve_preview`
 3. inspect:
    - `job_extract_keywords`
-   - `resume_generate_diffs`
-   - fallback `resume_generate_full`, if present
-   - `resume_refine_keyword_injection`, if present
+   - `resume_generate_full`
+   - optional `cover_letter_generate`
+   - optional `outreach_generate`
+
+Historical traces from older runs may still show:
+
+- `resume_generate_diffs`
+- `resume_refine_keyword_injection`
 
 ### Prompt-specific regressions
 
 Filter by:
 
-- `operation=resume_generate_diffs`
 - `operation=resume_generate_full`
 - `request_scope=resumes.improve_preview` or `resumes.improve`
 

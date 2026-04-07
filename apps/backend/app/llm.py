@@ -1334,6 +1334,7 @@ async def complete_json(
     retries: int = 2,
     operation: str = "json_completion",
     metadata: dict[str, Any] | None = None,
+    retry_hint: str | None = None,
 ) -> dict[str, Any]:
     """Make a completion request expecting JSON response.
 
@@ -1356,6 +1357,11 @@ async def complete_json(
     # Check if we can use JSON mode
     use_json_mode = _supports_json_mode(model_name)
     call_group_id = str(uuid4())
+    generic_retry_hint = (
+        retry_hint
+        or "Output the COMPLETE JSON object with all required sections. "
+        "Start with { and end with }. Do not truncate."
+    )
 
     for attempt in range(retries + 1):
         started_at = time.perf_counter()
@@ -1430,7 +1436,8 @@ async def complete_json(
                     )
                     messages[-1]["content"] = (
                         prompt
-                        + "\n\nIMPORTANT: Output the COMPLETE JSON object with ALL sections including personalInfo. Do not truncate."
+                        + "\n\nIMPORTANT: "
+                        + generic_retry_hint
                     )
                     continue
                 logging.warning(
@@ -1484,7 +1491,8 @@ async def complete_json(
             if attempt < retries:
                 messages[-1]["content"] = (
                     prompt
-                    + "\n\nIMPORTANT: Output ONLY a valid JSON object. Start with { and end with }."
+                    + "\n\nIMPORTANT: "
+                    + generic_retry_hint
                 )
                 continue
             raise ValueError(
@@ -1514,6 +1522,11 @@ async def complete_json(
             # Content quality — empty response, JSON extraction failure
             logging.warning(f"Content extraction failed (attempt {attempt + 1}): {e}")
             if attempt < retries:
+                messages[-1]["content"] = (
+                    prompt
+                    + "\n\nIMPORTANT: "
+                    + generic_retry_hint
+                )
                 continue
             raise
 

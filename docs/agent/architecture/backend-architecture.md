@@ -72,9 +72,9 @@ Important relationships:
 | Module | Responsibility |
 |--------|----------------|
 | `services/parser.py` | PDF/DOCX -> markdown -> structured resume JSON |
-| `services/improver.py` | job keyword extraction, diff generation, full tailoring fallback, resume diff summaries |
-| `services/refiner.py` | keyword injection, AI-phrase cleanup, master-alignment enforcement |
-| `services/cover_letter.py` | cover letter, outreach, and title generation |
+| `services/improver.py` | job keyword extraction, primary full tailoring prompt, prompt contract shaping, local verifier, resume diff summaries |
+| `services/refiner.py` | local AI-phrase cleanup and master-alignment helpers; older keyword-injection prompt retained but not used in the active tailoring path |
+| `services/cover_letter.py` | cover letter, outreach, and local title generation |
 | `services/additional_groups.py` | canonical additional-group normalization |
 | `services/artifact_service.py` | persist RenderCV bundle files and create artifact rows |
 

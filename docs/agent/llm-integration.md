@@ -10,7 +10,7 @@
 | `apps/backend/app/config.py` | runtime settings, API-key fallback, trace/cost knobs |
 | `apps/backend/app/prompts/templates.py` | core parse/tailor/cover-letter/outreach prompts plus job metadata extraction |
 | `apps/backend/app/prompts/enrichment.py` | enrichment and regenerate prompts |
-| `apps/backend/app/prompts/refinement.py` | refinement prompt plus local AI-phrase cleanup rules |
+| `apps/backend/app/prompts/refinement.py` | older refinement prompt plus local cleanup constants; not part of the active tailoring runtime |
 
 ## Provider Configuration
 
@@ -58,6 +58,7 @@ Current retry policy:
 - appends a JSON-only system instruction
 - enables `response_format={"type": "json_object"}` when the target model supports it
 - retries malformed or truncated content at the application layer
+- supports prompt-specific `retry_hint` text so retries reinforce the exact JSON contract for that caller
 - records every attempt in `llm_calls`
 
 ## JSON Handling
@@ -67,7 +68,7 @@ Current retry policy:
 - strips code fences and `<think>` tags
 - extracts the first balanced JSON object from mixed output
 - rejects obviously truncated responses
-- retries parse/extraction failures
+- retries parse/extraction failures with a caller-provided hint when available
 - uses adaptive timeouts based on provider and `max_tokens`
 
 ## Health Checks
@@ -111,10 +112,27 @@ Selection precedence:
 
 See [llm-prompt-inventory.md](llm-prompt-inventory.md) for the full prompt map.
 
+## Tailoring Runtime Today
+
+The active tailoring path is now:
+
+1. `job_extract_keywords`
+2. `resume_generate_full`
+3. local cleanup and validation
+4. local diff generation for preview UI
+5. optional cover letter / outreach generation
+
+Notably, the active runtime no longer does:
+
+- `resume_generate_diffs`
+- diff-first fallback orchestration
+- LLM keyword-injection refinement after tailoring
+
 ## Current Guidance For New LLM Work
 
 - Put reusable prompt text in `app/prompts/`.
 - Use `complete_json()` for structured outputs and `complete()` for plain text.
 - Always set a stable `operation` name.
 - Pass useful `metadata` so traces are debuggable.
+- If the JSON contract is strict or caller-specific, pass a `retry_hint`.
 - If the call is part of a top-level request flow, make sure it runs inside an appropriate `llm_trace_scope()`.

@@ -24,11 +24,13 @@ POST /api/v1/application-packs/preview
 ├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve_preview")
 ├── extract_job_keywords() if missing/stale
 ├── _generate_tailored_resume_data()
-│   ├── generate_resume_diffs() -> LLM
-│   ├── apply_diffs()
-│   ├── verify_diff_result()
-│   └── fallback improve_resume() -> LLM if diff mode fails
-├── refine_resume() -> mixed LLM + local passes
+│   └── improve_resume() -> LLM (`resume_generate_full`)
+├── local cleanup
+│   ├── preserve personal info / dates / additional items / custom sections
+│   ├── remove unsupported additions locally
+│   └── remove AI-style phrasing locally
+├── verify_generated_resume_result() -> local warnings
+├── calculate_resume_diff() -> local diff summary + detailed changes
 ├── generate title / cover letter / outreach
 ├── create application_pack + generation_run
 ├── render_resume_bundle() -> RenderCV artifacts
@@ -59,8 +61,9 @@ POST /api/v1/resumes/improve
 ├── fetch resume + job
 ├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve")
 ├── extract_job_keywords() -> LLM
-├── diff-first tailoring with full-output fallback
-├── refine_resume()
+├── improve_resume() -> LLM (`resume_generate_full`)
+├── local cleanup + verification
+├── calculate_resume_diff()
 ├── generate title / cover letter / outreach
 ├── create tailored resume
 ├── create legacy improvement record
