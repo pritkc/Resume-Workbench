@@ -18,6 +18,9 @@ class TestExtractJobKeywords:
     @patch("app.services.improver.complete_json", new_callable=AsyncMock)
     async def test_returns_extracted_keywords(self, mock_llm, sample_job_description):
         mock_llm.return_value = {
+            "core_title": "Backend Engineer",
+            "company_name": "TechCorp",
+            "location": "Remote",
             "required_skills": ["Python", "FastAPI"],
             "preferred_skills": ["Docker"],
             "keywords": ["microservices"],
@@ -27,6 +30,9 @@ class TestExtractJobKeywords:
         result = await extract_job_keywords(sample_job_description)
         assert "Python" in result["required_skills"]
         assert result["experience_years"] == 5
+        assert result["core_title"] == "Backend Engineer"
+        assert result["company_name"] == "TechCorp"
+        assert result["location"] == "Remote"
         mock_llm.assert_called_once()
 
     @patch("app.services.improver.complete_json", new_callable=AsyncMock)
@@ -38,6 +44,19 @@ class TestExtractJobKeywords:
         call_args = mock_llm.call_args
         prompt = call_args.kwargs.get("prompt", call_args.args[0] if call_args.args else "")
         assert "ignore all previous instructions" not in prompt.lower()
+
+    @patch("app.services.improver.complete_json", new_callable=AsyncMock)
+    async def test_backfills_missing_target_metadata_from_job_description(self, mock_llm):
+        mock_llm.return_value = {
+            "required_skills": [],
+            "preferred_skills": [],
+            "keywords": [],
+        }
+        result = await extract_job_keywords(
+            "As an Agile Business Analyst at West Shore Home, you will work across teams."
+        )
+        assert result["core_title"] == "Agile Business Analyst"
+        assert result["company_name"] == "West Shore Home"
 
 
 class TestGenerateResumeDiffs:

@@ -21,6 +21,7 @@ from app.prompts import (
 from app.prompts.templates import IMPROVE_SCHEMA_EXAMPLE
 from app.schemas import ResumeData, ResumeFieldDiff, ResumeDiffSummary
 from app.schemas.models import ImproveDiffResult, ResumeChange
+from app.services.cover_letter import extract_job_target_metadata
 from app.services.additional_groups import (
     additional_items_match,
     extract_additional_groups,
@@ -567,12 +568,23 @@ async def extract_job_keywords(job_description: str) -> dict[str, Any]:
     sanitized_jd = _sanitize_user_input(job_description)
     prompt = EXTRACT_KEYWORDS_PROMPT.format(job_description=sanitized_jd)
 
-    return await complete_json(
+    result = await complete_json(
         prompt=prompt,
         system_prompt="You are an expert job description analyzer.",
         operation="job_extract_keywords",
         metadata={"job_description_chars": len(job_description)},
     )
+    if not isinstance(result, dict):
+        result = {}
+
+    target_metadata = extract_job_target_metadata(
+        job_description,
+        job_keywords=result,
+    )
+    result["core_title"] = target_metadata.get("role")
+    result["company_name"] = target_metadata.get("company")
+    result["location"] = target_metadata.get("location")
+    return result
 
 
 MONTH_PATTERN = re.compile(

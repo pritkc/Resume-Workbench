@@ -95,6 +95,9 @@ def sample_resume_copy(sample_resume) -> dict:
 def sample_job_keywords() -> dict:
     """Extracted job keywords matching the LLM output format."""
     return {
+        "core_title": "Backend Engineer",
+        "company_name": "TechCorp",
+        "location": "Remote",
         "required_skills": ["Python", "FastAPI", "Docker", "Kubernetes"],
         "preferred_skills": ["AWS", "Terraform", "GraphQL"],
         "experience_requirements": ["5+ years backend development"],

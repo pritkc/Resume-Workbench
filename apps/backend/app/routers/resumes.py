@@ -75,10 +75,10 @@ from app.services.improver import (
 from app.services.refiner import refine_resume, calculate_keyword_match
 from app.schemas.refinement import RefinementConfig
 from app.services.cover_letter import (
+    build_job_target_title,
     extract_job_target_metadata,
     generate_cover_letter,
     generate_outreach_message,
-    generate_resume_title,
 )
 from app.services.additional_groups import restore_missing_additional_items
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
@@ -346,15 +346,21 @@ def _resolve_request_theme_settings(
 
 def _merge_target_metadata(
     *sources: dict[str, Any] | None,
+    job_description: str = "",
+    job_keywords: dict[str, Any] | None = None,
     title: str | None = None,
 ) -> tuple[str | None, str | None, str | None]:
-    metadata_from_title = extract_job_target_metadata("", title=title)
+    metadata_from_keywords = extract_job_target_metadata(
+        job_description,
+        title=title,
+        job_keywords=job_keywords,
+    )
 
     role = None
     company = None
     location = None
 
-    for source in [*sources, metadata_from_title]:
+    for source in [*sources, metadata_from_keywords]:
         if not source:
             continue
         role = role or source.get("role")
@@ -368,9 +374,12 @@ def _backfill_job_target_metadata(
     *,
     job_id: str,
     job: dict[str, Any],
-    title: str | None = None,
+    job_keywords: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    inferred = extract_job_target_metadata(job.get("content", ""), title=title)
+    inferred = extract_job_target_metadata(
+        job.get("content", ""),
+        job_keywords=job_keywords,
+    )
     updates = {
         key: value
         for key, value in inferred.items()
@@ -944,24 +953,21 @@ def _validate_confirm_payload(
 async def _generate_auxiliary_messages(
     improved_data: dict[str, Any],
     job_content: str,
+    job_keywords: dict[str, Any] | None,
     language: str,
     enable_cover_letter: bool,
     enable_outreach: bool,
 ) -> tuple[str | None, str | None, str | None, list[str]]:
-    """Generate cover letter, outreach message, and resume title.
+    """Generate auxiliary content and derive a stable resume title locally.
 
     Returns (cover_letter, outreach_message, title, warnings).
     """
     cover_letter = None
     outreach_message = None
-    title = None
+    title = build_job_target_title(job_content, job_keywords=job_keywords)
     warnings: list[str] = []
     generation_tasks: list[Awaitable[str]] = []
     task_labels: list[str] = []
-
-    # Title generation is always on (no feature flag)
-    generation_tasks.append(generate_resume_title(job_content, language))
-    task_labels.append("title")
 
     if enable_cover_letter:
         generation_tasks.append(
@@ -983,12 +989,9 @@ async def _generate_auxiliary_messages(
                 result,
                 exc_info=result,
             )
-            if label != "title":
-                warnings.append(f"{label.replace('_', ' ').title()} generation failed")
+            warnings.append(f"{label.replace('_', ' ').title()} generation failed")
         else:
-            if label == "title":
-                title = result
-            elif label == "cover_letter":
+            if label == "cover_letter":
                 cover_letter = result
             elif label == "outreach":
                 outreach_message = result
@@ -1492,6 +1495,7 @@ async def _improve_preview_flow(
     ) = await _generate_auxiliary_messages(
         improved_data,
         job["content"],
+        job_keywords,
         language,
         enable_cover_letter,
         enable_outreach,
@@ -1500,11 +1504,12 @@ async def _improve_preview_flow(
     job = _backfill_job_target_metadata(
         job_id=request.job_id,
         job=job,
-        title=generated_title,
+        job_keywords=job_keywords,
     )
     target_role, target_company, target_location = _merge_target_metadata(
         job,
-        title=generated_title,
+        job_description=job["content"],
+        job_keywords=job_keywords,
     )
     llm_summary = db.summarize_llm_calls(trace_id=request_id)
 
@@ -1699,6 +1704,7 @@ async def improve_resume_confirm_endpoint(
             ) = await _generate_auxiliary_messages(
                 improved_data,
                 job["content"],
+                job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None,
                 language,
                 enable_cover_letter,
                 enable_outreach,
@@ -1708,11 +1714,12 @@ async def improve_resume_confirm_endpoint(
         job = _backfill_job_target_metadata(
             job_id=request.job_id,
             job=job,
-            title=title,
+            job_keywords=job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None,
         )
         target_role, target_company, target_location = _merge_target_metadata(
             job,
-            title=title,
+            job_description=job["content"],
+            job_keywords=job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None,
         )
 
         stage = "create_resume"
@@ -2021,6 +2028,7 @@ async def improve_resume_endpoint(
             ) = await _generate_auxiliary_messages(
                 improved_data,
                 job["content"],
+                job_keywords,
                 language,
                 enable_cover_letter,
                 enable_outreach,
@@ -2029,7 +2037,7 @@ async def improve_resume_endpoint(
         job = _backfill_job_target_metadata(
             job_id=request.job_id,
             job=job,
-            title=title,
+            job_keywords=job_keywords,
         )
 
         # Store the tailored resume with cover letter, outreach message, and title

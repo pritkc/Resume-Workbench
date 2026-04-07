@@ -217,6 +217,9 @@ EXTRACT_KEYWORDS_PROMPT = """Extract job requirements as JSON. Output ONLY the J
 
 Example format:
 {{
+  "core_title": "Backend Engineer",
+  "company_name": "TechCorp",
+  "location": "Remote",
   "required_skills": ["Python", "AWS"],
   "preferred_skills": ["Kubernetes"],
   "experience_requirements": ["5+ years"],
@@ -227,7 +230,12 @@ Example format:
   "seniority_level": "senior"
 }}
 
-Extract numeric years (e.g., "5+ years" → 5) and infer seniority level.
+Rules:
+- `core_title`: return the core role title only, without company name, location, employment type, or extra qualifiers like "apply now"
+- `company_name`: return the employer/company name when present, else null
+- `location`: return the location/work arrangement when clearly stated (for example "Remote", "Hybrid in Seattle, WA", "New York, NY"), else null
+- Extract numeric years (e.g., "5+ years" → 5) and infer seniority level
+- Use null for missing scalar values and [] for missing arrays
 
 Job description:
 {job_description}"""
@@ -431,22 +439,6 @@ Guidelines:
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
 
 Output plain text only. No JSON, no markdown formatting."""
-
-GENERATE_TITLE_PROMPT = """Extract the job title and company name from this job description.
-
-IMPORTANT: Write in {output_language}.
-
-Job Description:
-{job_description}
-
-Rules:
-- Format: "Role @ Company" (e.g., "Senior Frontend Engineer @ Stripe")
-- If the company name is not found, return just the role (e.g., "Senior Frontend Engineer")
-- Maximum 60 characters
-- Use the most specific role title mentioned
-- Do not add any other text, quotes, or formatting
-
-Output the title only, nothing else."""
 
 # Alias for backward compatibility
 RESUME_SCHEMA = RESUME_SCHEMA_EXAMPLE

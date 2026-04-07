@@ -213,7 +213,7 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
 
     assert response.status_code == 200
     assert mock_db.create_generation_run.call_args.kwargs["prompt_id"] == "full"
-    assert auxiliary_messages.await_args.args[2:] == ("en", True, False)
+    assert auxiliary_messages.await_args.args[3:] == ("en", True, False)
 
 
 @pytest.mark.asyncio
