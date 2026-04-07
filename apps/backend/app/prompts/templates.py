@@ -231,20 +231,16 @@ PRIMARY STRATEGY:
 
 IMPORTANT:
 - Generate all rewritten text in {output_language}
-- Return one complete JSON object that follows the output plan exactly
-- Do NOT return personalInfo
+- Return one complete JSON object that follows the response contract exactly
+- Do NOT return personalInfo or sectionMeta
 - Keep proper nouns and identity fields unchanged
 - Do NOT use em dash ("—") anywhere in the output
 
 HARD STRUCTURE RULES:
-- Copy every top-level key shown in the output plan
+- Copy every top-level key shown in the response contract
 - Do not add extra top-level keys
-- Keep workExperience, education, and personalProjects entry counts unchanged
-- {strategy_description_rule}
-- Keep ids, titles, company names, institutions, roles, locations, and years exactly as in the original resume JSON
-- For additional.groups keep every original item exactly once; you may reorder, regroup, or relabel, but never add, drop, or rename the items themselves
-- For customSections preserve the same keys, sectionType values, item counts, ids, titles, subtitles, and years
-- If a custom section item's original description is [] keep it []
+- Follow the immutable_fields, editable_fields, entry_count, and rules in the response contract JSON
+- Keep section counts unchanged unless the response contract explicitly allows otherwise
 - If a field is unchanged, copy it through unchanged
 - Output valid JSON only with double-quoted keys and strings
 - No markdown fences, comments, explanations, or trailing commas
@@ -255,11 +251,11 @@ JOB ANALYSIS:
 JOB DESCRIPTION EXCERPT:
 {job_description}
 
-ORIGINAL RESUME JSON:
+TAILORING RESUME JSON:
 {original_resume}
 
-OUTPUT PLAN:
-{resume_output_plan}"""
+RESPONSE CONTRACT (JSON):
+{response_contract}"""
 
 IMPROVE_PROMPT_OPTIONS = [
     {
@@ -283,51 +279,64 @@ DEFAULT_IMPROVE_PROMPT_ID = "keywords"
 
 IMPROVE_RESUME_PROMPT = IMPROVE_RESUME_PROMPT_TEMPLATE
 
-COVER_LETTER_PROMPT = """Write a brief cover letter for this job application.
+COVER_LETTER_PROMPT = """Write one finished cover letter for this job application.
 
-IMPORTANT: Write in {output_language}.
+IMPORTANT:
+- Write in {output_language}
+- Output plain text only
+- Return exactly one finished cover letter
+- Do NOT use em dash ("—") anywhere in the output
 
-Job Description:
+JOB TARGET (JSON):
+{job_target}
+
+JOB DESCRIPTION EXCERPT:
 {job_description}
 
-Candidate Resume (JSON):
-{resume_data}
+CANDIDATE PROFILE (JSON):
+{resume_profile}
 
-Requirements:
-- 100-150 words maximum
-- 3-4 short paragraphs
-- Opening: Reference ONE specific thing from the job description (product, tech stack, or problem they're solving) - not generic excitement about "the role"
-- Middle: Pick 1-2 qualifications from resume that DIRECTLY match stated requirements - prioritize relevance over impressiveness
-- Closing: Simple availability to discuss, no desperate enthusiasm
-- If resume shows career transition, frame the pivot as intentional and relevant
-- Extract company name from job description - do not use placeholders
-- Do NOT invent information not in the resume
-- Tone: Confident peer, not eager applicant
-- Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
+RULES:
+- 110-140 words
+- At most 3 short paragraphs
+- Opening: reference one specific job detail (product, team, stack, or problem), not generic excitement
+- Body: highlight 1-2 directly relevant qualifications grounded in the candidate profile
+- Closing: simple availability to talk, no desperate enthusiasm
+- If the candidate is pivoting, frame the move as intentional and relevant
+- Do NOT invent facts, metrics, or names
+- Do NOT use placeholder text or bracketed names
+- Do NOT add a signature block, heading, or markdown formatting
+"""
 
-Output plain text only. No JSON, no markdown formatting."""
+OUTREACH_MESSAGE_PROMPT = """Write one finished cold outreach message for LinkedIn or email about this job opportunity.
 
-OUTREACH_MESSAGE_PROMPT = """Generate a cold outreach message for LinkedIn or email about this job opportunity.
+IMPORTANT:
+- Write in {output_language}
+- Output plain text only
+- Return exactly one finished outreach message
+- Do NOT use em dash ("—") anywhere in the output
 
-IMPORTANT: Write in {output_language}.
+JOB TARGET (JSON):
+{job_target}
 
-Job Description:
+JOB DESCRIPTION EXCERPT:
 {job_description}
 
-Candidate Resume (JSON):
-{resume_data}
+CANDIDATE PROFILE (JSON):
+{resume_profile}
 
-Guidelines:
-- 70-100 words maximum (shorter than a cover letter)
-- First sentence: Reference specific detail from job description (team, product, technical challenge) - never open with "I'm reaching out" or "I saw your posting"
-- One sentence on strongest matching qualification with a concrete metric if available
-- End with low-friction ask: "Worth a quick chat?" not "I'd love the opportunity to discuss"
-- Tone: How you'd message a former colleague, not a stranger
-- Do NOT include placeholder brackets
+RULES:
+- 55-85 words total
+- 3 to 4 short sentences
+- Open with one specific job detail, never with "I'm reaching out" or "I saw your posting"
+- Mention the strongest relevant qualification with one concrete detail if supported
+- End with one low-friction ask
+- Tone: warm, confident peer; not stiff, not overly eager
+- If the recipient name is unknown, do not invent one and do not use a greeting placeholder
 - Do NOT use phrases like "excited about" or "passionate about"
-- Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
-
-Output plain text only. No JSON, no markdown formatting."""
+- Do NOT invent facts, metrics, or names
+- Do NOT add a subject line, signature block, or markdown formatting
+"""
 
 # Alias for backward compatibility
 RESUME_SCHEMA = RESUME_SCHEMA_EXAMPLE

@@ -30,11 +30,12 @@ Preview work in `apps/backend/app/routers/resumes.py`:
 - resolves `prompt_id`
 - extracts job keywords
 - runs one primary full-resume tailoring call
-- shapes that prompt with compact job analysis, supported keywords from the source resume, a trimmed JD excerpt, and a compact output plan
+- shapes that prompt with compact job analysis, supported keywords from the source resume, a trimmed JD excerpt, the typed tailoring resume payload, and a JSON response contract
 - preserves personal info, dates, skills, and custom sections
+- rebuilds `sectionMeta` locally after tailoring
 - removes unsupported additions and AI-style phrasing locally
 - computes local warnings and local diff data for the review UI
-- optionally generates cover letter and outreach, while deriving title locally from extracted job metadata
+- optionally generates cover letter and outreach from compact auxiliary prompt payloads, while deriving title locally from extracted job metadata
 - creates an `application_packs` row with `status="preview_ready"`
 - creates a `generation_runs` row with `run_kind="application_pack_preview"`
 - renders/stores RenderCV artifacts
@@ -79,6 +80,12 @@ The preview pipeline currently touches these LLM operations:
 - `resume_generate_full`
 - optional `cover_letter_generate`
 - optional `outreach_generate`
+
+The auxiliary text prompts do not receive the full stored resume JSON anymore. They receive:
+
+- local `job_target` metadata (`role`, `company`, `location`)
+- a trimmed job-description excerpt
+- a compact candidate profile built from the resume
 
 Preview requests use request scope `resumes.improve_preview`.
 
@@ -128,6 +135,8 @@ Behavior to remember:
 - `apps/backend/app/routers/resumes.py`
 - `apps/backend/app/db/models.py`
 - `apps/backend/app/services/artifact_service.py`
+- `apps/backend/app/services/tailoring/`
+- `apps/backend/app/services/cover_letter.py`
 
 ## Agent Notes
 

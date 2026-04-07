@@ -421,6 +421,56 @@ def _extract_finish_reason(choice: Any) -> str | None:
     return str(finish_reason) if finish_reason is not None else None
 
 
+def _text_response_hit_length_limit(
+    *,
+    finish_reason: str | None,
+    response: Any,
+    max_tokens: int,
+) -> bool:
+    """Detect text responses that hit the output-token ceiling."""
+
+    if finish_reason == "length":
+        return True
+
+    usage = _extract_usage_metrics(response)
+    output_tokens = usage["output_tokens"]
+    return bool(
+        max_tokens > 0
+        and output_tokens is not None
+        and output_tokens >= int(max_tokens * settings.llm_near_limit_ratio)
+        and finish_reason in (None, "")
+    )
+
+
+def _should_retry_text_completion(
+    *,
+    error: Exception,
+    finish_reason: str | None,
+    response: Any,
+    max_tokens: int,
+) -> bool:
+    """Return whether a text completion should be retried at the app layer."""
+
+    if _text_response_hit_length_limit(
+        finish_reason=finish_reason,
+        response=response,
+        max_tokens=max_tokens,
+    ):
+        return True
+
+    message = str(error).lower()
+    return "empty response" in message or "thinking content" in message
+
+
+def _get_text_retry_max_tokens(current_max_tokens: int, retry_max_tokens: int | None) -> int:
+    """Increase the output budget for a retry without growing unbounded."""
+
+    if retry_max_tokens is not None:
+        return max(current_max_tokens, retry_max_tokens)
+    increased = max(current_max_tokens + 128, math.ceil(current_max_tokens * 1.5))
+    return min(increased, 8192)
+
+
 def _resolve_pricing(model_name: str) -> tuple[float | None, float | None, str | None]:
     if (
         settings.llm_cost_input_per_million_tokens is not None
@@ -1033,8 +1083,11 @@ async def complete(
     config: LLMConfig | None = None,
     max_tokens: int = 4096,
     temperature: float = 0.7,
+    retries: int = 1,
     operation: str = "text_completion",
     metadata: dict[str, Any] | None = None,
+    retry_hint: str | None = None,
+    retry_max_tokens: int | None = None,
 ) -> str:
     """Make a completion request to the LLM.
 
@@ -1046,88 +1099,163 @@ async def complete(
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
+    base_user_prompt = prompt
+    messages.append({"role": "user", "content": base_user_prompt})
     call_group_id = str(uuid4())
-    applied_temperature: float | None = None
-    reasoning_effort: str | None = None
-    started_at = time.perf_counter()
-    response = None
-    content: str | None = None
-    finish_reason: str | None = None
+    generic_retry_hint = (
+        retry_hint
+        or "Return one complete plain-text response within the requested length. "
+        "End naturally and do not stop mid-sentence."
+    )
+    current_max_tokens = max_tokens
 
-    try:
-        kwargs: dict[str, Any] = {
-            "model": "primary",
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "timeout": LLM_TIMEOUT_COMPLETION,
-        }
-        if _supports_temperature(config.provider, model_name):
-            kwargs["temperature"] = temperature
-            applied_temperature = temperature
-        reasoning_effort = _get_reasoning_effort(config.provider, model_name)
-        if reasoning_effort:
-            kwargs["reasoning_effort"] = reasoning_effort
+    for attempt in range(retries + 1):
+        applied_temperature: float | None = None
+        reasoning_effort: str | None = None
+        started_at = time.perf_counter()
+        response = None
+        content: str | None = None
+        finish_reason: str | None = None
 
-        response = await router.acompletion(**kwargs)
+        try:
+            kwargs: dict[str, Any] = {
+                "model": "primary",
+                "messages": messages,
+                "max_tokens": current_max_tokens,
+                "timeout": _calculate_timeout(
+                    "completion",
+                    current_max_tokens,
+                    config.provider,
+                ),
+            }
+            if _supports_temperature(config.provider, model_name):
+                applied_temperature = _get_retry_temperature(attempt, base_temp=temperature)
+                kwargs["temperature"] = applied_temperature
+            reasoning_effort = _get_reasoning_effort(config.provider, model_name)
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
 
-        choice = response.choices[0]
-        finish_reason = _extract_finish_reason(choice)
-        content = _extract_choice_text(choice)
-        if not content:
-            raise ValueError("Empty response from LLM")
-        # Strip thinking tags from reasoning models (deepseek-r1, qwq, etc.)
-        if "<think>" in content:
-            content = _strip_thinking_tags(content)
+            response = await router.acompletion(**kwargs)
+
+            choice = response.choices[0]
+            finish_reason = _extract_finish_reason(choice)
+            content = _extract_choice_text(choice)
             if not content:
-                raise ValueError("Response contained only thinking content, no output")
-        _record_llm_attempt(
-            call_group_id=call_group_id,
-            attempt=1,
-            operation=operation,
-            request_kind="text",
-            messages=messages,
-            config=config,
-            model_name=model_name,
-            max_tokens=max_tokens,
-            temperature=applied_temperature,
-            reasoning_effort=reasoning_effort,
-            json_mode=False,
-            started_at=started_at,
-            success=True,
-            content=content,
-            response=response,
-            finish_reason=finish_reason,
-            extra_context=metadata,
-        )
-        return content
-    except Exception as e:
-        _record_llm_attempt(
-            call_group_id=call_group_id,
-            attempt=1,
-            operation=operation,
-            request_kind="text",
-            messages=messages,
-            config=config,
-            model_name=model_name,
-            max_tokens=max_tokens,
-            temperature=applied_temperature,
-            reasoning_effort=reasoning_effort,
-            json_mode=False,
-            started_at=started_at,
-            success=False,
-            content=content,
-            response=response,
-            finish_reason=finish_reason,
-            error=e,
-            extra_context=metadata,
-        )
-        # Log the actual error server-side for debugging
-        logging.error(f"LLM completion failed: {e}", extra={
-                      "model": model_name})
-        raise ValueError(
-            "LLM completion failed. Please check your API configuration and try again."
-        ) from e
+                raise ValueError("Empty response from LLM")
+            # Strip thinking tags from reasoning models (deepseek-r1, qwq, etc.)
+            if "<think>" in content:
+                content = _strip_thinking_tags(content)
+                if not content:
+                    raise ValueError("Response contained only thinking content, no output")
+            if _text_response_hit_length_limit(
+                finish_reason=finish_reason,
+                response=response,
+                max_tokens=current_max_tokens,
+            ):
+                raise ValueError("LLM response was truncated at max_tokens")
+
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="text",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=current_max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=False,
+                started_at=started_at,
+                success=True,
+                content=content,
+                response=response,
+                finish_reason=finish_reason,
+                extra_context=metadata,
+            )
+            return content
+        except ValueError as e:
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="text",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=current_max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=False,
+                started_at=started_at,
+                success=False,
+                content=content,
+                response=response,
+                finish_reason=finish_reason,
+                error=e,
+                extra_context=metadata,
+            )
+            if attempt < retries and _should_retry_text_completion(
+                error=e,
+                finish_reason=finish_reason,
+                response=response,
+                max_tokens=current_max_tokens,
+            ):
+                current_max_tokens = _get_text_retry_max_tokens(
+                    current_max_tokens,
+                    retry_max_tokens,
+                )
+                messages[-1]["content"] = (
+                    base_user_prompt
+                    + "\n\nIMPORTANT: "
+                    + generic_retry_hint
+                )
+                logging.warning(
+                    "Retrying text completion after content issue (attempt %d/%d): %s",
+                    attempt + 1,
+                    retries + 1,
+                    e,
+                )
+                continue
+
+            if "truncated at max_tokens" in str(e).lower():
+                raise ValueError(
+                    f"LLM completion for {operation} was truncated after {attempt + 1} "
+                    "attempt(s). Reduce prompt size or tighten the output contract."
+                ) from e
+            raise
+        except Exception as e:
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="text",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=current_max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=False,
+                started_at=started_at,
+                success=False,
+                content=content,
+                response=response,
+                finish_reason=finish_reason,
+                error=e,
+                extra_context=metadata,
+            )
+            # Log the actual error server-side for debugging
+            logging.error(
+                "LLM completion failed: %s",
+                e,
+                extra={"model": model_name},
+            )
+            raise ValueError(
+                "LLM completion failed. Please check your API configuration and try again."
+            ) from e
+
+    raise ValueError(f"LLM completion failed after {retries + 1} attempts")
 
 
 def _supports_json_mode(model_name: str) -> bool:

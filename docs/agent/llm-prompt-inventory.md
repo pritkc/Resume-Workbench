@@ -26,10 +26,10 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | Prompt or constant | Used by | LLM operation |
 |--------------------|---------|---------------|
 | `PARSE_RESUME_PROMPT` | `services/parser.py` | `resume_parse_json` |
-| `EXTRACT_KEYWORDS_PROMPT` | `services/improver.py` | `job_extract_keywords` (also extracts core title, company, location) |
-| `IMPROVE_RESUME_PROMPT` | `services/improver.py` | `resume_generate_full` |
-| `IMPROVE_STRATEGY_GUIDANCE` | `services/improver.py` | folded into `resume_generate_full` |
-| `CRITICAL_TRUTHFULNESS_RULES` | `services/improver.py` | folded into `resume_generate_full` |
+| `EXTRACT_KEYWORDS_PROMPT` | `services/tailoring/analysis.py` | `job_extract_keywords` (also extracts core title, company, location) |
+| `IMPROVE_RESUME_PROMPT` | `services/tailoring/prompting.py` | `resume_generate_full` |
+| `IMPROVE_STRATEGY_GUIDANCE` | `services/tailoring/prompting.py` | folded into `resume_generate_full` |
+| `CRITICAL_TRUTHFULNESS_RULES` | `services/tailoring/prompting.py` | folded into `resume_generate_full` |
 | `COVER_LETTER_PROMPT` | `services/cover_letter.py` | `cover_letter_generate` |
 | `OUTREACH_MESSAGE_PROMPT` | `services/cover_letter.py` | `outreach_generate` |
 
@@ -59,16 +59,18 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 2. `resume_generate_full`
    - prompt: `IMPROVE_RESUME_PROMPT`
    - strategy text injected from `IMPROVE_STRATEGY_GUIDANCE[prompt_id]`
-   - prompt also receives compact `job_analysis`, supported JD keywords from the source resume, a trimmed JD excerpt, and a `resume_output_plan`
+   - prompt also receives compact `job_analysis`, supported JD keywords from the source resume, a trimmed JD excerpt, the typed tailoring resume payload, and a JSON `response_contract`
+   - prompt explicitly excludes `personalInfo` and `sectionMeta`
 3. local post-processing:
    - preserve personal info, dates, additional items, and custom sections
+   - rebuild `sectionMeta` locally from source state
    - remove unsupported additions and AI-style phrasing locally
    - compute local warnings with `verify_generated_resume_result(...)`
    - compute preview diffs locally with `calculate_resume_diff(...)`
 4. auxiliary generation:
    - local title derivation from extracted job metadata
-   - optional `cover_letter_generate`
-   - optional `outreach_generate`
+   - optional `cover_letter_generate` with compact `job_target` + trimmed JD excerpt + `CandidatePromptProfile`
+   - optional `outreach_generate` with the same compact auxiliary payload shape
 
 ## Config Surfaces
 
@@ -98,6 +100,7 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 Current prompt-related metadata is not centralized, but several calls already persist useful context:
 
 - tailor calls attach `prompt_id` in `metadata`
+- cover/outreach calls attach prompt-payload size hints such as trimmed JD chars and compact candidate-profile chars
 - application-pack preview/confirm store `prompt_id` in `generation_runs`
 - job preview state stores `preview_prompt_id`
 

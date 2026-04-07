@@ -1,6 +1,14 @@
-"""Service tests for cover letter metadata helpers."""
+"""Service tests for cover letter and outreach helpers."""
 
-from app.services.cover_letter import build_job_target_title, extract_job_target_metadata
+from unittest.mock import AsyncMock, patch
+
+from app.services.cover_letter import (
+    build_job_target_title,
+    extract_job_target_metadata,
+    generate_cover_letter,
+    generate_outreach_message,
+)
+from app.services.message_profiles import CandidatePromptProfile
 
 
 class TestJobTargetMetadata:
@@ -92,3 +100,56 @@ class TestBuildJobTargetTitle:
         )
 
         assert title == "Backend Engineer"
+
+
+class TestCandidatePromptProfile:
+    def test_builds_compact_profile_without_personal_info_or_section_meta(self, sample_resume):
+        profile = CandidatePromptProfile.from_resume_data(sample_resume)
+        payload = profile.model_dump(exclude_none=True)
+
+        assert "headline" in payload
+        assert "skills" in payload
+        assert "sectionMeta" not in payload
+        assert "personalInfo" not in payload
+        assert "email" not in profile.to_prompt_json()
+        assert "linkedin.com/in/janedoe" not in profile.to_prompt_json()
+
+
+class TestGeneratedMessages:
+    @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
+    async def test_outreach_uses_compact_profile_and_retry_hint(
+        self, mock_complete, sample_resume, sample_job_description
+    ):
+        mock_complete.return_value = "Worth a quick chat?"
+
+        await generate_outreach_message(sample_resume, sample_job_description)
+
+        kwargs = mock_complete.call_args.kwargs
+        prompt = kwargs["prompt"]
+        assert "CANDIDATE PROFILE (JSON):" in prompt
+        assert '"experience"' in prompt
+        assert '"sectionMeta"' not in prompt
+        assert "jane@example.com" not in prompt
+        assert "linkedin.com/in/janedoe" not in prompt
+        assert kwargs["max_tokens"] == 256
+        assert kwargs["retries"] == 1
+        assert "Do not stop mid-sentence" in kwargs["retry_hint"]
+
+    @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
+    async def test_cover_letter_uses_compact_profile_and_retry_hint(
+        self, mock_complete, sample_resume, sample_job_description
+    ):
+        mock_complete.return_value = "Thanks for your time."
+
+        await generate_cover_letter(sample_resume, sample_job_description)
+
+        kwargs = mock_complete.call_args.kwargs
+        prompt = kwargs["prompt"]
+        assert "JOB TARGET (JSON):" in prompt
+        assert "CANDIDATE PROFILE (JSON):" in prompt
+        assert "Acme Corp" in prompt
+        assert '"sectionMeta"' not in prompt
+        assert "jane@example.com" not in prompt
+        assert kwargs["max_tokens"] == 384
+        assert kwargs["retries"] == 1
+        assert "complete cover letter" in kwargs["retry_hint"]

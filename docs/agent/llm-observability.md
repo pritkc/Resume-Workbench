@@ -87,6 +87,7 @@ Historical traces from older runs may still show:
 
 - `resume_generate_diffs`
 - `resume_refine_keyword_injection`
+- text-generation rows for `outreach_generate` / `cover_letter_generate` that were marked successful even with `finish_reason=length` before the truncation-safe `complete()` fix
 
 ### Prompt-specific regressions
 
@@ -106,3 +107,9 @@ Check:
 - `usage_output_tokens`
 - warnings about near-limit output
 - prompt/response previews for malformed JSON or truncated sections
+
+Current behavior to remember:
+
+- `complete_json()` retries malformed or truncated JSON at the app layer.
+- `complete()` now retries bounded plain-text prompts that hit the output ceiling and raises if the final result is still truncated.
+- For cover letter / outreach traces, `request_context` may include compact-payload hints such as trimmed JD chars and candidate-profile chars.

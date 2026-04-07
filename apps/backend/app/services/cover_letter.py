@@ -10,6 +10,8 @@ from app.prompts.templates import (
     OUTREACH_MESSAGE_PROMPT,
 )
 from app.prompts import get_language_name
+from app.services.message_profiles import CandidatePromptProfile
+from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
 _ROLE_AT_COMPANY_RE = re.compile(
     r"\bAs an?\s+(?P<role>.+?)\s+at\s+(?P<company>[^,\n\.]+)",
@@ -61,6 +63,19 @@ _TITLE_TRAILING_QUALIFIER_RE = re.compile(
     \s*$
     """,
     re.IGNORECASE | re.VERBOSE,
+)
+
+MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2500
+
+_COVER_LETTER_RETRY_HINT = (
+    "Return one complete cover letter in plain text only. Stay under 140 words, "
+    "use at most 3 short paragraphs, and end with a complete closing sentence. "
+    "Do not use placeholders, markdown, or signature blocks."
+)
+_OUTREACH_RETRY_HINT = (
+    "Return one complete outreach message in plain text only. Stay under 85 words, "
+    "use 3 to 4 short sentences, avoid placeholders, and end with one low-friction ask. "
+    "Do not stop mid-sentence or add a signature block."
 )
 
 
@@ -210,6 +225,29 @@ def build_job_target_title(
     return None
 
 
+def _build_message_prompt_inputs(
+    resume_data: dict[str, Any],
+    job_description: str,
+) -> dict[str, str]:
+    """Build compact prompt inputs for cover-letter and outreach generation."""
+
+    profile = CandidatePromptProfile.from_resume_data(resume_data)
+    job_target = extract_job_target_metadata(job_description)
+    sanitized_jd = trim_job_description_for_prompt(
+        sanitize_user_input(job_description),
+        max_chars=MAX_MESSAGE_JOB_DESCRIPTION_CHARS,
+    )
+    return {
+        "job_target": json.dumps(
+            {key: value for key, value in job_target.items() if value},
+            indent=2,
+            ensure_ascii=True,
+        ),
+        "job_description": sanitized_jd,
+        "resume_profile": profile.to_prompt_json(),
+    }
+
+
 async def generate_cover_letter(
     resume_data: dict[str, Any],
     job_description: str,
@@ -226,19 +264,28 @@ async def generate_cover_letter(
         Generated cover letter as plain text
     """
     output_language = get_language_name(language)
+    prompt_inputs = _build_message_prompt_inputs(resume_data, job_description)
 
     prompt = COVER_LETTER_PROMPT.format(
-        job_description=job_description,
-        resume_data=json.dumps(resume_data),
+        job_target=prompt_inputs["job_target"],
+        job_description=prompt_inputs["job_description"],
+        resume_profile=prompt_inputs["resume_profile"],
         output_language=output_language,
     )
 
     result = await complete(
         prompt=prompt,
         system_prompt="You are a professional career coach and resume writer. Write compelling, personalized cover letters.",
-        max_tokens=2048,
+        max_tokens=384,
+        retries=1,
+        retry_hint=_COVER_LETTER_RETRY_HINT,
+        retry_max_tokens=640,
         operation="cover_letter_generate",
-        metadata={"job_description_chars": len(job_description)},
+        metadata={
+            "job_description_chars": len(job_description),
+            "prompt_job_description_chars": len(prompt_inputs["job_description"]),
+            "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
+        },
     )
 
     return result.strip()
@@ -260,19 +307,28 @@ async def generate_outreach_message(
         Generated outreach message as plain text
     """
     output_language = get_language_name(language)
+    prompt_inputs = _build_message_prompt_inputs(resume_data, job_description)
 
     prompt = OUTREACH_MESSAGE_PROMPT.format(
-        job_description=job_description,
-        resume_data=json.dumps(resume_data),
+        job_target=prompt_inputs["job_target"],
+        job_description=prompt_inputs["job_description"],
+        resume_profile=prompt_inputs["resume_profile"],
         output_language=output_language,
     )
 
     result = await complete(
         prompt=prompt,
         system_prompt="You are a professional networking coach. Write genuine, engaging cold outreach messages.",
-        max_tokens=1024,
+        max_tokens=256,
+        retries=1,
+        retry_hint=_OUTREACH_RETRY_HINT,
+        retry_max_tokens=384,
         operation="outreach_generate",
-        metadata={"job_description_chars": len(job_description)},
+        metadata={
+            "job_description_chars": len(job_description),
+            "prompt_job_description_chars": len(prompt_inputs["job_description"]),
+            "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
+        },
     )
 
     return result.strip()

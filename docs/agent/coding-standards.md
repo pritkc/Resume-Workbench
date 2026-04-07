@@ -73,4 +73,4 @@ data = DEFAULT_DATA
 
 ### New Service Pattern
 
-Mirror patterns in `app/services/improver.py` for new services.
+Mirror current service boundaries in `app/services/tailoring/*` and keep `app/services/improver.py` as a thin compatibility facade only.

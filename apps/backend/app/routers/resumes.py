@@ -62,18 +62,11 @@ from app.schemas import (
     UpdateTitleRequest,
     normalize_resume_data,
 )
-from app.services.parser import parse_document, parse_resume_to_json, restore_dates_from_markdown
+from app.services.parser import parse_document, parse_resume_to_json
 from app.services.improver import (
-    MONTH_PATTERN,
+    generate_tailored_resume,
     extract_job_keywords,
     generate_improvements,
-    improve_resume,
-    verify_generated_resume_result,
-)
-from app.services.refiner import (
-    fix_alignment_violations,
-    remove_ai_phrases,
-    validate_master_alignment,
 )
 from app.services.cover_letter import (
     build_job_target_title,
@@ -81,7 +74,6 @@ from app.services.cover_letter import (
     generate_cover_letter,
     generate_outreach_message,
 )
-from app.services.additional_groups import restore_missing_additional_items
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
 
 
@@ -628,250 +620,27 @@ async def _generate_tailored_resume_data(
     job_keywords: dict[str, Any],
     language: str,
     prompt_id: str,
-    resume_id: str,
-    job_id: str,
     stage_state: dict[str, str] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any] | None, list[str]]:
+) -> tuple[dict[str, Any], list[str]]:
     """Generate tailored resume data through the primary full-resume prompt."""
     original_resume_data = _get_original_resume_data(resume)
+    master_resume = db.get_master_resume()
+    cleanup_source_data = (
+        _get_original_resume_data(master_resume)
+        if master_resume
+        else original_resume_data
+    )
     _set_stage(stage_state, "generate_full_resume")
-    improved_data = await improve_resume(
+    tailoring_result = await generate_tailored_resume(
         original_resume=resume["content"],
         job_description=job["content"],
         job_keywords=job_keywords,
         language=language,
         prompt_id=prompt_id,
         original_resume_data=original_resume_data,
+        cleanup_source_data=cleanup_source_data,
     )
-    return improved_data, original_resume_data, []
-
-
-def _has_month(date_str: str) -> bool:
-    """Return True if the date string contains a month name."""
-    return bool(MONTH_PATTERN.search(date_str))
-
-
-def _restore_original_dates(
-    original_data: dict[str, Any] | None,
-    improved_data: dict[str, Any],
-) -> dict[str, Any]:
-    """Restore original date/years values that the LLM may have truncated.
-
-    Compares each entry's ``years`` field in the tailored resume against
-    the corresponding entry in the original.  If the original has more
-    date precision (e.g. includes a month) and the tailored version lost
-    it, the original value is restored.
-    """
-    if not original_data:
-        return improved_data
-
-    result = copy.deepcopy(improved_data)
-
-    for section_key in ("workExperience", "education", "personalProjects"):
-        orig_entries = original_data.get(section_key, [])
-        result_entries = result.get(section_key, [])
-        for idx, orig_entry in enumerate(orig_entries):
-            if idx >= len(result_entries):
-                break
-            if not isinstance(orig_entry, dict) or not isinstance(result_entries[idx], dict):
-                continue
-            orig_years = orig_entry.get("years", "")
-            result_years = result_entries[idx].get("years", "")
-            if (
-                isinstance(orig_years, str)
-                and isinstance(result_years, str)
-                and orig_years
-                and orig_years != result_years
-                and _has_month(orig_years)
-                and not _has_month(result_years)
-            ):
-                logger.info(
-                    "Restoring date in %s[%d]: %r → %r",
-                    section_key,
-                    idx,
-                    result_years,
-                    orig_years,
-                )
-                result_entries[idx]["years"] = orig_years
-
-    # Custom sections (itemList)
-    orig_custom = original_data.get("customSections", {})
-    result_custom = result.get("customSections", {})
-    if isinstance(orig_custom, dict) and isinstance(result_custom, dict):
-        for section_key, orig_section in orig_custom.items():
-            if not isinstance(orig_section, dict):
-                continue
-            result_section = result_custom.get(section_key)
-            if not isinstance(result_section, dict):
-                continue
-            if orig_section.get("sectionType") != "itemList":
-                continue
-            orig_items = orig_section.get("items", [])
-            result_items = result_section.get("items", [])
-            for idx, orig_item in enumerate(orig_items):
-                if idx >= len(result_items):
-                    break
-                if not isinstance(orig_item, dict) or not isinstance(result_items[idx], dict):
-                    continue
-                orig_years = orig_item.get("years", "")
-                result_years = result_items[idx].get("years", "")
-                if (
-                    isinstance(orig_years, str)
-                    and isinstance(result_years, str)
-                    and orig_years
-                    and orig_years != result_years
-                    and _has_month(orig_years)
-                    and not _has_month(result_years)
-                ):
-                    result_items[idx]["years"] = orig_years
-
-    return result
-
-
-def _preserve_original_skills(
-    original_data: dict[str, Any] | None,
-    improved_data: dict[str, Any],
-) -> dict[str, Any]:
-    """Restore any original additional-group items dropped by the LLM."""
-    if not original_data:
-        return improved_data
-
-    result = copy.deepcopy(improved_data)
-    restored = restore_missing_additional_items(
-        original_data.get("additional"),
-        result.get("additional"),
-    )
-    result["additional"] = restored
-    return result
-
-
-def _protect_custom_sections(
-    original_data: dict[str, Any] | None,
-    improved_data: dict[str, Any],
-) -> dict[str, Any]:
-    """Protect custom sections from LLM hallucination.
-
-    - If an item originally had description: [], revert any fabricated descriptions.
-    - If the LLM added items that weren't in the original, remove them.
-    """
-    if not original_data:
-        return improved_data
-
-    orig_custom = original_data.get("customSections")
-    if not isinstance(orig_custom, dict) or not orig_custom:
-        return improved_data
-
-    result = copy.deepcopy(improved_data)
-    result_custom = result.get("customSections")
-    if not isinstance(result_custom, dict):
-        return result
-
-    for section_key, orig_section in orig_custom.items():
-        if not isinstance(orig_section, dict):
-            continue
-        result_section = result_custom.get(section_key)
-        if not isinstance(result_section, dict):
-            # Section was removed by LLM — restore original
-            result_custom[section_key] = copy.deepcopy(orig_section)
-            logger.info("Restored missing custom section: %s", section_key)
-            continue
-
-        section_type = orig_section.get("sectionType", "")
-        if section_type == "itemList":
-            orig_items = orig_section.get("items", [])
-            result_items = result_section.get("items", [])
-            if not isinstance(orig_items, list) or not isinstance(result_items, list):
-                continue
-
-            # Trim any items the LLM added beyond the original count
-            if len(result_items) > len(orig_items):
-                logger.info(
-                    "Trimming %d hallucinated items from customSections.%s",
-                    len(result_items) - len(orig_items),
-                    section_key,
-                )
-                result_items = result_items[: len(orig_items)]
-
-            # Revert fabricated descriptions on items that had empty descriptions
-            for idx, orig_item in enumerate(orig_items):
-                if idx >= len(result_items):
-                    break
-                if not isinstance(orig_item, dict):
-                    continue
-                orig_desc = orig_item.get("description")
-                if isinstance(orig_desc, list) and len(orig_desc) == 0:
-                    result_desc = result_items[idx].get("description")
-                    if isinstance(result_desc, list) and len(result_desc) > 0:
-                        logger.info(
-                            "Reverted fabricated description on customSections.%s.items[%d]",
-                            section_key,
-                            idx,
-                        )
-                        result_items[idx]["description"] = []
-
-            result_section["items"] = result_items
-
-    result["customSections"] = result_custom
-    return result
-
-
-def _apply_local_resume_cleanup(
-    source_data: dict[str, Any] | None,
-    improved_data: dict[str, Any],
-    job_content: str,
-) -> tuple[dict[str, Any], list[str]]:
-    """Apply local-only cleanup so unsupported additions do not leak through."""
-    warnings: list[str] = []
-    result = improved_data
-
-    cleaned_data, removed_ai_phrases = remove_ai_phrases(result, job_content)
-    if removed_ai_phrases:
-        result = cleaned_data
-        warnings.append(
-            "Removed AI-style phrasing: " + ", ".join(sorted(removed_ai_phrases))
-        )
-
-    if source_data:
-        alignment_report = validate_master_alignment(result, source_data)
-        critical_violations = [
-            violation
-            for violation in alignment_report.violations
-            if violation.severity == "critical"
-        ]
-        if critical_violations:
-            result = fix_alignment_violations(result, critical_violations)
-            warnings.append(
-                f"Removed {len(critical_violations)} unsupported addition(s) from tailored resume"
-            )
-
-    return result, warnings
-
-
-def _preserve_personal_info(
-    original_data: dict[str, Any] | None,
-    improved_data: dict[str, Any],
-) -> tuple[dict[str, Any], list[str]]:
-    """Preserve personal info from original, return warnings if unable.
-
-    Uses deep copy to prevent mutation of original data.
-    """
-    warnings: list[str] = []
-
-    if not original_data:
-        warnings.append(
-            "Original resume data unavailable - personal info may be AI-generated"
-        )
-        return improved_data, warnings
-
-    original_info = original_data.get("personalInfo")
-    if not isinstance(original_info, dict):
-        warnings.append("Original personal info missing or invalid")
-        return improved_data, warnings
-
-    # SVC-001: Use deep copy to prevent any mutation of original data
-    result = copy.deepcopy(improved_data)
-    result["personalInfo"] = copy.deepcopy(original_info)
-    return result, warnings
+    return tailoring_result.resume_data, tailoring_result.warnings
 
 
 def _calculate_diff_from_resume(
@@ -1349,60 +1118,20 @@ async def _improve_preview_flow(
                 request.job_id,
                 e,
             )
-    improved_data, original_resume_data, response_warnings = (
+    improved_data, response_warnings = (
         await _generate_tailored_resume_data(
             resume=resume,
             job=job,
             job_keywords=job_keywords,
             language=language,
             prompt_id=prompt_id,
-            resume_id=request.resume_id,
-            job_id=request.job_id,
             stage_state=stage_state,
         )
     )
 
-    # Safety nets (defense in depth after primary full-resume generation)
-    _set_stage(stage_state, "preserve_resume_metadata")
-    improved_data, preserve_warnings = _preserve_personal_info(
-        original_resume_data,
-        improved_data,
-    )
-    response_warnings.extend(preserve_warnings)
-
-    improved_data = _restore_original_dates(original_resume_data, improved_data)
-    original_markdown = _get_original_markdown(resume)
-    if original_markdown:
-        improved_data = restore_dates_from_markdown(improved_data, original_markdown)
-    improved_data = _preserve_original_skills(original_resume_data, improved_data)
-    improved_data = _protect_custom_sections(original_resume_data, improved_data)
-    master_resume = db.get_master_resume()
-    cleanup_source_data = (
-        _get_original_resume_data(master_resume)
-        if master_resume
-        else original_resume_data
-    )
-    improved_data, cleanup_warnings = _apply_local_resume_cleanup(
-        cleanup_source_data,
-        improved_data,
-        job["content"],
-    )
-    response_warnings.extend(cleanup_warnings)
-
     refinement_stats: RefinementStats | None = None
     refinement_attempted = False
     refinement_successful = False
-
-    if original_resume_data:
-        _set_stage(stage_state, "verify_generated_resume")
-        response_warnings.extend(
-            verify_generated_resume_result(
-                original_resume_data,
-                improved_data,
-                job_keywords,
-                prompt_id=prompt_id,
-            )
-        )
 
     improved_data = _canonicalize_improved_resume_data(improved_data)
     improved_text = json.dumps(improved_data, indent=2)
@@ -1859,59 +1588,20 @@ async def improve_resume_endpoint(
                 "prompt_id": prompt_id,
             },
         ):
-            improved_data, original_resume_data, response_warnings = (
+            improved_data, response_warnings = (
                 await _generate_tailored_resume_data(
                     resume=resume,
                     job=job,
                     job_keywords=job_keywords,
                     language=language,
                     prompt_id=prompt_id,
-                    resume_id=request.resume_id,
-                    job_id=request.job_id,
                     stage_state=stage_state,
                 )
             )
 
-        # Safety nets (defense in depth)
-        _set_stage(stage_state, "preserve_resume_metadata")
-        improved_data, preserve_warnings = _preserve_personal_info(
-            original_resume_data,
-            improved_data,
-        )
-        response_warnings.extend(preserve_warnings)
-
-        improved_data = _restore_original_dates(original_resume_data, improved_data)
-        original_markdown = _get_original_markdown(resume)
-        if original_markdown:
-            improved_data = restore_dates_from_markdown(improved_data, original_markdown)
-        improved_data = _preserve_original_skills(original_resume_data, improved_data)
-        improved_data = _protect_custom_sections(original_resume_data, improved_data)
-        master_resume = db.get_master_resume()
-        cleanup_source_data = (
-            _get_original_resume_data(master_resume)
-            if master_resume
-            else original_resume_data
-        )
-        improved_data, cleanup_warnings = _apply_local_resume_cleanup(
-            cleanup_source_data,
-            improved_data,
-            job["content"],
-        )
-        response_warnings.extend(cleanup_warnings)
-
         refinement_stats: RefinementStats | None = None
         refinement_attempted = False
         refinement_successful = False
-        if original_resume_data:
-            _set_stage(stage_state, "verify_generated_resume")
-            response_warnings.extend(
-                verify_generated_resume_result(
-                    original_resume_data,
-                    improved_data,
-                    job_keywords,
-                    prompt_id=prompt_id,
-                )
-            )
 
         # Convert improved data to JSON string for storage
         improved_text = json.dumps(improved_data, indent=2)

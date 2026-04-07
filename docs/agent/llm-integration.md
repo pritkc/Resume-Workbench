@@ -52,6 +52,9 @@ Current retry policy:
 - uses the cached Router
 - suppresses `temperature` for GPT-5-family models
 - injects `reasoning_effort="minimal"` for GPT-5-family models
+- retries text responses that hit `finish_reason=length` or otherwise come back incomplete
+- supports caller-specific `retry_hint` text and retry token budgets for bounded plain-text prompts
+- raises instead of silently returning truncated partial text on final failure
 
 `complete_json()`
 
@@ -78,7 +81,8 @@ Current retry policy:
 - uses direct LiteLLM completion, not the shared Router path
 - caches successful and failed health results by provider/model/key/base fingerprint
 - stores health-check attempts in `llm_calls`
-- powers `/api/v1/health`, `/api/v1/status`, and `/api/v1/config/llm-test`
+- refreshes the cached snapshot used by `/api/v1/health` and `/api/v1/status`
+- powers explicit connection tests through `/api/v1/config/llm-test`
 
 ## Observability
 
@@ -120,7 +124,7 @@ The active tailoring path is now:
 2. `resume_generate_full`
 3. local cleanup and validation
 4. local diff generation for preview UI
-5. optional cover letter / outreach generation
+5. optional cover letter / outreach generation with compact candidate-profile prompt payloads
 
 Notably, the active runtime no longer does:
 
@@ -132,7 +136,9 @@ Notably, the active runtime no longer does:
 
 - Put reusable prompt text in `app/prompts/`.
 - Use `complete_json()` for structured outputs and `complete()` for plain text.
+- Keep prompt payloads compact and typed. Do not pass full stored resume blobs to text-generation prompts unless there is a strong reason.
 - Always set a stable `operation` name.
 - Pass useful `metadata` so traces are debuggable.
 - If the JSON contract is strict or caller-specific, pass a `retry_hint`.
+- If the text output must be short and complete, also pass a caller-specific `retry_hint` and consider a bounded `retry_max_tokens`.
 - If the call is part of a top-level request flow, make sure it runs inside an appropriate `llm_trace_scope()`.

@@ -67,19 +67,23 @@ Important implication:
 
 ## LLM Safety Guards
 
-Tailoring routes explicitly protect custom sections after generation.
+Tailoring no longer sends `sectionMeta` to the LLM. The model only sees the tailoring resume payload (`summary`, experience, education, projects, additional groups, custom sections), and backend preservation logic restores view metadata locally after generation.
 
-`apps/backend/app/routers/resumes.py` currently:
+The tailoring preservation layer currently:
 
 - restores custom sections that the LLM removed
 - trims hallucinated extra items from `itemList` custom sections
 - removes fabricated descriptions when the original custom item had an empty description
 - restores month-level date strings for `itemList` custom sections if the LLM degrades them
+- rehydrates `sectionMeta` locally from source resume state and current `customSections`
 
-The main guard is `_protect_custom_sections()`.
+Relevant files:
+
+- `apps/backend/app/services/tailoring/preservation.py`
+- `apps/backend/app/services/section_metadata.py`
 
 ## Agent Notes
 
 - Treat `sectionMeta.key` as the durable link between metadata and `customSections`.
 - Display-name changes are allowed, but key stability matters for saves, raw YAML parsing, and LLM post-processing.
-- If you introduce new custom-section behavior, update visual builder code, schema normalization, RenderCV adapter round-trip logic, and tailoring safeguards together.
+- If you introduce new custom-section behavior, update visual builder code, schema normalization, RenderCV adapter round-trip logic, section-metadata rebuilding, and tailoring safeguards together.

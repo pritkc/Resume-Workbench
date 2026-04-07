@@ -135,3 +135,44 @@ def test_rendercv_social_round_trip_keeps_dedicated_networks_out_of_generic_list
     assert parsed_resume["personalInfo"]["socialNetworks"] == [
         {"network": "Mastodon", "username": "jane"}
     ]
+
+
+def test_rendercv_round_trip_preserves_custom_section_display_name_and_key(
+    sample_resume_copy: dict,
+) -> None:
+    sample_resume_copy["customSections"] = {
+        "publications": {
+            "sectionType": "text",
+            "text": "Published papers on distributed systems.",
+        }
+    }
+    sample_resume_copy["sectionMeta"] = [
+        *sample_resume_copy.get("sectionMeta", []),
+        {
+            "id": "publications",
+            "key": "publications",
+            "displayName": "Publications",
+            "sectionType": "text",
+            "isDefault": False,
+            "isVisible": True,
+            "order": 6,
+        },
+    ]
+
+    sections = rendercv_payload_to_yaml_sections(
+        sample_resume_copy,
+        RenderThemeSettings(theme_id="classic"),
+    )
+    parsed_resume, _ = parse_rendercv_yaml_sections(
+        sections,
+        base_resume_data=sample_resume_copy,
+        base_theme_settings=RenderThemeSettings(theme_id="classic"),
+    )
+
+    assert parsed_resume["customSections"]["publications"]["sectionType"] == "text"
+    custom_meta = next(
+        meta
+        for meta in parsed_resume["sectionMeta"]
+        if meta["key"] == "publications"
+    )
+    assert custom_meta["displayName"] == "Publications"

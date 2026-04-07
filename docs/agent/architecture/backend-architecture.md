@@ -72,9 +72,13 @@ Important relationships:
 | Module | Responsibility |
 |--------|----------------|
 | `services/parser.py` | PDF/DOCX -> markdown -> structured resume JSON |
-| `services/improver.py` | job keyword extraction, primary full tailoring prompt, prompt contract shaping, local verifier, resume diff summaries |
+| `services/tailoring/*` | typed single-prompt tailoring pipeline: job analysis, prompt contract shaping, orchestration, preservation, local verifier, and local diff summaries |
+| `services/improver.py` | compatibility facade that re-exports the tailoring entrypoints and helper APIs |
 | `services/refiner.py` | local AI-phrase cleanup and master-alignment helpers; older keyword-injection prompt retained but not used in the active tailoring path |
-| `services/cover_letter.py` | cover letter, outreach, and local title generation |
+| `services/cover_letter.py` | cover letter, outreach, and local title generation using compact auxiliary prompt inputs |
+| `services/message_profiles.py` | compact candidate-profile payloads for cover letter and outreach prompts |
+| `services/section_metadata.py` | backend section-metadata synthesis and local `sectionMeta` rehydration |
+| `services/prompt_utils.py` | shared prompt sanitization and JD trimming helpers |
 | `services/additional_groups.py` | canonical additional-group normalization |
 | `services/artifact_service.py` | persist RenderCV bundle files and create artifact rows |
 
@@ -102,6 +106,6 @@ Playwright in `app/pdf.py` still exists for non-resume documents, especially cov
 Top-level request flows create trace context with `llm_trace_scope()`, then nested calls use:
 
 - `complete_json()` for structured outputs
-- `complete()` for plain text
+- `complete()` for plain text, with truncation-aware retries for bounded text prompts
 
 Those attempts persist to `llm_calls`, including retries, finish reasons, token usage, estimated costs, and previews.

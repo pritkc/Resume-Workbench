@@ -17,6 +17,7 @@ from app.services.additional_groups import (
     generate_additional_group_id,
     normalize_additional_groups,
 )
+from app.services.section_metadata import build_section_meta_for_titled_custom_sections
 from app.rendering.theme_profiles import (
     RenderThemeSettings,
     build_design,
@@ -24,7 +25,6 @@ from app.rendering.theme_profiles import (
     build_settings,
     theme_settings_from_rendercv_sections,
 )
-from app.schemas.models import DEFAULT_SECTION_META
 
 _LINK_PREFIX_RE = re.compile(r"^(https?://)?(www\.)?", re.IGNORECASE)
 _NON_DIGIT_RE = re.compile(r"\D+")
@@ -237,12 +237,37 @@ def _bullet_entries(items: list[str]) -> list[dict[str, str]]:
     return [{"bullet": item} for item in items if item]
 
 
-def _custom_sections(custom_sections: dict[str, Any]) -> dict[str, list[dict[str, str]] | list[str]]:
+def _custom_sections(
+    custom_sections: dict[str, Any],
+    section_meta: list[dict[str, Any]] | None = None,
+) -> dict[str, list[dict[str, str]] | list[str]]:
     sections: dict[str, list[dict[str, str]] | list[str]] = {}
+    display_name_by_key = {
+        str(meta.get("key", "")).strip(): str(meta.get("displayName", "")).strip()
+        for meta in section_meta or []
+        if not meta.get("isDefault", True)
+    }
     for key, raw_section in custom_sections.items():
         if not isinstance(raw_section, dict):
             continue
-        title = raw_section.get("title") or raw_section.get("displayName") or key
+        title = (
+            raw_section.get("title")
+            or raw_section.get("displayName")
+            or display_name_by_key.get(key)
+            or key
+        )
+        raw_section_type = raw_section.get("sectionType")
+        section_type = _clean_text(getattr(raw_section_type, "value", raw_section_type))
+        if section_type == "text":
+            text_value = _clean_text(raw_section.get("text"))
+            if text_value:
+                sections[title] = [text_value]
+            continue
+        if section_type == "stringList":
+            strings = _text_list(raw_section.get("strings"))
+            if strings:
+                sections[title] = strings
+            continue
         items = raw_section.get("items") or []
         normalized_items: list[str] = []
         for item in items:
@@ -291,7 +316,10 @@ def resume_to_rendercv_payload(
     if skills:
         sections["skills"] = skills
 
-    for section_title, values in _custom_sections(resume_data.get("customSections") or {}).items():
+    for section_title, values in _custom_sections(
+        resume_data.get("customSections") or {},
+        resume_data.get("sectionMeta") or [],
+    ).items():
         sections[section_title] = values
 
     website = _clean_text(personal_info.get("website"))
@@ -416,59 +444,10 @@ def _build_custom_section_meta(
     custom_sections: dict[str, dict[str, Any]],
     base_resume_data: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    base_meta = copy.deepcopy(base_resume_data.get("sectionMeta") or []) if base_resume_data else []
-    if not base_meta:
-        base_meta = copy.deepcopy(DEFAULT_SECTION_META)
-
-    default_meta = [meta for meta in base_meta if meta.get("isDefault", True)]
-    existing_custom_meta = [meta for meta in base_meta if not meta.get("isDefault", True)]
-    existing_by_name = {
-        str(meta.get("displayName", "")).strip().lower(): meta
-        for meta in existing_custom_meta
-        if meta.get("displayName")
-    }
-    existing_by_key = {
-        str(meta.get("key", "")).strip().lower(): meta
-        for meta in existing_custom_meta
-        if meta.get("key")
-    }
-    existing_indices = [
-        int(str(meta.get("id", "")).replace("custom_", ""))
-        for meta in existing_custom_meta
-        if str(meta.get("id", "")).startswith("custom_")
-        and str(meta.get("id", "")).replace("custom_", "").isdigit()
-    ]
-    next_custom_index = max(existing_indices, default=0)
-    next_order = max((int(meta.get("order", 0)) for meta in base_meta), default=0)
-
-    resolved_custom_meta: list[dict[str, Any]] = []
-    for display_name, section in custom_sections.items():
-        existing = existing_by_name.get(display_name.lower()) or existing_by_key.get(
-            display_name.lower()
-        )
-        if existing:
-            meta = copy.deepcopy(existing)
-            meta["displayName"] = display_name
-            meta["sectionType"] = section["sectionType"]
-            resolved_custom_meta.append(meta)
-            continue
-
-        next_custom_index += 1
-        next_order += 1
-        custom_id = f"custom_{next_custom_index}"
-        resolved_custom_meta.append(
-            {
-                "id": custom_id,
-                "key": custom_id,
-                "displayName": display_name,
-                "sectionType": section["sectionType"],
-                "isDefault": False,
-                "isVisible": True,
-                "order": next_order,
-            }
-        )
-
-    return default_meta + resolved_custom_meta
+    return build_section_meta_for_titled_custom_sections(
+        custom_sections,
+        base_resume_data=base_resume_data,
+    )
 
 
 def _parse_custom_section_items(items: list[Any]) -> dict[str, Any]:
@@ -516,6 +495,37 @@ def _parse_custom_section_items(items: list[Any]) -> dict[str, Any]:
 
     if parsed_items:
         return {"sectionType": "itemList", "items": parsed_items}
+
+
+def _base_custom_section_type_by_title(
+    base_resume_data: dict[str, Any] | None,
+) -> dict[str, str]:
+    if not isinstance(base_resume_data, dict):
+        return {}
+
+    section_meta = base_resume_data.get("sectionMeta")
+    custom_sections = base_resume_data.get("customSections")
+    if not isinstance(section_meta, list) or not isinstance(custom_sections, dict):
+        return {}
+
+    section_type_by_title: dict[str, str] = {}
+    for meta in section_meta:
+        if not isinstance(meta, dict) or meta.get("isDefault", True):
+            continue
+        key = str(meta.get("key", "")).strip()
+        display_name = str(meta.get("displayName", "")).strip()
+        if not key or not display_name:
+            continue
+        raw_section = custom_sections.get(key)
+        if not isinstance(raw_section, dict):
+            continue
+        raw_section_type = getattr(raw_section.get("sectionType"), "value", raw_section.get("sectionType"))
+        meta_section_type = getattr(meta.get("sectionType"), "value", meta.get("sectionType"))
+        section_type = _clean_text(raw_section_type) or _clean_text(meta_section_type)
+        if section_type:
+            section_type_by_title[display_name] = section_type
+            section_type_by_title[key] = section_type
+    return section_type_by_title
 
     return {"sectionType": "stringList", "strings": _text_list(items)}
 
@@ -698,8 +708,21 @@ def rendercv_cv_to_resume_data(
         for title, values in sections.items()
         if title not in _KNOWN_SECTION_KEYS
     }
+    base_custom_section_types = _base_custom_section_type_by_title(base_resume_data)
     parsed_custom_sections = {
-        title: _parse_custom_section_items(values if isinstance(values, list) else [values])
+        title: (
+            {
+                "sectionType": "text",
+                "text": "\n".join(_text_list(values if isinstance(values, list) else [values])),
+            }
+            if base_custom_section_types.get(title) == "text"
+            else {
+                "sectionType": "stringList",
+                "strings": _text_list(values if isinstance(values, list) else [values]),
+            }
+            if base_custom_section_types.get(title) == "stringList"
+            else _parse_custom_section_items(values if isinstance(values, list) else [values])
+        )
         for title, values in custom_sections_payload.items()
     }
     section_meta = _build_custom_section_meta(parsed_custom_sections, base_resume_data)

@@ -27,11 +27,13 @@ POST /api/v1/application-packs/preview
 │   └── improve_resume() -> LLM (`resume_generate_full`)
 ├── local cleanup
 │   ├── preserve personal info / dates / additional items / custom sections
+│   ├── rehydrate sectionMeta locally
 │   ├── remove unsupported additions locally
 │   └── remove AI-style phrasing locally
 ├── verify_generated_resume_result() -> local warnings
 ├── calculate_resume_diff() -> local diff summary + detailed changes
-├── generate title / cover letter / outreach
+├── generate title locally
+├── generate optional cover letter / outreach from compact auxiliary prompt payloads
 ├── create application_pack + generation_run
 ├── render_resume_bundle() -> RenderCV artifacts
 └── return preview data, artifacts, warnings, diff summary, request_id

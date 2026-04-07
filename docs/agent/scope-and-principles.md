@@ -17,8 +17,10 @@ Resume Workbench is a Resume-Matcher-derived product with major local additions:
 3. `app/database.py` is a compatibility wrapper over SQLAlchemy repositories, not a TinyDB implementation.
 4. `additional.groups` is the canonical additional-info shape. Legacy flat keys are normalized in and out.
 5. Tailoring uses one primary `resume_generate_full` call, followed by local cleanup, local verification, and local diff generation for preview.
-6. LLM tracing is part of the product now. New LLM-backed work should preserve useful `operation`, `metadata`, and request-scope context.
-7. `application-packs/preview` and `application-packs/confirm` are the newest JD workflow surfaces. `POST /resumes/improve` still exists, but it is not the full pack workflow.
+6. `sectionMeta` is UI/render metadata and should stay out of LLM prompt/output contracts unless there is a very strong reason.
+7. Auxiliary text prompts should use compact typed payloads, not full stored resume JSON, and plain-text calls should fail loudly rather than silently returning truncated content.
+8. LLM tracing is part of the product now. New LLM-backed work should preserve useful `operation`, `metadata`, and request-scope context.
+9. `application-packs/preview` and `application-packs/confirm` are the newest JD workflow surfaces. `POST /resumes/improve` still exists, but it is not the full pack workflow.
 
 ## Working Rules
 

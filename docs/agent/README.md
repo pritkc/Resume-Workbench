@@ -8,7 +8,10 @@ This folder is the working map for agents operating in the current `resume-workk
 - The backend is FastAPI + LiteLLM + SQLAlchemy/Alembic, and local development is expected to run against Postgres via `DATABASE_URL`.
 - Resume preview and resume PDF generation now come from RenderCV artifacts, not the old frontend print route.
 - Cover-letter PDF generation still uses Playwright through `apps/backend/app/pdf.py`.
-- The main JD flow is `application-packs/preview` -> diff review -> `application-packs/confirm`.
+- The main JD flow is `application-packs/preview` -> local diff review -> `application-packs/confirm`.
+- Resume tailoring is a typed single-prompt pipeline centered on `resume_generate_full`.
+- `sectionMeta` stays local to rendering/storage flows and is rehydrated after tailoring instead of being sent to the LLM.
+- Cover-letter and outreach prompts now use compact candidate-profile payloads, not the full stored resume JSON.
 - LLM calls are persisted to `llm_calls` and surfaced in the `/llm-traces` UI.
 - `additional.groups` and raw RenderCV YAML editing are live features.
 
