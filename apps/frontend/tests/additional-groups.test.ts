@@ -30,7 +30,8 @@ describe('additional group utils', () => {
         label: 'Technical Skills ',
         items: [],
       },
-      (key) => (key === 'resume.additionalDefaults.technicalSkills' ? 'Compétences techniques' : key)
+      (key) =>
+        key === 'resume.additionalDefaults.technicalSkills' ? 'Compétences techniques' : key
     );
 
     expect(label).toBe('Technical Skills ');

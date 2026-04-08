@@ -722,9 +722,10 @@ def migrate_legacy_theme_settings(settings: RenderThemeSettings) -> RenderThemeS
 
 def build_design(settings: RenderThemeSettings) -> dict[str, object]:
     if settings.uses_theme_profiles:
-        return _build_sparse_design_from_profile(
+        resolved = _resolve_theme_profile_state(
             settings.theme_id, settings.theme_profiles.get(settings.theme_id)
         )
+        return deepcopy(resolved["design"])
 
     density = _LEGACY_DENSITY_MAP[settings.density_profile]
     accent = _ACCENT_COLORS[settings.accent_color]

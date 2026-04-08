@@ -3,7 +3,7 @@
 PROMPT_VERSIONS = {
     "tailoring_system": "v2.0",
     "tailoring_user": "v2.0",
-    "parse_resume": "v2.1",
+    "parse_resume": "v2.2",
     "extract_keywords": "v1.0",
     "cover_letter": "v1.3",
     "outreach": "v1.3",
@@ -29,12 +29,12 @@ def get_language_name(code: str) -> str:
 
 
 RESUME_SCHEMA_COMPACT = """{
-  "personalInfo":{"name":"...","title":"...","email":"...","phone":"...","location":"...","website":"...or null","linkedin":"...or null","github":"...or null"},
+  "personalInfo":{"name":"...","headline":"...","email":"...","phone":"...","location":"...","website":"...or null","linkedin":"...or null","github":"...or null","photo":"...or null","profileLinks":[{"label":"Portfolio","url":"https://example.com","fontawesome_icon":"link"}],"socialNetworks":[{"network":"LinkedIn","username":"..."}],"customConnections":[{"placeholder":"Portfolio","url":"...or null","fontawesome_icon":"...or null"}]},
   "summary":"string",
-  "workExperience":[{"id":1,"title":"...","company":"...","location":"...or null","years":"Jan 2020 - Present","description":["bullet1","bullet2"]}],
-  "education":[{"id":1,"institution":"...","degree":"...","years":"2014 - 2018","description":"string or null"}],
-  "personalProjects":[{"id":1,"name":"...","role":"...","years":"Mar 2021 - Present","github":"...or null","website":"...or null","description":["bullet1"]}],
-  "additional":{"groups":[{"id":"technicalSkills","label":"Technical Skills","items":["Python","AWS"]},{"id":"languages","label":"Languages","items":["English (Native)"]}]},
+  "workExperience":[{"id":1,"position":"...","company":"...","location":"...or null","date":"Jan 2020 - Present","start_date":"2020-01 or null","end_date":"present or 2023-12 or null","summary":"...or null","highlights":["bullet1","bullet2"]}],
+  "education":[{"id":1,"institution":"...","area":"...or null","degree":"...or null","location":"...or null","date":"2014 - 2018","start_date":"2014 or null","end_date":"2018 or null","summary":"string or null","highlights":["bullet1"]}],
+  "personalProjects":[{"id":1,"name":"...","summary":"...or null","date":"Mar 2021 - Present","github":"...or null","website":"...or null","highlights":["bullet1"]}],
+  "skills":{"groups":[{"id":"technicalSkills","label":"Technical Skills","values":["Python","AWS"]},{"id":"languages","label":"Languages","values":["English (Native)"]}]},
   "customSections":{"publications":{"sectionType":"itemList","items":[{"id":1,"title":"...","subtitle":"...","years":"Jun 2023","description":["..."]}]},"volunteer_work":{"sectionType":"text","text":"..."}}
 }"""
 
@@ -50,7 +50,7 @@ SECTIONS: Map to standard keys when possible. Non-standard sections → customSe
 RULES:
 - "" for missing text, [] for missing arrays, null for optional fields
 - IDs start from 1
-- additional.groups: use natural category labels from the resume (e.g., Backend, ML, Infra, Languages, Certifications)
+- skills.groups: use natural category labels from the resume (e.g., Backend, ML, Infra, Languages, Certifications)
 - Custom section keys: snake_case (e.g., "volunteer_work", "publications")
 - Overlapping dates (concurrent roles): preserve both, don't merge
 
@@ -96,7 +96,7 @@ TRUTHFULNESS (violation = interview harm):
 - Never invent skills, tools, certifications, metrics, companies, or dates not in the original resume
 - Never upgrade experience level or add new employers
 - Copy date ranges exactly including months
-- Every original additional-group item must appear exactly once in output
+- Every original skill value must appear exactly once in output
 
 STRUCTURE:
 - One complete JSON object, no markdown fences, no commentary

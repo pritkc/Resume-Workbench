@@ -296,6 +296,9 @@
         "organization": "Organization",
         "location": "Location",
         "years": "Years",
+        "date": "Date",
+        "summaryOptional": "Summary (Optional)",
+        "highlights": "Highlights",
         "descriptionPoints": "Description Points"
       },
       "actions": {
@@ -317,13 +320,18 @@
         "addFirstJob": "Add First Job",
         "fields": {
           "jobTitle": "Job Title",
+          "position": "Position",
           "company": "Company"
         },
         "placeholders": {
           "jobTitle": "Senior Developer",
+          "position": "Software Engineer, Data Infra & MLOps",
           "company": "Tech Corp",
           "location": "Remote / City",
           "years": "Jan 2020 - Present",
+          "date": "Jan 2020 - Present",
+          "summary": "Short overview of the role...",
+          "highlight": "Describe your achievement...",
           "description": "Describe your achievement..."
         }
       },
@@ -333,13 +341,19 @@
         "fields": {
           "institution": "Institution",
           "degree": "Degree",
+          "area": "Area / Major",
           "description": "Description",
           "descriptionOptional": "Description (Optional)"
         },
         "placeholders": {
           "institution": "University Name",
           "degree": "Bachelor of Science",
+          "area": "Big Data Analytics",
           "years": "Aug 2016 - May 2020",
+          "date": "Aug 2016 - May 2020",
+          "location": "San Diego, CA",
+          "summary": "GPA: 3.78",
+          "highlight": "Relevant coursework, honors, or leadership...",
           "description": "Additional details..."
         }
       },
@@ -349,12 +363,16 @@
         "fields": {
           "projectName": "Project Name",
           "role": "Role",
+          "summary": "Summary",
           "website": "Website"
         },
         "placeholders": {
           "projectName": "Resume Matcher",
           "role": "Creator",
           "years": "Mar 2023",
+          "date": "Mar 2023",
+          "summary": "One-line project overview...",
+          "highlight": "Project detail...",
           "github": "github.com/username/project",
           "website": "https://project-demo.com",
           "description": "Project detail..."

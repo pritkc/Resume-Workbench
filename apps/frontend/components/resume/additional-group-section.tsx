@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AdditionalInfo } from '@/components/dashboard/resume-component';
+import type { SkillsSection } from '@/components/dashboard/resume-component';
 import {
   getAdditionalGroupDisplayLabel,
   getAdditionalGroupsWithContent,
@@ -8,7 +8,7 @@ import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface AdditionalGroupSectionProps {
-  additional?: AdditionalInfo | null;
+  skills?: SkillsSection | null;
   displayName?: string;
   className?: string;
   headingClassName?: string;
@@ -19,7 +19,7 @@ interface AdditionalGroupSectionProps {
 }
 
 export function AdditionalGroupSection({
-  additional,
+  skills,
   displayName,
   className,
   headingClassName,
@@ -29,7 +29,7 @@ export function AdditionalGroupSection({
   valueClassName,
 }: AdditionalGroupSectionProps) {
   const { t } = useTranslations();
-  const groups = getAdditionalGroupsWithContent(additional);
+  const groups = getAdditionalGroupsWithContent(skills);
 
   if (groups.length === 0) {
     return null;
@@ -42,7 +42,7 @@ export function AdditionalGroupSection({
         {groups.map((group) => (
           <div key={group.id} className={cn('flex', rowClassName)}>
             <span className={labelClassName}>{getAdditionalGroupDisplayLabel(group, t)}:</span>
-            <span className={valueClassName}>{group.items.join(', ')}</span>
+            <span className={valueClassName}>{group.values.join(', ')}</span>
           </div>
         ))}
       </div>

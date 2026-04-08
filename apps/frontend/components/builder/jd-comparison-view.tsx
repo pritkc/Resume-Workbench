@@ -4,6 +4,20 @@ import { useMemo } from 'react';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { extractKeywords, calculateMatchStats } from '@/lib/utils/keyword-matcher';
 import { flattenAdditionalItems } from '@/lib/utils/additional-groups';
+import {
+  getEducationCredential,
+  getEducationDate,
+  getEducationHighlights,
+  getEducationSummary,
+  getExperienceDate,
+  getExperienceHighlights,
+  getExperiencePosition,
+  getExperienceSummary,
+  getPersonalHeadline,
+  getProjectDate,
+  getProjectHighlights,
+  getProjectSummary,
+} from '@/lib/utils/rendercv-fields';
 import { JDDisplay } from './jd-display';
 import { HighlightedResumeView } from './highlighted-resume-view';
 import { CheckCircle, Target } from 'lucide-react';
@@ -29,26 +43,50 @@ export function JDComparisonView({ jobDescription, resumeData }: JDComparisonVie
   const resumeText = useMemo(() => {
     const parts: string[] = [];
 
+    const headline = getPersonalHeadline(resumeData.personalInfo);
+    if (headline) parts.push(headline);
+
     if (resumeData.summary) parts.push(resumeData.summary);
 
     resumeData.workExperience?.forEach((exp) => {
-      if (exp.title) parts.push(exp.title);
+      const position = getExperiencePosition(exp);
+      const date = getExperienceDate(exp);
+      const summary = getExperienceSummary(exp);
+
+      if (position) parts.push(position);
       if (exp.company) parts.push(exp.company);
-      exp.description?.forEach((d) => parts.push(d));
+      if (exp.location) parts.push(exp.location);
+      if (date) parts.push(date);
+      if (summary) parts.push(summary);
+      getExperienceHighlights(exp).forEach((d) => parts.push(d));
     });
 
     resumeData.education?.forEach((edu) => {
-      if (edu.degree) parts.push(edu.degree);
+      const credential = getEducationCredential(edu);
+      const date = getEducationDate(edu);
+      const summary = getEducationSummary(edu);
+
+      if (credential) parts.push(credential);
       if (edu.institution) parts.push(edu.institution);
+      if (edu.location) parts.push(edu.location);
+      if (date) parts.push(date);
+      if (summary) parts.push(summary);
+      getEducationHighlights(edu).forEach((d) => parts.push(d));
     });
 
     resumeData.personalProjects?.forEach((proj) => {
       if (proj.name) parts.push(proj.name);
-      if (proj.role) parts.push(proj.role);
-      proj.description?.forEach((d) => parts.push(d));
+      const summary = getProjectSummary(proj);
+      const date = getProjectDate(proj);
+
+      if (summary) parts.push(summary);
+      if (date) parts.push(date);
+      getProjectHighlights(proj).forEach((d) => parts.push(d));
     });
 
-    flattenAdditionalItems(resumeData.additional).forEach((item) => parts.push(item));
+    flattenAdditionalItems(resumeData.skills ?? resumeData.additional).forEach((item) =>
+      parts.push(item)
+    );
 
     return parts.join(' ');
   }, [resumeData]);

@@ -7,6 +7,19 @@ import {
   getAdditionalGroupsWithContent,
   getAdditionalGroupDisplayLabel,
 } from '@/lib/utils/additional-groups';
+import {
+  getEducationCredential,
+  getEducationDate,
+  getEducationHighlights,
+  getEducationSummary,
+  getExperienceDate,
+  getExperienceHighlights,
+  getExperiencePosition,
+  getExperienceSummary,
+  getProjectDate,
+  getProjectHighlights,
+  getProjectSummary,
+} from '@/lib/utils/rendercv-fields';
 import { FileUser, Briefcase, GraduationCap, FolderKanban, Wrench } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 
@@ -21,9 +34,9 @@ interface HighlightedResumeViewProps {
  */
 export function HighlightedResumeView({ resumeData, keywords }: HighlightedResumeViewProps) {
   const { t } = useTranslations();
-  const additionalGroups = useMemo(
-    () => getAdditionalGroupsWithContent(resumeData.additional),
-    [resumeData.additional]
+  const skillGroups = useMemo(
+    () => getAdditionalGroupsWithContent(resumeData.skills ?? resumeData.additional),
+    [resumeData.skills, resumeData.additional]
   );
 
   return (
@@ -54,7 +67,7 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
             {resumeData.workExperience.map((exp) => (
               <div key={exp.id} className="mb-4 last:mb-0">
                 <div className="font-semibold text-gray-900">
-                  <HighlightedText text={exp.title || ''} keywords={keywords} />
+                  <HighlightedText text={getExperiencePosition(exp)} keywords={keywords} />
                   {exp.company && (
                     <span className="text-gray-600">
                       {t('builder.jdMatch.atSeparator')}
@@ -62,10 +75,17 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
                     </span>
                   )}
                 </div>
-                {exp.years && <div className="text-xs text-gray-500 mb-1">{exp.years}</div>}
-                {exp.description && (
+                {getExperienceDate(exp) && (
+                  <div className="mb-1 text-xs text-gray-500">{getExperienceDate(exp)}</div>
+                )}
+                {getExperienceSummary(exp) && (
+                  <div className="mb-2 text-sm text-gray-700">
+                    <HighlightedText text={getExperienceSummary(exp)} keywords={keywords} />
+                  </div>
+                )}
+                {getExperienceHighlights(exp).length > 0 && (
                   <ul className="list-disc list-inside space-y-1 text-sm">
-                    {exp.description.map((bullet, i) => (
+                    {getExperienceHighlights(exp).map((bullet, i) => (
                       <li key={i} className="text-gray-700">
                         <HighlightedText text={bullet} keywords={keywords} />
                       </li>
@@ -86,14 +106,32 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
             {resumeData.education.map((edu) => (
               <div key={edu.id} className="mb-3 last:mb-0">
                 <div className="font-semibold text-gray-900">
-                  <HighlightedText text={edu.degree || ''} keywords={keywords} />
+                  <HighlightedText text={getEducationCredential(edu)} keywords={keywords} />
                 </div>
                 {edu.institution && (
                   <div className="text-sm text-gray-600">
                     <HighlightedText text={edu.institution} keywords={keywords} />
                   </div>
                 )}
-                {edu.years && <div className="text-xs text-gray-500">{edu.years}</div>}
+                {(edu.location || getEducationDate(edu)) && (
+                  <div className="text-xs text-gray-500">
+                    {[edu.location, getEducationDate(edu)].filter(Boolean).join(' | ')}
+                  </div>
+                )}
+                {getEducationSummary(edu) && (
+                  <div className="mt-1 text-sm text-gray-700">
+                    <HighlightedText text={getEducationSummary(edu)} keywords={keywords} />
+                  </div>
+                )}
+                {getEducationHighlights(edu).length > 0 && (
+                  <ul className="mt-1 list-disc list-inside space-y-1 text-sm">
+                    {getEducationHighlights(edu).map((bullet, i) => (
+                      <li key={i} className="text-gray-700">
+                        <HighlightedText text={bullet} keywords={keywords} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ))}
           </Section>
@@ -109,18 +147,20 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
               <div key={proj.id} className="mb-4 last:mb-0">
                 <div className="font-semibold text-gray-900">
                   <HighlightedText text={proj.name || ''} keywords={keywords} />
-                  {proj.role && (
+                  {getProjectSummary(proj) && (
                     <span className="text-gray-600 font-normal">
                       {' '}
                       {t('builder.jdMatch.roleSeparator')}{' '}
-                      <HighlightedText text={proj.role} keywords={keywords} />
+                      <HighlightedText text={getProjectSummary(proj)} keywords={keywords} />
                     </span>
                   )}
                 </div>
-                {proj.years && <div className="text-xs text-gray-500 mb-1">{proj.years}</div>}
-                {proj.description && (
+                {getProjectDate(proj) && (
+                  <div className="mb-1 text-xs text-gray-500">{getProjectDate(proj)}</div>
+                )}
+                {getProjectHighlights(proj).length > 0 && (
                   <ul className="list-disc list-inside space-y-1 text-sm">
-                    {proj.description.map((bullet, i) => (
+                    {getProjectHighlights(proj).map((bullet, i) => (
                       <li key={i} className="text-gray-700">
                         <HighlightedText text={bullet} keywords={keywords} />
                       </li>
@@ -133,15 +173,15 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
         )}
 
         {/* Skills */}
-        {additionalGroups.length > 0 && (
+        {skillGroups.length > 0 && (
           <Section title={t('resume.sections.skills')} icon={<Wrench className="w-4 h-4" />}>
-            {additionalGroups.map((group) => (
+            {skillGroups.map((group) => (
               <div key={group.id} className="mb-3">
                 <div className="text-xs font-mono uppercase text-gray-500 mb-1">
                   {getAdditionalGroupDisplayLabel(group, t)}
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {group.items.map((item, index) => (
+                  {group.values.map((item, index) => (
                     <SkillTag key={`${group.id}-${index}`} text={item} keywords={keywords} />
                   ))}
                 </div>

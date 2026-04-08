@@ -45,7 +45,7 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
 }) => {
   const { t } = useTranslations();
   const [expandedSections, setExpandedSections] = React.useState<Set<string>>(
-    new Set(['experience', 'projects', 'additional'])
+    new Set(['experience', 'projects', 'skills'])
   );
 
   const toggleSection = (section: string) => {
@@ -168,13 +168,13 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
             </div>
           )}
 
-          {/* Additional Groups Section */}
+          {/* Skills Groups Section */}
           {additionalGroupItems.length > 0 && (
             <div className="border border-black">
               <button
                 type="button"
-                onClick={() => toggleSection('additional')}
-                aria-expanded={expandedSections.has('additional')}
+                onClick={() => toggleSection('skills')}
+                aria-expanded={expandedSections.has('skills')}
                 className="w-full p-4 flex items-center justify-between bg-[#F0F0E8] hover:bg-[#E5E5E0] transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -186,13 +186,13 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
                     ({additionalGroupItems.length})
                   </span>
                 </div>
-                {expandedSections.has('additional') ? (
+                {expandedSections.has('skills') ? (
                   <ChevronDown className="w-4 h-4" />
                 ) : (
                   <ChevronRight className="w-4 h-4" />
                 )}
               </button>
-              {expandedSections.has('additional') && (
+              {expandedSections.has('skills') && (
                 <div className="border-t border-black">
                   {additionalGroupItems.map((item) => (
                     <ItemRow

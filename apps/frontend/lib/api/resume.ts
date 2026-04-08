@@ -1,5 +1,5 @@
 import { ImprovedResult } from '@/components/common/resume_previewer_context';
-import type { AdditionalGroup, ResumeData } from '@/components/dashboard/resume-component';
+import type { ResumeData, SkillGroup } from '@/components/dashboard/resume-component';
 import {
   type RenderThemeSettings,
   type RenderPreviewResponse,
@@ -8,13 +8,14 @@ import {
   serializeRenderThemeSettings,
 } from '@/lib/types/render-theme';
 import { type Locale } from '@/i18n/config';
-import { normalizeResumeAdditional } from '@/lib/utils/additional-groups';
+import { normalizeResumeSkills } from '@/lib/utils/additional-groups';
 import { API_BASE, apiPost, apiPatch, apiDelete, apiFetch } from './client';
 
 // Matches backend schemas/models.py ResumeData
 interface ProcessedResume {
   personalInfo?: {
     name?: string;
+    headline?: string;
     title?: string;
     email?: string;
     phone?: string;
@@ -22,7 +23,14 @@ interface ProcessedResume {
     website?: string | null;
     linkedin?: string | null;
     github?: string | null;
+    photo?: string | null;
     photoUrl?: string | null;
+    profileLinks?: Array<{
+      label?: string;
+      url?: string | null;
+      fontawesome_icon?: string | null;
+      fontAwesomeIcon?: string | null;
+    }>;
     socialNetworks?: Array<{
       network?: string;
       username?: string;
@@ -37,30 +45,46 @@ interface ProcessedResume {
   summary?: string;
   workExperience?: Array<{
     id: number;
+    position?: string;
     title?: string;
     company?: string;
     location?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    date?: string;
     years?: string;
+    summary?: string | null;
     description?: string[];
+    highlights?: string[];
   }>;
   education?: Array<{
     id: number;
     institution?: string;
-    degree?: string;
+    area?: string;
+    degree?: string | null;
+    location?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    date?: string;
     years?: string;
+    summary?: string | null;
     description?: string | null;
+    highlights?: string[];
   }>;
   personalProjects?: Array<{
     id: number;
     name?: string;
+    summary?: string | null;
     role?: string;
+    date?: string;
     years?: string;
     github?: string | null;
     website?: string | null;
     description?: string[];
+    highlights?: string[];
   }>;
-  additional?: {
-    groups?: AdditionalGroup[];
+  skills?: {
+    groups?: SkillGroup[];
     technicalSkills?: string[];
     languages?: string[];
     certificationsTraining?: string[];
@@ -200,7 +224,7 @@ function normalizeProcessedResume<T extends ProcessedResume | ResumeData | null>
     return value;
   }
 
-  return normalizeResumeAdditional(value) as T;
+  return normalizeResumeSkills(value) as T;
 }
 
 export function isDraftRequestError(error: unknown): error is DraftRequestError {

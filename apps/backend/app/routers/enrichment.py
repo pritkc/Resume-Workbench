@@ -40,7 +40,7 @@ from app.schemas.enrichment import (
     RegenerateResponse,
     RegeneratedItem,
 )
-from app.services.additional_groups import normalize_additional_groups
+from app.services.additional_groups import normalize_skill_groups
 
 logger = logging.getLogger(__name__)
 
@@ -303,7 +303,7 @@ async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
                     "prompt_version": PROMPT_VERSIONS.get("enrichment_enhance", "unknown"),
                 },
             )
-            # Get additional bullets from LLM (new key name)
+            # Get skills-group values from LLM
             additional_bullets = result.get("additional_bullets", [])
             # Fallback to old key for backwards compatibility
             if not additional_bullets:
@@ -471,7 +471,7 @@ async def _regenerate_additional_group(
     instruction: str,
     output_language: str,
 ) -> RegeneratedItem:
-    """Regenerate a flexible additional label/value group."""
+    """Regenerate a flexible skills label/value group."""
     current_values_text = ", ".join(item.current_content) if item.current_content else "(No values)"
 
     prompt = REGENERATE_ADDITIONAL_GROUP_PROMPT.format(
@@ -515,7 +515,7 @@ async def _regenerate_additional_group(
 async def regenerate_items(request: RegenerateRequest) -> RegenerateResponse:
     """Regenerate selected resume items based on user feedback.
 
-    Takes selected items (experience, projects, additional groups) and a user instruction,
+    Takes selected items (experience, projects, skills groups) and a user instruction,
     then uses AI to rewrite the content addressing the user's concerns.
     """
     # Validate resume exists
@@ -786,8 +786,8 @@ async def apply_regenerated_items(
 
         elif item_type == "additionalGroup":
             expected_original_content = item.original_content
-            additional = normalize_additional_groups(updated_data.get("additional"))
-            groups = additional.get("groups", [])
+            skills = normalize_skill_groups(updated_data.get("skills") or updated_data.get("additional"))
+            groups = skills.get("groups", [])
             resolved_group: dict | None = None
             target_group_id = item.group_id or item_id.replace("additional_", "", 1)
 
@@ -804,7 +804,7 @@ async def apply_regenerated_items(
                 for group in groups:
                     if not isinstance(group, dict):
                         continue
-                    if _lines_equal(group.get("items"), expected_original_content):
+                    if _lines_equal(group.get("values"), expected_original_content):
                         matching_groups.append(group)
                 if len(matching_groups) == 1:
                     resolved_group = matching_groups[0]
@@ -825,13 +825,13 @@ async def apply_regenerated_items(
                 apply_failures.append(item_id)
                 continue
 
-            if not _lines_equal(resolved_group.get("items"), expected_original_content):
+            if not _lines_equal(resolved_group.get("values"), expected_original_content):
                 apply_failures.append(item_id)
                 continue
 
             resolved_group["label"] = item.title
-            resolved_group["items"] = new_content
-            updated_data["additional"] = additional
+            resolved_group["values"] = new_content
+            updated_data["skills"] = skills
 
     if apply_failures:
         logger.warning(

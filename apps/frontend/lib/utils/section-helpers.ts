@@ -60,9 +60,9 @@ export const DEFAULT_SECTION_META: SectionMeta[] = [
     order: 4,
   },
   {
-    id: 'additional',
-    key: 'additional',
-    displayName: 'Skills & Awards',
+    id: 'skills',
+    key: 'skills',
+    displayName: 'Skills',
     sectionType: 'stringList',
     isDefault: true,
     isVisible: true,
@@ -80,7 +80,7 @@ const DEFAULT_SECTION_I18N_KEY_BY_ID: Readonly<Record<string, string>> = Object.
   workExperience: 'resume.sections.experience',
   education: 'resume.sections.education',
   personalProjects: 'resume.sections.projects',
-  additional: 'resume.sections.skills',
+  skills: 'resume.sections.skills',
 });
 
 /**

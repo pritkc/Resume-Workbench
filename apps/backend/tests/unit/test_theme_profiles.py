@@ -47,7 +47,9 @@ def test_build_design_uses_only_the_active_theme_profile() -> None:
     assert design["theme"] == "harvard"
     assert design["header"]["alignment"] == "right"
     assert design["header"]["connections"]["show_icons"] is False
-    assert "colors" not in design or "name" not in design.get("colors", {})
+    assert design["colors"]["name"] != "#ff0000"
+    assert design["page"]["size"] == "us-letter"
+    assert "education_entry" in design["templates"]
 
 
 def test_build_design_keeps_legacy_flat_payload_behavior() -> None:

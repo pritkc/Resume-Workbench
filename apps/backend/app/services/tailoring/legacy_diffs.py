@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from app.schemas.models import ResumeChange
-from app.services.additional_groups import additional_items_match, normalize_additional_groups
+from app.services.additional_groups import additional_items_match, normalize_skill_groups
 
 from app.services.tailoring.diffing import count_description_words
 
@@ -19,7 +19,7 @@ _ALLOWED_PATH_PATTERNS = [
     re.compile(r"^summary$"),
     re.compile(r"^workExperience\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^personalProjects\[\d+\]\.description(\[\d+\])?$"),
-    re.compile(r"^additional\.groups$"),
+    re.compile(r"^skills\.groups$"),
 ]
 _BLOCKED_PATH_PREFIXES = frozenset({
     "personalInfo",
@@ -138,9 +138,9 @@ def apply_diffs(
     """Apply verified diffs to an original resume."""
 
     result = copy.deepcopy(original)
-    if isinstance(result.get("additional"), dict):
-        result["additional"] = normalize_additional_groups(
-            result.get("additional"),
+    if isinstance(result.get("skills"), dict) or isinstance(result.get("additional"), dict):
+        result["skills"] = normalize_skill_groups(
+            result.get("skills") or result.get("additional"),
             seed_defaults_if_empty=False,
         )
     applied: list[ResumeChange] = []
@@ -224,14 +224,14 @@ def apply_diffs(
             applied.append(change)
 
         elif action == "regroup":
-            if path != "additional.groups":
+            if path != "skills.groups":
                 logger.info("Diff rejected (regroup path unsupported): %s", path)
                 rejected.append(change)
                 continue
             if not isinstance(actual_value, list) or not isinstance(change.value, list):
                 rejected.append(change)
                 continue
-            normalized = normalize_additional_groups({"groups": change.value}, seed_defaults_if_empty=False)
+            normalized = normalize_skill_groups({"groups": change.value}, seed_defaults_if_empty=False)
             if not additional_items_match({"groups": actual_value}, normalized):
                 logger.info("Diff rejected (regroup items mismatch): %s", path)
                 rejected.append(change)

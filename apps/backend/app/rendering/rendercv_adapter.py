@@ -10,12 +10,13 @@ from urllib.parse import urlparse
 import yaml
 
 from app.services.additional_groups import (
-    DEFAULT_ADDITIONAL_GROUP_LABELS_BY_ID,
+    DEFAULT_SKILL_GROUP_LABELS_BY_ID,
     coerce_string_list,
-    default_additional_info,
-    extract_additional_groups,
-    generate_additional_group_id,
+    default_skills_section,
+    extract_skill_groups,
+    generate_skill_group_id,
     normalize_additional_groups,
+    normalize_skill_groups,
 )
 from app.services.section_metadata import build_section_meta_for_titled_custom_sections
 from app.rendering.theme_profiles import (
@@ -30,6 +31,7 @@ _LINK_PREFIX_RE = re.compile(r"^(https?://)?(www\.)?", re.IGNORECASE)
 _NON_DIGIT_RE = re.compile(r"\D+")
 _MARKDOWN_LINK_RE = re.compile(r"^\[(?P<label>.+?)\]\((?P<url>[^)]+)\)$")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_FA_CLASS_TOKEN_RE = re.compile(r"\s+")
 
 _KNOWN_SECTION_KEYS = {
     "summary",
@@ -44,6 +46,10 @@ _KNOWN_SECTION_KEYS = {
 _DEDICATED_SOCIAL_NETWORKS = {
     "linkedin": "LinkedIn",
     "github": "GitHub",
+}
+_SOCIAL_NETWORK_URL_PREFIXES = {
+    "linkedin": "https://linkedin.com/in/",
+    "github": "https://github.com/",
 }
 
 
@@ -94,12 +100,130 @@ def _canonical_social_network_name(value: str | None) -> str | None:
     return _DEDICATED_SOCIAL_NETWORKS.get(normalized, cleaned)
 
 
+def _ensure_absolute_url(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    if cleaned.startswith(("http://", "https://")):
+        return cleaned
+    return f"https://{cleaned}"
+
+
+def _normalize_icon_name(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+
+    tokens = [token for token in _FA_CLASS_TOKEN_RE.split(cleaned) if token]
+    if not tokens:
+        return None
+
+    filtered_tokens = [
+        token
+        for token in tokens
+        if token
+        and token not in {
+            "fa",
+            "fa-brands",
+            "fa-solid",
+            "fa-regular",
+            "fa-light",
+            "fa-thin",
+            "fa-duotone",
+            "fab",
+            "fas",
+            "far",
+            "fal",
+            "fat",
+        }
+    ]
+    if not filtered_tokens:
+        return cleaned
+
+    icon_token = filtered_tokens[-1]
+    if icon_token.startswith("fa-"):
+        return icon_token[3:]
+    return icon_token
+
+
+def _build_social_url(network: str | None, username: str | None) -> str | None:
+    canonical_name = _canonical_social_network_name(network)
+    canonical_username = _extract_social_username(username)
+    if not canonical_name or not canonical_username:
+        return None
+    if isinstance(username, str) and username.strip().startswith(("http://", "https://")):
+        return username.strip()
+    prefix = _SOCIAL_NETWORK_URL_PREFIXES.get(_NON_ALNUM_RE.sub("", canonical_name.lower()))
+    if prefix:
+        return f"{prefix}{canonical_username}"
+    if isinstance(username, str) and ("/" in username or "." in username):
+        return _ensure_absolute_url(username)
+    return None
+
+
+def _profile_links(personal_info: dict[str, Any]) -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    has_explicit_profile_links = isinstance(personal_info.get("profileLinks"), list) or isinstance(
+        personal_info.get("profile_links"), list
+    )
+
+    def append(label: str | None, url: str | None, icon: str | None = None) -> None:
+        cleaned_label = _clean_text(label)
+        cleaned_url = _ensure_absolute_url(url)
+        cleaned_icon = _normalize_icon_name(icon)
+        if not cleaned_label or not cleaned_url:
+            return
+
+        url_key = cleaned_url.casefold()
+        if url_key in seen_urls:
+            return
+
+        seen_urls.add(url_key)
+        row: dict[str, str] = {"label": cleaned_label, "url": cleaned_url}
+        if cleaned_icon:
+            row["fontawesome_icon"] = cleaned_icon
+        entries.append(row)
+
+    for item in personal_info.get("profileLinks") or personal_info.get("profile_links") or []:
+        if not isinstance(item, dict):
+            continue
+        append(
+            item.get("label") or item.get("placeholder"),
+            item.get("url"),
+            item.get("fontawesome_icon") or item.get("fontAwesomeIcon"),
+        )
+
+    if has_explicit_profile_links:
+        return entries
+
+    for item in personal_info.get("customConnections") or personal_info.get("custom_connections") or []:
+        if not isinstance(item, dict):
+            continue
+        append(
+            item.get("label") or item.get("placeholder"),
+            item.get("url"),
+            item.get("fontawesome_icon") or item.get("fontAwesomeIcon"),
+        )
+
+    append("Website", personal_info.get("website"), "link")
+    append("LinkedIn", _build_social_url("LinkedIn", personal_info.get("linkedin")), "linkedin-in")
+    append("GitHub", _build_social_url("GitHub", personal_info.get("github")), "github")
+
+    for item in personal_info.get("socialNetworks") or personal_info.get("social_networks") or []:
+        if not isinstance(item, dict):
+            continue
+        append(
+            item.get("network"),
+            _build_social_url(item.get("network"), item.get("username")),
+        )
+
+    return entries
+
+
 def _social_networks(personal_info: dict[str, Any]) -> list[dict[str, str]]:
     networks: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
-
-    linkedin_username = _extract_social_username(personal_info.get("linkedin"))
-    github_username = _extract_social_username(personal_info.get("github"))
 
     def append_network(network: str | None, username: str | None) -> None:
         canonical_name = _canonical_social_network_name(network)
@@ -114,7 +238,21 @@ def _social_networks(personal_info: dict[str, Any]) -> list[dict[str, str]]:
         seen.add(key)
         networks.append({"network": canonical_name, "username": canonical_username})
 
-    for item in personal_info.get("socialNetworks") or []:
+    has_explicit_profile_links = isinstance(personal_info.get("profileLinks"), list) or isinstance(
+        personal_info.get("profile_links"), list
+    )
+    if has_explicit_profile_links:
+        for item in _profile_links(personal_info):
+            network = _canonical_social_network_name(item.get("label"))
+            if network not in _DEDICATED_SOCIAL_NETWORKS.values():
+                continue
+            append_network(network, item.get("url"))
+        return networks
+
+    linkedin_username = _extract_social_username(personal_info.get("linkedin"))
+    github_username = _extract_social_username(personal_info.get("github"))
+
+    for item in personal_info.get("socialNetworks") or personal_info.get("social_networks") or []:
         if not isinstance(item, dict):
             continue
         network = _canonical_social_network_name(item.get("network"))
@@ -133,21 +271,29 @@ def _social_networks(personal_info: dict[str, Any]) -> list[dict[str, str]]:
 
 def _custom_connections(personal_info: dict[str, Any]) -> list[dict[str, str]] | None:
     entries: list[dict[str, str]] = []
-    for item in personal_info.get("customConnections") or []:
-        if not isinstance(item, dict):
+    for item in _profile_links(personal_info):
+        placeholder = _clean_text(item.get("label"))
+        if not placeholder or placeholder.casefold() == "website":
             continue
-        placeholder = _clean_text(item.get("placeholder"))
-        if not placeholder:
+        if _canonical_social_network_name(placeholder) in _DEDICATED_SOCIAL_NETWORKS.values():
             continue
         row: dict[str, str] = {"placeholder": placeholder}
-        url = _clean_text(item.get("url"))
-        icon = _clean_text(item.get("fontawesome_icon") or item.get("fontAwesomeIcon"))
+        url = _ensure_absolute_url(item.get("url"))
+        icon = _normalize_icon_name(item.get("fontawesome_icon"))
         if url:
-            row["url"] = url if url.startswith("http") else f"https://{url}"
+            row["url"] = url
         if icon:
             row["fontawesome_icon"] = icon
         entries.append(row)
     return entries or None
+
+
+def _website_link(personal_info: dict[str, Any]) -> str | None:
+    for item in _profile_links(personal_info):
+        label = _clean_text(item.get("label"))
+        if label and label.casefold() == "website":
+            return _ensure_absolute_url(item.get("url"))
+    return None
 
 
 def _normalize_phone_number(value: str | None) -> str | None:
@@ -176,15 +322,47 @@ def _summary_section(summary: str | None) -> list[str] | None:
     return [cleaned] if cleaned else None
 
 
+def _entry_date_fields(item: dict[str, Any]) -> dict[str, str]:
+    start_date = _clean_text(item.get("start_date") or item.get("startDate"))
+    end_date = _clean_text(item.get("end_date") or item.get("endDate"))
+    if start_date or end_date:
+        fields: dict[str, str] = {}
+        if start_date:
+            fields["start_date"] = start_date
+        if end_date:
+            fields["end_date"] = end_date
+        return fields
+
+    date = _clean_text(item.get("date") or item.get("years"))
+    return {"date": date} if date else {}
+
+
+def _resume_date_label(item: dict[str, Any]) -> str:
+    date = _clean_text(item.get("date"))
+    if date:
+        return date
+    start_date = _clean_text(item.get("start_date") or item.get("startDate"))
+    end_date = _clean_text(item.get("end_date") or item.get("endDate"))
+    if start_date and end_date:
+        return f"{start_date} - {end_date}"
+    if start_date:
+        return f"{start_date} - present"
+    return end_date or ""
+
+
 def _experience_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
             "company": item.get("company") or "Company",
-            "position": item.get("title") or "Role",
-            "date": _clean_text(item.get("years")),
+            "position": item.get("position") or item.get("title") or "Role",
+            **_entry_date_fields(item),
             "location": _clean_text(item.get("location")),
-            "summary": None,
-            "highlights": [point for point in item.get("description", []) if point],
+            "summary": _clean_text(item.get("summary")),
+            "highlights": [
+                point
+                for point in (item.get("highlights") or item.get("description") or [])
+                if point
+            ],
         }
         for item in entries
     ]
@@ -194,12 +372,16 @@ def _education_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
             "institution": item.get("institution") or "Institution",
-            "area": item.get("degree") or "Education",
-            "degree": None,
-            "date": _clean_text(item.get("years")),
-            "location": None,
-            "summary": _clean_text(item.get("description")),
-            "highlights": [],
+            "area": item.get("area") or item.get("degree") or "Education",
+            "degree": _clean_text(item.get("degree")),
+            **_entry_date_fields(item),
+            "location": _clean_text(item.get("location")),
+            "summary": _clean_text(item.get("summary") or item.get("description")),
+            "highlights": [
+                point
+                for point in (item.get("highlights") or [])
+                if point
+            ],
         }
         for item in entries
     ]
@@ -215,21 +397,25 @@ def _project_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         project_rows.append(
             {
                 "name": name,
-                "date": _clean_text(item.get("years")),
-                "summary": _clean_text(item.get("role")),
-                "highlights": [point for point in item.get("description", []) if point],
+                "date": _clean_text(item.get("date") or item.get("years")),
+                "summary": _clean_text(item.get("summary") or item.get("role")),
+                "highlights": [
+                    point
+                    for point in (item.get("highlights") or item.get("description") or [])
+                    if point
+                ],
             }
         )
     return project_rows
 
 
-def _skills_sections(additional: dict[str, Any]) -> list[dict[str, str]]:
+def _skills_sections(skills_section: dict[str, Any]) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
-    for group in extract_additional_groups(additional):
+    for group in extract_skill_groups(skills_section):
         label = _clean_text(str(group.get("label") or ""))
-        items = [item for item in group.get("items") or [] if isinstance(item, str) and item.strip()]
-        if label and items:
-            entries.append({"label": label, "details": ", ".join(items)})
+        values = [item for item in group.get("values") or [] if isinstance(item, str) and item.strip()]
+        if label and values:
+            entries.append({"label": label, "details": ", ".join(values)})
     return entries
 
 
@@ -293,7 +479,7 @@ def resume_to_rendercv_payload(
     theme_settings: RenderThemeSettings,
 ) -> dict[str, object]:
     personal_info = resume_data.get("personalInfo") or {}
-    additional = resume_data.get("additional") or {}
+    skills_section = resume_data.get("skills") or resume_data.get("additional") or {}
     sections: dict[str, object] = {}
 
     summary = _summary_section(resume_data.get("summary"))
@@ -312,7 +498,7 @@ def resume_to_rendercv_payload(
     if projects:
         sections["projects"] = projects
 
-    skills = _skills_sections(additional)
+    skills = _skills_sections(skills_section)
     if skills:
         sections["skills"] = skills
 
@@ -322,20 +508,20 @@ def resume_to_rendercv_payload(
     ).items():
         sections[section_title] = values
 
-    website = _clean_text(personal_info.get("website"))
+    website = _website_link(personal_info)
     payload = {
         "cv": {
             "name": personal_info.get("name") or "Candidate",
-            "headline": _clean_text(personal_info.get("title")),
+            "headline": _clean_text(personal_info.get("headline") or personal_info.get("title")),
             "location": _clean_text(personal_info.get("location")),
             "email": _clean_text(personal_info.get("email")),
-            "photo": _clean_text(personal_info.get("photoUrl") or personal_info.get("photo_url")),
-            "phone": _normalize_phone_number(personal_info.get("phone")),
-            "website": (
-                website
-                if website and website.startswith("http")
-                else (f"https://{website}" if website else None)
+            "photo": _clean_text(
+                personal_info.get("photo")
+                or personal_info.get("photoUrl")
+                or personal_info.get("photo_url")
             ),
+            "phone": _normalize_phone_number(personal_info.get("phone")),
+            "website": website,
             "social_networks": _social_networks(personal_info),
             "custom_connections": _custom_connections(personal_info),
             "sections": sections,
@@ -417,6 +603,12 @@ def _skill_entry_items(entry: dict[str, Any]) -> list[str]:
     items = entry.get("items")
     if items is not None:
         parsed = coerce_string_list(items)
+        if parsed:
+            return parsed
+
+    values = entry.get("values")
+    if values is not None:
+        parsed = coerce_string_list(values)
         if parsed:
             return parsed
 
@@ -532,12 +724,12 @@ def _base_custom_section_type_by_title(
 
 def _default_group_label_for_id(group_id: str, base_resume_data: dict[str, Any] | None) -> str:
     if base_resume_data:
-        for group in extract_additional_groups(base_resume_data.get("additional")):
+        for group in extract_skill_groups(base_resume_data.get("skills") or base_resume_data.get("additional")):
             if str(group.get("id", "")).strip() == group_id:
                 label = _clean_text(str(group.get("label") or ""))
                 if label:
                     return label
-    return DEFAULT_ADDITIONAL_GROUP_LABELS_BY_ID[group_id]
+    return DEFAULT_SKILL_GROUP_LABELS_BY_ID[group_id]
 
 
 def _group_id_from_label(label: str) -> str | None:
@@ -588,7 +780,7 @@ def rendercv_cv_to_resume_data(
 
     summary_items = _text_list(sections.get("summary"))
     skills_entries = sections.get("skills") if isinstance(sections.get("skills"), list) else []
-    additional_groups: list[dict[str, Any]] = []
+    skill_groups: list[dict[str, Any]] = []
     existing_group_ids: set[str] = set()
 
     for entry in skills_entries:
@@ -596,14 +788,14 @@ def rendercv_cv_to_resume_data(
             group_id = (
                 "technicalSkills"
                 if "technicalSkills" not in existing_group_ids
-                else generate_additional_group_id(existing_group_ids, "Technical Skills")
+                else generate_skill_group_id(existing_group_ids, "Technical Skills")
             )
             existing_group_ids.add(group_id)
-            additional_groups.append(
+            skill_groups.append(
                 {
                     "id": group_id,
                     "label": _default_group_label_for_id("technicalSkills", base_resume_data),
-                    "items": _split_csv(entry),
+                    "values": _split_csv(entry),
                 }
             )
             continue
@@ -618,35 +810,35 @@ def rendercv_cv_to_resume_data(
         if default_group_id and default_group_id not in existing_group_ids:
             group_id = default_group_id
         else:
-            group_id = generate_additional_group_id(existing_group_ids, label)
+            group_id = generate_skill_group_id(existing_group_ids, label)
 
         existing_group_ids.add(group_id)
-        additional_groups.append(
+        skill_groups.append(
             {
                 "id": group_id,
                 "label": label,
-                "items": details,
+                "values": details,
             }
         )
 
     certifications = _text_list(sections.get("certifications"))
     if certifications:
-        additional_groups.append(
+        skill_groups.append(
             {
                 "id": "certificationsTraining",
                 "label": _default_group_label_for_id("certificationsTraining", base_resume_data),
-                "items": certifications,
+                "values": certifications,
             }
         )
         existing_group_ids.add("certificationsTraining")
 
     awards = _text_list(sections.get("awards"))
     if awards:
-        additional_groups.append(
+        skill_groups.append(
             {
                 "id": "awards",
                 "label": _default_group_label_for_id("awards", base_resume_data),
-                "items": awards,
+                "values": awards,
             }
         )
         existing_group_ids.add("awards")
@@ -662,10 +854,16 @@ def rendercv_cv_to_resume_data(
         work_experience.append(
             {
                 "id": index,
+                "position": _clean_text(item.get("position")) or "",
                 "title": _clean_text(item.get("position")) or "",
                 "company": _clean_text(item.get("company")) or "",
                 "location": _clean_text(item.get("location")),
-                "years": _clean_text(item.get("date")) or "",
+                "start_date": _clean_text(item.get("start_date")),
+                "end_date": _clean_text(item.get("end_date")),
+                "date": _resume_date_label(item),
+                "years": _resume_date_label(item),
+                "summary": summary,
+                "highlights": _text_list(item.get("highlights")),
                 "description": description,
             }
         )
@@ -678,8 +876,15 @@ def rendercv_cv_to_resume_data(
             {
                 "id": index,
                 "institution": _clean_text(item.get("institution")) or "",
-                "degree": _clean_text(item.get("area") or item.get("degree")) or "",
-                "years": _clean_text(item.get("date")) or "",
+                "area": _clean_text(item.get("area")) or "",
+                "degree": _clean_text(item.get("degree")),
+                "location": _clean_text(item.get("location")),
+                "start_date": _clean_text(item.get("start_date")),
+                "end_date": _clean_text(item.get("end_date")),
+                "date": _resume_date_label(item),
+                "years": _resume_date_label(item),
+                "summary": _clean_text(item.get("summary")),
+                "highlights": _text_list(item.get("highlights")),
                 "description": _stringify_description(
                     _clean_text(item.get("summary")),
                     _text_list(item.get("highlights")),
@@ -696,9 +901,12 @@ def rendercv_cv_to_resume_data(
             {
                 "id": index,
                 "name": name or "",
+                "summary": _clean_text(item.get("summary")),
                 "role": _clean_text(item.get("summary")) or "",
+                "date": _clean_text(item.get("date")) or "",
                 "years": _clean_text(item.get("date")) or "",
                 "website": website,
+                "highlights": _text_list(item.get("highlights")),
                 "description": _text_list(item.get("highlights")),
             }
         )
@@ -734,34 +942,46 @@ def rendercv_cv_to_resume_data(
         if display_name in parsed_custom_sections:
             custom_sections[str(meta["key"])] = parsed_custom_sections[display_name]
 
+    legacy_personal_info = {
+        "website": _clean_text(cv_payload.get("website")),
+        "linkedin": social_lookup.get("linkedin"),
+        "github": social_lookup.get("github"),
+        "socialNetworks": social_networks,
+        "customConnections": [
+            item
+            for item in cv_payload.get("custom_connections") or []
+            if isinstance(item, dict)
+        ],
+    }
+
     resume_data.update(
         {
             "personalInfo": {
                 **(resume_data.get("personalInfo") or {}),
                 "name": cv_payload.get("name") or "",
+                "headline": _clean_text(cv_payload.get("headline")) or "",
                 "title": _clean_text(cv_payload.get("headline")) or "",
                 "email": _clean_text(cv_payload.get("email")) or "",
                 "phone": _clean_text(cv_payload.get("phone")) or "",
                 "location": _clean_text(cv_payload.get("location")) or "",
-                "website": _clean_text(cv_payload.get("website")),
-                "linkedin": social_lookup.get("linkedin"),
-                "github": social_lookup.get("github"),
+                **legacy_personal_info,
+                "photo": _clean_text(cv_payload.get("photo")),
                 "photoUrl": _clean_text(cv_payload.get("photo")),
-                "socialNetworks": social_networks,
-                "customConnections": [
-                    item
-                    for item in cv_payload.get("custom_connections") or []
-                    if isinstance(item, dict)
-                ],
+                "profileLinks": _profile_links(legacy_personal_info),
             },
             "summary": summary_items[0] if summary_items else "",
             "workExperience": work_experience,
             "education": education,
             "personalProjects": projects,
+            "skills": normalize_skill_groups(
+                {"groups": skill_groups}
+                if skill_groups
+                else resume_data.get("skills") or resume_data.get("additional") or default_skills_section()
+            ),
             "additional": normalize_additional_groups(
-                {"groups": additional_groups}
-                if additional_groups
-                else resume_data.get("additional") or default_additional_info()
+                {"groups": skill_groups}
+                if skill_groups
+                else resume_data.get("skills") or resume_data.get("additional") or default_skills_section()
             ),
             "customSections": custom_sections,
             "sectionMeta": section_meta,

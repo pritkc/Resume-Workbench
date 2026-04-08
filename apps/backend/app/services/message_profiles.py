@@ -46,10 +46,29 @@ def _normalize_lines(values: list[str] | None, *, limit: int, text_limit: int) -
 
 
 def _format_education_entry(entry: dict[str, Any]) -> str:
+    date_value = _truncate_text(entry.get("date"), 40) or _truncate_text(entry.get("years"), 40)
+    if not date_value:
+        start_date = _truncate_text(entry.get("start_date") or entry.get("startDate"), 20)
+        end_date = _truncate_text(entry.get("end_date") or entry.get("endDate"), 20)
+        if start_date and end_date:
+            date_value = f"{start_date} - {end_date}"
+        elif start_date:
+            date_value = f"{start_date} - present"
+        else:
+            date_value = end_date
+
+    degree_with_area = " in ".join(
+        part
+        for part in [
+            _truncate_text(entry.get("degree"), 80),
+            _truncate_text(entry.get("area"), 80),
+        ]
+        if part
+    )
     parts = [
-        _truncate_text(entry.get("degree"), 80),
+        degree_with_area or _truncate_text(entry.get("degree"), 80) or _truncate_text(entry.get("area"), 80),
         _truncate_text(entry.get("institution"), 80),
-        _truncate_text(entry.get("years"), 40),
+        date_value,
     ]
     return ", ".join(part for part in parts if part)
 
@@ -96,6 +115,7 @@ class CandidateExperienceProfile(BaseModel):
     title: str = ""
     company: str = ""
     years: str = ""
+    summary: str | None = None
     highlights: list[str] = Field(default_factory=list)
 
 
@@ -107,6 +127,7 @@ class CandidateProjectProfile(BaseModel):
     name: str = ""
     role: str = ""
     years: str = ""
+    summary: str | None = None
     highlights: list[str] = Field(default_factory=list)
 
 
@@ -132,11 +153,12 @@ class CandidatePromptProfile(BaseModel):
         )
         experience = [
             CandidateExperienceProfile(
-                title=_truncate_text(entry.title, 80),
+                title=_truncate_text(entry.position or entry.title, 80),
                 company=_truncate_text(entry.company, 80),
-                years=_truncate_text(entry.years, 40),
+                years=_truncate_text(entry.date or entry.years, 40),
+                summary=_truncate_text(entry.summary, 80) or None,
                 highlights=_normalize_lines(
-                    entry.description,
+                    entry.highlights or entry.description,
                     limit=MAX_PROFILE_HIGHLIGHTS_PER_ENTRY,
                     text_limit=MAX_PROFILE_HIGHLIGHT_CHARS,
                 ),
@@ -146,10 +168,11 @@ class CandidatePromptProfile(BaseModel):
         projects = [
             CandidateProjectProfile(
                 name=_truncate_text(entry.name, 80),
-                role=_truncate_text(entry.role, 80),
-                years=_truncate_text(entry.years, 40),
+                role=_truncate_text(entry.role or entry.summary, 80),
+                years=_truncate_text(entry.date or entry.years, 40),
+                summary=_truncate_text(entry.summary, 80) or None,
                 highlights=_normalize_lines(
-                    entry.description,
+                    entry.highlights or entry.description,
                     limit=MAX_PROFILE_HIGHLIGHTS_PER_ENTRY,
                     text_limit=MAX_PROFILE_HIGHLIGHT_CHARS,
                 ),
@@ -166,9 +189,9 @@ class CandidatePromptProfile(BaseModel):
         ]
 
         skills: dict[str, list[str]] = {}
-        for group in normalized.additional.groups[:MAX_PROFILE_SKILL_GROUPS]:
+        for group in normalized.skills.groups[:MAX_PROFILE_SKILL_GROUPS]:
             items = _normalize_lines(
-                group.items,
+                group.values,
                 limit=MAX_PROFILE_SKILLS_PER_GROUP,
                 text_limit=40,
             )
@@ -183,7 +206,11 @@ class CandidatePromptProfile(BaseModel):
         )
 
         return cls(
-            headline=_truncate_text(normalized.personalInfo.title, 80) or None,
+            headline=_truncate_text(
+                normalized.personalInfo.headline or normalized.personalInfo.title,
+                80,
+            )
+            or None,
             summary=_truncate_text(normalized.summary, MAX_PROFILE_SUMMARY_CHARS),
             experience=experience,
             projects=projects,

@@ -3,6 +3,21 @@ import { Mail, Phone, MapPin, Globe, Linkedin, Github, ExternalLink } from 'luci
 import type { ResumeData, SectionMeta } from '@/components/dashboard/resume-component';
 import { getSortedSections } from '@/lib/utils/section-helpers';
 import { formatDateRange } from '@/lib/utils';
+import {
+  getEducationCredential,
+  getEducationDate,
+  getEducationHighlights,
+  getEducationSummary,
+  getExperienceDate,
+  getExperienceHighlights,
+  getExperiencePosition,
+  getExperienceSummary,
+  getExtraContactEntries,
+  getPersonalHeadline,
+  getProjectDate,
+  getProjectHighlights,
+  getProjectSummary,
+} from '@/lib/utils/rendercv-fields';
 import { DynamicResumeSection } from './dynamic-resume-section';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
@@ -26,10 +41,11 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
   data,
   showContactIcons = false,
 }) => {
-  const { personalInfo, summary, workExperience, education, personalProjects, additional } = data;
+  const { personalInfo, summary, workExperience, education, personalProjects, skills } = data;
 
   // Get sorted visible sections
   const sortedSections = getSortedSections(data);
+  const extraConnections = getExtraContactEntries(personalInfo);
 
   // Icon mapping for contact types
   const contactIcons: Record<string, React.ReactNode> = {
@@ -42,7 +58,12 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
   };
 
   // Helper function to render contact details
-  const renderContactDetail = (label: string, value?: string, hrefPrefix: string = '') => {
+  const renderContactDetail = (
+    label: string,
+    value?: string,
+    hrefPrefix: string = '',
+    options?: { displayText?: string; href?: string }
+  ) => {
     if (!value) return null;
 
     let finalHrefPrefix = hrefPrefix;
@@ -54,13 +75,14 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
       finalHrefPrefix = 'https://';
     }
 
-    const href = finalHrefPrefix + value;
+    const href = options?.href || finalHrefPrefix + value;
     const isLink =
+      Boolean(options?.href) ||
       finalHrefPrefix.startsWith('http') ||
       finalHrefPrefix.startsWith('mailto:') ||
       finalHrefPrefix.startsWith('tel:');
 
-    let displayText = value;
+    let displayText = options?.displayText || value;
     if (isLink && (label === 'LinkedIn' || label === 'GitHub' || label === 'Website')) {
       displayText = value.replace(/^https?:\/\//, '').replace(/^www\./, '');
     }
@@ -111,10 +133,14 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
                   <div
                     className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}
                   >
-                    <h4 className={baseStyles['resume-item-title']}>{exp.title}</h4>
-                    <span className={`${baseStyles['resume-date']} ml-4`}>
-                      {formatDateRange(exp.years)}
-                    </span>
+                    <h4 className={baseStyles['resume-item-title']}>
+                      {getExperiencePosition(exp)}
+                    </h4>
+                    {getExperienceDate(exp) && (
+                      <span className={`${baseStyles['resume-date']} ml-4`}>
+                        {formatDateRange(getExperienceDate(exp))}
+                      </span>
+                    )}
                   </div>
                   <div
                     className={`flex justify-between items-center ${baseStyles['resume-row']} ${baseStyles['resume-item-subtitle']}`}
@@ -122,11 +148,16 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
                     <span>{exp.company}</span>
                     {exp.location && <span>{exp.location}</span>}
                   </div>
-                  {exp.description && exp.description.length > 0 && (
+                  {getExperienceSummary(exp) && (
+                    <p className={baseStyles['resume-text-sm']}>
+                      <SafeHtml html={getExperienceSummary(exp)} />
+                    </p>
+                  )}
+                  {getExperienceHighlights(exp).length > 0 && (
                     <ul
                       className={`ml-4 ${baseStyles['resume-list']} ${baseStyles['resume-text-sm']}`}
                     >
-                      {exp.description.map((desc, index) => (
+                      {getExperienceHighlights(exp).map((desc, index) => (
                         <li key={index} className="flex">
                           <span className="mr-1.5 flex-shrink-0">•&nbsp;</span>
                           <span>
@@ -196,24 +227,24 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
                         </span>
                       )}
                     </div>
-                    {project.years && (
+                    {getProjectDate(project) && (
                       <span className={`${baseStyles['resume-date']} ml-4`}>
-                        {formatDateRange(project.years)}
+                        {formatDateRange(getProjectDate(project))}
                       </span>
                     )}
                   </div>
-                  {project.role && (
+                  {getProjectSummary(project) && (
                     <div
                       className={`${baseStyles['resume-row']} ${baseStyles['resume-item-subtitle']}`}
                     >
-                      <span>{project.role}</span>
+                      <span>{getProjectSummary(project)}</span>
                     </div>
                   )}
-                  {project.description && project.description.length > 0 && (
+                  {getProjectHighlights(project).length > 0 && (
                     <ul
                       className={`ml-4 ${baseStyles['resume-list']} ${baseStyles['resume-text-sm']}`}
                     >
-                      {project.description.map((desc, index) => (
+                      {getProjectHighlights(project).map((desc, index) => (
                         <li key={index} className="flex">
                           <span className="mr-1.5 flex-shrink-0">•&nbsp;</span>
                           <span>
@@ -241,17 +272,36 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
                     className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}
                   >
                     <h4 className={baseStyles['resume-item-title']}>{edu.institution}</h4>
-                    <span className={`${baseStyles['resume-date']} ml-4`}>
-                      {formatDateRange(edu.years)}
-                    </span>
+                    {getEducationDate(edu) && (
+                      <span className={`${baseStyles['resume-date']} ml-4`}>
+                        {formatDateRange(getEducationDate(edu))}
+                      </span>
+                    )}
                   </div>
                   <div
                     className={`flex justify-between ${baseStyles['resume-item-subtitle']} ${baseStyles['resume-row-tight']}`}
                   >
-                    <span>{edu.degree}</span>
+                    <span>{getEducationCredential(edu)}</span>
                   </div>
-                  {edu.description && (
-                    <p className={baseStyles['resume-text-sm']}>{edu.description}</p>
+                  {edu.location && (
+                    <p className={`${baseStyles['resume-text-sm']} ${baseStyles['resume-meta']}`}>
+                      {edu.location}
+                    </p>
+                  )}
+                  {getEducationSummary(edu) && (
+                    <p className={baseStyles['resume-text-sm']}>{getEducationSummary(edu)}</p>
+                  )}
+                  {getEducationHighlights(edu).length > 0 && (
+                    <ul
+                      className={`ml-4 ${baseStyles['resume-list']} ${baseStyles['resume-text-sm']}`}
+                    >
+                      {getEducationHighlights(edu).map((highlight, index) => (
+                        <li key={index} className="flex">
+                          <span className="mr-1.5 flex-shrink-0">•&nbsp;</span>
+                          <span>{highlight}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               ))}
@@ -259,14 +309,10 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
           </div>
         );
 
-      case 'additional':
-        if (!additional) return null;
+      case 'skills':
+        if (!skills) return null;
         return (
-          <AdditionalSection
-            key={section.id}
-            additional={additional}
-            displayName={section.displayName}
-          />
+          <AdditionalSection key={section.id} skills={skills} displayName={section.displayName} />
         );
 
       default:
@@ -294,11 +340,11 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
           )}
 
           {/* Title - Centered, below name */}
-          {personalInfo.title && (
+          {getPersonalHeadline(personalInfo) && (
             <h2
               className={`${baseStyles['resume-title']} ${baseStyles['resume-meta']} tracking-wide uppercase mb-3`}
             >
-              {personalInfo.title}
+              {getPersonalHeadline(personalInfo)}
             </h2>
           )}
 
@@ -319,24 +365,15 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
                 {renderContactDetail('Location', personalInfo.location)}
               </>
             )}
-            {personalInfo.website && (
-              <>
+            {extraConnections.map((entry) => (
+              <React.Fragment key={`${entry.label}-${entry.displayValue}-${entry.href || ''}`}>
                 <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('Website', personalInfo.website)}
-              </>
-            )}
-            {personalInfo.linkedin && (
-              <>
-                <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('LinkedIn', personalInfo.linkedin)}
-              </>
-            )}
-            {personalInfo.github && (
-              <>
-                <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('GitHub', personalInfo.github)}
-              </>
-            )}
+                {renderContactDetail(entry.label, entry.displayValue, '', {
+                  displayText: entry.displayValue,
+                  href: entry.href,
+                })}
+              </React.Fragment>
+            ))}
           </div>
         </header>
       )}
@@ -353,12 +390,12 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
  * Additional info section (skills, languages, certifications, awards)
  */
 const AdditionalSection: React.FC<{
-  additional: ResumeData['additional'];
+  skills: ResumeData['skills'];
   displayName?: string;
-}> = ({ additional, displayName = 'Skills & Awards' }) => {
+}> = ({ skills, displayName = 'Skills' }) => {
   return (
     <AdditionalGroupSection
-      additional={additional}
+      skills={skills}
       displayName={displayName}
       className={baseStyles['resume-section']}
       headingClassName={baseStyles['resume-section-title']}

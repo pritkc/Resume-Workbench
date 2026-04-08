@@ -257,12 +257,14 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
             />
           );
 
-        case 'additional':
+        case 'skills':
           return (
             <AdditionalForm
-              data={normalizeAdditionalInfo(resumeData.additional || createDefaultAdditionalInfo())}
+              data={normalizeAdditionalInfo(
+                resumeData.skills || resumeData.additional || createDefaultAdditionalInfo()
+              )}
               onChange={(data) =>
-                onUpdate({ ...resumeData, additional: normalizeAdditionalInfo(data) })
+                onUpdate({ ...resumeData, skills: normalizeAdditionalInfo(data) })
               }
             />
           );

@@ -71,11 +71,17 @@ import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/uti
 import { cn } from '@/lib/utils';
 import {
   buildRegenerateItemIdForGroup,
-  createDefaultAdditionalInfo,
+  createDefaultSkillsSection,
   getAdditionalGroupDisplayLabel,
   getAdditionalGroupsWithContent,
-  normalizeResumeAdditional,
+  normalizeResumeSkills,
 } from '@/lib/utils/additional-groups';
+import {
+  getExperienceHighlights,
+  getExperiencePosition,
+  getProjectHighlights,
+  getProjectSummary,
+} from '@/lib/utils/rendercv-fields';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
 
 type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match';
@@ -104,19 +110,25 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 const buildInitialData = (t: Translate): ResumeData => ({
   personalInfo: {
     name: t('builder.personalInfoForm.placeholders.name'),
+    headline: t('builder.personalInfoForm.placeholders.title'),
     title: t('builder.personalInfoForm.placeholders.title'),
     email: t('builder.personalInfoForm.placeholders.email'),
     phone: t('builder.personalInfoForm.placeholders.phone'),
     location: t('builder.personalInfoForm.placeholders.location'),
-    website: t('builder.personalInfoForm.placeholders.website'),
-    linkedin: t('builder.personalInfoForm.placeholders.linkedin'),
-    github: t('builder.personalInfoForm.placeholders.github'),
+    website: '',
+    linkedin: '',
+    github: '',
+    photo: null,
+    photoUrl: null,
+    profileLinks: [],
+    socialNetworks: [],
+    customConnections: [],
   },
   summary: t('builder.placeholders.summary'),
   workExperience: [],
   education: [],
   personalProjects: [],
-  additional: createDefaultAdditionalInfo(),
+  skills: createDefaultSkillsSection(),
 });
 
 const EMPTY_RAW_YAML: RawYamlSections = {
@@ -703,7 +715,7 @@ const ResumeBuilderContent = () => {
         // Update resume title for downloads
         setResumeTitle(data.title ?? null);
         if (data.processed_resume) {
-          const nextResumeData = normalizeResumeAdditional(data.processed_resume as ResumeData);
+          const nextResumeData = normalizeResumeSkills(data.processed_resume as ResumeData);
           const nextThemeSettings = data.theme_settings
             ? normalizeRenderThemeSettings(data.theme_settings)
             : themeSettingsRef.current;
@@ -756,9 +768,9 @@ const ResumeBuilderContent = () => {
     return (resumeData.workExperience || []).map((exp, idx) => ({
       item_id: `exp_${idx}`,
       item_type: 'experience' as const,
-      title: exp.title ?? '',
+      title: getExperiencePosition(exp),
       subtitle: exp.company || undefined,
-      current_content: Array.isArray(exp.description) ? exp.description : [],
+      current_content: getExperienceHighlights(exp),
     }));
   }, [resumeData.workExperience]);
 
@@ -767,20 +779,22 @@ const ResumeBuilderContent = () => {
       item_id: `proj_${idx}`,
       item_type: 'project' as const,
       title: proj.name ?? '',
-      subtitle: proj.role || undefined,
-      current_content: Array.isArray(proj.description) ? proj.description : [],
+      subtitle: getProjectSummary(proj) || undefined,
+      current_content: getProjectHighlights(proj),
     }));
   }, [resumeData.personalProjects]);
 
   const additionalGroupItemsForRegenerate: RegenerateItemInput[] = useMemo(() => {
-    return getAdditionalGroupsWithContent(resumeData.additional).map((group) => ({
-      item_id: buildRegenerateItemIdForGroup(group.id),
-      item_type: 'additionalGroup' as const,
-      title: getAdditionalGroupDisplayLabel(group, t),
-      group_id: group.id,
-      current_content: group.items,
-    }));
-  }, [resumeData.additional, t]);
+    return getAdditionalGroupsWithContent(resumeData.skills ?? resumeData.additional).map(
+      (group) => ({
+        item_id: buildRegenerateItemIdForGroup(group.id),
+        item_type: 'additionalGroup' as const,
+        title: getAdditionalGroupDisplayLabel(group, t),
+        group_id: group.id,
+        current_content: group.values,
+      })
+    );
+  }, [resumeData.skills, resumeData.additional, t]);
 
   // Load template settings from localStorage on mount
   useEffect(() => {
@@ -856,7 +870,7 @@ const ResumeBuilderContent = () => {
           }
           // Prefer processed_resume if available
           if (data.processed_resume) {
-            const nextResumeData = normalizeResumeAdditional(data.processed_resume as ResumeData);
+            const nextResumeData = normalizeResumeSkills(data.processed_resume as ResumeData);
             setResumeData(nextResumeData);
             setLastSavedData(nextResumeData);
             setAutosaveState('saved');
@@ -877,7 +891,7 @@ const ResumeBuilderContent = () => {
           // Fallback to parsing raw content
           if (data.raw_resume?.content) {
             try {
-              const parsed = normalizeResumeAdditional(JSON.parse(data.raw_resume.content));
+              const parsed = normalizeResumeSkills(JSON.parse(data.raw_resume.content));
               setResumeData(parsed);
               setLastSavedData(parsed);
               setAutosaveState('saved');
@@ -905,7 +919,7 @@ const ResumeBuilderContent = () => {
 
       // Priority 2: Improved Data from Context (Tailor Flow)
       if (improvedPreview) {
-        const nextResumeData = normalizeResumeAdditional(improvedPreview);
+        const nextResumeData = normalizeResumeSkills(improvedPreview);
         setResumeData(nextResumeData);
         setLastSavedData(nextResumeData);
         // Also load cover letter and outreach if present
@@ -935,7 +949,7 @@ const ResumeBuilderContent = () => {
       const savedDraft = localStorage.getItem(STORAGE_KEY);
       if (savedDraft) {
         try {
-          const parsed = normalizeResumeAdditional(JSON.parse(savedDraft));
+          const parsed = normalizeResumeSkills(JSON.parse(savedDraft));
           setResumeData(parsed);
           setLastSavedData(parsed);
           setHasUnsavedChanges(true); // Mark as unsaved since it's a draft
@@ -1130,7 +1144,7 @@ const ResumeBuilderContent = () => {
 
   const handleUpdate = useCallback(
     (newData: ResumeData) => {
-      const normalizedData = normalizeResumeAdditional(newData);
+      const normalizedData = normalizeResumeSkills(newData);
       setResumeData(normalizedData);
       setRawYamlIssue(null);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedData));

@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import type { AdditionalInfo } from '@/components/dashboard/resume-component';
+import type { SkillsSection } from '@/components/dashboard/resume-component';
 import { AdditionalGroupsForm } from './additional-groups-form';
 
 interface AdditionalFormProps {
-  data: AdditionalInfo;
-  onChange: (data: AdditionalInfo) => void;
+  data: SkillsSection;
+  onChange: (data: SkillsSection) => void;
 }
 
 export const AdditionalForm: React.FC<AdditionalFormProps> = ({ data, onChange }) => {

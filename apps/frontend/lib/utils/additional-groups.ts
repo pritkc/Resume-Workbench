@@ -1,7 +1,7 @@
 import type {
-  AdditionalGroup,
-  AdditionalInfo,
   ResumeData,
+  SkillGroup,
+  SkillsSection,
 } from '@/components/dashboard/resume-component';
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;
@@ -39,7 +39,7 @@ const DEFAULT_TRANSLATION_KEY_BY_ID = Object.fromEntries(
   DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => [spec.id, spec.translationKey])
 ) as Record<DefaultAdditionalGroupId, string>;
 
-type AdditionalInfoInput = AdditionalInfo | null | undefined;
+type SkillsSectionInput = SkillsSection | null | undefined;
 
 function isDefaultGroupId(value: string): value is DefaultAdditionalGroupId {
   return value in DEFAULT_LABEL_BY_ID;
@@ -60,23 +60,26 @@ function toStringList(value: unknown): string[] {
   return normalized;
 }
 
-export function createDefaultAdditionalGroups(): AdditionalGroup[] {
+export function createDefaultSkillGroups(): SkillGroup[] {
   return DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => ({
     id: spec.id,
     label: spec.label,
-    items: [],
+    values: [],
   }));
 }
 
-export function createDefaultAdditionalInfo(): AdditionalInfo {
+export function createDefaultSkillsSection(): SkillsSection {
   return {
-    groups: createDefaultAdditionalGroups(),
+    groups: createDefaultSkillGroups(),
   };
 }
 
+export const createDefaultAdditionalGroups = createDefaultSkillGroups;
+export const createDefaultAdditionalInfo = createDefaultSkillsSection;
+
 export function generateAdditionalGroupId(
-  groups: Array<Pick<AdditionalGroup, 'id' | 'label'>> = [],
-  preferredLabel = 'Additional'
+  groups: Array<Pick<SkillGroup, 'id' | 'label'>> = [],
+  preferredLabel = 'Skills'
 ): string {
   const existingIds = new Set(
     groups
@@ -90,7 +93,7 @@ export function generateAdditionalGroupId(
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  const base = normalizedBase || 'additional';
+  const base = normalizedBase || 'skills';
 
   let candidate = base;
   let counter = 2;
@@ -102,20 +105,20 @@ export function generateAdditionalGroupId(
   return candidate;
 }
 
-function buildLegacyGroups(additional: AdditionalInfoInput): AdditionalGroup[] {
-  if (!additional || typeof additional !== 'object') {
+function buildLegacyGroups(skills: SkillsSectionInput): SkillGroup[] {
+  if (!skills || typeof skills !== 'object') {
     return [];
   }
 
-  const groups: AdditionalGroup[] = [];
+  const groups: SkillGroup[] = [];
 
   for (const spec of DEFAULT_ADDITIONAL_GROUP_SPECS) {
-    const rawItems = (additional as Record<string, unknown>)[spec.id];
+    const rawItems = (skills as Record<string, unknown>)[spec.id];
     if (rawItems !== undefined) {
       groups.push({
         id: spec.id,
         label: spec.label,
-        items: toStringList(rawItems),
+        values: toStringList(rawItems),
       });
     }
   }
@@ -124,14 +127,18 @@ function buildLegacyGroups(additional: AdditionalInfoInput): AdditionalGroup[] {
 }
 
 export function normalizeAdditionalGroups(
-  additional: AdditionalInfoInput,
+  skills: SkillsSectionInput,
   options: { seedDefaultsIfEmpty?: boolean } = {}
-): AdditionalGroup[] {
+): SkillGroup[] {
   const { seedDefaultsIfEmpty = true } = options;
 
   const groupedInput =
-    additional && typeof additional === 'object' && Array.isArray(additional.groups)
-      ? additional.groups
+    skills && typeof skills === 'object'
+      ? Array.isArray(skills.groups)
+        ? skills.groups
+        : Array.isArray((skills as { groups?: unknown[] }).groups)
+          ? (skills as { groups?: unknown[] }).groups
+          : null
       : null;
 
   const sourceGroups =
@@ -140,15 +147,15 @@ export function normalizeAdditionalGroups(
         return null;
       }
 
-      const rawGroup = group as Partial<AdditionalGroup>;
+      const rawGroup = group as Partial<SkillGroup> & { items?: unknown };
       return {
         id: typeof rawGroup.id === 'string' ? rawGroup.id.trim() : '',
         label: typeof rawGroup.label === 'string' ? rawGroup.label : '',
-        items: toStringList(rawGroup.items),
+        values: toStringList(rawGroup.values ?? rawGroup.items),
       };
-    }) ?? buildLegacyGroups(additional);
+    }) ?? buildLegacyGroups(skills);
 
-  const normalized: AdditionalGroup[] = [];
+  const normalized: SkillGroup[] = [];
   const existingIds = new Set<string>();
 
   for (const source of sourceGroups) {
@@ -156,7 +163,7 @@ export function normalizeAdditionalGroups(
       continue;
     }
 
-    const nextId = source.id || generateAdditionalGroupId(normalized, source.label || 'Additional');
+    const nextId = source.id || generateAdditionalGroupId(normalized, source.label || 'Skills');
     const dedupedId = existingIds.has(nextId.toLowerCase())
       ? generateAdditionalGroupId(normalized, nextId)
       : nextId;
@@ -169,39 +176,56 @@ export function normalizeAdditionalGroups(
         (isDefaultGroupId(dedupedId)
           ? DEFAULT_LABEL_BY_ID[dedupedId]
           : prettifyGroupLabel(dedupedId)),
-      items: source.items,
+      values: source.values,
     });
   }
 
   if (normalized.length === 0 && seedDefaultsIfEmpty) {
-    return createDefaultAdditionalGroups();
+    return createDefaultSkillGroups();
   }
 
   return normalized;
 }
 
 export function normalizeAdditionalInfo(
-  additional: AdditionalInfoInput,
+  skills: SkillsSectionInput,
   options: { seedDefaultsIfEmpty?: boolean } = {}
-): AdditionalInfo {
+): SkillsSection {
   return {
-    groups: normalizeAdditionalGroups(additional, options),
+    groups: normalizeAdditionalGroups(skills, options),
   };
 }
 
-export function normalizeResumeAdditional<T extends { additional?: AdditionalInfoInput }>(
-  resumeData: T,
+export function normalizeResumeSkills<
+  T extends { skills?: SkillsSectionInput; additional?: SkillsSectionInput },
+>(
+  resumeData: T & { sectionMeta?: Array<{ id?: string; key?: string; displayName?: string }> },
   options: { seedDefaultsIfEmpty?: boolean } = {}
 ): T {
+  const normalizedSkills = normalizeAdditionalInfo(
+    resumeData.skills ?? resumeData.additional,
+    options
+  );
+  const nextSectionMeta = Array.isArray(resumeData.sectionMeta)
+    ? resumeData.sectionMeta.map((section) => ({
+        ...section,
+        id: section.id === 'additional' ? 'skills' : section.id,
+        key: section.key === 'additional' ? 'skills' : section.key,
+        displayName: section.displayName === 'Skills & Awards' ? 'Skills' : section.displayName,
+      }))
+    : resumeData.sectionMeta;
   return {
     ...resumeData,
-    additional: normalizeAdditionalInfo(resumeData.additional, options),
+    skills: normalizedSkills,
+    sectionMeta: nextSectionMeta,
   };
 }
 
-export function flattenAdditionalItems(additional: AdditionalInfoInput): string[] {
-  return normalizeAdditionalGroups(additional, { seedDefaultsIfEmpty: false }).flatMap(
-    (group) => group.items
+export const normalizeResumeAdditional = normalizeResumeSkills;
+
+export function flattenAdditionalItems(skills: SkillsSectionInput): string[] {
+  return normalizeAdditionalGroups(skills, { seedDefaultsIfEmpty: false }).flatMap(
+    (group) => group.values
   );
 }
 
@@ -231,7 +255,7 @@ export function getDefaultAdditionalGroupLabel(
   return t(DEFAULT_TRANSLATION_KEY_BY_ID[groupId]);
 }
 
-export function getAdditionalGroupDisplayLabel(group: AdditionalGroup, t?: Translator): string {
+export function getAdditionalGroupDisplayLabel(group: SkillGroup, t?: Translator): string {
   const rawLabel = typeof group.label === 'string' ? group.label : '';
   const normalizedRawLabel = rawLabel.trim();
   const defaultLabel = getDefaultAdditionalGroupLabel(group.id, t);
@@ -248,15 +272,15 @@ export function getAdditionalGroupDisplayLabel(group: AdditionalGroup, t?: Trans
   return rawLabel;
 }
 
-export function hasAdditionalContent(additional: AdditionalInfoInput): boolean {
-  return normalizeAdditionalGroups(additional, { seedDefaultsIfEmpty: false }).some(
-    (group) => group.items.length > 0
+export function hasAdditionalContent(skills: SkillsSectionInput): boolean {
+  return normalizeAdditionalGroups(skills, { seedDefaultsIfEmpty: false }).some(
+    (group) => group.values.length > 0
   );
 }
 
-export function getAdditionalGroupsWithContent(additional: AdditionalInfoInput): AdditionalGroup[] {
-  return normalizeAdditionalGroups(additional, { seedDefaultsIfEmpty: false }).filter(
-    (group) => group.items.length > 0
+export function getAdditionalGroupsWithContent(skills: SkillsSectionInput): SkillGroup[] {
+  return normalizeAdditionalGroups(skills, { seedDefaultsIfEmpty: false }).filter(
+    (group) => group.values.length > 0
   );
 }
 
@@ -274,5 +298,5 @@ export function buildRegenerateItemIdForGroup(groupId: string): string {
 }
 
 export function normalizeResumeData(resumeData: ResumeData): ResumeData {
-  return normalizeResumeAdditional(resumeData);
+  return normalizeResumeSkills(resumeData);
 }

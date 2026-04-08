@@ -296,6 +296,9 @@
         "organization": "组织/公司",
         "location": "地点",
         "years": "时间",
+        "date": "日期",
+        "summaryOptional": "摘要（可选）",
+        "highlights": "亮点",
         "descriptionPoints": "描述要点"
       },
       "actions": {
@@ -317,13 +320,18 @@
         "addFirstJob": "添加第一条经历",
         "fields": {
           "jobTitle": "职位名称",
+          "position": "岗位",
           "company": "公司"
         },
         "placeholders": {
           "jobTitle": "高级开发工程师",
+          "position": "软件工程师，Data Infra & MLOps",
           "company": "科技公司",
           "location": "远程 / 城市",
           "years": "2020年1月 - 至今",
+          "date": "2020年1月 - 至今",
+          "summary": "该岗位的简短概述...",
+          "highlight": "描述你的成果...",
           "description": "描述你的成果..."
         }
       },
@@ -333,13 +341,19 @@
         "fields": {
           "institution": "学校/机构",
           "degree": "学位/专业",
+          "area": "专业 / 方向",
           "description": "描述",
           "descriptionOptional": "描述（可选）"
         },
         "placeholders": {
           "institution": "某某大学",
           "degree": "工学学士",
+          "area": "大数据分析",
           "years": "2016年8月 - 2020年5月",
+          "date": "2016年8月 - 2020年5月",
+          "location": "圣地亚哥, CA",
+          "summary": "GPA: 3.78",
+          "highlight": "相关课程、荣誉或领导经历...",
           "description": "补充说明..."
         }
       },
@@ -349,12 +363,16 @@
         "fields": {
           "projectName": "项目名称",
           "role": "角色",
+          "summary": "摘要",
           "website": "网站"
         },
         "placeholders": {
           "projectName": "Resume Matcher",
           "role": "作者",
           "years": "2023年3月",
+          "date": "2023年3月",
+          "summary": "项目的一句话概述...",
+          "highlight": "项目细节...",
           "github": "github.com/username/project",
           "website": "https://project-demo.com",
           "description": "项目细节..."

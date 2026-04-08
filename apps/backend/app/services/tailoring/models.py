@@ -13,6 +13,7 @@ from app.schemas import (
     Experience,
     Project,
     ResumeData,
+    SkillsSection,
     normalize_resume_data,
 )
 
@@ -20,7 +21,7 @@ TAILORING_TOP_LEVEL_KEYS = (
     "summary",
     "workExperience",
     "personalProjects",
-    "additional",
+    "skills",
     "customSections",
 )
 
@@ -33,7 +34,7 @@ class TailoringResumePayload(BaseModel):
     summary: str = ""
     workExperience: list[Experience] = Field(default_factory=list)
     personalProjects: list[Project] = Field(default_factory=list)
-    additional: AdditionalInfo = Field(default_factory=AdditionalInfo)
+    skills: SkillsSection = Field(default_factory=SkillsSection)
     customSections: dict[str, CustomSection] = Field(default_factory=dict)
 
     @classmethod

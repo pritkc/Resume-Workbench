@@ -15,6 +15,7 @@ import baseStyles from '@/components/resume/styles/_base.module.css';
 
 export interface PersonalInfo {
   name?: string;
+  headline?: string;
   title?: string;
   email?: string;
   phone?: string;
@@ -22,7 +23,14 @@ export interface PersonalInfo {
   website?: string;
   linkedin?: string;
   github?: string;
+  photo?: string | null;
   photoUrl?: string | null;
+  profileLinks?: Array<{
+    label?: string;
+    url?: string | null;
+    fontawesome_icon?: string | null;
+    fontAwesomeIcon?: string | null;
+  }>;
   socialNetworks?: Array<{
     network?: string;
     username?: string;
@@ -37,44 +45,63 @@ export interface PersonalInfo {
 
 export interface Experience {
   id: number;
+  position?: string;
   title?: string;
   company?: string;
   location?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  date?: string;
   years?: string;
+  summary?: string | null;
   description?: string[];
+  highlights?: string[];
 }
 
 export interface Education {
   id: number;
   institution?: string;
-  degree?: string;
+  area?: string;
+  degree?: string | null;
+  location?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  date?: string;
   years?: string;
-  description?: string;
+  summary?: string | null;
+  description?: string | null;
+  highlights?: string[];
 }
 
 export interface Project {
   id: number;
   name?: string;
+  summary?: string | null;
   role?: string;
+  date?: string;
   years?: string;
   github?: string;
   website?: string;
   description?: string[];
+  highlights?: string[];
 }
 
-export interface AdditionalGroup {
+export interface SkillGroup {
   id: string;
   label: string;
-  items: string[];
+  values: string[];
 }
 
-export interface AdditionalInfo {
-  groups?: AdditionalGroup[];
+export interface SkillsSection {
+  groups?: SkillGroup[];
   technicalSkills?: string[];
   languages?: string[];
   certificationsTraining?: string[];
   awards?: string[];
 }
+
+export type AdditionalGroup = SkillGroup;
+export type AdditionalInfo = SkillsSection;
 
 export type AdditionalSectionLabels = Record<string, string>;
 
@@ -132,7 +159,8 @@ export interface ResumeData {
   workExperience?: Experience[];
   education?: Education[];
   personalProjects?: Project[];
-  additional?: AdditionalInfo;
+  skills?: SkillsSection;
+  additional?: SkillsSection;
   // NEW: Section metadata and custom sections
   sectionMeta?: SectionMeta[];
   customSections?: Record<string, CustomSection>;

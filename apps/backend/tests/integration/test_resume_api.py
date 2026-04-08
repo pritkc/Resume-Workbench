@@ -62,6 +62,108 @@ class TestGetResume:
         assert data["theme_settings"]["theme_id"] == "classic"
 
     @patch("app.routers.resumes.db")
+    async def test_fetch_existing_resume_surfaces_rendercv_alias_fields(
+        self, mock_db, client, mock_resume_record
+    ):
+        mock_db.get_resume.return_value = mock_resume_record
+
+        async with client:
+            resp = await client.get("/api/v1/resumes", params={"resume_id": "res-123"})
+
+        assert resp.status_code == 200
+        processed = resp.json()["data"]["processed_resume"]
+        assert processed["personalInfo"]["headline"] == "Senior Backend Engineer"
+        assert processed["personalInfo"]["profileLinks"] == [
+            {
+                "label": "Website",
+                "url": "https://janedoe.dev",
+                "fontawesome_icon": "link",
+                "fontAwesomeIcon": "link",
+            },
+            {
+                "label": "LinkedIn",
+                "url": "https://linkedin.com/in/janedoe",
+                "fontawesome_icon": "linkedin-in",
+                "fontAwesomeIcon": "linkedin-in",
+            },
+            {
+                "label": "GitHub",
+                "url": "https://github.com/janedoe",
+                "fontawesome_icon": "github",
+                "fontAwesomeIcon": "github",
+            },
+        ]
+        assert processed["workExperience"][0]["position"] == "Senior Backend Engineer"
+        assert processed["workExperience"][0]["date"] == "Jan 2021 - Present"
+        assert processed["workExperience"][0]["highlights"] == [
+            "Built REST APIs serving 50K requests/day using Python and FastAPI",
+            "Led migration from monolith to microservices architecture",
+            "Mentored 3 junior developers on backend best practices",
+        ]
+        assert processed["personalProjects"][0]["summary"] == "Creator & Maintainer"
+        assert processed["personalProjects"][0]["date"] == "Mar 2021 - Present"
+        assert processed["personalProjects"][0]["highlights"] == [
+            "CLI tool generating API clients from OpenAPI specs",
+            "500+ GitHub stars, used by 30+ companies",
+        ]
+
+    @patch("app.routers.resumes.db")
+    async def test_fetch_existing_resume_profile_links_override_stale_legacy_fields(
+        self, mock_db, client, mock_resume_record
+    ):
+        mock_db.get_resume.return_value = {
+            **mock_resume_record,
+            "processed_data": {
+                **mock_resume_record["processed_data"],
+                "personalInfo": {
+                    **mock_resume_record["processed_data"]["personalInfo"],
+                    "profileLinks": [
+                        {
+                            "label": "LinkedIn / pritkc",
+                            "url": "https://linkedin.com/in/pritkc",
+                        },
+                        {
+                            "label": "GitHub / pritkc",
+                            "url": "https://github.com/pritkc",
+                        },
+                    ],
+                },
+            },
+        }
+
+        async with client:
+            resp = await client.get("/api/v1/resumes", params={"resume_id": "res-123"})
+
+        assert resp.status_code == 200
+        personal_info = resp.json()["data"]["processed_resume"]["personalInfo"]
+        assert personal_info["profileLinks"] == [
+            {
+                "label": "LinkedIn / pritkc",
+                "url": "https://linkedin.com/in/pritkc",
+            },
+            {
+                "label": "GitHub / pritkc",
+                "url": "https://github.com/pritkc",
+            },
+        ]
+        assert personal_info["linkedin"] == ""
+        assert personal_info["github"] == ""
+        assert personal_info["customConnections"] == [
+            {
+                "placeholder": "LinkedIn / pritkc",
+                "url": "https://linkedin.com/in/pritkc",
+                "fontawesome_icon": None,
+                "fontAwesomeIcon": None,
+            },
+            {
+                "placeholder": "GitHub / pritkc",
+                "url": "https://github.com/pritkc",
+                "fontawesome_icon": None,
+                "fontAwesomeIcon": None,
+            },
+        ]
+
+    @patch("app.routers.resumes.db")
     async def test_fetch_nonexistent_returns_404(self, mock_db, client):
         mock_db.get_resume.return_value = None
         async with client:
@@ -272,6 +374,30 @@ class TestDraftResumeFlows:
         assert payload["yaml_sections"]["cv"].startswith("cv:")
         assert payload["yaml_sections"]["design"].startswith("design:")
 
+    async def test_normalize_resume_draft_returns_full_design_yaml_for_theme_profiles(
+        self, client, sample_resume
+    ):
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/draft/normalize",
+                json={
+                    "processed_resume": sample_resume,
+                    "theme_settings": {
+                        "theme_id": "moderncv",
+                        "bold_keywords": False,
+                        "locale": {"language": "english"},
+                        "settings": {"current_date": "today"},
+                        "theme_profiles": {},
+                    },
+                },
+            )
+
+        assert resp.status_code == 200
+        design_yaml = resp.json()["yaml_sections"]["design"]
+        assert "show_footer: true" in design_yaml
+        assert "show_top_note: true" in design_yaml
+        assert "degree_column: null" in design_yaml
+
     @patch("app.routers.resumes.db")
     async def test_normalize_resume_draft_preserves_custom_additional_group_labels_from_yaml(
         self, mock_db, client, mock_resume_record
@@ -308,6 +434,76 @@ class TestDraftResumeFlows:
         assert languages_group["label"] == "Languages & Frameworks"
         assert languages_group["items"] == ["English", "Python"]
         assert "Languages & Frameworks" in payload["yaml_sections"]["cv"]
+
+    async def test_normalize_resume_draft_profile_links_override_stale_social_fields_in_yaml(
+        self, client, sample_resume
+    ):
+        draft_resume = {
+            **sample_resume,
+            "personalInfo": {
+                **sample_resume["personalInfo"],
+                "linkedin": "stale-linkedin",
+                "github": "stale-github",
+                "socialNetworks": [
+                    {"network": "LinkedIn", "username": "stale-linkedin"},
+                    {"network": "GitHub", "username": "stale-github"},
+                ],
+                "profileLinks": [
+                    {
+                        "label": "LinkedIn / pritkc",
+                        "url": "https://linkedin.com/in/pritkc",
+                    },
+                    {
+                        "label": "GitHub / pritkc",
+                        "url": "https://github.com/pritkc",
+                    },
+                ],
+            },
+        }
+
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/draft/normalize",
+                json={
+                    "processed_resume": draft_resume,
+                    "theme_settings": {"theme_id": "classic"},
+                },
+            )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        personal_info = payload["data"]["processed_resume"]["personalInfo"]
+        assert personal_info["linkedin"] == ""
+        assert personal_info["github"] == ""
+        assert personal_info["profileLinks"] == [
+            {
+                "label": "LinkedIn / pritkc",
+                "url": "https://linkedin.com/in/pritkc",
+            },
+            {
+                "label": "GitHub / pritkc",
+                "url": "https://github.com/pritkc",
+            },
+        ]
+        assert personal_info["customConnections"] == [
+            {
+                "placeholder": "LinkedIn / pritkc",
+                "url": "https://linkedin.com/in/pritkc",
+                "fontawesome_icon": None,
+                "fontAwesomeIcon": None,
+            },
+            {
+                "placeholder": "GitHub / pritkc",
+                "url": "https://github.com/pritkc",
+                "fontawesome_icon": None,
+                "fontAwesomeIcon": None,
+            },
+        ]
+        cv_yaml = payload["yaml_sections"]["cv"]
+        assert "placeholder: LinkedIn / pritkc" in cv_yaml
+        assert "placeholder: GitHub / pritkc" in cv_yaml
+        assert "username: stale-linkedin" not in cv_yaml
+        assert "username: stale-github" not in cv_yaml
 
     @patch("app.routers.resumes.store_rendercv_bundle")
     @patch("app.routers.resumes.render_resume_bundle")

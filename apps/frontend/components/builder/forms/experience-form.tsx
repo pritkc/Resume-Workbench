@@ -23,6 +23,13 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import {
+  buildExperienceDescription,
+  getExperienceExplicitDate,
+  getExperienceHighlights,
+  getExperiencePosition,
+  getExperienceSummary,
+} from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
 
 interface ExperienceFormProps {
@@ -33,7 +40,6 @@ interface ExperienceFormProps {
 export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
 
-  // Configure drag-and-drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -41,7 +47,6 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
     })
   );
 
-  // Handler for drag end event
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -52,9 +57,11 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
     if (oldIndex === -1 || newIndex === -1) return;
 
-    // Reorder the array using arrayMove from @dnd-kit
-    const reordered = arrayMove(data, oldIndex, newIndex);
-    onChange(reordered);
+    onChange(arrayMove(data, oldIndex, newIndex));
+  };
+
+  const updateItem = (id: number, updater: (item: Experience) => Experience) => {
+    onChange(data.map((item) => (item.id === id ? updater(item) : item)));
   };
 
   const handleAdd = () => {
@@ -63,11 +70,17 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       ...data,
       {
         id: newId,
+        position: '',
         title: '',
         company: '',
         location: '',
+        start_date: '',
+        end_date: '',
+        date: '',
         years: '',
-        description: [''],
+        summary: '',
+        description: [],
+        highlights: [],
       },
     ]);
   };
@@ -76,52 +89,79 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
     onChange(data.filter((item) => item.id !== id));
   };
 
-  const handleChange = (id: number, field: keyof Experience, value: string | string[]) => {
-    onChange(
-      data.map((item) => {
-        if (item.id === id) {
-          return { ...item, [field]: value };
-        }
-        return item;
-      })
-    );
+  const handleTextFieldChange = (
+    id: number,
+    field: 'company' | 'location' | 'position' | 'date' | 'start_date' | 'end_date' | 'summary',
+    value: string
+  ) => {
+    updateItem(id, (item) => {
+      if (field === 'position') {
+        return {
+          ...item,
+          position: value,
+          title: value,
+        };
+      }
+
+      if (field === 'date') {
+        return {
+          ...item,
+          date: value,
+          years: value,
+        };
+      }
+
+      if (field === 'summary') {
+        const highlights = getExperienceHighlights(item);
+        return {
+          ...item,
+          summary: value,
+          description: buildExperienceDescription(value, highlights),
+        };
+      }
+
+      return {
+        ...item,
+        [field]: value,
+      };
+    });
   };
 
-  const handleDescriptionChange = (id: number, index: number, value: string) => {
-    onChange(
-      data.map((item) => {
-        if (item.id === id) {
-          const newDesc = [...(item.description || [])];
-          newDesc[index] = value;
-          return { ...item, description: newDesc };
-        }
-        return item;
-      })
-    );
+  const handleHighlightChange = (id: number, index: number, value: string) => {
+    updateItem(id, (item) => {
+      const highlights = [...getExperienceHighlights(item)];
+      highlights[index] = value;
+
+      return {
+        ...item,
+        highlights,
+        description: buildExperienceDescription(getExperienceSummary(item), highlights),
+      };
+    });
   };
 
-  const handleAddDescription = (id: number) => {
-    onChange(
-      data.map((item) => {
-        if (item.id === id) {
-          return { ...item, description: [...(item.description || []), ''] };
-        }
-        return item;
-      })
-    );
+  const handleAddHighlight = (id: number) => {
+    updateItem(id, (item) => {
+      const highlights = [...getExperienceHighlights(item), ''];
+      return {
+        ...item,
+        highlights,
+        description: buildExperienceDescription(getExperienceSummary(item), highlights),
+      };
+    });
   };
 
-  const handleRemoveDescription = (id: number, index: number) => {
-    onChange(
-      data.map((item) => {
-        if (item.id === id) {
-          const newDesc = [...(item.description || [])];
-          newDesc.splice(index, 1);
-          return { ...item, description: newDesc };
-        }
-        return item;
-      })
-    );
+  const handleRemoveHighlight = (id: number, index: number) => {
+    updateItem(id, (item) => {
+      const highlights = [...getExperienceHighlights(item)];
+      highlights.splice(index, 1);
+
+      return {
+        ...item,
+        highlights,
+        description: buildExperienceDescription(getExperienceSummary(item), highlights),
+      };
+    });
   };
 
   return (
@@ -158,106 +198,158 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-3">
-              {data.map((item) => (
-                <DraggableListItem key={item.id} id={item.id}>
-                  <div className="group relative border border-black bg-gray-50 px-3 py-2.5">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('common.delete')}
-                      className="absolute right-2 top-2 text-destructive opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-                      onClick={() => handleRemove(item.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+              {data.map((item) => {
+                const highlights = getExperienceHighlights(item);
+                const summary = getExperienceSummary(item);
 
-                    <div className="mb-2.5 grid grid-cols-1 gap-2.5 pr-7 md:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
-                          {t('builder.forms.experience.fields.jobTitle')}
-                        </Label>
-                        <Input
-                          value={item.title || ''}
-                          onChange={(e) => handleChange(item.id, 'title', e.target.value)}
-                          placeholder={t('builder.forms.experience.placeholders.jobTitle')}
-                          className="rounded-none border-black bg-white"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
-                          {t('builder.forms.experience.fields.company')}
-                        </Label>
-                        <Input
-                          value={item.company || ''}
-                          onChange={(e) => handleChange(item.id, 'company', e.target.value)}
-                          placeholder={t('builder.forms.experience.placeholders.company')}
-                          className="rounded-none border-black bg-white"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
-                          {t('builder.genericItemForm.fields.location')}
-                        </Label>
-                        <Input
-                          value={item.location || ''}
-                          onChange={(e) => handleChange(item.id, 'location', e.target.value)}
-                          placeholder={t('builder.forms.experience.placeholders.location')}
-                          className="rounded-none border-black bg-white"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
-                          {t('builder.genericItemForm.fields.years')}
-                        </Label>
-                        <Input
-                          value={item.years || ''}
-                          onChange={(e) => handleChange(item.id, 'years', e.target.value)}
-                          placeholder={t('builder.forms.experience.placeholders.years')}
-                          className="rounded-none border-black bg-white"
-                        />
-                      </div>
-                    </div>
+                return (
+                  <DraggableListItem key={item.id} id={item.id}>
+                    <div className="group relative border border-black bg-gray-50 px-3 py-2.5">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('common.delete')}
+                        className="absolute right-2 top-2 text-destructive opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                        onClick={() => handleRemove(item.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
 
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
-                          {t('builder.genericItemForm.fields.descriptionPoints')}
-                        </Label>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => handleAddDescription(item.id)}
-                          className="px-2 text-[11px] text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                        >
-                          <Plus className="mr-1 h-3 w-3" />{' '}
-                          {t('builder.genericItemForm.actions.addPoint')}
-                        </Button>
+                      <div className="mb-2.5 grid grid-cols-1 gap-2.5 pr-7 md:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                            {t('builder.forms.experience.fields.position')}
+                          </Label>
+                          <Input
+                            value={getExperiencePosition(item)}
+                            onChange={(e) =>
+                              handleTextFieldChange(item.id, 'position', e.target.value)
+                            }
+                            placeholder={t('builder.forms.experience.placeholders.position')}
+                            className="rounded-none border-black bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                            {t('builder.forms.experience.fields.company')}
+                          </Label>
+                          <Input
+                            value={item.company || ''}
+                            onChange={(e) =>
+                              handleTextFieldChange(item.id, 'company', e.target.value)
+                            }
+                            placeholder={t('builder.forms.experience.placeholders.company')}
+                            className="rounded-none border-black bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                            {t('builder.genericItemForm.fields.location')}
+                          </Label>
+                          <Input
+                            value={item.location || ''}
+                            onChange={(e) =>
+                              handleTextFieldChange(item.id, 'location', e.target.value)
+                            }
+                            placeholder={t('builder.forms.experience.placeholders.location')}
+                            className="rounded-none border-black bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                            Start Date
+                          </Label>
+                          <Input
+                            value={item.start_date || ''}
+                            onChange={(e) =>
+                              handleTextFieldChange(item.id, 'start_date', e.target.value)
+                            }
+                            placeholder="2021-01"
+                            className="rounded-none border-black bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                            End Date
+                          </Label>
+                          <Input
+                            value={item.end_date || ''}
+                            onChange={(e) =>
+                              handleTextFieldChange(item.id, 'end_date', e.target.value)
+                            }
+                            placeholder="present or 2024-03"
+                            className="rounded-none border-black bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5 md:col-span-2">
+                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                            {t('builder.genericItemForm.fields.date')}
+                          </Label>
+                          <Input
+                            value={getExperienceExplicitDate(item)}
+                            onChange={(e) => handleTextFieldChange(item.id, 'date', e.target.value)}
+                            placeholder={t('builder.forms.experience.placeholders.date')}
+                            className="rounded-none border-black bg-white"
+                          />
+                          <p className="font-mono text-[11px] text-gray-500">
+                            Optional override. If blank, the preview uses start and end dates.
+                          </p>
+                        </div>
                       </div>
-                      {item.description?.map((desc, idx) => (
-                        <div key={idx} className="flex gap-2">
-                          <div className="flex-1">
-                            <RichTextEditor
-                              value={desc}
-                              onChange={(html) => handleDescriptionChange(item.id, idx, html)}
-                              placeholder={t('builder.forms.experience.placeholders.description')}
-                              minHeight="48px"
-                            />
-                          </div>
+
+                      <div className="mb-2.5 space-y-1.5">
+                        <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                          {t('builder.genericItemForm.fields.summaryOptional')}
+                        </Label>
+                        <RichTextEditor
+                          value={summary}
+                          onChange={(html) => handleTextFieldChange(item.id, 'summary', html)}
+                          placeholder={t('builder.forms.experience.placeholders.summary')}
+                          minHeight="56px"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                            {t('builder.genericItemForm.fields.highlights')}
+                          </Label>
                           <Button
                             variant="ghost"
-                            size="icon-sm"
-                            aria-label={t('common.delete')}
-                            onClick={() => handleRemoveDescription(item.id, idx)}
-                            className="self-end text-muted-foreground hover:text-destructive"
+                            size="xs"
+                            onClick={() => handleAddHighlight(item.id)}
+                            className="px-2 text-[11px] text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Plus className="mr-1 h-3 w-3" />{' '}
+                            {t('builder.genericItemForm.actions.addPoint')}
                           </Button>
                         </div>
-                      ))}
+                        {highlights.map((highlight, idx) => (
+                          <div key={idx} className="flex gap-2">
+                            <div className="flex-1">
+                              <RichTextEditor
+                                value={highlight}
+                                onChange={(html) => handleHighlightChange(item.id, idx, html)}
+                                placeholder={t('builder.forms.experience.placeholders.highlight')}
+                                minHeight="48px"
+                              />
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={t('common.delete')}
+                              onClick={() => handleRemoveHighlight(item.id, idx)}
+                              className="self-end text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </DraggableListItem>
-              ))}
+                  </DraggableListItem>
+                );
+              })}
             </div>
           </SortableContext>
         </DndContext>

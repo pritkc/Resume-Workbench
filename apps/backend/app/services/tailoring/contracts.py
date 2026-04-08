@@ -87,9 +87,9 @@ def build_response_contract(
             editable_fields=["description"],
             immutable_fields=["id", "name", "role", "years", "github", "website"],
         ),
-        "additional": TailoringSectionContract(
+        "skills": TailoringSectionContract(
             type="object",
-            rules=["Keep every item once. May regroup."],
+            rules=["Keep every skill value once. May regroup."],
         ),
         "customSections": TailoringSectionContract(
             type="object",
@@ -124,12 +124,12 @@ def build_response_contract(
         editable_fields=["description"],
     )
 
-    additional = resume_payload.additional.model_dump()
-    groups = additional.get("groups", [])
-    sections["additional"] = TailoringSectionContract(
+    skills = resume_payload.skills.model_dump()
+    groups = skills.get("groups", [])
+    sections["skills"] = TailoringSectionContract(
         type="object",
         entry_count=len(groups) if isinstance(groups, list) else 0,
-        rules=["Keep every item once. May regroup."],
+        rules=["Keep every skill value once. May regroup."],
     )
 
     custom_sections = resume_payload.customSections
@@ -149,4 +149,3 @@ def build_response_contract(
         mode_rules=_mode_rules(prompt_id),
         sections=sections,
     )
-

@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import type {
-  AdditionalGroup,
-  AdditionalInfo as ResumeAdditionalInfo,
+  SkillGroup,
+  SkillsSection as ResumeSkillsSection,
 } from '@/components/dashboard/resume-component';
 import type { ArtifactSummary, RenderThemeSettings } from '@/lib/types/render-theme';
 
@@ -43,8 +43,8 @@ export interface ProjectEntry {
   description: string[];
 }
 
-export interface AdditionalInfo extends ResumeAdditionalInfo {
-  groups?: AdditionalGroup[];
+export interface SkillsSection extends ResumeSkillsSection {
+  groups?: SkillGroup[];
 }
 
 export interface ResumeDiffSummary {
@@ -78,7 +78,7 @@ export interface ResumePreview {
   workExperience: ExperienceEntry[];
   education: EducationEntry[];
   personalProjects: ProjectEntry[];
-  additional: AdditionalInfo;
+  skills: SkillsSection;
 }
 
 export interface Data {

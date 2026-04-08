@@ -20,6 +20,43 @@ class DiffConfidence:
     modified: str
 
 
+def _clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _first_text(entry: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = _clean_text(entry.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _education_credential(entry: dict[str, Any]) -> str:
+    degree = _clean_text(entry.get("degree"))
+    area = _clean_text(entry.get("area"))
+    if degree and area:
+        return f"{degree}, {area}"
+    return degree or area
+
+
+def _entry_date(entry: dict[str, Any]) -> str:
+    direct = _first_text(entry, "date", "years")
+    if direct:
+        return direct
+    start_date = _clean_text(entry.get("start_date") or entry.get("startDate"))
+    end_date = _clean_text(entry.get("end_date") or entry.get("endDate"))
+    if start_date and end_date:
+        return f"{start_date} - {end_date}"
+    if start_date:
+        return f"{start_date} - present"
+    return end_date
+
+
 def _format_entry_label(parts: list[str], fallback: str) -> str:
     label = " | ".join([part for part in parts if part])
     return label if label else fallback
@@ -28,9 +65,9 @@ def _format_entry_label(parts: list[str], fallback: str) -> str:
 def _format_experience_entry(entry: dict[str, Any], index: int) -> str:
     return _format_entry_label(
         [
-            entry.get("title", ""),
-            entry.get("company", ""),
-            entry.get("years", ""),
+            _first_text(entry, "position", "title"),
+            _clean_text(entry.get("company")),
+            _entry_date(entry),
         ],
         f"Work experience #{index + 1}",
     )
@@ -39,9 +76,9 @@ def _format_experience_entry(entry: dict[str, Any], index: int) -> str:
 def _format_education_entry(entry: dict[str, Any], index: int) -> str:
     return _format_entry_label(
         [
-            entry.get("degree", ""),
-            entry.get("institution", ""),
-            entry.get("years", ""),
+            _education_credential(entry),
+            _clean_text(entry.get("institution")),
+            _entry_date(entry),
         ],
         f"Education #{index + 1}",
     )
@@ -50,9 +87,9 @@ def _format_education_entry(entry: dict[str, Any], index: int) -> str:
 def _format_project_entry(entry: dict[str, Any], index: int) -> str:
     return _format_entry_label(
         [
-            entry.get("name", ""),
-            entry.get("role", ""),
-            entry.get("years", ""),
+            _clean_text(entry.get("name")),
+            _first_text(entry, "summary", "role"),
+            _entry_date(entry),
         ],
         f"Project #{index + 1}",
     )
@@ -152,7 +189,7 @@ def _build_additional_item_index(value: Any) -> dict[str, tuple[str, str]]:
     index: dict[str, tuple[str, str]] = {}
     for group in extract_additional_groups(value):
         group_id = str(group.get("id", "")).strip()
-        for item in _normalize_string_list(group.get("items", []), f"additional.groups[{group_id}]"):
+        for item in _normalize_string_list(group.get("values", []), f"skills.groups[{group_id}]"):
             key = item.casefold()
             if key not in index:
                 index[key] = (item, group_id)
@@ -162,8 +199,8 @@ def _build_additional_item_index(value: Any) -> dict[str, tuple[str, str]]:
 def _format_additional_groups(value: Any) -> str:
     parts: list[str] = []
     for group in extract_additional_groups(value):
-        label = str(group.get("label") or group.get("id") or "Additional").strip()
-        items = _normalize_string_list(group.get("items", []), f"{label}.items")
+        label = str(group.get("label") or group.get("id") or "Skills").strip()
+        items = _normalize_string_list(group.get("values", []), f"{label}.values")
         parts.append(f"{label}: {', '.join(items)}" if items else label)
     return " | ".join(parts)
 
@@ -171,7 +208,10 @@ def _format_additional_groups(value: Any) -> str:
 def _extract_description_list(entry: Any) -> list[str]:
     if not isinstance(entry, dict):
         return []
-    return _normalize_string_list(entry.get("description", []), "workExperience.description")
+    highlights = _normalize_string_list(entry.get("highlights", []), "entry.highlights")
+    if highlights:
+        return highlights
+    return _normalize_string_list(entry.get("description", []), "entry.description")
 
 
 def _append_list_changes(
@@ -253,7 +293,7 @@ def _append_list_changes(
 
 
 def count_description_words(data: dict[str, Any]) -> int:
-    """Count words across work/project description bullets."""
+    """Count words across work/project summaries and bullets."""
 
     sections = [
         data.get("workExperience", []),
@@ -266,12 +306,12 @@ def count_description_words(data: dict[str, Any]) -> int:
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            description = entry.get("description", [])
-            if not isinstance(description, list):
-                continue
-            for item in description:
-                if isinstance(item, str):
-                    total += len(item.split())
+            summary = _clean_text(entry.get("summary"))
+            if summary:
+                total += len(summary.split())
+
+            for item in _extract_description_list(entry):
+                total += len(item.split())
     return total
 
 
@@ -303,8 +343,8 @@ def calculate_resume_diff(
             )
         )
 
-    orig_additional_items = _build_additional_item_index(original.get("additional"))
-    new_additional_items = _build_additional_item_index(improved.get("additional"))
+    orig_additional_items = _build_additional_item_index(original.get("skills") or original.get("additional"))
+    new_additional_items = _build_additional_item_index(improved.get("skills") or improved.get("additional"))
     orig_additional_keys = set(orig_additional_items)
     new_additional_keys = set(new_additional_items)
 
@@ -314,7 +354,7 @@ def calculate_resume_diff(
         item_value, group_id = new_additional_items[item_key]
         changes.append(
             ResumeFieldDiff(
-                field_path=f"additional.groups[{group_id}].items",
+                field_path=f"skills.groups[{group_id}].values",
                 field_type="additional_item",
                 change_type="added",
                 new_value=item_value,
@@ -328,7 +368,7 @@ def calculate_resume_diff(
         item_value, group_id = orig_additional_items[item_key]
         changes.append(
             ResumeFieldDiff(
-                field_path=f"additional.groups[{group_id}].items",
+                field_path=f"skills.groups[{group_id}].values",
                 field_type="additional_item",
                 change_type="removed",
                 original_value=item_value,
@@ -336,16 +376,16 @@ def calculate_resume_diff(
             )
         )
 
-    if _format_additional_groups(original.get("additional")) != _format_additional_groups(
-        improved.get("additional")
+    if _format_additional_groups(original.get("skills") or original.get("additional")) != _format_additional_groups(
+        improved.get("skills") or improved.get("additional")
     ):
         changes.append(
             ResumeFieldDiff(
-                field_path="additional.groups",
+                field_path="skills.groups",
                 field_type="additional_group",
                 change_type="modified",
-                original_value=_format_additional_groups(original.get("additional")) or None,
-                new_value=_format_additional_groups(improved.get("additional")) or None,
+                original_value=_format_additional_groups(original.get("skills") or original.get("additional")) or None,
+                new_value=_format_additional_groups(improved.get("skills") or improved.get("additional")) or None,
                 confidence="medium",
             )
         )
@@ -379,7 +419,7 @@ def calculate_resume_diff(
         original.get("workExperience", []),
         improved.get("workExperience", []),
         _format_experience_entry,
-        {"description"},
+        {"description", "highlights", "summary"},
     )
     _append_entry_changes(
         changes,
@@ -388,6 +428,7 @@ def calculate_resume_diff(
         original.get("education", []),
         improved.get("education", []),
         _format_education_entry,
+        {"description", "highlights", "summary"},
     )
     _append_entry_changes(
         changes,
@@ -396,6 +437,7 @@ def calculate_resume_diff(
         original.get("personalProjects", []),
         improved.get("personalProjects", []),
         _format_project_entry,
+        {"description", "highlights", "summary"},
     )
 
     summary = ResumeDiffSummary(

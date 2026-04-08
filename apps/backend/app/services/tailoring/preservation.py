@@ -144,15 +144,15 @@ def preserve_original_skills(
     original_data: dict[str, Any] | None,
     improved_data: dict[str, Any],
 ) -> dict[str, Any]:
-    """Restore any original additional-group items dropped by the LLM."""
+    """Restore any original skill values dropped by the LLM."""
 
     if not original_data:
         return improved_data
 
     result = copy.deepcopy(improved_data)
-    result["additional"] = restore_missing_additional_items(
-        original_data.get("additional"),
-        result.get("additional"),
+    result["skills"] = restore_missing_additional_items(
+        original_data.get("skills") or original_data.get("additional"),
+        result.get("skills") or result.get("additional"),
     )
     return result
 

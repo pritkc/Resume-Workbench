@@ -296,6 +296,9 @@
         "organization": "組織",
         "location": "場所",
         "years": "期間",
+        "date": "日付",
+        "summaryOptional": "概要（任意）",
+        "highlights": "ハイライト",
         "descriptionPoints": "説明ポイント"
       },
       "actions": {
@@ -317,13 +320,18 @@
         "addFirstJob": "最初の職歴を追加",
         "fields": {
           "jobTitle": "職種",
+          "position": "役職",
           "company": "会社"
         },
         "placeholders": {
           "jobTitle": "シニアエンジニア",
+          "position": "ソフトウェアエンジニア, Data Infra & MLOps",
           "company": "Tech Corp",
           "location": "リモート / 都市",
           "years": "2020年1月 - 現在",
+          "date": "2020年1月 - 現在",
+          "summary": "役割の簡単な概要...",
+          "highlight": "実績を説明...",
           "description": "実績を説明..."
         }
       },
@@ -333,13 +341,19 @@
         "fields": {
           "institution": "学校/機関",
           "degree": "学位",
+          "area": "専攻 / 分野",
           "description": "説明",
           "descriptionOptional": "説明（任意）"
         },
         "placeholders": {
           "institution": "大学名",
           "degree": "学士（理学）",
+          "area": "ビッグデータ分析",
           "years": "2016年8月 - 2020年5月",
+          "date": "2016年8月 - 2020年5月",
+          "location": "サンディエゴ, CA",
+          "summary": "GPA: 3.78",
+          "highlight": "関連科目、表彰、リーダーシップなど...",
           "description": "追加の詳細..."
         }
       },
@@ -349,12 +363,16 @@
         "fields": {
           "projectName": "プロジェクト名",
           "role": "役割",
+          "summary": "概要",
           "website": "Webサイト"
         },
         "placeholders": {
           "projectName": "Resume Matcher",
           "role": "作成者",
           "years": "2023年3月",
+          "date": "2023年3月",
+          "summary": "プロジェクトの一行概要...",
+          "highlight": "プロジェクト詳細...",
           "github": "github.com/username/project",
           "website": "https://project-demo.com",
           "description": "プロジェクト詳細..."

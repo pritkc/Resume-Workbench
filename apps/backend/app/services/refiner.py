@@ -32,6 +32,7 @@ from app.services.additional_groups import (
     extract_additional_groups,
     flatten_additional_items,
     normalize_additional_groups,
+    normalize_skill_groups,
 )
 
 logger = logging.getLogger(__name__)
@@ -279,17 +280,17 @@ def validate_master_alignment(
     """
     violations: list[AlignmentViolation] = []
 
-    # Check all additional-group items against the source resume
-    tailored_groups = extract_additional_groups(tailored.get("additional"))
-    master_groups = extract_additional_groups(master.get("additional"))
+    # Check all skill-group values against the source resume
+    tailored_groups = extract_additional_groups(tailored.get("skills") or tailored.get("additional"))
+    master_groups = extract_additional_groups(master.get("skills") or master.get("additional"))
     tailored_items = additional_items_counter(tailored_groups)
     master_items = additional_items_counter(master_groups)
     master_full_text = _extract_all_text(master).lower()
 
     for group in tailored_groups:
         group_id = str(group.get("id", "")).strip()
-        field_path = f"additional.groups[{group_id or 'unknown'}]"
-        for item in group.get("items", []):
+        field_path = f"skills.groups[{group_id or 'unknown'}]"
+        for item in group.get("values", []):
             if not isinstance(item, str) or not item.strip():
                 continue
             key = item.casefold()
@@ -490,12 +491,12 @@ def fix_alignment_violations(
             continue
 
         if violation.violation_type == "fabricated_additional_item":
-            additional = normalize_additional_groups(fixed.get("additional"))
-            groups = additional.get("groups", [])
+            skills = normalize_skill_groups(fixed.get("skills") or fixed.get("additional"))
+            groups = skills.get("groups", [])
             for group in groups:
-                items = group.get("items", [])
+                items = group.get("values", [])
                 if isinstance(items, list):
-                    group["items"] = [
+                    group["values"] = [
                         item
                         for item in items
                         if not (
@@ -503,7 +504,8 @@ def fix_alignment_violations(
                             and item.casefold() == violation.value.casefold()
                         )
                     ]
-            fixed["additional"] = additional
+            fixed["skills"] = skills
+            fixed["additional"] = normalize_additional_groups(skills)
 
         elif violation.violation_type == "fabricated_company":
             # SVC-002: Remove the fabricated work experience entry
@@ -608,10 +610,10 @@ def _extract_all_text_cached(data_json: str) -> str:
             if isinstance(desc, list):
                 parts.extend(str(d) for d in desc)
 
-    # Additional
-    additional = data.get("additional", {})
-    if isinstance(additional, dict):
-        parts.extend(flatten_additional_items(additional))
+    # Skills
+    skills = data.get("skills") or data.get("additional") or {}
+    if isinstance(skills, dict):
+        parts.extend(flatten_additional_items(skills))
 
     # Custom sections
     custom_sections = data.get("customSections", {})

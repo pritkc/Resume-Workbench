@@ -7,12 +7,13 @@ import re
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID
 from app.services.additional_groups import (
-    default_additional_groups,
+    default_skill_groups,
     normalize_additional_groups,
+    normalize_skill_groups,
 )
 
 _TEXT_VALUE_KEYS = (
@@ -27,6 +28,11 @@ _TEXT_VALUE_KEYS = (
     "label",
 )
 _BULLET_PREFIX_RE = re.compile(r"^\s*(?:[-*•]+|\d+[.)])\s*")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_SOCIAL_LINK_PREFIXES = {
+    "linkedin": "https://linkedin.com/in/",
+    "github": "https://github.com/",
+}
 
 
 def _extract_text_fragments(
@@ -115,6 +121,144 @@ def _coerce_string_list(value: Any) -> list[str]:
     return [coerced] if coerced else []
 
 
+def _ensure_absolute_url(value: Any) -> str | None:
+    text = _coerce_optional_text(value)
+    if not text:
+        return None
+    if text.startswith(("http://", "https://")):
+        return text
+    return f"https://{text}"
+
+
+def _social_url(network: str | None, username: Any) -> str | None:
+    cleaned_network = _coerce_optional_text(network)
+    cleaned_username = _coerce_optional_text(username)
+    if not cleaned_network or not cleaned_username:
+        return None
+    if cleaned_username.startswith(("http://", "https://")):
+        return cleaned_username
+    if "/" in cleaned_username or "." in cleaned_username:
+        return _ensure_absolute_url(cleaned_username)
+    prefix = _SOCIAL_LINK_PREFIXES.get(_NON_ALNUM_RE.sub("", cleaned_network.casefold()))
+    if prefix:
+        return f"{prefix}{cleaned_username.lstrip('@')}"
+    return None
+
+
+def _build_profile_links(data: dict[str, Any]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    has_explicit_profile_links = isinstance(data.get("profileLinks"), list) or isinstance(
+        data.get("profile_links"), list
+    )
+
+    def append(label: Any, url: Any, icon: Any = None) -> None:
+        cleaned_label = _coerce_optional_text(label)
+        cleaned_url = _ensure_absolute_url(url)
+        cleaned_icon = _coerce_optional_text(icon)
+        if not cleaned_label or not cleaned_url:
+            return
+
+        url_key = cleaned_url.casefold()
+        if url_key in seen_urls:
+            return
+
+        seen_urls.add(url_key)
+        row: dict[str, Any] = {"label": cleaned_label, "url": cleaned_url}
+        if cleaned_icon:
+            row["fontawesome_icon"] = cleaned_icon
+            row["fontAwesomeIcon"] = cleaned_icon
+        entries.append(row)
+
+    for item in data.get("profileLinks") or data.get("profile_links") or []:
+        if not isinstance(item, dict):
+            continue
+        append(
+            item.get("label") or item.get("placeholder"),
+            item.get("url"),
+            item.get("fontawesome_icon") or item.get("fontAwesomeIcon"),
+        )
+
+    if has_explicit_profile_links:
+        return entries
+
+    for item in data.get("customConnections") or data.get("custom_connections") or []:
+        if not isinstance(item, dict):
+            continue
+        append(
+            item.get("label") or item.get("placeholder"),
+            item.get("url"),
+            item.get("fontawesome_icon") or item.get("fontAwesomeIcon"),
+        )
+
+    append("Website", data.get("website"), "link")
+    append("LinkedIn", _social_url("LinkedIn", data.get("linkedin")), "linkedin-in")
+    append("GitHub", _social_url("GitHub", data.get("github")), "github")
+
+    for item in data.get("socialNetworks") or data.get("social_networks") or []:
+        if not isinstance(item, dict):
+            continue
+        append(
+            item.get("network"),
+            _social_url(item.get("network"), item.get("username")),
+        )
+
+    return entries
+
+
+def _legacy_profile_fields_from_links(links: list[dict[str, Any]]) -> dict[str, Any]:
+    website = ""
+    linkedin = ""
+    github = ""
+    custom_connections: list[dict[str, Any]] = []
+
+    for item in links:
+        if not isinstance(item, dict):
+            continue
+
+        label = _coerce_optional_text(item.get("label") or item.get("placeholder"))
+        url = _ensure_absolute_url(item.get("url"))
+        icon = _coerce_optional_text(item.get("fontawesome_icon") or item.get("fontAwesomeIcon"))
+        if not label or not url:
+            continue
+
+        normalized_label = _NON_ALNUM_RE.sub("", label.casefold())
+        if normalized_label == "website" and not website:
+            website = url
+            continue
+        if normalized_label == "linkedin" and not linkedin:
+            linkedin = url
+            continue
+        if normalized_label == "github" and not github:
+            github = url
+            continue
+
+        custom_connections.append(
+            {
+                "placeholder": label,
+                "url": url,
+                "fontawesome_icon": icon,
+                "fontAwesomeIcon": icon,
+            }
+        )
+
+    return {
+        "website": website,
+        "linkedin": linkedin,
+        "github": github,
+        "socialNetworks": [],
+        "customConnections": custom_connections,
+    }
+
+
+def _compose_date_range(start_date: str | None, end_date: str | None) -> str:
+    if start_date and end_date:
+        return f"{start_date} - {end_date}"
+    if start_date:
+        return f"{start_date} - present"
+    return end_date or ""
+
+
 # Section Type Enum for dynamic sections
 class SectionType(str, Enum):
     """Types of resume sections."""
@@ -130,6 +274,7 @@ class PersonalInfo(BaseModel):
     """Personal information section."""
 
     name: str = ""
+    headline: str = ""
     title: str = ""
     email: str = ""
     phone: str = ""
@@ -137,25 +282,114 @@ class PersonalInfo(BaseModel):
     website: str | None = None
     linkedin: str | None = None
     github: str | None = None
+    photo: str | None = None
     photoUrl: str | None = None
+    profileLinks: list[dict[str, Any]] = Field(default_factory=list)
     socialNetworks: list[dict[str, str]] = Field(default_factory=list)
     customConnections: list[dict[str, Any]] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_personal_info(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+
+        data = copy.deepcopy(value)
+        headline = _coerce_text(data.get("headline") or data.get("title"))
+        data["headline"] = headline
+        data["title"] = _coerce_text(data.get("title") or headline)
+
+        photo = _coerce_optional_text(data.get("photo") or data.get("photoUrl"))
+        data["photo"] = photo
+        data["photoUrl"] = photo
+
+        if "social_networks" in data and "socialNetworks" not in data:
+            data["socialNetworks"] = data.get("social_networks")
+        if "custom_connections" in data and "customConnections" not in data:
+            data["customConnections"] = data.get("custom_connections")
+        if "profile_links" in data and "profileLinks" not in data:
+            data["profileLinks"] = data.get("profile_links")
+
+        data["profileLinks"] = _build_profile_links(data)
+        if "profileLinks" in data or "profile_links" in data:
+            data.update(_legacy_profile_fields_from_links(data["profileLinks"]))
+
+        return data
 
 
 class Experience(BaseModel):
     """Work experience entry."""
 
     id: int = 0
+    position: str = ""
     title: str = ""
     company: str = ""
     location: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    date: str = ""
     years: str = ""
+    summary: str | None = None
     description: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_experience(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+
+        data = copy.deepcopy(value)
+
+        position = _coerce_text(data.get("position") or data.get("title"))
+        data["position"] = position
+        data["title"] = _coerce_text(data.get("title") or position)
+
+        start_date = _coerce_optional_text(data.get("start_date") or data.get("startDate"))
+        end_date = _coerce_optional_text(data.get("end_date") or data.get("endDate"))
+        data["start_date"] = start_date
+        data["end_date"] = end_date
+
+        date = _coerce_text(data.get("date") or data.get("years") or _compose_date_range(start_date, end_date))
+        data["date"] = date
+        data["years"] = _coerce_text(data.get("years") or date)
+
+        summary = _coerce_optional_text(data.get("summary"))
+        data["summary"] = summary
+
+        legacy_description = data.get("description")
+        legacy_highlights = data.get("highlights")
+        if legacy_highlights is None:
+            highlights = _coerce_string_list(legacy_description)
+        else:
+            highlights = _coerce_string_list(legacy_highlights)
+            if legacy_description is None:
+                legacy_description = highlights
+
+        legacy_description_list = _coerce_string_list(legacy_description)
+        if summary and legacy_description_list and legacy_description_list[0] == summary:
+            highlights = legacy_description_list[1:]
+        elif legacy_highlights is None and legacy_description_list:
+            highlights = legacy_description_list
+
+        data["highlights"] = highlights
+        data["description"] = [summary, *highlights] if summary else highlights
+        return data
 
     @field_validator("description", mode="before")
     @classmethod
     def _normalize_description(cls, value: Any) -> list[str]:
         return _coerce_string_list(value)
+
+    @field_validator("highlights", mode="before")
+    @classmethod
+    def _normalize_highlights(cls, value: Any) -> list[str]:
+        return _coerce_string_list(value)
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def _normalize_summary(cls, value: Any) -> str | None:
+        return _coerce_optional_text(value)
 
 
 class Education(BaseModel):
@@ -163,14 +397,69 @@ class Education(BaseModel):
 
     id: int = 0
     institution: str = ""
-    degree: str = ""
+    area: str = ""
+    degree: str | None = None
+    location: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    date: str = ""
     years: str = ""
+    summary: str | None = None
     description: str | None = None
+    highlights: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_education(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+
+        data = copy.deepcopy(value)
+
+        data["area"] = _coerce_text(data.get("area") or data.get("major"))
+        data["degree"] = _coerce_optional_text(data.get("degree"))
+        data["location"] = _coerce_optional_text(data.get("location"))
+
+        start_date = _coerce_optional_text(data.get("start_date") or data.get("startDate"))
+        end_date = _coerce_optional_text(data.get("end_date") or data.get("endDate"))
+        data["start_date"] = start_date
+        data["end_date"] = end_date
+
+        date = _coerce_text(data.get("date") or data.get("years") or _compose_date_range(start_date, end_date))
+        data["date"] = date
+        data["years"] = _coerce_text(data.get("years") or date)
+
+        description = data.get("description")
+        summary = _coerce_optional_text(data.get("summary"))
+        highlights = _coerce_string_list(data.get("highlights"))
+
+        if summary is None and description is not None:
+            description_lines = _split_description_lines(_coerce_text(description, joiner="\n"))
+            if description_lines:
+                summary = description_lines[0]
+                if not highlights and len(description_lines) > 1:
+                    highlights = description_lines[1:]
+
+        data["summary"] = summary
+        data["highlights"] = highlights
+        description_lines = [line for line in [summary, *highlights] if line]
+        data["description"] = "\n".join(description_lines) if description_lines else None
+        return data
 
     @field_validator("description", mode="before")
     @classmethod
     def _normalize_description(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def _normalize_summary(cls, value: Any) -> str | None:
+        return _coerce_optional_text(value)
+
+    @field_validator("highlights", mode="before")
+    @classmethod
+    def _normalize_highlights(cls, value: Any) -> list[str]:
+        return _coerce_string_list(value)
 
 
 class Project(BaseModel):
@@ -178,45 +467,87 @@ class Project(BaseModel):
 
     id: int = 0
     name: str = ""
+    summary: str | None = None
     role: str = ""
+    date: str = ""
     years: str = ""
     github: str | None = None
     website: str | None = None
     description: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_project(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+
+        data = copy.deepcopy(value)
+
+        summary = _coerce_optional_text(data.get("summary") or data.get("role"))
+        data["summary"] = summary
+        data["role"] = _coerce_text(data.get("role") or summary)
+
+        date = _coerce_text(data.get("date") or data.get("years"))
+        data["date"] = date
+        data["years"] = _coerce_text(data.get("years") or date)
+
+        highlights = _coerce_string_list(data.get("highlights", data.get("description")))
+        data["highlights"] = highlights
+        data["description"] = highlights
+        return data
 
     @field_validator("description", mode="before")
     @classmethod
     def _normalize_description(cls, value: Any) -> list[str]:
         return _coerce_string_list(value)
 
+    @field_validator("highlights", mode="before")
+    @classmethod
+    def _normalize_highlights(cls, value: Any) -> list[str]:
+        return _coerce_string_list(value)
 
-class AdditionalGroup(BaseModel):
-    """Flexible label/value group inside the additional section."""
+    @field_validator("summary", mode="before")
+    @classmethod
+    def _normalize_summary(cls, value: Any) -> str | None:
+        return _coerce_optional_text(value)
+
+
+class SkillGroup(BaseModel):
+    """Flexible label/value group inside the skills section."""
 
     id: str = ""
     label: str = ""
-    items: list[str] = Field(default_factory=list)
+    values: list[str] = Field(default_factory=list)
 
     @field_validator("label", mode="before")
     @classmethod
     def _normalize_label(cls, value: Any) -> str:
         return _coerce_text(value)
 
-    @field_validator("items", mode="before")
+    @field_validator("values", mode="before")
     @classmethod
-    def _normalize_items(cls, value: Any) -> list[str]:
+    def _normalize_values(cls, value: Any) -> list[str]:
         return _coerce_string_list(value)
 
+    @property
+    def items(self) -> list[str]:
+        return self.values
 
-class AdditionalInfo(BaseModel):
-    """Additional information section."""
 
-    groups: list[AdditionalGroup] = Field(default_factory=default_additional_groups)
+class SkillsSection(BaseModel):
+    """Grouped skills section."""
+
+    groups: list[SkillGroup] = Field(default_factory=default_skill_groups)
 
     @model_validator(mode="before")
     @classmethod
     def _normalize_groups(cls, value: Any) -> dict[str, Any]:
-        return normalize_additional_groups(value)
+        return normalize_skill_groups(value)
+
+
+AdditionalGroup = SkillGroup
+AdditionalInfo = SkillsSection
 
 
 # Section Metadata Models for dynamic section management
@@ -332,9 +663,9 @@ DEFAULT_SECTION_META: list[dict[str, Any]] = [
         "order": 4,
     },
     {
-        "id": "additional",
-        "key": "additional",
-        "displayName": "Skills & Awards",
+        "id": "skills",
+        "key": "skills",
+        "displayName": "Skills",
         "sectionType": SectionType.STRING_LIST,
         "isDefault": True,
         "isVisible": True,
@@ -349,10 +680,30 @@ def normalize_resume_data(data: dict[str, Any]) -> dict[str, Any]:
     This function is used for lazy migration of existing resumes
     that don't have sectionMeta or customSections fields.
     """
+    if "skills" not in data and "additional" in data:
+        data["skills"] = copy.deepcopy(data.get("additional"))
+    if "skills" in data:
+        data.pop("additional", None)
+
     if not data.get("sectionMeta"):
         # Use deepcopy to avoid shared mutable reference bug
         # Without this, all resumes would share the same list reference
         data["sectionMeta"] = copy.deepcopy(DEFAULT_SECTION_META)
+    else:
+        migrated_meta: list[dict[str, Any]] = []
+        for raw_meta in data.get("sectionMeta") or []:
+            if not isinstance(raw_meta, dict):
+                migrated_meta.append(raw_meta)
+                continue
+            meta = copy.deepcopy(raw_meta)
+            if meta.get("id") == "additional":
+                meta["id"] = "skills"
+            if meta.get("key") == "additional":
+                meta["key"] = "skills"
+            if meta.get("displayName") == "Skills & Awards":
+                meta["displayName"] = "Skills"
+            migrated_meta.append(meta)
+        data["sectionMeta"] = migrated_meta
     if "customSections" not in data:
         data["customSections"] = {}
     return data
@@ -361,22 +712,32 @@ def normalize_resume_data(data: dict[str, Any]) -> dict[str, Any]:
 class ResumeData(BaseModel):
     """Complete structured resume data."""
 
-    # Existing fields (kept for backward compatibility)
     personalInfo: PersonalInfo = Field(default_factory=PersonalInfo)
     summary: str = ""
     workExperience: list[Experience] = Field(default_factory=list)
     education: list[Education] = Field(default_factory=list)
     personalProjects: list[Project] = Field(default_factory=list)
-    additional: AdditionalInfo = Field(default_factory=AdditionalInfo)
+    skills: SkillsSection = Field(default_factory=SkillsSection)
 
-    # NEW: Section metadata and custom sections
     sectionMeta: list[SectionMeta] = Field(default_factory=list)
     customSections: dict[str, CustomSection] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_payload(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        return normalize_resume_data(copy.deepcopy(value))
 
     @field_validator("summary", mode="before")
     @classmethod
     def _normalize_summary(cls, value: Any) -> str:
         return _coerce_text(value)
+
+    @computed_field
+    @property
+    def additional(self) -> dict[str, Any]:
+        return normalize_additional_groups({"groups": [group.model_dump() for group in self.skills.groups]})
 
 
 # API Response Models

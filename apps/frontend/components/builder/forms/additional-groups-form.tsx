@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import type { AdditionalGroup, AdditionalInfo } from '@/components/dashboard/resume-component';
+import type { SkillGroup, SkillsSection } from '@/components/dashboard/resume-component';
 import {
   formatAdditionalGroupItems,
   generateAdditionalGroupId,
@@ -18,11 +18,11 @@ import {
 import { useTranslations } from '@/lib/i18n';
 
 interface AdditionalGroupsFormProps {
-  data: AdditionalInfo;
-  onChange: (data: AdditionalInfo) => void;
+  data: SkillsSection;
+  onChange: (data: SkillsSection) => void;
 }
 
-function updateGroups(groups: AdditionalGroup[], onChange: (data: AdditionalInfo) => void): void {
+function updateGroups(groups: SkillGroup[], onChange: (data: SkillsSection) => void): void {
   onChange(
     normalizeAdditionalInfo(
       {
@@ -57,7 +57,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
         currentIndex === index
           ? {
               ...group,
-              items: parseAdditionalGroupItems(value),
+              values: parseAdditionalGroupItems(value),
             }
           : group
       ),
@@ -90,7 +90,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
       {
         id: generateAdditionalGroupId(groups, t('builder.additionalForm.newGroupLabel')),
         label: t('builder.additionalForm.newGroupLabel'),
-        items: [],
+        values: [],
       },
     ];
     updateGroups(nextGroups, onChange);
@@ -167,7 +167,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
                 </Label>
                 <Textarea
                   id={`additional-group-items-${group.id}`}
-                  value={formatAdditionalGroupItems(group.items)}
+                  value={formatAdditionalGroupItems(group.values)}
                   onChange={(event) => handleItemsChange(index, event.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={t('builder.additionalForm.groupValuesPlaceholder')}

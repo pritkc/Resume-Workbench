@@ -11,6 +11,43 @@ from app.services.tailoring.diffing import calculate_resume_diff, count_descript
 _METRIC_RE = re.compile(r"\d+%|\d+x|\$\d+")
 
 
+def _clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _first_text(entry: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = _clean_text(entry.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _education_credential(entry: dict[str, Any]) -> str:
+    degree = _clean_text(entry.get("degree"))
+    area = _clean_text(entry.get("area"))
+    if degree and area:
+        return f"{degree}, {area}"
+    return degree or area
+
+
+def _entry_date(entry: dict[str, Any]) -> str:
+    direct = _first_text(entry, "date", "years")
+    if direct:
+        return direct
+    start_date = _clean_text(entry.get("start_date") or entry.get("startDate"))
+    end_date = _clean_text(entry.get("end_date") or entry.get("endDate"))
+    if start_date and end_date:
+        return f"{start_date} - {end_date}"
+    if start_date:
+        return f"{start_date} - present"
+    return end_date
+
+
 def verify_generated_resume_result(
     original: dict[str, Any],
     result: dict[str, Any],
@@ -39,19 +76,44 @@ def verify_generated_resume_result(
                 f"Section count changed: {label} ({orig_count} → {result_count})"
             )
 
-    for key, id_fields in [
-        ("workExperience", ["company", "title", "location", "years"]),
-        ("education", ["institution", "degree", "location", "years"]),
-        ("personalProjects", ["name", "role", "location", "years", "github", "website"]),
+    for key, identity_fields in [
+        (
+            "workExperience",
+            [
+                ("company", lambda entry: _clean_text(entry.get("company"))),
+                ("position", lambda entry: _first_text(entry, "position", "title")),
+                ("location", lambda entry: _clean_text(entry.get("location"))),
+                ("date", _entry_date),
+            ],
+        ),
+        (
+            "education",
+            [
+                ("institution", lambda entry: _clean_text(entry.get("institution"))),
+                ("credential", _education_credential),
+                ("location", lambda entry: _clean_text(entry.get("location"))),
+                ("date", _entry_date),
+            ],
+        ),
+        (
+            "personalProjects",
+            [
+                ("name", lambda entry: _clean_text(entry.get("name"))),
+                ("summary", lambda entry: _first_text(entry, "summary", "role")),
+                ("date", _entry_date),
+                ("github", lambda entry: _clean_text(entry.get("github"))),
+                ("website", lambda entry: _clean_text(entry.get("website"))),
+            ],
+        ),
     ]:
         orig_entries = original.get(key, [])
         result_entries = result.get(key, [])
         for index, (orig_entry, result_entry) in enumerate(zip(orig_entries, result_entries)):
             if not isinstance(orig_entry, dict) or not isinstance(result_entry, dict):
                 continue
-            for field in id_fields:
-                original_value = str(orig_entry.get(field, "")).strip()
-                result_value = str(result_entry.get(field, "")).strip()
+            for field, extractor in identity_fields:
+                original_value = extractor(orig_entry)
+                result_value = extractor(result_entry)
                 if original_value and original_value != result_value:
                     warnings.append(
                         f"Identity field changed: {key}[{index}].{field} "
