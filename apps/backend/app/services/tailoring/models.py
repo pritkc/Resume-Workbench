@@ -10,7 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas import (
     AdditionalInfo,
     CustomSection,
-    Education,
     Experience,
     Project,
     ResumeData,
@@ -20,7 +19,6 @@ from app.schemas import (
 TAILORING_TOP_LEVEL_KEYS = (
     "summary",
     "workExperience",
-    "education",
     "personalProjects",
     "additional",
     "customSections",
@@ -34,7 +32,6 @@ class TailoringResumePayload(BaseModel):
 
     summary: str = ""
     workExperience: list[Experience] = Field(default_factory=list)
-    education: list[Education] = Field(default_factory=list)
     personalProjects: list[Project] = Field(default_factory=list)
     additional: AdditionalInfo = Field(default_factory=AdditionalInfo)
     customSections: dict[str, CustomSection] = Field(default_factory=dict)

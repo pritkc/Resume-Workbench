@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from app.llm import complete_json
-from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_STRATEGY_GUIDANCE
+from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_STRATEGY_GUIDANCE, PROMPT_VERSIONS
 
 from app.services.tailoring.analysis import (
     build_job_analysis,
@@ -76,12 +76,13 @@ async def generate_tailored_resume(
 
     result = await complete_json(
         prompt=prompt,
-        system_prompt="You are an expert resume editor. Output only valid JSON.",
+        system_prompt=prompt_context.system_prompt,
         max_tokens=8192,
         retries=1,
         operation="resume_generate_full",
         metadata={
             "prompt_id": prompt_context.prompt_id,
+            "prompt_version": PROMPT_VERSIONS.get("tailoring_user", "unknown"),
             "job_description_chars": len(job_description),
             "supported_keywords_count": len(supported_keywords),
             "structured_resume_input": prompt_context.used_structured_resume_input,

@@ -18,7 +18,13 @@ from app.prompts.enrichment import (
     REGENERATE_ADDITIONAL_GROUP_PROMPT,
     REGENERATE_ITEM_PROMPT,
 )
-from app.prompts.templates import get_language_name
+from app.prompts.templates import (
+    ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
+    ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
+    ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
+    PROMPT_VERSIONS,
+    get_language_name,
+)
 from app.schemas.enrichment import (
     AnalysisResponse,
     AnswerInput,
@@ -118,9 +124,13 @@ async def analyze_resume(resume_id: str) -> AnalysisResponse:
         # Call LLM with increased max_tokens for non-English languages
         result = await complete_json(
             prompt,
+            system_prompt=ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
             max_tokens=8192,
             operation="enrichment_analyze_resume",
-            metadata={"resume_id": resume_id},
+            metadata={
+                "resume_id": resume_id,
+                "prompt_version": PROMPT_VERSIONS.get("enrichment_analyze", "unknown"),
+            },
         )
 
         # Parse response into schema objects
@@ -213,9 +223,13 @@ async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
         try:
             analysis_result = await complete_json(
                 analysis_prompt,
+                system_prompt=ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
                 max_tokens=8192,
                 operation="enrichment_reanalyze_resume",
-                metadata={"resume_id": request.resume_id},
+                metadata={
+                    "resume_id": request.resume_id,
+                    "prompt_version": PROMPT_VERSIONS.get("enrichment_analyze", "unknown"),
+                },
             )
         except Exception as e:
             logger.error(f"Failed to re-analyze resume: {e}")
@@ -281,8 +295,13 @@ async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
         try:
             result = await complete_json(
                 prompt,
+                system_prompt=ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
                 operation="enrichment_generate_description",
-                metadata={"resume_id": request.resume_id, "item_id": item_id},
+                metadata={
+                    "resume_id": request.resume_id,
+                    "item_id": item_id,
+                    "prompt_version": PROMPT_VERSIONS.get("enrichment_enhance", "unknown"),
+                },
             )
             # Get additional bullets from LLM (new key name)
             additional_bullets = result.get("additional_bullets", [])
@@ -421,9 +440,14 @@ async def _regenerate_experience_or_project(
 
     result = await complete_json(
         prompt,
+        system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
         max_tokens=4096,
         operation="enrichment_regenerate_item",
-        metadata={"item_id": item.item_id, "item_type": item.item_type},
+        metadata={
+            "item_id": item.item_id,
+            "item_type": item.item_type,
+            "prompt_version": PROMPT_VERSIONS.get("enrichment_regenerate_item", "unknown"),
+        },
     )
 
     new_bullets = result.get("new_bullets", [])
@@ -459,9 +483,14 @@ async def _regenerate_additional_group(
 
     result = await complete_json(
         prompt,
+        system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
         max_tokens=2048,
         operation="enrichment_regenerate_additional_group",
-        metadata={"item_id": item.item_id, "item_type": item.item_type},
+        metadata={
+            "item_id": item.item_id,
+            "item_type": item.item_type,
+            "prompt_version": PROMPT_VERSIONS.get("enrichment_regenerate_group", "unknown"),
+        },
     )
 
     new_values = result.get("new_values", [])

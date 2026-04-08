@@ -9,8 +9,8 @@ from typing import Any
 from markitdown import MarkItDown
 
 from app.llm import complete_json
-from app.prompts import PARSE_RESUME_PROMPT
-from app.prompts.templates import RESUME_SCHEMA_EXAMPLE
+from app.prompts import PARSE_RESUME_PROMPT, PROMPT_VERSIONS
+from app.prompts.templates import PARSE_SYSTEM_PROMPT, RESUME_SCHEMA_EXAMPLE
 from app.schemas import ResumeData
 
 logger = logging.getLogger(__name__)
@@ -161,11 +161,14 @@ async def parse_resume_to_json(markdown_text: str) -> dict[str, Any]:
 
     result = await complete_json(
         prompt=prompt,
-        system_prompt="You are a JSON extraction engine. Output only valid JSON, no explanations.",
+        system_prompt=PARSE_SYSTEM_PROMPT,
         max_tokens=6144,
         retries=3,
         operation="resume_parse_json",
-        metadata={"markdown_chars": len(markdown_text)},
+        metadata={
+            "markdown_chars": len(markdown_text),
+            "prompt_version": PROMPT_VERSIONS.get("parse_resume", "unknown"),
+        },
     )
 
     # Patch dates: restore months the LLM may have dropped

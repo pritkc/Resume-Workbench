@@ -13,6 +13,7 @@ def _llm_resume_output(sample_resume: dict, *, summary: str = "Improved summary.
     result = copy.deepcopy(sample_resume)
     result.pop("personalInfo", None)
     result.pop("sectionMeta", None)
+    result.pop("education", None)
     result["summary"] = summary
     return result
 
@@ -130,8 +131,8 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "RESPONSE CONTRACT (JSON):" in prompt
-        assert '"schema_version": "tailoring_resume_v1"' in prompt
+        assert "RESPONSE CONTRACT:" in prompt
+        assert '"schema_version":"tailoring_resume_v1"' in prompt
         assert "supported_keywords_from_resume" in prompt
         assert "FastAPI" in prompt
         assert "Experienced software engineer with 5+ years" not in prompt
@@ -157,7 +158,7 @@ class TestImproveResume:
 
         assert mock_llm.call_args.kwargs["retries"] == 1
         retry_hint = mock_llm.call_args.kwargs["retry_hint"]
-        assert "Do not include personalInfo or sectionMeta" in retry_hint
+        assert "Do not include personalInfo, sectionMeta, or education" in retry_hint
         assert "summary" in retry_hint
         assert "workExperience" in retry_hint
         assert "sectionMeta" in retry_hint
@@ -197,7 +198,7 @@ class TestImproveResume:
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
         assert "# Markdown with Jan 2020" not in prompt
-        assert '"years": "2020 - 2023"' in prompt
+        assert '"years":"2020 - 2023"' in prompt
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_unknown_prompt_id_falls_back_to_default_guidance(
@@ -214,7 +215,7 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "Weave in supported job keywords naturally" in prompt
+        assert "MODE: keywords" in prompt
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_synthesizes_default_section_meta_when_missing_from_source(

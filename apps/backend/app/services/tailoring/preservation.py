@@ -268,6 +268,10 @@ def rehydrate_tailoring_resume(
         result["personalInfo"] = copy.deepcopy(source_resume["personalInfo"])
 
     result.update(payload.model_dump())
+
+    if source_resume:
+        result["education"] = copy.deepcopy(source_resume.get("education", []))
+
     result["sectionMeta"] = rehydrate_section_meta(
         result.get("customSections"),
         base_resume_data=source_resume,

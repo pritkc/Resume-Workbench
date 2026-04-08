@@ -5,11 +5,16 @@ import re
 from typing import Any
 
 from app.llm import complete
+from app.prompts import (
+    COVER_LETTER_SYSTEM_PROMPT,
+    OUTREACH_SYSTEM_PROMPT,
+    PROMPT_VERSIONS,
+    get_language_name,
+)
 from app.prompts.templates import (
     COVER_LETTER_PROMPT,
     OUTREACH_MESSAGE_PROMPT,
 )
-from app.prompts import get_language_name
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -65,16 +70,16 @@ _TITLE_TRAILING_QUALIFIER_RE = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2500
+MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2200
 
 _COVER_LETTER_RETRY_HINT = (
-    "Return one complete cover letter in plain text only. Stay under 140 words, "
-    "use at most 3 short paragraphs, and end with a complete closing sentence. "
-    "Do not use placeholders, markdown, or signature blocks."
+    "Return one complete cover letter in plain text only. Stay between 120 and 180 words, "
+    "use 3 to 4 short paragraphs, end with a complete closing sentence, and return the final answer immediately. "
+    "Do not use placeholders, markdown, draft notes, or signature blocks."
 )
 _OUTREACH_RETRY_HINT = (
-    "Return one complete outreach message in plain text only. Stay under 85 words, "
-    "use 3 to 4 short sentences, avoid placeholders, and end with one low-friction ask. "
+    "Return one complete outreach message in plain text only. Stay between 65 and 110 words, "
+    "use 3 to 5 short sentences, avoid placeholders, end with one low-friction ask, and return the final answer immediately. "
     "Do not stop mid-sentence or add a signature block."
 )
 
@@ -240,7 +245,7 @@ def _build_message_prompt_inputs(
     return {
         "job_target": json.dumps(
             {key: value for key, value in job_target.items() if value},
-            indent=2,
+            separators=(',', ':'),
             ensure_ascii=True,
         ),
         "job_description": sanitized_jd,
@@ -275,16 +280,17 @@ async def generate_cover_letter(
 
     result = await complete(
         prompt=prompt,
-        system_prompt="You are a professional career coach and resume writer. Write compelling, personalized cover letters.",
-        max_tokens=384,
-        retries=1,
+        system_prompt=COVER_LETTER_SYSTEM_PROMPT,
+        max_tokens=2048,
+        retries=3,
         retry_hint=_COVER_LETTER_RETRY_HINT,
-        retry_max_tokens=640,
+        retry_max_tokens=4096,
         operation="cover_letter_generate",
         metadata={
             "job_description_chars": len(job_description),
             "prompt_job_description_chars": len(prompt_inputs["job_description"]),
             "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
+            "prompt_version": PROMPT_VERSIONS.get("cover_letter", "unknown"),
         },
     )
 
@@ -318,16 +324,17 @@ async def generate_outreach_message(
 
     result = await complete(
         prompt=prompt,
-        system_prompt="You are a professional networking coach. Write genuine, engaging cold outreach messages.",
-        max_tokens=256,
-        retries=1,
+        system_prompt=OUTREACH_SYSTEM_PROMPT,
+        max_tokens=1536,
+        retries=3,
         retry_hint=_OUTREACH_RETRY_HINT,
-        retry_max_tokens=384,
+        retry_max_tokens=3072,
         operation="outreach_generate",
         metadata={
             "job_description_chars": len(job_description),
             "prompt_job_description_chars": len(prompt_inputs["job_description"]),
             "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
+            "prompt_version": PROMPT_VERSIONS.get("outreach", "unknown"),
         },
     )
 

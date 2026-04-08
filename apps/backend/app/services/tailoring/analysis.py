@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from app.llm import complete_json
-from app.prompts import EXTRACT_KEYWORDS_PROMPT
+from app.prompts import EXTRACT_KEYWORDS_PROMPT, EXTRACT_KEYWORDS_SYSTEM_PROMPT, PROMPT_VERSIONS
 from app.services.cover_letter import extract_job_target_metadata
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -128,7 +128,7 @@ def build_job_analysis(
 def job_analysis_to_prompt_json(analysis: TailoringJobAnalysis) -> str:
     """Serialize the compact job analysis as stable prompt JSON."""
 
-    return json.dumps(analysis.to_prompt_dict(), indent=2, ensure_ascii=True)
+    return json.dumps(analysis.to_prompt_dict(), separators=(',', ':'), ensure_ascii=True)
 
 
 async def extract_job_keywords(job_description: str) -> dict[str, Any]:
@@ -139,9 +139,12 @@ async def extract_job_keywords(job_description: str) -> dict[str, Any]:
 
     result = await complete_json(
         prompt=prompt,
-        system_prompt="You are an expert job description analyzer.",
+        system_prompt=EXTRACT_KEYWORDS_SYSTEM_PROMPT,
         operation="job_extract_keywords",
-        metadata={"job_description_chars": len(job_description)},
+        metadata={
+            "job_description_chars": len(job_description),
+            "prompt_version": PROMPT_VERSIONS.get("extract_keywords", "unknown"),
+        },
     )
     if not isinstance(result, dict):
         result = {}

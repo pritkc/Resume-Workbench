@@ -1,5 +1,18 @@
 """LLM prompt templates for resume processing."""
 
+PROMPT_VERSIONS = {
+    "tailoring_system": "v2.0",
+    "tailoring_user": "v2.0",
+    "parse_resume": "v2.1",
+    "extract_keywords": "v1.0",
+    "cover_letter": "v1.3",
+    "outreach": "v1.3",
+    "enrichment_analyze": "v1.1",
+    "enrichment_enhance": "v1.1",
+    "enrichment_regenerate_item": "v1.1",
+    "enrichment_regenerate_group": "v1.1",
+}
+
 # Language code to full name mapping
 LANGUAGE_NAMES = {
     "en": "English",
@@ -15,121 +28,39 @@ def get_language_name(code: str) -> str:
     return LANGUAGE_NAMES.get(code, "English")
 
 
-# Schema with example values - used for prompts to show LLM expected format
-RESUME_SCHEMA_EXAMPLE = """{
-  "personalInfo": {
-    "name": "John Doe",
-    "title": "Software Engineer",
-    "email": "john@example.com",
-    "phone": "+1-555-0100",
-    "location": "San Francisco, CA",
-    "website": "https://johndoe.dev",
-    "linkedin": "linkedin.com/in/johndoe",
-    "github": "github.com/johndoe"
-  },
-  "summary": "Experienced software engineer with 5+ years...",
-  "workExperience": [
-    {
-      "id": 1,
-      "title": "Senior Software Engineer",
-      "company": "Tech Corp",
-      "location": "San Francisco, CA",
-      "years": "Jan 2020 - Present",
-      "description": [
-        "Led development of microservices architecture",
-        "Improved system performance by 40%"
-      ]
-    }
-  ],
-  "education": [
-    {
-      "id": 1,
-      "institution": "University of California",
-      "degree": "B.S. Computer Science",
-      "years": "2014 - 2018",
-      "description": "Graduated with honors"
-    }
-  ],
-  "personalProjects": [
-    {
-      "id": 1,
-      "name": "Open Source Tool",
-      "role": "Creator & Maintainer",
-      "years": "Mar 2021 - Present",
-      "description": [
-        "Built CLI tool with 1000+ GitHub stars",
-        "Used by 50+ companies worldwide"
-      ]
-    }
-  ],
-  "additional": {
-    "groups": [
-      {
-        "id": "technicalSkills",
-        "label": "Technical Skills",
-        "items": ["Python", "JavaScript", "AWS", "Docker"]
-      },
-      {
-        "id": "languages",
-        "label": "Languages",
-        "items": ["English (Native)", "Spanish (Conversational)"]
-      },
-      {
-        "id": "certificationsTraining",
-        "label": "Training & Certifications",
-        "items": ["AWS Solutions Architect"]
-      },
-      {
-        "id": "awards",
-        "label": "Awards",
-        "items": ["Employee of the Year 2022"]
-      }
-    ]
-  },
-  "customSections": {
-    "publications": {
-      "sectionType": "itemList",
-      "items": [
-        {
-          "id": 1,
-          "title": "Paper Title",
-          "subtitle": "Journal Name",
-          "years": "Jun 2023",
-          "description": ["Brief description of the publication"]
-        }
-      ]
-    },
-    "volunteer_work": {
-      "sectionType": "text",
-      "text": "Description of volunteer activities..."
-    }
-  }
+RESUME_SCHEMA_COMPACT = """{
+  "personalInfo":{"name":"...","title":"...","email":"...","phone":"...","location":"...","website":"...or null","linkedin":"...or null","github":"...or null"},
+  "summary":"string",
+  "workExperience":[{"id":1,"title":"...","company":"...","location":"...or null","years":"Jan 2020 - Present","description":["bullet1","bullet2"]}],
+  "education":[{"id":1,"institution":"...","degree":"...","years":"2014 - 2018","description":"string or null"}],
+  "personalProjects":[{"id":1,"name":"...","role":"...","years":"Mar 2021 - Present","github":"...or null","website":"...or null","description":["bullet1"]}],
+  "additional":{"groups":[{"id":"technicalSkills","label":"Technical Skills","items":["Python","AWS"]},{"id":"languages","label":"Languages","items":["English (Native)"]}]},
+  "customSections":{"publications":{"sectionType":"itemList","items":[{"id":1,"title":"...","subtitle":"...","years":"Jun 2023","description":["..."]}]},"volunteer_work":{"sectionType":"text","text":"..."}}
 }"""
 
-PARSE_RESUME_PROMPT = """Parse this resume into JSON. Output ONLY the JSON object, no other text.
+RESUME_SCHEMA_EXAMPLE = RESUME_SCHEMA_COMPACT
 
-Map content to standard sections when possible. For non-standard sections (like Publications, Volunteer Work, Research, Hobbies), add them to customSections with an appropriate type.
+PARSE_RESUME_PROMPT = """Parse this resume into JSON. Output ONLY the JSON object.
 
-Example output format:
+Schema:
 {schema}
 
-Custom section types:
-- "text": Single text block (e.g., objective, statement)
-- "itemList": List of items with title, subtitle, years, description (e.g., publications, research)
-- "stringList": Simple list of strings (e.g., hobbies, interests)
+SECTIONS: Map to standard keys when possible. Non-standard sections → customSections with sectionType "text" (single block), "itemList" (title/subtitle/years/description entries), or "stringList" (simple list).
 
-Rules:
-- Use "" for missing text fields, [] for missing arrays, null for optional fields
-- Number IDs starting from 1
-- For `additional.groups`, use the most natural category labels you find in the resume (for example: Backend, ML, Infra, Languages, Certifications)
-- Format dates preserving the original precision. Keep months when present: "Jan 2020 - Dec 2023", "May 2021 - Present". Use "YYYY - YYYY" only when the source has no months.
-- Use snake_case for custom section keys (e.g., "volunteer_work", "publications")
-- Preserve the original section name as a descriptive key
-- Normalize date separators: "2020-2021" → "2020 - 2021", "Current"/"Ongoing" → "Present". Do NOT discard months.
-- For ambiguous dates like "3 years experience", infer approximate years from context or use "~YYYY"
-- Flag overlapping dates (concurrent roles) by preserving both, don't merge
+RULES:
+- "" for missing text, [] for missing arrays, null for optional fields
+- IDs start from 1
+- additional.groups: use natural category labels from the resume (e.g., Backend, ML, Infra, Languages, Certifications)
+- Custom section keys: snake_case (e.g., "volunteer_work", "publications")
+- Overlapping dates (concurrent roles): preserve both, don't merge
 
-Resume to parse:
+DATES (critical — never discard month precision):
+- Copy months exactly when present: "Jan 2020 - Dec 2023", "May 2021 - Present"
+- "YYYY - YYYY" only when source truly has no months
+- Normalize separators: "2020-2021" → "2020 - 2021", "Current"/"Ongoing" → "Present"
+- Ambiguous durations ("3 years experience"): infer approximate years or use "~YYYY"
+
+Resume:
 {resume_text}"""
 
 EXTRACT_KEYWORDS_PROMPT = """Extract job requirements as JSON. Output ONLY the JSON object, no other text.
@@ -159,35 +90,30 @@ Rules:
 Job description:
 {job_description}"""
 
-CRITICAL_TRUTHFULNESS_RULES_TEMPLATE = """CRITICAL TRUTHFULNESS RULES - NEVER VIOLATE:
-1. DO NOT add any skill, tool, technology, or certification that is not explicitly mentioned in the original resume
-2. DO NOT invent numeric achievements (e.g., "increased by 30%") unless they exist in original
-3. DO NOT add company names, product names, or technical terms not in the original
-4. DO NOT upgrade experience level (e.g., "Junior" -> "Senior")
-5. DO NOT add languages, frameworks, or platforms the candidate hasn't used
-6. DO NOT extend employment dates or change timelines. Copy date ranges exactly as they appear, including months.
-7. {rule_7}
-8. Preserve factual accuracy - only use information provided by the candidate
-9. NEVER remove existing additional-group items. You may regroup or relabel them by relevance, but every original item must remain.
+TAILORING_SYSTEM_PROMPT = """You are an expert resume editor. Output only valid JSON.
 
-Violation of these rules could cause serious problems for the candidate in job interviews.
-"""
+TRUTHFULNESS (violation = interview harm):
+- Never invent skills, tools, certifications, metrics, companies, or dates not in the original resume
+- Never upgrade experience level or add new employers
+- Copy date ranges exactly including months
+- Every original additional-group item must appear exactly once in output
 
+STRUCTURE:
+- One complete JSON object, no markdown fences, no commentary
+- Double-quoted keys and strings, no trailing commas
+- Follow the response contract: respect entry counts, immutable fields, and editable fields
+- Do not add extra top-level keys beyond what the contract specifies
 
-def _build_truthfulness_rules(rule_7: str) -> str:
-    return CRITICAL_TRUTHFULNESS_RULES_TEMPLATE.format(rule_7=rule_7)
+VOICE:
+- Direct, specific, active verbs matching the candidate's original register
+- Avoid: spearheaded, leveraged, orchestrated, utilized, facilitated, synergy, robust, scalable, holistic, proactive
+- Prefer: led, built, designed, ran, managed, improved, reduced, created
+- Never use em-dash characters"""
 
-
-CRITICAL_TRUTHFULNESS_RULES = {
-    "nudge": _build_truthfulness_rules(
-        "DO NOT add new bullet points or content - only rephrase existing content"
-    ),
-    "keywords": _build_truthfulness_rules(
-        "You may rephrase existing bullet points to include keywords, but do NOT add new bullet points"
-    ),
-    "full": _build_truthfulness_rules(
-        "You may expand existing bullet points or add new ones that elaborate on existing work, but DO NOT invent entirely new responsibilities"
-    ),
+TAILORING_MODE_CONSTRAINTS = {
+    "nudge": "Rephrase only. Do not add or remove bullets. Keep every description array the same length.",
+    "keywords": "Integrate supported JD keywords into existing bullet phrasing. Do not add or remove bullets. Each keyword should appear in context that demonstrates concrete experience.",
+    "full": "Make targeted, high-signal tailoring edits. You may add at most one bullet per entry, elaborating on evidence already present. Do not invent new responsibilities.",
 }
 
 IMPROVE_STRATEGY_GUIDANCE = {
@@ -222,39 +148,29 @@ IMPROVE_STRATEGY_GUIDANCE = {
     },
 }
 
-IMPROVE_RESUME_PROMPT_TEMPLATE = """Tailor this resume for the target job. Output ONLY one complete JSON object.
+IMPROVE_RESUME_PROMPT_TEMPLATE = """Tailor this resume for the target job.
 
-{critical_truthfulness_rules}
+MODE: {mode_id} — {mode_constraint}
 
-PRIMARY STRATEGY:
-{strategy_primary_goal}
+EXAMPLE:
+Original: "Worked on backend systems"
+For JD mentioning "Kubernetes, CI/CD":
+Tailored: "Built and maintained backend services deployed across Kubernetes clusters with automated CI/CD pipelines"
 
-IMPORTANT:
-- Generate all rewritten text in {output_language}
-- Return one complete JSON object that follows the response contract exactly
-- Do NOT return personalInfo or sectionMeta
-- Keep proper nouns and identity fields unchanged
-- Do NOT use em dash ("—") anywhere in the output
+SUMMARY GUIDANCE: Open with "[N]+ years in [relevant domain]". Reference 1-2 JD-matching strengths. Max 3 sentences.
 
-HARD STRUCTURE RULES:
-- Copy every top-level key shown in the response contract
-- Do not add extra top-level keys
-- Follow the immutable_fields, editable_fields, entry_count, and rules in the response contract JSON
-- Keep section counts unchanged unless the response contract explicitly allows otherwise
-- If a field is unchanged, copy it through unchanged
-- Output valid JSON only with double-quoted keys and strings
-- No markdown fences, comments, explanations, or trailing commas
+Generate all rewritten text in {output_language}.
 
 JOB ANALYSIS:
 {job_analysis}
 
-JOB DESCRIPTION EXCERPT:
+JOB DESCRIPTION:
 {job_description}
 
-TAILORING RESUME JSON:
+RESUME:
 {original_resume}
 
-RESPONSE CONTRACT (JSON):
+RESPONSE CONTRACT:
 {response_contract}"""
 
 IMPROVE_PROMPT_OPTIONS = [
@@ -297,8 +213,8 @@ CANDIDATE PROFILE (JSON):
 {resume_profile}
 
 RULES:
-- 110-140 words
-- At most 3 short paragraphs
+- 120-180 words
+- 3 to 4 short paragraphs
 - Opening: reference one specific job detail (product, team, stack, or problem), not generic excitement
 - Body: highlight 1-2 directly relevant qualifications grounded in the candidate profile
 - Closing: simple availability to talk, no desperate enthusiasm
@@ -306,6 +222,7 @@ RULES:
 - Do NOT invent facts, metrics, or names
 - Do NOT use placeholder text or bracketed names
 - Do NOT add a signature block, heading, or markdown formatting
+- Return the final answer immediately, not a draft
 """
 
 OUTREACH_MESSAGE_PROMPT = """Write one finished cold outreach message for LinkedIn or email about this job opportunity.
@@ -326,8 +243,8 @@ CANDIDATE PROFILE (JSON):
 {resume_profile}
 
 RULES:
-- 55-85 words total
-- 3 to 4 short sentences
+- 65-110 words total
+- 3 to 5 short sentences
 - Open with one specific job detail, never with "I'm reaching out" or "I saw your posting"
 - Mention the strongest relevant qualification with one concrete detail if supported
 - End with one low-friction ask
@@ -336,7 +253,24 @@ RULES:
 - Do NOT use phrases like "excited about" or "passionate about"
 - Do NOT invent facts, metrics, or names
 - Do NOT add a subject line, signature block, or markdown formatting
+- Return the final answer immediately, not a draft
 """
 
 # Alias for backward compatibility
 RESUME_SCHEMA = RESUME_SCHEMA_EXAMPLE
+
+PARSE_SYSTEM_PROMPT = "You are a JSON extraction engine. Output only valid JSON, no explanations."
+EXTRACT_KEYWORDS_SYSTEM_PROMPT = "You are an expert job description analyzer. Output only valid JSON."
+COVER_LETTER_SYSTEM_PROMPT = (
+    "You are a professional career coach and resume writer. "
+    "Write one strong, personalized final cover letter only. "
+    "Do not show planning, analysis, alternatives, placeholders, or scaffolding."
+)
+OUTREACH_SYSTEM_PROMPT = (
+    "You are a professional networking coach. "
+    "Write one genuine, polished final outreach message only. "
+    "Do not show planning, analysis, alternatives, placeholders, or scaffolding."
+)
+ENRICHMENT_ANALYZE_SYSTEM_PROMPT = "You are a professional resume analyst. Output only valid JSON."
+ENRICHMENT_ENHANCE_SYSTEM_PROMPT = "You are a professional resume writer. Output only valid JSON."
+ENRICHMENT_REGENERATE_SYSTEM_PROMPT = "You are a professional resume writer. Output only valid JSON."

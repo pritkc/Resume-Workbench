@@ -10,15 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas import ResumeData, normalize_resume_data
 
-MAX_PROFILE_SUMMARY_CHARS = 280
-MAX_PROFILE_HIGHLIGHT_CHARS = 140
-MAX_PROFILE_EXPERIENCE_ENTRIES = 4
-MAX_PROFILE_PROJECT_ENTRIES = 2
-MAX_PROFILE_EDUCATION_ENTRIES = 2
-MAX_PROFILE_HIGHLIGHTS_PER_ENTRY = 3
-MAX_PROFILE_SKILL_GROUPS = 4
-MAX_PROFILE_SKILLS_PER_GROUP = 6
-MAX_PROFILE_CUSTOM_HIGHLIGHTS = 4
+MAX_PROFILE_SUMMARY_CHARS = 140
+MAX_PROFILE_HIGHLIGHT_CHARS = 100
+MAX_PROFILE_EXPERIENCE_ENTRIES = 2
+MAX_PROFILE_PROJECT_ENTRIES = 1
+MAX_PROFILE_EDUCATION_ENTRIES = 1
+MAX_PROFILE_HIGHLIGHTS_PER_ENTRY = 1
+MAX_PROFILE_SKILL_GROUPS = 2
+MAX_PROFILE_SKILLS_PER_GROUP = 4
+MAX_PROFILE_CUSTOM_HIGHLIGHTS = 2
 
 
 def _truncate_text(value: str | None, limit: int) -> str:
@@ -96,7 +96,6 @@ class CandidateExperienceProfile(BaseModel):
     title: str = ""
     company: str = ""
     years: str = ""
-    location: str | None = None
     highlights: list[str] = Field(default_factory=list)
 
 
@@ -136,7 +135,6 @@ class CandidatePromptProfile(BaseModel):
                 title=_truncate_text(entry.title, 80),
                 company=_truncate_text(entry.company, 80),
                 years=_truncate_text(entry.years, 40),
-                location=_truncate_text(entry.location, 60) or None,
                 highlights=_normalize_lines(
                     entry.description,
                     limit=MAX_PROFILE_HIGHLIGHTS_PER_ENTRY,
@@ -199,6 +197,6 @@ class CandidatePromptProfile(BaseModel):
 
         return json.dumps(
             self.model_dump(exclude_none=True),
-            indent=2,
+            separators=(',', ':'),
             ensure_ascii=True,
         )

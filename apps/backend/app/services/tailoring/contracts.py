@@ -11,14 +11,6 @@ from app.services.tailoring.models import (
     TailoringSectionContract,
 )
 
-_STRICT_DESCRIPTION_RULE = (
-    "Keep every description array the same length and preserve bullet ordering."
-)
-_FULL_DESCRIPTION_RULE = (
-    "Keep description arrays close to the original size. You may add at most one supported "
-    "bullet inside an existing work or project entry."
-)
-
 
 def _collect_dict_keys(entries: list[Any]) -> list[str]:
     ordered_keys: list[str] = []
@@ -36,14 +28,8 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
 
 def _mode_rules(prompt_id: str) -> list[str]:
     if prompt_id in {"nudge", "keywords"}:
-        return [
-            _STRICT_DESCRIPTION_RULE,
-            "Do not add or remove entries in any array-backed section.",
-        ]
-    return [
-        _FULL_DESCRIPTION_RULE,
-        "Do not add or remove entries outside supported description edits and additional regrouping.",
-    ]
+        return ["Keep description arrays the same length."]
+    return ["May add at most one bullet per work/project entry."]
 
 
 def _immutable_fields(entry_keys: list[str], editable_fields: set[str]) -> list[str]:
@@ -57,24 +43,17 @@ def _build_custom_section_contract(
     section_type = str(section_value.get("sectionType", "")).strip() or "text"
     if section_type == "itemList":
         items = section_value.get("items", [])
-        item_keys = _collect_dict_keys(items if isinstance(items, list) else [])
         return TailoringSectionContract(
             type="itemList",
             entry_count=len(items) if isinstance(items, list) else 0,
-            immutable_fields=["sectionType", *_immutable_fields(item_keys, {"description"})],
             editable_fields=["description"],
-            rules=[
-                "Keep the same item count.",
-                "Preserve item ids and non-description fields exactly.",
-                "If an item's description is [] keep it [].",
-            ],
+            immutable_fields=["sectionType", "id", "title", "subtitle", "years"],
         )
     if section_type == "text":
         return TailoringSectionContract(
             type="text",
-            immutable_fields=["sectionType"],
             editable_fields=["text"],
-            rules=["Refine only the text value when needed."],
+            immutable_fields=["sectionType"],
         )
     if section_type == "stringList":
         strings = section_value.get("strings", [])
@@ -82,13 +61,8 @@ def _build_custom_section_contract(
             type="stringList",
             entry_count=len(strings) if isinstance(strings, list) else 0,
             immutable_fields=["sectionType"],
-            editable_fields=[],
-            rules=["Copy the strings exactly as-is."],
         )
-    return TailoringSectionContract(
-        type=section_type,
-        rules=["Preserve the original structure exactly."],
-    )
+    return TailoringSectionContract(type=section_type)
 
 
 def build_response_contract(
@@ -96,26 +70,16 @@ def build_response_contract(
     *,
     prompt_id: str,
 ) -> TailoringResponseContract:
-    """Build a compact JSON response contract for the LLM."""
-
     sections: dict[str, TailoringSectionContract] = {
         "summary": TailoringSectionContract(
             type="string",
             editable_fields=["value"],
-            rules=["Return a plain string summary."],
         ),
         "workExperience": TailoringSectionContract(
             type="array",
             entry_count=0,
             editable_fields=["description"],
             immutable_fields=["id", "title", "company", "location", "years"],
-        ),
-        "education": TailoringSectionContract(
-            type="array",
-            entry_count=0,
-            editable_fields=[],
-            immutable_fields=["id", "institution", "degree", "location", "years", "description"],
-            rules=["Copy every education entry exactly."],
         ),
         "personalProjects": TailoringSectionContract(
             type="array",
@@ -125,16 +89,12 @@ def build_response_contract(
         ),
         "additional": TailoringSectionContract(
             type="object",
-            rules=[
-                'Return an object with a "groups" array.',
-                "Keep every original additional item exactly once.",
-                "You may reorder, regroup, or relabel groups, but never add, remove, or rename items.",
-            ],
+            rules=["Keep every item once. May regroup."],
         ),
         "customSections": TailoringSectionContract(
             type="object",
             keys=[],
-            rules=["Preserve the same custom section keys and section types."],
+            rules=["Preserve keys and types."],
         ),
     }
 
@@ -155,16 +115,6 @@ def build_response_contract(
         editable_fields=["description"],
     )
 
-    education_entries = resume_payload.education
-    education_keys = _collect_dict_keys([entry.model_dump() for entry in education_entries])
-    sections["education"] = TailoringSectionContract(
-        type="array",
-        entry_count=len(education_entries),
-        immutable_fields=education_keys,
-        editable_fields=[],
-        rules=["Copy every education entry exactly."],
-    )
-
     project_entries = resume_payload.personalProjects
     project_keys = _collect_dict_keys([entry.model_dump() for entry in project_entries])
     sections["personalProjects"] = TailoringSectionContract(
@@ -179,18 +129,14 @@ def build_response_contract(
     sections["additional"] = TailoringSectionContract(
         type="object",
         entry_count=len(groups) if isinstance(groups, list) else 0,
-        rules=[
-            'Return an object with a "groups" array.',
-            "Keep every original additional item exactly once.",
-            "You may reorder, regroup, or relabel groups, but never add, remove, or rename items.",
-        ],
+        rules=["Keep every item once. May regroup."],
     )
 
     custom_sections = resume_payload.customSections
     sections["customSections"] = TailoringSectionContract(
         type="object",
         keys=list(custom_sections.keys()),
-        rules=["Preserve the same custom section keys and section types."],
+        rules=["Preserve keys and types."],
         sections={
             section_key: _build_custom_section_contract(section_key, section_value.model_dump())
             for section_key, section_value in custom_sections.items()
@@ -203,3 +149,4 @@ def build_response_contract(
         mode_rules=_mode_rules(prompt_id),
         sections=sections,
     )
+

@@ -106,13 +106,16 @@ class TestCandidatePromptProfile:
     def test_builds_compact_profile_without_personal_info_or_section_meta(self, sample_resume):
         profile = CandidatePromptProfile.from_resume_data(sample_resume)
         payload = profile.model_dump(exclude_none=True)
+        prompt_json = profile.to_prompt_json()
 
         assert "headline" in payload
         assert "skills" in payload
         assert "sectionMeta" not in payload
         assert "personalInfo" not in payload
-        assert "email" not in profile.to_prompt_json()
-        assert "linkedin.com/in/janedoe" not in profile.to_prompt_json()
+        assert "email" not in prompt_json
+        assert "linkedin.com/in/janedoe" not in prompt_json
+        assert "\n" not in prompt_json
+        assert len(prompt_json) < 900
 
 
 class TestGeneratedMessages:
@@ -131,9 +134,11 @@ class TestGeneratedMessages:
         assert '"sectionMeta"' not in prompt
         assert "jane@example.com" not in prompt
         assert "linkedin.com/in/janedoe" not in prompt
-        assert kwargs["max_tokens"] == 256
-        assert kwargs["retries"] == 1
-        assert "Do not stop mid-sentence" in kwargs["retry_hint"]
+        assert kwargs["max_tokens"] == 1536
+        assert kwargs["retries"] == 3
+        assert kwargs["retry_max_tokens"] == 3072
+        assert "return the final answer immediately" in kwargs["retry_hint"].lower()
+        assert kwargs["metadata"]["candidate_profile_chars"] < 900
 
     @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
     async def test_cover_letter_uses_compact_profile_and_retry_hint(
@@ -150,6 +155,9 @@ class TestGeneratedMessages:
         assert "Acme Corp" in prompt
         assert '"sectionMeta"' not in prompt
         assert "jane@example.com" not in prompt
-        assert kwargs["max_tokens"] == 384
-        assert kwargs["retries"] == 1
+        assert kwargs["max_tokens"] == 2048
+        assert kwargs["retries"] == 3
+        assert kwargs["retry_max_tokens"] == 4096
         assert "complete cover letter" in kwargs["retry_hint"]
+        assert "return the final answer immediately" in kwargs["retry_hint"].lower()
+        assert kwargs["metadata"]["candidate_profile_chars"] < 900
