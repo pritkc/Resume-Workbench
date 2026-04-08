@@ -749,6 +749,101 @@ async def _generate_auxiliary_messages(
     return cover_letter, outreach_message, title, warnings
 
 
+def _read_preview_auxiliary_payload(
+    generation_run_id: str | None,
+) -> dict[str, str | None]:
+    """Load previously generated auxiliary outputs from a preview generation run."""
+
+    if not generation_run_id:
+        return {}
+
+    try:
+        generation_run = db.get_generation_run(generation_run_id)
+    except Exception as exc:
+        logger.warning(
+            "Failed to load generation run %s for auxiliary reuse: %s",
+            generation_run_id,
+            exc,
+        )
+        return {}
+
+    if not generation_run:
+        return {}
+
+    result_payload = generation_run.get("result_payload")
+    if not isinstance(result_payload, dict):
+        return {}
+
+    auxiliary = result_payload.get("auxiliary")
+    if not isinstance(auxiliary, dict):
+        return {}
+
+    return {
+        "title": auxiliary.get("title") if isinstance(auxiliary.get("title"), str) else None,
+        "cover_letter": (
+            auxiliary.get("cover_letter")
+            if isinstance(auxiliary.get("cover_letter"), str)
+            else None
+        ),
+        "outreach_message": (
+            auxiliary.get("outreach_message")
+            if isinstance(auxiliary.get("outreach_message"), str)
+            else None
+        ),
+    }
+
+
+async def _resolve_confirm_auxiliary_messages(
+    *,
+    generation_run_id: str | None,
+    improved_data: dict[str, Any],
+    job_content: str,
+    job_keywords: dict[str, Any] | None,
+    language: str,
+    enable_cover_letter: bool,
+    enable_outreach: bool,
+) -> tuple[str | None, str | None, str | None, list[str]]:
+    """Reuse reviewed preview auxiliary outputs before regenerating anything."""
+
+    preview_auxiliary = _read_preview_auxiliary_payload(generation_run_id)
+    title = preview_auxiliary.get("title") or build_job_target_title(
+        job_content,
+        job_keywords=job_keywords,
+    )
+    cover_letter = (
+        preview_auxiliary.get("cover_letter")
+        if enable_cover_letter
+        else None
+    )
+    outreach_message = (
+        preview_auxiliary.get("outreach_message")
+        if enable_outreach
+        else None
+    )
+
+    needs_cover_letter = enable_cover_letter and not cover_letter
+    needs_outreach = enable_outreach and not outreach_message
+    if not needs_cover_letter and not needs_outreach:
+        return cover_letter, outreach_message, title, []
+
+    generated_cover_letter, generated_outreach, generated_title, warnings = (
+        await _generate_auxiliary_messages(
+            improved_data,
+            job_content,
+            job_keywords,
+            language,
+            needs_cover_letter,
+            needs_outreach,
+        )
+    )
+    return (
+        cover_letter or generated_cover_letter,
+        outreach_message or generated_outreach,
+        title or generated_title,
+        warnings,
+    )
+
+
 router = APIRouter(prefix="/resumes", tags=["Resumes"])
 
 ALLOWED_TYPES = {
@@ -1217,6 +1312,11 @@ async def _improve_preview_flow(
             "llm_summary": llm_summary,
             "preview_hash": preview_hash,
             "diff_summary": diff_summary.model_dump() if diff_summary else None,
+            "auxiliary": {
+                "title": generated_title,
+                "cover_letter": cover_letter,
+                "outreach_message": outreach_message,
+            },
         },
         warnings=response_warnings,
     )
@@ -1251,6 +1351,11 @@ async def _improve_preview_flow(
                 "preview_hash": preview_hash,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
                 "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
+                "auxiliary": {
+                    "title": generated_title,
+                    "cover_letter": cover_letter,
+                    "outreach_message": outreach_message,
+                },
             },
         },
     )
@@ -1383,13 +1488,18 @@ async def improve_resume_confirm_endpoint(
                 outreach_message,
                 title,
                 aux_warnings,
-            ) = await _generate_auxiliary_messages(
-                improved_data,
-                job["content"],
-                job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None,
-                language,
-                enable_cover_letter,
-                enable_outreach,
+            ) = await _resolve_confirm_auxiliary_messages(
+                generation_run_id=request.generation_run_id,
+                improved_data=improved_data,
+                job_content=job["content"],
+                job_keywords=(
+                    job.get("job_keywords")
+                    if isinstance(job.get("job_keywords"), dict)
+                    else None
+                ),
+                language=language,
+                enable_cover_letter=enable_cover_letter,
+                enable_outreach=enable_outreach,
             )
             llm_summary = db.summarize_llm_calls(trace_id=request_id)
         response_warnings.extend(aux_warnings)
@@ -1471,6 +1581,11 @@ async def improve_resume_confirm_endpoint(
             result_payload={
                 "llm_summary": llm_summary,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                "auxiliary": {
+                    "title": title,
+                    "cover_letter": cover_letter,
+                    "outreach_message": outreach_message,
+                },
             },
             warnings=response_warnings,
         )
@@ -1507,6 +1622,11 @@ async def improve_resume_confirm_endpoint(
                     "llm_summary": llm_summary,
                     "diff_summary": diff_summary.model_dump() if diff_summary else None,
                     "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
+                    "auxiliary": {
+                        "title": title,
+                        "cover_letter": cover_letter,
+                        "outreach_message": outreach_message,
+                    },
                 },
             },
         )

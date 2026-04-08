@@ -127,6 +127,12 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
         if group["id"] == "technicalSkills"
     )
     assert "BogusSkill" not in technical_group["items"]
+    update_run_payload = mock_db.update_generation_run.call_args.args[1]
+    assert update_run_payload["result_payload"]["auxiliary"] == {
+        "title": "Tailored Title",
+        "cover_letter": "Cover letter",
+        "outreach_message": "Outreach",
+    }
 
 
 @pytest.mark.asyncio
@@ -276,6 +282,9 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         "pack_id": "pack-123",
         "theme_settings": None,
     }
+    auxiliary_messages = AsyncMock(
+        return_value=("Cover letter", "Outreach", "Tailored Title", [])
+    )
 
     def update_job(_job_id: str, updates: dict):
         job_record.update(updates)
@@ -295,10 +304,7 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
         ),
-        patch(
-            "app.routers.resumes._generate_auxiliary_messages",
-            new=AsyncMock(return_value=("Cover letter", "Outreach", "Tailored Title", [])),
-        ),
+        patch("app.routers.resumes._generate_auxiliary_messages", new=auxiliary_messages),
         patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
         patch(
             "app.routers.resumes.store_rendercv_bundle",
@@ -336,6 +342,16 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         ]
         mock_db.update_generation_run.return_value = {"generation_run_id": "preview-run-123"}
         mock_db.update_application_pack.return_value = application_pack
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "preview-run-123",
+            "result_payload": {
+                "auxiliary": {
+                    "title": "Tailored Title",
+                    "cover_letter": "Cover letter",
+                    "outreach_message": "Outreach",
+                }
+            },
+        }
         mock_db.create_resume.return_value = {
             **_fake_resume_record(sample_resume),
             "resume_id": "tailored-123",
@@ -346,7 +362,12 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         async with client:
             preview_response = await client.post(
                 "/api/v1/application-packs/preview",
-                json={"resume_id": "res-123", "job_id": "job-123"},
+                json={
+                    "resume_id": "res-123",
+                    "job_id": "job-123",
+                    "include_cover_letter": True,
+                    "include_outreach_message": True,
+                },
             )
 
             assert preview_response.status_code == 200
@@ -361,6 +382,8 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
                     "generation_run_id": preview_data["generation_run_id"],
                     "improved_data": preview_data["resume_preview"],
                     "improvements": preview_data["improvements"],
+                    "include_cover_letter": True,
+                    "include_outreach_message": True,
                 },
             )
 
@@ -369,16 +392,17 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
     assert confirm_data["resume_id"] == "tailored-123"
     assert confirm_data["application_pack_id"] == "pack-123"
     assert confirm_data["generation_run_id"] == "confirm-run-123"
+    auxiliary_messages.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume: dict, client):
+    auxiliary_messages = AsyncMock(
+        return_value=("Cover letter", "Outreach", "Tailored Title", [])
+    )
     with (
         patch("app.routers.resumes.db") as mock_db,
-        patch(
-            "app.routers.resumes._generate_auxiliary_messages",
-            new=AsyncMock(return_value=("Cover letter", "Outreach", "Tailored Title", [])),
-        ),
+        patch("app.routers.resumes._generate_auxiliary_messages", new=auxiliary_messages),
         patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
         patch(
             "app.routers.resumes.store_rendercv_bundle",
@@ -411,6 +435,16 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
             "pack_id": "pack-123",
             "theme_settings": None,
         }
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "preview-run-123",
+            "result_payload": {
+                "auxiliary": {
+                    "title": "Tailored Title",
+                    "cover_letter": "Cover letter",
+                    "outreach_message": "Outreach",
+                }
+            },
+        }
 
         with patch("app.routers.resumes._hash_improved_data", return_value="allowed-hash"):
             async with client:
@@ -423,6 +457,8 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
                         "generation_run_id": "preview-run-123",
                         "improved_data": sample_resume,
                         "improvements": [{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
+                        "include_cover_letter": True,
+                        "include_outreach_message": True,
                     },
                 )
 
@@ -432,6 +468,13 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
     assert data["application_pack_id"] == "pack-123"
     assert data["generation_run_id"] == "confirm-run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-final-1"
+    auxiliary_messages.assert_not_awaited()
+    update_run_payload = mock_db.update_generation_run.call_args.args[1]
+    assert update_run_payload["result_payload"]["auxiliary"] == {
+        "title": "Tailored Title",
+        "cover_letter": "Cover letter",
+        "outreach_message": "Outreach",
+    }
 
 
 @pytest.mark.asyncio

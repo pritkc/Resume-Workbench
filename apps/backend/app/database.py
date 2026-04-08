@@ -468,6 +468,11 @@ class Database:
             )
             return _serialize_generation_run(record)
 
+    def get_generation_run(self, generation_run_id: str) -> dict[str, Any] | None:
+        with self._session() as session:
+            record = generation_run_repo.get_generation_run(session, generation_run_id)
+            return _serialize_generation_run(record) if record else None
+
     def update_generation_run(
         self, generation_run_id: str, updates: dict[str, Any]
     ) -> dict[str, Any] | None:
