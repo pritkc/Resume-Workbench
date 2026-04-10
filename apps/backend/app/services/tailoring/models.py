@@ -284,12 +284,14 @@ class CompactBulletDiff(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    position: str | None = None
+    name: str | None = None
     tech_stacks: str | None = None
     bullets: dict[str, str] = Field(default_factory=dict)
 
 
 class TailoringLLMResponseV2(BaseModel):
-    """Compact LLM response: only changed content, addressed by index.
+    """Compact LLM response with title enhancements and bold keywords.
 
     extra='ignore' so any legacy keys (workExperience, changes[], id, etc.)
     are silently dropped without a ValidationError.
@@ -301,6 +303,7 @@ class TailoringLLMResponseV2(BaseModel):
     experience: dict[str, CompactBulletDiff] = Field(default_factory=dict)
     projects: dict[str, CompactBulletDiff] = Field(default_factory=dict)
     skills: list[dict[str, Any]] | None = None
+    bold_keywords: list[str] = Field(default_factory=list)
 
     @field_validator("skills", mode="before")
     @classmethod
@@ -340,6 +343,107 @@ class TailoringJobAnalysis(BaseModel):
         return payload
 
 
+class JDRoleContext(BaseModel):
+    """Role-level intelligence from the JD."""
+
+    model_config = ConfigDict(extra="ignore")
+    title: str | None = None
+    seniority: str | None = None
+    function: str | None = None
+    scope: str | None = None
+
+
+class JDCompanyContext(BaseModel):
+    """Company/team intelligence from the JD."""
+
+    model_config = ConfigDict(extra="ignore")
+    name: str | None = None
+    team: str | None = None
+    domain: str | None = None
+    product_context: str | None = None
+    scale_signals: list[str] = Field(default_factory=list)
+
+
+class JDTechnicalRequirements(BaseModel):
+    """Technical stack requirements from the JD."""
+
+    model_config = ConfigDict(extra="ignore")
+    primary_stack: list[str] = Field(default_factory=list)
+    secondary_stack: list[str] = Field(default_factory=list)
+    infrastructure: list[str] = Field(default_factory=list)
+    paradigms: list[str] = Field(default_factory=list)
+
+
+class JDRequirements(BaseModel):
+    """Hard requirements from the JD."""
+
+    model_config = ConfigDict(extra="ignore")
+    years: int | None = None
+    must_have: list[str] = Field(default_factory=list)
+    preferred: list[str] = Field(default_factory=list)
+    education: str | None = None
+
+
+class JDCalibration(BaseModel):
+    """Seniority calibration signals from the JD."""
+
+    model_config = ConfigDict(extra="ignore")
+    seniority_expectations: str | None = None
+    team_context: str | None = None
+
+
+class JDIntelligence(BaseModel):
+    """Rich job description intelligence for the 2.0 tailoring prompt."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    role: JDRoleContext = Field(default_factory=JDRoleContext)
+    company: JDCompanyContext = Field(default_factory=JDCompanyContext)
+    location: str | None = None
+    technical_requirements: JDTechnicalRequirements = Field(
+        default_factory=JDTechnicalRequirements
+    )
+    requirements: JDRequirements = Field(default_factory=JDRequirements)
+    responsibility_themes: list[str] = Field(default_factory=list)
+    ats_keywords: list[str] = Field(default_factory=list)
+    bold_keywords: list[str] = Field(default_factory=list)
+    calibration: JDCalibration = Field(default_factory=JDCalibration)
+
+    def to_prompt_dict(self) -> dict[str, Any]:
+        """Compact JSON without empty fields."""
+
+        def _strip_empty(d: Any) -> Any:
+            if isinstance(d, dict):
+                return {
+                    k: _strip_empty(v)
+                    for k, v in d.items()
+                    if v not in (None, "", [], {})
+                }
+            if isinstance(d, list):
+                return [_strip_empty(i) for i in d]
+            return d
+
+        return _strip_empty(self.model_dump())
+
+    def to_legacy_keywords(self) -> dict[str, Any]:
+        """Produce the old job_keywords dict for backward-compatible consumers."""
+        return {
+            "core_title": self.role.title,
+            "company_name": self.company.name,
+            "location": self.location,
+            "required_skills": self.technical_requirements.primary_stack,
+            "preferred_skills": self.technical_requirements.secondary_stack,
+            "keywords": self.ats_keywords,
+            "key_responsibilities": self.responsibility_themes,
+            "experience_years": self.requirements.years,
+            "seniority_level": self.role.seniority,
+            "experience_requirements": self.requirements.must_have,
+            "education_requirements": (
+                [self.requirements.education] if self.requirements.education else []
+            ),
+        }
+
+
 class TailoringSectionContract(BaseModel):
     """Per-section structure rules for the LLM response contract."""
 
@@ -370,31 +474,32 @@ class TailoringResponseContract(BaseModel):
     # Compact address data — populated by build_response_contract
     experience_entries: list[str] = Field(default_factory=list)
     experience_bullet_counts: list[int] = Field(default_factory=list)
+    experience_positions: list[str] = Field(default_factory=list)
     project_entries: list[str] = Field(default_factory=list)
     project_bullet_counts: list[int] = Field(default_factory=list)
+    project_tech_stacks: list[str] = Field(default_factory=list)
     skills_values_count: int = 0
 
     def to_prompt_dict(self) -> dict[str, Any]:
         """Return compact address contract for the LLM prompt."""
         out: dict[str, Any] = {
             "mode": self.prompt_mode,
-            "output_keys": ["summary", "experience", "projects", "skills"],
+            "output_keys": ["summary", "experience", "projects", "skills", "bold_keywords"],
         }
 
         if self.experience_entries:
             out["experience"] = {
                 "entries": self.experience_entries,
+                "positions": self.experience_positions,
                 "bullet_counts": self.experience_bullet_counts,
             }
 
         if self.project_entries:
             out["projects"] = {
                 "entries": self.project_entries,
+                "tech_stacks": self.project_tech_stacks,
                 "bullet_counts": self.project_bullet_counts,
             }
-
-        if self.skills_values_count > 0:
-            out["skills_values"] = self.skills_values_count
 
         return out
 
@@ -414,6 +519,7 @@ class TailoringResult(BaseModel):
     rejected_declared_changes: list[ResumeChange] = Field(default_factory=list)
     cleanup_changes: list[ResumeFieldDiff] = Field(default_factory=list)
     stage_breakdown: TailoringStageBreakdown = Field(default_factory=TailoringStageBreakdown)
+    bold_keywords: list[str] = Field(default_factory=list)
 
 
 TailoringSectionContract.model_rebuild()

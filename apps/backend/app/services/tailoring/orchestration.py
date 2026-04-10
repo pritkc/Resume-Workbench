@@ -9,10 +9,7 @@ from app.llm import complete_json
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_STRATEGY_GUIDANCE, PROMPT_VERSIONS
 
 from app.services.tailoring.analysis import (
-    build_job_analysis,
-    find_supported_keywords,
-    sanitize_user_input,
-    trim_job_description_for_prompt,
+    build_jd_intelligence,
 )
 from app.services.tailoring.change_manifest import (
     build_change_manifest,
@@ -62,18 +59,8 @@ async def generate_tailored_resume(
         prompt_id if prompt_id in IMPROVE_STRATEGY_GUIDANCE else DEFAULT_IMPROVE_PROMPT_ID
     )
     prompt_resume_data = TailoringResumePayload.from_resume_data(original_resume_data)
-    supported_keywords = find_supported_keywords(
-        job_keywords,
-        prompt_resume_data.model_dump() if prompt_resume_data is not None else original_resume,
-    )
-    job_analysis = build_job_analysis(
-        job_keywords,
-        supported_keywords=supported_keywords,
-    )
+    jd_intelligence = build_jd_intelligence(job_keywords)
 
-    sanitized_jd = trim_job_description_for_prompt(
-        sanitize_user_input(job_description)
-    )
     response_contract = build_response_contract(
         prompt_resume_data,
         prompt_id=resolved_prompt_id,
@@ -81,8 +68,7 @@ async def generate_tailored_resume(
     prompt_context = build_prompt_context(
         prompt_id=resolved_prompt_id,
         language=language,
-        job_analysis=job_analysis,
-        job_description_excerpt=sanitized_jd,
+        jd_intelligence=jd_intelligence,
         response_contract=response_contract,
         resume_payload=prompt_resume_data,
         original_resume_markdown=original_resume,
@@ -99,7 +85,6 @@ async def generate_tailored_resume(
             "prompt_id": prompt_context.prompt_id,
             "prompt_version": PROMPT_VERSIONS.get("tailoring_user", "unknown"),
             "job_description_chars": len(job_description),
-            "supported_keywords_count": len(supported_keywords),
             "structured_resume_input": prompt_context.used_structured_resume_input,
         },
         retry_hint=prompt_context.retry_hint,
@@ -165,6 +150,8 @@ async def generate_tailored_resume(
         location_source=location_source,
         location_value=location_value,
     )
+    bold_keywords = llm_response_v2.bold_keywords if has_compact_content else []
+
     return TailoringResult(
         resume_data=resume_data,
         warnings=warnings,
@@ -176,6 +163,7 @@ async def generate_tailored_resume(
         rejected_declared_changes=rejected_declared_changes,
         cleanup_changes=cleanup_changes,
         stage_breakdown=stage_breakdown,
+        bold_keywords=bold_keywords,
     )
 
 

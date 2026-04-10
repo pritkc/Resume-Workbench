@@ -15,9 +15,9 @@ from app.prompts import (
     get_language_name,
 )
 
-from app.services.tailoring.analysis import job_analysis_to_prompt_json
+from app.services.tailoring.analysis import jd_intelligence_to_prompt_json
 from app.services.tailoring.models import (
-    TailoringJobAnalysis,
+    JDIntelligence,
     TailoringResponseContract,
     TailoringResumePayload,
 )
@@ -32,8 +32,7 @@ class TailoringPromptContext:
     mode_constraint: str
     strategy_primary_goal: str
     response_contract_json: str
-    job_analysis_json: str
-    job_description_excerpt: str
+    job_intelligence_json: str
     original_resume_json: str
     retry_hint: str
     system_prompt: str
@@ -60,10 +59,11 @@ def _resolve_strategy(prompt_id: str | None) -> tuple[str, dict[str, str], str]:
 
 def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> str:
     return (
-        'Output a JSON object with keys "summary", "experience", "projects", "skills". '
+        'Output a JSON object with keys "summary", "experience", "projects", "skills", "bold_keywords". '
         "summary: one sentence. "
         "experience/projects: object keyed by 0-based entry index with a bullets sub-object. "
         "skills: array of {label, values} objects. "
+        "bold_keywords: array of 10-20 keyword strings. "
         "Do not include personalInfo, sectionMeta, education, id, company, location, or dates. "
         "Start with { and end with }."
     )
@@ -73,8 +73,7 @@ def build_prompt_context(
     *,
     prompt_id: str | None,
     language: str,
-    job_analysis: TailoringJobAnalysis,
-    job_description_excerpt: str,
+    jd_intelligence: JDIntelligence,
     response_contract: TailoringResponseContract,
     resume_payload: TailoringResumePayload | None,
     original_resume_markdown: str,
@@ -98,8 +97,7 @@ def build_prompt_context(
         mode_constraint=mode_constraint,
         strategy_primary_goal=strategy_guidance["primary_goal"],
         response_contract_json=response_contract_json,
-        job_analysis_json=job_analysis_to_prompt_json(job_analysis),
-        job_description_excerpt=job_description_excerpt,
+        job_intelligence_json=jd_intelligence_to_prompt_json(jd_intelligence),
         original_resume_json=resume_input,
         retry_hint=build_tailoring_retry_hint(response_contract),
         system_prompt=TAILORING_SYSTEM_PROMPT,
@@ -109,8 +107,7 @@ def build_prompt_context(
 
 def render_tailoring_prompt(context: TailoringPromptContext) -> str:
     return IMPROVE_RESUME_PROMPT.format(
-        job_description=context.job_description_excerpt,
-        job_analysis=context.job_analysis_json,
+        job_intelligence=context.job_intelligence_json,
         original_resume=context.original_resume_json,
         response_contract=context.response_contract_json,
         output_language=context.output_language,

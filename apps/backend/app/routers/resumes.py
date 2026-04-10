@@ -1453,6 +1453,7 @@ async def _improve_preview_flow(
             change_manifest=tailoring_result.change_manifest,
             change_breakdown=tailoring_result.stage_breakdown,
             refinement_stats=refinement_stats,
+            bold_keywords=tailoring_result.bold_keywords,
             warnings=response_warnings,
             refinement_attempted=refinement_attempted,
             refinement_successful=refinement_successful,

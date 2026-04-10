@@ -1,10 +1,10 @@
 """LLM prompt templates for resume processing."""
 
 PROMPT_VERSIONS = {
-    "tailoring_system": "v3.1",
-    "tailoring_user": "v3.1",
+    "tailoring_system": "v4.0",
+    "tailoring_user": "v4.0",
     "parse_resume": "v2.2",
-    "extract_keywords": "v1.0",
+    "extract_keywords": "v2.0",
     "cover_letter": "v1.3",
     "outreach": "v1.3",
     "enrichment_analyze": "v1.1",
@@ -63,119 +63,187 @@ DATES (critical — never discard month precision):
 Resume:
 {resume_text}"""
 
-EXTRACT_KEYWORDS_PROMPT = """Extract job requirements as JSON. Output ONLY the JSON object, no other text.
+EXTRACT_JD_INTELLIGENCE_PROMPT = """Analyze this job description and extract comprehensive intelligence for resume tailoring.
 
-Example format:
+Output JSON matching this schema:
+
 {{
-  "core_title": "Backend Engineer",
-  "company_name": "TechCorp",
-  "location": "Remote",
-  "required_skills": ["Python", "AWS"],
-  "preferred_skills": ["Kubernetes"],
-  "experience_requirements": ["5+ years"],
-  "education_requirements": ["Bachelor's in CS"],
-  "key_responsibilities": ["Lead team"],
-  "keywords": ["microservices", "agile"],
-  "experience_years": 5,
-  "seniority_level": "senior"
+  "role": {{
+    "title": "core role title — no company name, location, or qualifiers",
+    "seniority": "junior | mid | senior | staff | principal | lead",
+    "function": "primary function (full-stack, backend, data engineering, devops, etc.)",
+    "scope": "expected scope of work (team-level delivery, org-wide standardization, cross-functional initiatives, etc.)"
+  }},
+  "company": {{
+    "name": "company name or null",
+    "team": "specific team or division or null",
+    "domain": "industry and domain context (fintech, healthtech, enterprise SaaS, e-commerce, etc.)",
+    "product_context": "what the team builds — infer from the description",
+    "scale_signals": ["any mentions of scale: user counts, transaction volumes, data volume, global reach"]
+  }},
+  "location": "location or remote arrangement or null",
+  "technical_requirements": {{
+    "primary_stack": ["hard-required technologies in the order the JD emphasizes"],
+    "secondary_stack": ["preferred or nice-to-have technologies"],
+    "infrastructure": ["cloud platforms, devops, infra tools"],
+    "paradigms": ["architectural patterns and methodologies: microservices, event-driven, agile, CI/CD, etc."]
+  }},
+  "requirements": {{
+    "years": 5,
+    "must_have": ["hard requirements as stated in the JD"],
+    "preferred": ["nice-to-have qualifications"],
+    "education": "education requirement or null"
+  }},
+  "responsibility_themes": [
+    "distill responsibilities into 5-8 actionable themes for resume writing — not raw JD copies"
+  ],
+  "ats_keywords": [
+    "every technical term, tool, methodology, and domain keyword an ATS would scan for — be thorough"
+  ],
+  "bold_keywords": [
+    "the 10-15 most impactful keywords that should appear prominently in the resume"
+  ],
+  "calibration": {{
+    "seniority_expectations": "what this level is expected to demonstrate — ownership scope, leadership, depth",
+    "team_context": "IC, tech lead, cross-team, org-wide, etc."
+  }}
 }}
 
 Rules:
-- `core_title`: return the core role title only, without company name, location, employment type, or extra qualifiers like "apply now"
-- `company_name`: return the employer/company name when present, else null
-- `location`: return the location/work arrangement when clearly stated (for example "Remote", "Hybrid in Seattle, WA", "New York, NY"), else null
-- Extract numeric years (e.g., "5+ years" → 5) and infer seniority level
-- Use null for missing scalar values and [] for missing arrays
+- role.title: strip company name, location, employment type, "apply now"-style noise
+- company.product_context: infer from team/division description what they build or maintain
+- responsibility_themes: distill into themes a resume writer can target, not raw JD bullet copies. Examples: "API architecture & governance", "cloud-native microservices", "frontend accessibility & performance"
+- ats_keywords: include every technical and domain term. Include common abbreviation variants (e.g., "CI/CD" and "Continuous Integration/Continuous Deployment")
+- bold_keywords: the highest-signal keywords for this specific role — will be visually emphasized in the final resume
+- calibration.seniority_expectations: interpret what scope of impact, leadership, and technical depth this level demands
+- Use null for missing scalars, [] for missing arrays
 
 Job description:
 {job_description}"""
 
-TAILORING_SYSTEM_PROMPT = """You are an expert resume editor. Output only valid JSON — no markdown fences, no commentary.
+# Kept for backward compatibility — consumers that import by name still work
+EXTRACT_KEYWORDS_PROMPT = EXTRACT_JD_INTELLIGENCE_PROMPT
 
-HONESTY (violation = interview harm):
-- Never invent skills, tools, certifications, metrics, companies, or dates
-- Never upgrade experience level or add new employers
-- Skill values must each appear exactly once; relabeling and regrouping is allowed
+TAILORING_SYSTEM_PROMPT = """You are a senior resume strategist. Your single goal: craft a resume that earns the interview call.
 
-OUTPUT:
-- JSON with exactly these keys: "summary", "experience", "projects", "skills"
-- summary: one sentence — "[N]+ years in [domain], [1-2 JD strengths]." No second sentence.
-- experience / projects: object keyed by 0-based entry index (string "0", "1", …)
-  - only include entries you are changing
-  - each entry: { "bullets": { "INDEX": "rewritten text" } }
-  - projects may also include "tech_stacks": "new tagline"
-  - INDEX must be within bullet_counts for that entry — no new indices
-  - omit an index to keep that bullet unchanged
-- skills: array of { "label": "...", "values": [...] } when any group changes; omit key otherwise
-  - total value count must equal skills_values from contract — no new values
-- Do NOT emit: id, company, location, dates, role, github, website, customSections, changes[]
+APPROACH:
+- Rewrite the resume so the candidate naturally fits the target role
+- The writing must read like the candidate genuinely wrote it — someone who has done the work and knows the domain
+- Maintain the candidate's authentic voice and writing culture from their master resume
+- Relate work naturally to what the target employer and team care about
+- You may replace the least relevant bullets with content that naturally supports the role
+- Titles may be enhanced: add platform, domain, team, or functional scope (e.g., "Software Engineer" → "Software Engineer, Platform & Distributed Systems")
+- For projects, naturally relate them to the company's products or domain where the candidate was employed
 
-VOICE:
-- Active verbs: led, built, designed, ran, managed, improved, reduced, created
-- Banned: spearheaded, leveraged, orchestrated, utilized, facilitated, synergy, robust, scalable, holistic, proactive
-- No em-dash"""
+WRITING STANDARDS:
+- Write like a real engineer — specific, concrete, direct
+- Every bullet earns its place: what was done, how, and what it achieved
+- No trailing purpose clauses ("enhancing system reliability") or self-narrating ("demonstrating expertise in X")
+- Active verbs: built, designed, led, shipped, implemented, migrated, automated, improved, reduced, created, integrated, deployed
+- Banned: spearheaded, leveraged, orchestrated, utilized, facilitated, synergy, robust, scalable, holistic, proactive, streamlined, cutting-edge, state-of-the-art
+- No em-dash
+- Vary metrics across bullets: time saved, latency reduced, throughput improved, cost cut, data volume, team size, user count, SLA numbers, error rate reduction — do not repeat the same metric type in consecutive bullets
+- Metrics only where credible for the role's seniority and tenure
+- Calibrate scope to experience level: early career roles get modest bullets, senior roles can claim system-wide impact. A 3-month intern does not "architect" anything. A first job does not "drive organization-wide strategy"
+- Short stints get proportionally scoped bullets
+
+ATS OPTIMIZATION:
+- Weave keywords throughout: summary, bullets, skills, project descriptions
+- Use exact keyword forms from the job intelligence (e.g., "Spring Boot" not "Spring framework", "Kubernetes" not "K8s")
+- Place the highest-priority keywords early in bullets and in the summary
+- Never stuff keywords or write hollow ATS-bait sentences — every keyword sits in a meaningful, natural context
+
+OUTPUT FORMAT:
+- Valid JSON only — no markdown, no commentary
+- Keys: "summary", "experience", "projects", "skills", "bold_keywords"
+- summary: one sentence. "[N]+ years in [domain], [1-2 JD-aligned strengths]."
+- experience: object keyed by 0-based entry index ("0", "1", …)
+  - include only entries you change
+  - each entry: { "position": "enhanced title or omit", "bullets": { "INDEX": "text" } }
+  - INDEX must be within the entry's bullet_count
+  - omit an INDEX to keep that bullet unchanged
+- projects: object keyed by 0-based entry index
+  - each entry: { "name": "enhanced title or omit", "tech_stacks": "updated tagline or omit", "bullets": { "INDEX": "text" } }
+- skills: array of { "label": "...", "values": [...] }
+  - regroup and relabel freely for JD relevance
+  - you may add skills the JD demands that the candidate can credibly claim
+  - place JD-critical skills in the first groups
+  - omit "skills" key entirely if no changes
+- bold_keywords: array of 10-20 strings — keywords from the final resume content that should be rendered bold, selected for maximum JD alignment
+- Do NOT emit: id, company, location, dates, github, website, customSections"""
 
 TAILORING_MODE_CONSTRAINTS = {
-    "nudge": "Rewrite bullets conservatively. Only address bullets that clearly benefit from small wording improvement. Omit entries with no changes. No new bullets.",
-    "keywords": "Weave JD keywords into existing bullets. Only rewrite bullets where a keyword fits naturally. Omit entries with no changes. No new bullets.",
-    "full": "Rewrite bullets to strongly match the JD. You may rewrite any existing bullet at its index. Omit entries with no changes. No new bullets — only rewrite what is already there.",
+    "nudge": (
+        "Conservative alignment. Improve wording and weave in a few high-priority keywords. "
+        "Keep original voice nearly intact. Do not change titles. "
+        "Only touch bullets that clearly benefit. Omit unchanged entries."
+    ),
+    "keywords": (
+        "Keyword-focused alignment. Weave JD keywords into bullets where they fit naturally. "
+        "May adjust role titles to add relevant context. Regroup skills for JD relevance. "
+        "Omit unchanged entries."
+    ),
+    "full": (
+        "Maximum alignment. Rewrite bullets to strongly match the target role. "
+        "Enhance titles with platform, domain, or scope context. "
+        "Replace least applicable bullets with naturally fitting alternatives. "
+        "Regroup and expand skills for maximum JD coverage. "
+        "Every bullet should serve the candidate's case for this specific role."
+    ),
 }
 
 IMPROVE_STRATEGY_GUIDANCE = {
     "nudge": {
         "primary_goal": (
-            "Make minimal, conservative wording adjustments only where the resume "
-            "already strongly supports the job."
+            "Make minimal wording improvements and add a few high-priority keywords "
+            "where the resume already supports them."
         ),
         "description_rule": (
-            "Rewrite only bullets that benefit from improvement. Preserve all others unchanged."
+            "Rewrite only bullets that clearly benefit from adjustment. "
+            "Preserve all others unchanged."
         ),
     },
     "keywords": {
         "primary_goal": (
-            "Weave in supported job keywords naturally while keeping the original "
-            "scope, voice, and structure."
+            "Weave JD keywords naturally into bullets and skills. "
+            "May enhance titles and regroup skills for relevance."
         ),
         "description_rule": (
-            "Rewrite only bullets where a keyword fits naturally. Preserve all others unchanged."
+            "Rewrite bullets where keywords fit naturally. May replace weak bullets "
+            "with keyword-rich alternatives. Preserve strong bullets unchanged."
         ),
     },
     "full": {
         "primary_goal": (
-            "Make targeted, high-signal tailoring adjustments while staying fully "
-            "grounded in the original resume."
+            "Maximize alignment with the target role. Rewrite for impact, "
+            "enhance titles, expand skills, and replace weak content."
         ),
         "description_rule": (
-            "Rewrite bullets to strongly match the JD. No new bullets beyond the original count."
+            "Rewrite all bullets for maximum JD alignment. Replace the least applicable "
+            "with naturally fitting alternatives. No content should feel generic."
         ),
     },
 }
 
-IMPROVE_RESUME_PROMPT_TEMPLATE = """Tailor this resume for the target job.
+IMPROVE_RESUME_PROMPT_TEMPLATE = """Tailor this resume for the target role.
 
 MODE: {mode_id} — {mode_constraint}
 
 REWRITING EXAMPLE:
-Original bullet: "Worked on backend systems"
-JD mentions: Kubernetes, CI/CD
-Rewritten: "Built and maintained backend services across Kubernetes clusters with automated CI/CD pipelines"
+Original: "Worked on backend systems"
+JD needs: Kubernetes, CI/CD, microservices
+Rewritten: "Built and maintained backend microservices deployed on Kubernetes with automated CI/CD pipelines, reducing deployment time from 2 hours to 15 minutes"
 
-Output format example (2 changed bullets in entry 0, 1 changed bullet in entry 1):
-{{"summary":"5+ years in Python backend engineering with expertise in high-throughput APIs and CI/CD.","experience":{{"0":{{"bullets":{{"1":"Built and maintained..."}}}},"1":{{"bullets":{{"2":"Improved CI/CD..."}}}}}}}}
+JOB INTELLIGENCE:
+{job_intelligence}
 
-Output language: {output_language}
-
-JOB ANALYSIS:
-{job_analysis}
-
-JOB DESCRIPTION:
-{job_description}
-
-RESUME:
+MASTER RESUME:
 {original_resume}
 
 RESPONSE CONTRACT:
-{response_contract}"""
+{response_contract}
+
+Output language: {output_language}"""
 
 IMPROVE_PROMPT_OPTIONS = [
     {
@@ -264,7 +332,9 @@ RULES:
 RESUME_SCHEMA = RESUME_SCHEMA_EXAMPLE
 
 PARSE_SYSTEM_PROMPT = "You are a JSON extraction engine. Output only valid JSON, no explanations."
-EXTRACT_KEYWORDS_SYSTEM_PROMPT = "You are an expert job description analyzer. Output only valid JSON."
+EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT = "You are a job description analyst. Extract actionable intelligence for resume tailoring. Output only valid JSON, no other text."
+# Kept for backward compatibility
+EXTRACT_KEYWORDS_SYSTEM_PROMPT = EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
 COVER_LETTER_SYSTEM_PROMPT = (
     "You are a professional career coach and resume writer. "
     "Write one strong, personalized final cover letter only. "

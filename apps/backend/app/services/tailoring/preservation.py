@@ -282,6 +282,17 @@ def apply_compact_diff(
 
             entry = entries[entry_idx]
 
+            if diff_key == "experience" and "position" in entry_diff:
+                pos = entry_diff["position"]
+                if isinstance(pos, str) and pos.strip():
+                    entry["position"] = pos.strip()
+                    entry["title"] = pos.strip()
+
+            if diff_key == "projects" and "name" in entry_diff:
+                nm = entry_diff["name"]
+                if isinstance(nm, str) and nm.strip():
+                    entry["name"] = nm.strip()
+
             if diff_key == "projects" and "tech_stacks" in entry_diff:
                 ts = entry_diff["tech_stacks"]
                 if isinstance(ts, str):
@@ -314,16 +325,6 @@ def apply_compact_diff(
 
     skills_diff = diff.get("skills")
     if isinstance(skills_diff, list):
-        original_values = _all_skill_values(original_resume_data)
-        new_values = {
-            v for group in skills_diff
-            for v in (group.get("values") or [])
-            if isinstance(v, str)
-        }
-        invented = new_values - original_values
-        if invented:
-            logger.warning("compact_diff: invented skill values %s — stripping", sorted(invented))
-            skills_diff = _strip_invented_skills(skills_diff, original_values)
         result.setdefault("skills", {})["groups"] = skills_diff
 
     return result

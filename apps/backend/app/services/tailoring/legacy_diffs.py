@@ -20,6 +20,7 @@ _ALLOWED_PATH_PATTERNS = [
     re.compile(r"^workExperience\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^personalProjects\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^skills\.groups$"),
+    re.compile(r"^additional\.groups$"),
 ]
 _BLOCKED_PATH_PREFIXES = frozenset({
     "personalInfo",
@@ -139,10 +140,12 @@ def apply_diffs(
 
     result = copy.deepcopy(original)
     if isinstance(result.get("skills"), dict) or isinstance(result.get("additional"), dict):
-        result["skills"] = normalize_skill_groups(
+        normalized = normalize_skill_groups(
             result.get("skills") or result.get("additional"),
             seed_defaults_if_empty=False,
         )
+        result["skills"] = normalized
+        result["additional"] = normalized
     applied: list[ResumeChange] = []
     rejected: list[ResumeChange] = []
 
@@ -224,7 +227,7 @@ def apply_diffs(
             applied.append(change)
 
         elif action == "regroup":
-            if path != "skills.groups":
+            if path not in ("skills.groups", "additional.groups"):
                 logger.info("Diff rejected (regroup path unsupported): %s", path)
                 rejected.append(change)
                 continue
@@ -236,9 +239,12 @@ def apply_diffs(
                 logger.info("Diff rejected (regroup items mismatch): %s", path)
                 rejected.append(change)
                 continue
-            if not _set_at_path(result, path, normalized.get("groups", [])):
+            new_groups = normalized.get("groups", [])
+            if not _set_at_path(result, path, new_groups):
                 rejected.append(change)
                 continue
+            other = "additional.groups" if path == "skills.groups" else "skills.groups"
+            _set_at_path(result, other, new_groups)
             applied.append(change)
 
         else:

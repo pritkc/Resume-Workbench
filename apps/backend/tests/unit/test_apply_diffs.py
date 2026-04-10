@@ -150,7 +150,7 @@ class TestApplyDiffsRegroup:
         assert len(applied) == 1
         assert len(rejected) == 0
         assert result["additional"]["groups"][0]["label"] == "Backend"
-        assert result["additional"]["groups"][0]["items"] == list(reversed(original_skills[:3]))
+        assert result["additional"]["groups"][0]["values"] == list(reversed(original_skills[:3]))
 
     def test_regroup_rejects_different_items(self, sample_resume):
         changes = [
@@ -411,8 +411,8 @@ class TestApplyDiffsIntegrity:
         assert len(applied) == 0
         assert len(rejected) == 0
         assert result["summary"] == sample_resume["summary"]
-        assert result["additional"]["groups"][0]["id"] == "technicalSkills"
-        assert result["additional"]["groups"][0]["items"] == sample_resume["additional"]["technicalSkills"]
+        assert result["additional"]["groups"][0]["label"] == "Technical Skills"
+        assert result["additional"]["groups"][0]["values"] == sample_resume["additional"]["technicalSkills"]
 
     def test_all_changes_applied(self, sample_resume, sample_changes):
         result, applied, rejected = apply_diffs(sample_resume, sample_changes)

@@ -18,7 +18,6 @@ from app.llm import complete_json
 from app.prompts.refinement import (
     AI_PHRASE_BLACKLIST,
     AI_PHRASE_REPLACEMENTS,
-    KEYWORD_INJECTION_PROMPT,
 )
 from app.schemas.refinement import (
     AlignmentReport,
@@ -429,44 +428,14 @@ async def inject_keywords(
             len(job_description),
         )
 
-    prompt = KEYWORD_INJECTION_PROMPT.format(
-        keywords_to_inject=json.dumps(keywords_to_inject),
-        current_resume=json.dumps(tailored),
-        master_resume=json.dumps(master),
-        job_description=truncated_jd,
+    # Keyword injection via LLM is removed in 2.0 — the main tailoring prompt
+    # handles keyword weaving comprehensively via JD intelligence.
+    logger.info(
+        "Keyword injection LLM pass skipped (2.0 pipeline handles keywords in main prompt). "
+        "Keywords requested: %s",
+        keywords_to_inject,
     )
-
-    try:
-        result = await complete_json(
-            prompt=prompt,
-            system_prompt=(
-                "You are a resume editor. Inject keywords naturally without adding "
-                "fabricated content. Return only valid JSON matching the input schema."
-            ),
-            max_tokens=8192,
-            operation="resume_refine_keyword_injection",
-            metadata={
-                "keywords_to_inject": len(keywords_to_inject),
-                "job_description_chars": len(job_description),
-            },
-        )
-
-        # LLM-014: Validate the result maintains required structure
-        if not isinstance(result, dict):
-            logger.warning("Keyword injection returned non-dict: %s", type(result))
-            return tailored
-
-        if not _validate_resume_structure(result):
-            logger.warning(
-                "Keyword injection corrupted resume structure, using original"
-            )
-            return tailored
-
-        return result
-
-    except Exception as e:
-        logger.warning("Keyword injection failed: %s", e)
-        return tailored
+    return tailored
 
 
 def fix_alignment_violations(

@@ -1067,6 +1067,9 @@ class ImproveResumeData(BaseModel):
     # Refinement metadata (multi-pass refinement stats)
     refinement_stats: "RefinementStats | None" = None
 
+    # Bold keywords returned by the LLM for PDF rendering
+    bold_keywords: list[str] = Field(default_factory=list)
+
     # Warning and status fields for transparency
     warnings: list[str] = Field(default_factory=list)
     refinement_attempted: bool = False

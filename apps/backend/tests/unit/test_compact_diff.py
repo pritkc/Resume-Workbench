@@ -4,7 +4,6 @@ import pytest
 
 from app.services.tailoring.preservation import (
     _all_skill_values,
-    _strip_invented_skills,
     apply_compact_diff,
 )
 
@@ -149,7 +148,7 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, diff)
         assert result["skills"] == base_resume["skills"]
 
-    def test_invented_skills_stripped(self, base_resume):
+    def test_new_skills_accepted(self, base_resume):
         diff = {
             "skills": [
                 {"label": "Languages", "values": ["Python", "SQL", "Kubernetes"]},
@@ -158,8 +157,47 @@ class TestApplyCompactDiff:
         }
         result = apply_compact_diff(base_resume, diff)
         langs = next(g for g in result["skills"]["groups"] if g["label"] == "Languages")
-        assert "Kubernetes" not in langs["values"]
+        assert "Kubernetes" in langs["values"]
         assert "Python" in langs["values"]
+
+    def test_experience_position_applied(self, base_resume):
+        diff = {
+            "experience": {
+                "0": {
+                    "position": "Senior Engineer, Platform & Distributed Systems",
+                    "bullets": {"0": "Built distributed APIs"},
+                }
+            }
+        }
+        result = apply_compact_diff(base_resume, diff)
+        assert result["workExperience"][0]["position"] == "Senior Engineer, Platform & Distributed Systems"
+        assert result["workExperience"][0]["title"] == "Senior Engineer, Platform & Distributed Systems"
+        assert result["workExperience"][0]["description"][0] == "Built distributed APIs"
+
+    def test_project_name_applied(self, base_resume):
+        diff = {
+            "projects": {
+                "0": {
+                    "name": "LogLens | Observability Toolkit",
+                    "tech_stacks": "Python, Click, observability",
+                    "bullets": {"0": "Built a CLI for structured log analysis"},
+                }
+            }
+        }
+        result = apply_compact_diff(base_resume, diff)
+        assert result["personalProjects"][0]["name"] == "LogLens | Observability Toolkit"
+        assert result["personalProjects"][0]["summary"] == "Python, Click, observability"
+        assert result["personalProjects"][0]["description"][0] == "Built a CLI for structured log analysis"
+
+    def test_position_not_applied_to_projects(self, base_resume):
+        diff = {"projects": {"0": {"position": "should be ignored", "bullets": {"0": "Bullet"}}}}
+        result = apply_compact_diff(base_resume, diff)
+        assert "position" not in result["personalProjects"][0]
+
+    def test_name_not_applied_to_experience(self, base_resume):
+        diff = {"experience": {"0": {"name": "should be ignored", "bullets": {"0": "Bullet"}}}}
+        result = apply_compact_diff(base_resume, diff)
+        assert result["workExperience"][0].get("name") is None
 
     def test_original_not_mutated(self, base_resume):
         import copy
@@ -189,19 +227,37 @@ class TestAllSkillValues:
         assert vals == {"Go", "Rust"}
 
 
-class TestStripInventedSkills:
-    def test_removes_invented_values(self):
-        skills = [{"label": "Tech", "values": ["Python", "Kubernetes", "Docker"]}]
-        allowed = {"Python", "Docker"}
-        result = _strip_invented_skills(skills, allowed)
-        assert result[0]["values"] == ["Python", "Docker"]
+class TestJDIntelligence:
+    def test_to_prompt_dict_strips_empty_fields(self):
+        from app.services.tailoring.models import JDIntelligence
+        intel = JDIntelligence(
+            role={"title": "Backend Engineer", "seniority": "senior"},
+            company={"name": "TechCorp"},
+            ats_keywords=["Python", "FastAPI"],
+        )
+        d = intel.to_prompt_dict()
+        assert d["role"]["title"] == "Backend Engineer"
+        assert "location" not in d
+        assert "bold_keywords" not in d
+        assert d["ats_keywords"] == ["Python", "FastAPI"]
 
-    def test_preserves_label(self):
-        skills = [{"label": "My Label", "values": ["Python"]}]
-        result = _strip_invented_skills(skills, {"Python"})
-        assert result[0]["label"] == "My Label"
-
-    def test_all_invented_gives_empty_values(self):
-        skills = [{"label": "Tech", "values": ["Kubernetes"]}]
-        result = _strip_invented_skills(skills, {"Python"})
-        assert result[0]["values"] == []
+    def test_to_legacy_keywords_backward_compat(self):
+        from app.services.tailoring.models import JDIntelligence
+        intel = JDIntelligence(
+            role={"title": "Backend Engineer", "seniority": "senior"},
+            company={"name": "TechCorp"},
+            location="Remote",
+            technical_requirements={"primary_stack": ["Python", "FastAPI"]},
+            requirements={"years": 5, "education": "BS in CS"},
+            ats_keywords=["microservices"],
+            responsibility_themes=["API design"],
+        )
+        legacy = intel.to_legacy_keywords()
+        assert legacy["core_title"] == "Backend Engineer"
+        assert legacy["company_name"] == "TechCorp"
+        assert legacy["location"] == "Remote"
+        assert legacy["required_skills"] == ["Python", "FastAPI"]
+        assert legacy["experience_years"] == 5
+        assert legacy["seniority_level"] == "senior"
+        assert legacy["keywords"] == ["microservices"]
+        assert legacy["education_requirements"] == ["BS in CS"]

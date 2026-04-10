@@ -129,7 +129,7 @@ class TestImproveResume:
         assert '"sectionMeta"' not in prompt
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
-    async def test_prompt_contains_response_contract_and_supported_keywords(
+    async def test_prompt_contains_response_contract_and_jd_intelligence(
         self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume)
@@ -149,12 +149,17 @@ class TestImproveResume:
         assert '"output_keys"' in prompt
         assert '"bullet_counts"' in prompt
         assert '"entries"' in prompt
-        assert "supported_keywords_from_resume" in prompt
+        assert "JOB INTELLIGENCE:" in prompt
+        assert "bold_keywords" in prompt
+        # FastAPI appears in the MASTER RESUME skills section
         assert "FastAPI" in prompt
         assert "Experienced software engineer with 5+ years" not in prompt
         assert '"sectionMeta"' not in prompt
         assert '"personalInfo"' not in prompt
         assert "OUTPUT PLAN:" not in prompt
+        # Old prompt fields are gone
+        assert "JOB DESCRIPTION:" not in prompt
+        assert "supported_keywords_from_resume" not in prompt
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_primary_prompt_uses_single_retry_with_specific_retry_hint(

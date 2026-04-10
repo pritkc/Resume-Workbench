@@ -175,10 +175,6 @@ def build_response_contract(
         },
     )
 
-    skills_values_count = sum(
-        len(g.values) for g in resume_payload.skills.groups
-    )
-
     return TailoringResponseContract(
         prompt_mode=prompt_id,
         top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
@@ -186,7 +182,8 @@ def build_response_contract(
         sections=sections,
         experience_entries=[e.company for e in work_entries],
         experience_bullet_counts=[len(e.description) for e in work_entries],
+        experience_positions=[e.position or e.title for e in work_entries],
         project_entries=[e.name for e in project_entries],
         project_bullet_counts=[len(e.description) for e in project_entries],
-        skills_values_count=skills_values_count,
+        project_tech_stacks=[e.tech_stacks or "" for e in project_entries],
     )

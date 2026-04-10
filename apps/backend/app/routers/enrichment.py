@@ -786,16 +786,21 @@ async def apply_regenerated_items(
 
         elif item_type == "additionalGroup":
             expected_original_content = item.original_content
-            skills = normalize_skill_groups(updated_data.get("skills") or updated_data.get("additional"))
+            source_key = "skills" if isinstance(updated_data.get("skills"), dict) else "additional"
+            raw_section = updated_data.get(source_key) or {}
+            skills = normalize_skill_groups(raw_section)
             groups = skills.get("groups", [])
             resolved_group: dict | None = None
-            target_group_label = item.group_id or item_id.replace("additional_", "", 1)
+            target_group_id = item.group_id or item_id.replace("additional_", "", 1)
 
             for group in groups:
                 if not isinstance(group, dict):
                     continue
                 group_label = str(group.get("label", "")).strip()
-                if group_label and group_label == target_group_label:
+                if group_label and (
+                    group_label == target_group_id
+                    or _normalize_match_value(group_label) == _normalize_match_value(target_group_id)
+                ):
                     resolved_group = group
                     break
 
@@ -832,6 +837,12 @@ async def apply_regenerated_items(
             resolved_group["label"] = item.title
             resolved_group["values"] = new_content
             updated_data["skills"] = skills
+            updated_data["additional"] = {
+                "groups": [
+                    {"label": g.get("label", ""), "items": g.get("values", [])}
+                    for g in skills.get("groups", [])
+                ]
+            }
 
     if apply_failures:
         logger.warning(
