@@ -69,6 +69,14 @@ def preserve_personal_info(
     return result, warnings
 
 
+def _resolved_target_location(job_keywords: dict[str, Any]) -> str | None:
+    location = job_keywords.get("location")
+    if not isinstance(location, str):
+        return None
+    cleaned = location.strip()
+    return cleaned or None
+
+
 def restore_original_dates(
     original_data: dict[str, Any] | None,
     improved_data: dict[str, Any],
@@ -288,7 +296,7 @@ def finalize_tailored_resume(
     job_content: str,
     job_keywords: dict[str, Any],
     prompt_id: str,
-) -> tuple[dict[str, Any], list[str]]:
+) -> tuple[dict[str, Any], list[str], str, str | None]:
     """Apply all local safeguards and return a full resume payload plus warnings."""
 
     result = rehydrate_tailoring_resume(
@@ -318,6 +326,24 @@ def finalize_tailored_resume(
     )
     warnings.extend(cleanup_warnings)
 
+    target_location = _resolved_target_location(job_keywords)
+    if target_location:
+        personal_info = result.get("personalInfo")
+        if not isinstance(personal_info, dict):
+            personal_info = {}
+            result["personalInfo"] = personal_info
+        personal_info["location"] = target_location
+        location_source = "jd"
+        location_value = target_location
+    else:
+        location_value = None
+        location_source = "none"
+        if isinstance(result.get("personalInfo"), dict):
+            current_location = result["personalInfo"].get("location")
+            if isinstance(current_location, str) and current_location.strip():
+                location_source = "master"
+                location_value = current_location.strip()
+
     if original_resume_data:
         warnings.extend(
             verify_generated_resume_result(
@@ -329,4 +355,4 @@ def finalize_tailored_resume(
         )
 
     validated = ResumeData.model_validate(normalize_resume_data(result))
-    return validated.model_dump(), warnings
+    return validated.model_dump(), warnings, location_source, location_value

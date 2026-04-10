@@ -11,6 +11,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
+from app.schemas import TailoringStageBreakdown
 from app.services.additional_groups import normalize_additional_groups
 
 
@@ -56,6 +57,12 @@ def _fake_tailoring_result(
         warnings=warnings or [],
         response_contract=None,
         used_structured_resume_input=True,
+        raw_llm_resume_data=copy.deepcopy(resume_data),
+        change_manifest=[],
+        declared_changes=[],
+        rejected_declared_changes=[],
+        cleanup_changes=[],
+        stage_breakdown=TailoringStageBreakdown(),
     )
 
 
@@ -121,6 +128,7 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     assert data["application_pack_id"] == "pack-123"
     assert data["generation_run_id"] == "run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-preview-1"
+    assert data["change_breakdown"]["llm_applied_changes"] == 0
     technical_group = next(
         group
         for group in data["resume_preview"]["additional"]["groups"]

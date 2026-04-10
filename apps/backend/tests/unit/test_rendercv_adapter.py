@@ -65,6 +65,25 @@ def test_rendercv_yaml_sections_emit_full_resolved_design(sample_resume: dict) -
     assert design["templates"]["education_entry"]["degree_column"] is None
 
 
+def test_rendercv_adapter_prefers_description_over_highlights(sample_resume_copy: dict) -> None:
+    sample_resume_copy["workExperience"][0]["description"] = [
+        "Canonical tailored bullet",
+        "Another canonical tailored bullet",
+    ]
+    sample_resume_copy["workExperience"][0]["highlights"] = [
+        "Legacy stale bullet",
+    ]
+    payload = resume_to_rendercv_payload(
+        sample_resume_copy,
+        RenderThemeSettings(theme_id="classic"),
+    )
+
+    assert payload["cv"]["sections"]["experience"][0]["highlights"] == [
+        "Canonical tailored bullet",
+        "Another canonical tailored bullet",
+    ]
+
+
 def test_rendercv_yaml_sections_preserve_custom_skill_group_labels(sample_resume: dict) -> None:
     sections = {
         "cv": (
@@ -218,6 +237,10 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
             "position": "Software Engineer, Data Infra & MLOps",
             "date": "Jan 2021 - Present",
             "summary": "Owned platform reliability and delivery for ML systems.",
+            "description": [
+                "Built a CDC-powered ETL pipeline for production embeddings.",
+                "Improved retrieval latency by 35% with semantic caching.",
+            ],
             "highlights": [
                 "Built a CDC-powered ETL pipeline for production embeddings.",
                 "Improved retrieval latency by 35% with semantic caching.",
@@ -238,6 +261,10 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
         {
             "summary": "Open-source API tooling project.",
             "date": "Mar 2021 - Present",
+            "description": [
+                "500+ GitHub stars",
+                "Used by 30+ engineering teams",
+            ],
             "highlights": [
                 "500+ GitHub stars",
                 "Used by 30+ engineering teams",

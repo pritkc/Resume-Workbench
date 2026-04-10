@@ -34,6 +34,10 @@ from app.rendering.theme_profiles import (
     migrate_legacy_theme_settings,
 )
 from app.services.artifact_service import store_rendercv_bundle
+from app.services.tailoring.change_manifest import (
+    build_change_manifest,
+    build_stage_breakdown,
+)
 
 logger = logging.getLogger(__name__)
 from app.schemas import (
@@ -621,7 +625,7 @@ async def _generate_tailored_resume_data(
     language: str,
     prompt_id: str,
     stage_state: dict[str, str] | None = None,
-) -> tuple[dict[str, Any], list[str]]:
+) -> Any:
     """Generate tailored resume data through the primary full-resume prompt."""
     original_resume_data = _get_original_resume_data(resume)
     master_resume = db.get_master_resume()
@@ -640,7 +644,7 @@ async def _generate_tailored_resume_data(
         original_resume_data=original_resume_data,
         cleanup_source_data=cleanup_source_data,
     )
-    return tailoring_result.resume_data, tailoring_result.warnings
+    return tailoring_result
 
 
 def _calculate_diff_from_resume(
@@ -668,14 +672,22 @@ def _calculate_diff_from_resume(
 def _validate_confirm_payload(
     original_data: dict[str, Any] | None,
     improved_data: dict[str, Any],
+    *,
+    allowed_personal_info_mismatches: set[str] | None = None,
 ) -> None:
     if not original_data:
         logger.warning(
             "Skipping confirm payload validation; structured resume data unavailable."
         )
         return
-    original_info = original_data.get("personalInfo")
-    improved_info = improved_data.get("personalInfo")
+    normalized_original = ResumeData.model_validate(
+        normalize_resume_data(copy.deepcopy(original_data))
+    ).model_dump()
+    normalized_improved = ResumeData.model_validate(
+        normalize_resume_data(copy.deepcopy(improved_data))
+    ).model_dump()
+    original_info = normalized_original.get("personalInfo")
+    improved_info = normalized_improved.get("personalInfo")
     # JSON-008: Explicit null checks with clear error messages
     if original_info is None:
         raise ValueError("Original resume missing personalInfo")
@@ -695,6 +707,7 @@ def _validate_confirm_payload(
         for field in sorted(fields)
         if _normalize_personal_info_value(original_info.get(field))
         != _normalize_personal_info_value(improved_info.get(field))
+        and field not in (allowed_personal_info_mismatches or set())
     ]
     if mismatches:
         raise ValueError(f"personalInfo fields changed: {', '.join(mismatches)}")
@@ -790,6 +803,41 @@ def _read_preview_auxiliary_payload(
             if isinstance(auxiliary.get("outreach_message"), str)
             else None
         ),
+    }
+
+
+def _read_preview_tailoring_payload(
+    generation_run_id: str | None,
+) -> dict[str, Any]:
+    """Load preview tailoring metadata for confirm reuse and UI continuity."""
+
+    if not generation_run_id:
+        return {}
+
+    try:
+        generation_run = db.get_generation_run(generation_run_id)
+    except Exception as exc:
+        logger.warning(
+            "Failed to load generation run %s for tailoring reuse: %s",
+            generation_run_id,
+            exc,
+        )
+        return {}
+
+    if not generation_run:
+        return {}
+
+    result_payload = generation_run.get("result_payload")
+    if not isinstance(result_payload, dict):
+        return {}
+
+    return {
+        "change_manifest": result_payload.get("change_manifest", []),
+        "declared_changes": result_payload.get("declared_changes", []),
+        "rejected_declared_changes": result_payload.get("rejected_declared_changes", []),
+        "cleanup_changes": result_payload.get("cleanup_changes", []),
+        "change_breakdown": result_payload.get("change_breakdown"),
+        "raw_llm_resume_data": result_payload.get("raw_llm_resume_data"),
     }
 
 
@@ -1213,16 +1261,16 @@ async def _improve_preview_flow(
                 request.job_id,
                 e,
             )
-    improved_data, response_warnings = (
-        await _generate_tailored_resume_data(
-            resume=resume,
-            job=job,
-            job_keywords=job_keywords,
-            language=language,
-            prompt_id=prompt_id,
-            stage_state=stage_state,
-        )
+    tailoring_result = await _generate_tailored_resume_data(
+        resume=resume,
+        job=job,
+        job_keywords=job_keywords,
+        language=language,
+        prompt_id=prompt_id,
+        stage_state=stage_state,
     )
+    improved_data = tailoring_result.resume_data
+    response_warnings = list(tailoring_result.warnings)
 
     refinement_stats: RefinementStats | None = None
     refinement_attempted = False
@@ -1312,6 +1360,15 @@ async def _improve_preview_flow(
             "llm_summary": llm_summary,
             "preview_hash": preview_hash,
             "diff_summary": diff_summary.model_dump() if diff_summary else None,
+            "change_manifest": [change.model_dump() for change in tailoring_result.change_manifest],
+            "declared_changes": [change.model_dump() for change in tailoring_result.declared_changes],
+            "rejected_declared_changes": [
+                change.model_dump() for change in tailoring_result.rejected_declared_changes
+            ],
+            "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
+            "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
+            "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
+            "final_resume_data": improved_data,
             "auxiliary": {
                 "title": generated_title,
                 "cover_letter": cover_letter,
@@ -1350,6 +1407,15 @@ async def _improve_preview_flow(
                 "llm_summary": llm_summary,
                 "preview_hash": preview_hash,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                "change_manifest": [change.model_dump() for change in tailoring_result.change_manifest],
+                "declared_changes": [change.model_dump() for change in tailoring_result.declared_changes],
+                "rejected_declared_changes": [
+                    change.model_dump() for change in tailoring_result.rejected_declared_changes
+                ],
+                "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
+                "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
+                "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
+                "final_resume_data": improved_data,
                 "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
                 "auxiliary": {
                     "title": generated_title,
@@ -1384,6 +1450,8 @@ async def _improve_preview_flow(
             theme_settings=theme_settings.to_dict(),
             diff_summary=diff_summary,
             detailed_changes=detailed_changes,
+            change_manifest=tailoring_result.change_manifest,
+            change_breakdown=tailoring_result.stage_breakdown,
             refinement_stats=refinement_stats,
             warnings=response_warnings,
             refinement_attempted=refinement_attempted,
@@ -1422,10 +1490,23 @@ async def improve_resume_confirm_endpoint(
     try:
         improved_data = _canonicalize_improved_resume_data(request.improved_data)
         improved_text = json.dumps(improved_data, indent=2)
+        preview_tailoring_payload = _read_preview_tailoring_payload(request.generation_run_id)
         # NOTE: This endpoint relies on preview-hash validation to ensure the payload matches a prior preview.
         # Stronger guarantees would require server-side preview storage or re-running the improvement.
         try:
-            _validate_confirm_payload(_get_original_resume_data(resume), improved_data)
+            allowed_mismatches: set[str] = set()
+            job_keywords_for_validation = (
+                job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
+            )
+            if isinstance(job_keywords_for_validation, dict):
+                location = job_keywords_for_validation.get("location")
+                if isinstance(location, str) and location.strip():
+                    allowed_mismatches.add("location")
+            _validate_confirm_payload(
+                _get_original_resume_data(resume),
+                improved_data,
+                allowed_personal_info_mismatches=allowed_mismatches,
+            )
         except ValueError as e:
             logger.warning("Resume confirm rejected: %s", e)
             raise HTTPException(
@@ -1472,6 +1553,28 @@ async def improve_resume_confirm_endpoint(
         )
         if diff_error:
             response_warnings.append(f"Could not calculate changes: {diff_error}")
+        change_manifest = preview_tailoring_payload.get("change_manifest")
+        change_breakdown = preview_tailoring_payload.get("change_breakdown")
+        if not isinstance(change_manifest, list):
+            change_manifest = build_change_manifest(_get_original_resume_data(resume), improved_data)
+        if not isinstance(change_breakdown, dict):
+            location_value = None
+            location_source = "none"
+            personal_info = improved_data.get("personalInfo")
+            if isinstance(personal_info, dict):
+                location = personal_info.get("location")
+                if isinstance(location, str) and location.strip():
+                    location_source = "master"
+                    location_value = location.strip()
+            change_breakdown = build_stage_breakdown(
+                declared_changes=[],
+                computed_llm_changes=change_manifest,
+                applied_changes=change_manifest,
+                rejected_declared_changes=[],
+                cleanup_only_changes=[],
+                location_source=location_source,
+                location_value=location_value,
+            ).model_dump()
 
         stage = "generate_auxiliary_messages"
         with llm_trace_scope(
@@ -1581,6 +1684,15 @@ async def improve_resume_confirm_endpoint(
             result_payload={
                 "llm_summary": llm_summary,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                "change_manifest": change_manifest,
+                "declared_changes": preview_tailoring_payload.get("declared_changes", []),
+                "rejected_declared_changes": preview_tailoring_payload.get(
+                    "rejected_declared_changes", []
+                ),
+                "cleanup_changes": preview_tailoring_payload.get("cleanup_changes", []),
+                "change_breakdown": change_breakdown,
+                "raw_llm_resume_data": preview_tailoring_payload.get("raw_llm_resume_data"),
+                "final_resume_data": improved_data,
                 "auxiliary": {
                     "title": title,
                     "cover_letter": cover_letter,
@@ -1621,6 +1733,15 @@ async def improve_resume_confirm_endpoint(
                 "result_payload": {
                     "llm_summary": llm_summary,
                     "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                    "change_manifest": change_manifest,
+                    "declared_changes": preview_tailoring_payload.get("declared_changes", []),
+                    "rejected_declared_changes": preview_tailoring_payload.get(
+                        "rejected_declared_changes", []
+                    ),
+                    "cleanup_changes": preview_tailoring_payload.get("cleanup_changes", []),
+                    "change_breakdown": change_breakdown,
+                    "raw_llm_resume_data": preview_tailoring_payload.get("raw_llm_resume_data"),
+                    "final_resume_data": improved_data,
                     "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
                     "auxiliary": {
                         "title": title,
@@ -1649,6 +1770,8 @@ async def improve_resume_confirm_endpoint(
                 theme_settings=theme_settings.to_dict(),
                 diff_summary=diff_summary,
                 detailed_changes=detailed_changes,
+                change_manifest=change_manifest,
+                change_breakdown=change_breakdown,
                 warnings=response_warnings,
             ),
         )
@@ -1708,16 +1831,16 @@ async def improve_resume_endpoint(
                 "prompt_id": prompt_id,
             },
         ):
-            improved_data, response_warnings = (
-                await _generate_tailored_resume_data(
-                    resume=resume,
-                    job=job,
-                    job_keywords=job_keywords,
-                    language=language,
-                    prompt_id=prompt_id,
-                    stage_state=stage_state,
-                )
+            tailoring_result = await _generate_tailored_resume_data(
+                resume=resume,
+                job=job,
+                job_keywords=job_keywords,
+                language=language,
+                prompt_id=prompt_id,
+                stage_state=stage_state,
             )
+            improved_data = tailoring_result.resume_data
+            response_warnings = list(tailoring_result.warnings)
 
         refinement_stats: RefinementStats | None = None
         refinement_attempted = False
@@ -1810,6 +1933,8 @@ async def improve_resume_endpoint(
                 # Diff metadata
                 diff_summary=diff_summary,
                 detailed_changes=detailed_changes,
+                change_manifest=tailoring_result.change_manifest,
+                change_breakdown=tailoring_result.stage_breakdown,
                 refinement_stats=refinement_stats,
                 warnings=response_warnings,
                 refinement_attempted=refinement_attempted,

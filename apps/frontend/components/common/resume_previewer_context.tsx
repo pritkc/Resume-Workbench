@@ -72,6 +72,28 @@ export interface ResumeFieldDiff {
   confidence: 'low' | 'medium' | 'high';
 }
 
+export interface ResumeChange {
+  path: string;
+  action: 'replace' | 'append' | 'remove' | 'reorder' | 'regroup';
+  original?: string;
+  value: string | string[] | Array<Record<string, unknown>>;
+  reason: string;
+}
+
+export interface TailoringStageBreakdown {
+  llm_declared_changes: number;
+  llm_computed_changes: number;
+  llm_applied_changes: number;
+  llm_rejected_changes: number;
+  cleanup_only_changes: number;
+  numeric_claim_changes: number;
+  numeric_claim_rejections: number;
+  skill_changes: number;
+  final_render_changes: number;
+  location_source: 'jd' | 'master' | 'none';
+  location_value?: string | null;
+}
+
 export interface ResumePreview {
   personalInfo: PersonalInfo;
   summary?: string;
@@ -105,6 +127,8 @@ export interface Data {
   warnings?: string[];
   diff_summary?: ResumeDiffSummary;
   detailed_changes?: ResumeFieldDiff[];
+  change_manifest?: ResumeChange[];
+  change_breakdown?: TailoringStageBreakdown;
 }
 
 export interface ImprovedResult {

@@ -103,6 +103,8 @@ STRUCTURE:
 - Double-quoted keys and strings, no trailing commas
 - Follow the response contract: respect entry counts, immutable fields, and editable fields
 - Do not add extra top-level keys beyond what the contract specifies
+- Populate the `changes` array with indexed paths for each actual edit you made
+- Keep `skills` editable and grounded: regroup/relabel is allowed, inventing skill values is not
 
 VOICE:
 - Direct, specific, active verbs matching the candidate's original register
@@ -171,7 +173,13 @@ RESUME:
 {original_resume}
 
 RESPONSE CONTRACT:
-{response_contract}"""
+{response_contract}
+
+CHANGES ARRAY RULES:
+- Each change path must point to the exact edited field or bullet index
+- Use `replace` for edited strings, `append` for newly added bullets, and `regroup` for `skills.groups`
+- `original` must match the pre-edit text at that path when available
+- If you edit nothing, return an empty `changes` array"""
 
 IMPROVE_PROMPT_OPTIONS = [
     {

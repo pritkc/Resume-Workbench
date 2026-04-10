@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTranslations } from '@/lib/i18n';
 import type {
+  TailoringStageBreakdown,
   ResumeDiffSummary,
   ResumeFieldDiff,
 } from '@/components/common/resume_previewer_context';
@@ -20,6 +21,7 @@ interface DiffPreviewModalProps {
   onConfirm: () => void;
   diffSummary?: ResumeDiffSummary;
   detailedChanges?: ResumeFieldDiff[];
+  changeBreakdown?: TailoringStageBreakdown;
   artifacts?: ArtifactSummary[];
   errorMessage?: string;
 }
@@ -32,6 +34,7 @@ export function DiffPreviewModal({
   onConfirm,
   diffSummary,
   detailedChanges,
+  changeBreakdown,
   artifacts,
   errorMessage,
 }: DiffPreviewModalProps) {
@@ -195,6 +198,30 @@ export function DiffPreviewModal({
           )}
         </div>
 
+        {changeBreakdown && (
+          <div className="border-2 border-black bg-white p-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3 h-3 bg-[#15803D]"></div>
+              <h3 className="font-mono text-sm font-bold uppercase tracking-wider">
+                Change Attribution
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <StatCard label="LLM applied" value={changeBreakdown.llm_applied_changes} variant="success" />
+              <StatCard label="Cleanup only" value={changeBreakdown.cleanup_only_changes} variant="warning" />
+              <StatCard label="Rejected" value={changeBreakdown.llm_rejected_changes} variant="danger" />
+              <StatCard label="Numeric risks" value={changeBreakdown.numeric_claim_changes} variant="warning" />
+              <StatCard label="Skill changes" value={changeBreakdown.skill_changes} variant="info" />
+              <StatCard
+                label={`Location: ${changeBreakdown.location_source}`}
+                value={changeBreakdown.location_value ?? 'n/a'}
+                variant={changeBreakdown.location_source === 'jd' ? 'success' : 'info'}
+              />
+            </div>
+          </div>
+        )}
+
         {errorMessage && (
           <div className="mt-4 border-2 border-red-600 bg-red-50 p-3 font-mono text-xs text-red-700">
             {errorMessage}
@@ -343,7 +370,7 @@ export function DiffPreviewModal({
 // Helper component: stat card
 interface StatCardProps {
   label: string;
-  value: number;
+  value: number | string;
   variant: 'success' | 'warning' | 'danger' | 'info';
 }
 

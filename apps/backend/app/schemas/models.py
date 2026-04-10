@@ -891,6 +891,22 @@ class ResumeDiffSummary(BaseModel):
     high_risk_changes: int  # High-risk additions
 
 
+class TailoringStageBreakdown(BaseModel):
+    """Stage-by-stage accounting for tailoring and safeguard edits."""
+
+    llm_declared_changes: int = 0
+    llm_computed_changes: int = 0
+    llm_applied_changes: int = 0
+    llm_rejected_changes: int = 0
+    cleanup_only_changes: int = 0
+    numeric_claim_changes: int = 0
+    numeric_claim_rejections: int = 0
+    skill_changes: int = 0
+    final_render_changes: int = 0
+    location_source: Literal["jd", "master", "none"] = "none"
+    location_value: str | None = None
+
+
 class ArtifactSummary(BaseModel):
     """Stored artifact returned to the frontend."""
 
@@ -1040,6 +1056,8 @@ class ImproveResumeData(BaseModel):
     # Diff metadata
     diff_summary: ResumeDiffSummary | None = None
     detailed_changes: list[ResumeFieldDiff] | None = None
+    change_manifest: list[ResumeChange] | None = None
+    change_breakdown: TailoringStageBreakdown | None = None
 
     # Refinement metadata (multi-pass refinement stats)
     refinement_stats: "RefinementStats | None" = None
@@ -1335,7 +1353,7 @@ class ResumeChange(BaseModel):
     path: str = Field(
         description="Dot+bracket path, e.g. 'workExperience[0].description[1]'"
     )
-    action: Literal["replace", "append", "reorder", "regroup"]
+    action: Literal["replace", "append", "remove", "reorder", "regroup"]
     original: str | None = Field(
         default=None, description="Current text at path — for verification"
     )

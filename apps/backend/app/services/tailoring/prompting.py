@@ -64,6 +64,7 @@ def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> 
         "Output one COMPLETE JSON object with these top-level keys only: "
         f"{json.dumps(top_level_keys, ensure_ascii=True)}. "
         "Do not include personalInfo, sectionMeta, or education. "
+        "The changes array must use indexed paths for each actual edit. "
         "Do not omit arrays or objects, even when they are empty. "
         "Start with { and end with }."
     )
@@ -117,4 +118,3 @@ def render_tailoring_prompt(context: TailoringPromptContext) -> str:
         mode_id=context.prompt_id,
         mode_constraint=context.mode_constraint,
     )
-

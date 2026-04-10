@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.tailoring.models import (
-    TAILORING_TOP_LEVEL_KEYS,
+    TAILORING_RESPONSE_TOP_LEVEL_KEYS,
     TailoringResponseContract,
     TailoringResumePayload,
     TailoringSectionContract,
@@ -28,7 +28,10 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
 
 def _mode_rules(prompt_id: str) -> list[str]:
     if prompt_id in {"nudge", "keywords"}:
-        return ["Keep description arrays the same length."]
+        return [
+            "Keep description arrays the same length.",
+            "Do not change indexed bullet counts in workExperience or personalProjects.",
+        ]
     return ["May add at most one bullet per work/project entry."]
 
 
@@ -78,30 +81,49 @@ def build_response_contract(
         "workExperience": TailoringSectionContract(
             type="array",
             entry_count=0,
-            editable_fields=["description"],
-            immutable_fields=["id", "title", "company", "location", "years"],
+            editable_fields=["summary", "description"],
+            immutable_fields=["id", "position", "title", "company", "location", "start_date", "end_date", "date", "years"],
         ),
         "personalProjects": TailoringSectionContract(
             type="array",
             entry_count=0,
-            editable_fields=["description"],
-            immutable_fields=["id", "name", "role", "years", "github", "website"],
+            editable_fields=["summary", "description"],
+            immutable_fields=["id", "name", "role", "date", "years", "github", "website"],
         ),
         "skills": TailoringSectionContract(
             type="object",
-            rules=["Keep every skill value once. May regroup."],
+            rules=[
+                "Keep every original skill value exactly once.",
+                "You may regroup labels and reorder groups.",
+                "Do not invent new skill values.",
+            ],
+            sections={
+                "groups": TailoringSectionContract(
+                    type="array",
+                    editable_fields=["label", "values"],
+                    immutable_fields=["id"],
+                )
+            },
         ),
         "customSections": TailoringSectionContract(
             type="object",
             keys=[],
             rules=["Preserve keys and types."],
         ),
+        "changes": TailoringSectionContract(
+            type="array",
+            rules=[
+                "Include one change record per actual edit when possible.",
+                "Use indexed paths like workExperience[0].description[1].",
+                "Never include blocked paths like personalInfo or education.",
+            ],
+        ),
     }
 
     if resume_payload is None:
         return TailoringResponseContract(
             prompt_mode=prompt_id,
-            top_level_keys=list(TAILORING_TOP_LEVEL_KEYS),
+            top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
             mode_rules=_mode_rules(prompt_id),
             sections=sections,
         )
@@ -111,8 +133,8 @@ def build_response_contract(
     sections["workExperience"] = TailoringSectionContract(
         type="array",
         entry_count=len(work_entries),
-        immutable_fields=_immutable_fields(work_keys, {"description"}),
-        editable_fields=["description"],
+        immutable_fields=_immutable_fields(work_keys, {"summary", "description"}),
+        editable_fields=["summary", "description"],
     )
 
     project_entries = resume_payload.personalProjects
@@ -120,8 +142,8 @@ def build_response_contract(
     sections["personalProjects"] = TailoringSectionContract(
         type="array",
         entry_count=len(project_entries),
-        immutable_fields=_immutable_fields(project_keys, {"description"}),
-        editable_fields=["description"],
+        immutable_fields=_immutable_fields(project_keys, {"summary", "description"}),
+        editable_fields=["summary", "description"],
     )
 
     skills = resume_payload.skills.model_dump()
@@ -129,7 +151,19 @@ def build_response_contract(
     sections["skills"] = TailoringSectionContract(
         type="object",
         entry_count=len(groups) if isinstance(groups, list) else 0,
-        rules=["Keep every skill value once. May regroup."],
+        rules=[
+            "Keep every original skill value exactly once.",
+            "You may regroup labels and reorder groups.",
+            "Do not invent new skill values.",
+        ],
+        sections={
+            "groups": TailoringSectionContract(
+                type="array",
+                entry_count=len(groups) if isinstance(groups, list) else 0,
+                editable_fields=["label", "values"],
+                immutable_fields=["id"],
+            )
+        },
     )
 
     custom_sections = resume_payload.customSections
@@ -145,7 +179,7 @@ def build_response_contract(
 
     return TailoringResponseContract(
         prompt_mode=prompt_id,
-        top_level_keys=list(TAILORING_TOP_LEVEL_KEYS),
+        top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
         mode_rules=_mode_rules(prompt_id),
         sections=sections,
     )

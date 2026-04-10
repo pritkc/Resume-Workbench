@@ -208,10 +208,10 @@ def _format_additional_groups(value: Any) -> str:
 def _extract_description_list(entry: Any) -> list[str]:
     if not isinstance(entry, dict):
         return []
-    highlights = _normalize_string_list(entry.get("highlights", []), "entry.highlights")
-    if highlights:
-        return highlights
-    return _normalize_string_list(entry.get("description", []), "entry.description")
+    description = _normalize_string_list(entry.get("description", []), "entry.description")
+    if description:
+        return description
+    return _normalize_string_list(entry.get("highlights", []), "entry.highlights")
 
 
 def _append_list_changes(

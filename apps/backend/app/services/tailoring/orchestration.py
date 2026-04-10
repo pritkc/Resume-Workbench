@@ -14,9 +14,22 @@ from app.services.tailoring.analysis import (
     sanitize_user_input,
     trim_job_description_for_prompt,
 )
+from app.services.tailoring.change_manifest import (
+    build_change_manifest,
+    build_stage_breakdown,
+    validate_declared_changes,
+)
 from app.services.tailoring.contracts import build_response_contract
-from app.services.tailoring.models import TailoringResult, TailoringResumePayload
-from app.services.tailoring.preservation import finalize_tailored_resume
+from app.services.tailoring.diffing import calculate_resume_diff
+from app.services.tailoring.models import (
+    TailoringLLMResponse,
+    TailoringResult,
+    TailoringResumePayload,
+)
+from app.services.tailoring.preservation import (
+    finalize_tailored_resume,
+    rehydrate_tailoring_resume,
+)
 from app.services.tailoring.prompting import build_prompt_context, render_tailoring_prompt
 
 logger = logging.getLogger(__name__)
@@ -77,7 +90,7 @@ async def generate_tailored_resume(
     result = await complete_json(
         prompt=prompt,
         system_prompt=prompt_context.system_prompt,
-        max_tokens=8192,
+        max_tokens=15000,
         retries=1,
         operation="resume_generate_full",
         metadata={
@@ -91,8 +104,15 @@ async def generate_tailored_resume(
     )
 
     _check_for_truncation(result)
-    tailored_payload = TailoringResumePayload.model_validate(result)
-    resume_data, warnings = finalize_tailored_resume(
+    llm_response = TailoringLLMResponse.model_validate(result)
+    tailored_payload = TailoringResumePayload.model_validate(
+        llm_response.model_dump(exclude={"changes"})
+    )
+    raw_llm_resume_data = rehydrate_tailoring_resume(
+        tailored_payload,
+        original_resume_data=original_resume_data,
+    )
+    resume_data, warnings, location_source, location_value = finalize_tailored_resume(
         payload=tailored_payload,
         original_resume_data=original_resume_data,
         original_resume_markdown=original_resume,
@@ -101,11 +121,33 @@ async def generate_tailored_resume(
         job_keywords=job_keywords,
         prompt_id=prompt_context.prompt_id,
     )
+    computed_llm_changes = build_change_manifest(original_resume_data, raw_llm_resume_data)
+    applied_changes = build_change_manifest(original_resume_data, resume_data)
+    _, cleanup_changes = calculate_resume_diff(raw_llm_resume_data, resume_data)
+    _accepted_declared_changes, rejected_declared_changes = validate_declared_changes(
+        original_resume_data,
+        llm_response.changes,
+    )
+    stage_breakdown = build_stage_breakdown(
+        declared_changes=llm_response.changes,
+        computed_llm_changes=computed_llm_changes,
+        applied_changes=applied_changes,
+        rejected_declared_changes=rejected_declared_changes,
+        cleanup_only_changes=cleanup_changes,
+        location_source=location_source,
+        location_value=location_value,
+    )
     return TailoringResult(
         resume_data=resume_data,
         warnings=warnings,
         response_contract=response_contract,
         used_structured_resume_input=prompt_context.used_structured_resume_input,
+        raw_llm_resume_data=raw_llm_resume_data,
+        change_manifest=applied_changes,
+        declared_changes=llm_response.changes,
+        rejected_declared_changes=rejected_declared_changes,
+        cleanup_changes=cleanup_changes,
+        stage_breakdown=stage_breakdown,
     )
 
 

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.improver import extract_job_keywords, improve_resume
+from app.services.improver import extract_job_keywords, improve_resume, generate_tailored_resume
 from app.schemas.models import DEFAULT_SECTION_META
 
 
@@ -132,11 +132,11 @@ class TestImproveResume:
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
         assert "RESPONSE CONTRACT:" in prompt
-        assert '"schema_version":"tailoring_resume_v1"' in prompt
+        assert '"schema_version":"tailoring_resume_v2"' in prompt
         assert "supported_keywords_from_resume" in prompt
         assert "FastAPI" in prompt
         assert "Experienced software engineer with 5+ years" not in prompt
-        assert "changes" not in prompt
+        assert '"changes"' in prompt
         assert '"sectionMeta"' not in prompt
         assert '"personalInfo"' not in prompt
         assert "OUTPUT PLAN:" not in prompt
@@ -264,6 +264,92 @@ class TestImproveResume:
         )
         assert custom_meta["displayName"] == "Publications"
         assert custom_meta["sectionType"] == "text"
+
+    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    async def test_applies_job_location_to_personal_info(
+        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+    ):
+        mock_llm.return_value = _llm_resume_output(sample_resume, summary="Remote-ready summary")
+
+        result = await improve_resume(
+            original_resume="# Resume markdown",
+            job_description=sample_job_description,
+            job_keywords=sample_job_keywords,
+            original_resume_data=sample_resume,
+        )
+
+        assert result["personalInfo"]["location"] == "Remote"
+
+    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    async def test_prefers_llm_description_over_legacy_highlights(
+        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+    ):
+        llm_output = _llm_resume_output(sample_resume, summary="Improved summary.")
+        llm_output["workExperience"][0]["description"] = [
+            "Designed backend APIs for high-volume payment workflows",
+            "Improved service reliability for Python microservices",
+        ]
+        llm_output["workExperience"][0]["highlights"] = [
+            "Built REST APIs serving 50K requests/day using Python and FastAPI",
+            "Led migration from monolith to microservices architecture",
+            "Mentored 3 junior developers on backend best practices",
+        ]
+        mock_llm.return_value = llm_output
+
+        result = await improve_resume(
+            original_resume="# Resume markdown",
+            job_description=sample_job_description,
+            job_keywords=sample_job_keywords,
+            original_resume_data=sample_resume,
+        )
+
+        assert result["workExperience"][0]["description"] == [
+            "Designed backend APIs for high-volume payment workflows",
+            "Improved service reliability for Python microservices",
+        ]
+
+    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    async def test_sample_data_run_reports_manifest_and_stage_breakdown(
+        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+    ):
+        llm_output = _llm_resume_output(sample_resume, summary="6 years building Python APIs for remote platform teams.")
+        llm_output["workExperience"][0]["description"] = [
+            "Built and maintained FastAPI services for high-volume API traffic",
+            "Led migration work across microservices and deployment workflows",
+            "Mentored backend developers on testing and service ownership",
+        ]
+        llm_output["workExperience"][0]["highlights"] = [
+            "Built REST APIs serving 50K requests/day using Python and FastAPI",
+            "Led migration from monolith to microservices architecture",
+            "Mentored 3 junior developers on backend best practices",
+        ]
+        llm_output["changes"] = [
+            {
+                "path": "summary",
+                "action": "replace",
+                "original": sample_resume["summary"],
+                "value": "6 years building Python APIs for remote platform teams.",
+                "reason": "Align summary with JD emphasis.",
+            }
+        ]
+        mock_llm.return_value = llm_output
+
+        result = await generate_tailored_resume(
+            original_resume="# Resume markdown",
+            job_description=sample_job_description,
+            job_keywords=sample_job_keywords,
+            original_resume_data=sample_resume,
+            cleanup_source_data=sample_resume,
+        )
+
+        assert result.resume_data["workExperience"][0]["description"][0] == (
+            "Built and maintained FastAPI services for high-volume API traffic"
+        )
+        assert result.resume_data["personalInfo"]["location"] == "Remote"
+        assert result.stage_breakdown.llm_declared_changes == 1
+        assert result.stage_breakdown.llm_applied_changes >= 2
+        assert result.stage_breakdown.location_source == "jd"
+        assert any(change.path == "summary" for change in result.change_manifest)
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_raises_on_invalid_json(self, mock_llm):

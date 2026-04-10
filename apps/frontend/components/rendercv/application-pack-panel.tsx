@@ -20,6 +20,7 @@ export function ApplicationPackPanel({
   const data = pendingResult?.data;
   const warnings = data?.warnings ?? [];
   const traceId = data?.request_id;
+  const changeBreakdown = data?.change_breakdown;
 
   return (
     <div className="space-y-4 border border-black bg-[#F8F7F1] p-4">
@@ -58,6 +59,26 @@ export function ApplicationPackPanel({
         title="Pack Artifacts"
         emptyMessage="Generate a preview to create the resume snapshot, PDF, and preview image."
       />
+
+      {changeBreakdown && (
+        <div className="border border-black bg-white p-4">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+            Change Attribution
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <AttributionCard label="LLM Applied" value={changeBreakdown.llm_applied_changes} />
+            <AttributionCard label="Cleanup Only" value={changeBreakdown.cleanup_only_changes} />
+            <AttributionCard label="Numeric Risks" value={changeBreakdown.numeric_claim_changes} />
+            <AttributionCard label="Rejected" value={changeBreakdown.llm_rejected_changes} />
+            <AttributionCard label="Skill Changes" value={changeBreakdown.skill_changes} />
+            <AttributionCard
+              label="Location Source"
+              value={changeBreakdown.location_source.toUpperCase()}
+              detail={changeBreakdown.location_value ?? undefined}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="border border-black bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -125,6 +146,26 @@ export function ApplicationPackPanel({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function AttributionCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number | string;
+  detail?: string;
+}) {
+  return (
+    <div className="border border-black bg-[#F8F7F1] p-3">
+      <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+        {label}
+      </p>
+      <p className="mt-2 font-mono text-sm uppercase">{value}</p>
+      {detail && <p className="mt-1 text-xs text-gray-600">{detail}</p>}
     </div>
   );
 }

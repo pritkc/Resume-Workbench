@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import type {
+  TailoringStageBreakdown,
   ResumeDiffSummary,
   ResumeFieldDiff,
 } from '@/components/common/resume_previewer_context';
@@ -38,6 +39,20 @@ const detailedChanges: ResumeFieldDiff[] = [
     confidence: 'high',
   },
 ];
+
+const changeBreakdown: TailoringStageBreakdown = {
+  llm_declared_changes: 2,
+  llm_computed_changes: 2,
+  llm_applied_changes: 2,
+  llm_rejected_changes: 0,
+  cleanup_only_changes: 1,
+  numeric_claim_changes: 1,
+  numeric_claim_rejections: 0,
+  skill_changes: 0,
+  final_render_changes: 2,
+  location_source: 'jd',
+  location_value: 'Remote',
+};
 
 describe('DiffPreviewModal', () => {
   it('renders fallback dialog when diff data is missing', () => {
@@ -81,6 +96,23 @@ describe('DiffPreviewModal', () => {
     expect(screen.getByText('new summary')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /tailor\.diffModal\.summaryChanges/i }));
     expect(screen.queryByText('new summary')).not.toBeInTheDocument();
+  });
+
+  it('renders change attribution when breakdown is provided', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        detailedChanges={detailedChanges}
+        changeBreakdown={changeBreakdown}
+      />
+    );
+
+    expect(screen.getByText('Change Attribution')).toBeInTheDocument();
+    expect(screen.getByText('Remote')).toBeInTheDocument();
   });
 
   it('fires confirm and reject handlers', () => {

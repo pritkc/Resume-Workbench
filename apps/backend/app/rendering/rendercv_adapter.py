@@ -360,7 +360,7 @@ def _experience_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "summary": _clean_text(item.get("summary")),
             "highlights": [
                 point
-                for point in (item.get("highlights") or item.get("description") or [])
+                for point in (item.get("description") or item.get("highlights") or [])
                 if point
             ],
         }
@@ -401,7 +401,7 @@ def _project_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "summary": _clean_text(item.get("summary") or item.get("role")),
                 "highlights": [
                     point
-                    for point in (item.get("highlights") or item.get("description") or [])
+                    for point in (item.get("description") or item.get("highlights") or [])
                     if point
                 ],
             }
