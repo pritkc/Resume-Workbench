@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import type { SkillGroup, SkillsSection } from '@/components/dashboard/resume-component';
 import {
   formatAdditionalGroupItems,
-  generateAdditionalGroupId,
   getAdditionalGroupDisplayLabel,
   normalizeAdditionalGroups,
   normalizeAdditionalInfo,
@@ -88,7 +87,6 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
     const nextGroups = [
       ...groups,
       {
-        id: generateAdditionalGroupId(groups, t('builder.additionalForm.newGroupLabel')),
         label: t('builder.additionalForm.newGroupLabel'),
         values: [],
       },
@@ -111,7 +109,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
           const displayLabel = getAdditionalGroupDisplayLabel(group, t);
 
           return (
-            <div key={group.id} className="border border-black bg-white">
+            <div key={`${group.label}-${index}`} className="border border-black bg-white">
               <div className="flex items-center justify-between gap-3 border-b border-black bg-[#F0F0E8] px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <Label className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
@@ -160,13 +158,13 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
 
               <div className="p-4">
                 <Label
-                  htmlFor={`additional-group-items-${group.id}`}
+                  htmlFor={`additional-group-items-${index}`}
                   className="font-mono text-[11px] uppercase tracking-wider text-gray-500"
                 >
                   {t('builder.additionalForm.groupValues')}
                 </Label>
                 <Textarea
-                  id={`additional-group-items-${group.id}`}
+                  id={`additional-group-items-${index}`}
                   value={formatAdditionalGroupItems(group.values)}
                   onChange={(event) => handleItemsChange(index, event.target.value)}
                   onKeyDown={handleKeyDown}

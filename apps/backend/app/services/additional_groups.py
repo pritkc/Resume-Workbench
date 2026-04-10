@@ -19,6 +19,8 @@ DEFAULT_SKILL_GROUP_IDS: tuple[str, ...] = tuple(
     group_id for group_id, _label in DEFAULT_SKILL_GROUP_SPECS
 )
 
+_DEFAULT_LABELS: set[str] = {label for _, label in DEFAULT_SKILL_GROUP_SPECS}
+
 _BULLET_PREFIX_RE = re.compile(r"^\s*(?:[-*•]+|\d+[.)])\s*")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
@@ -78,8 +80,8 @@ def coerce_string_list(value: Any) -> list[str]:
 def default_skill_groups() -> list[dict[str, Any]]:
     """Return the starter skills groups used for new/blank resumes."""
     return [
-        {"id": group_id, "label": label, "values": []}
-        for group_id, label in DEFAULT_SKILL_GROUP_SPECS
+        {"label": label, "values": []}
+        for _group_id, label in DEFAULT_SKILL_GROUP_SPECS
     ]
 
 
@@ -130,43 +132,34 @@ def _normalize_group_dict(
     raw_group: Any,
     *,
     index: int,
-    existing_ids: set[str],
+    existing_labels: set[str],
 ) -> dict[str, Any]:
     if isinstance(raw_group, str):
         label = f"Additional {index + 1}"
-        group_id = generate_skill_group_id(existing_ids, label)
-        existing_ids.add(group_id)
-        return {"id": group_id, "label": label, "values": coerce_string_list(raw_group)}
+        existing_labels.add(label.lower())
+        return {"label": label, "values": coerce_string_list(raw_group)}
 
     if not isinstance(raw_group, dict):
         label = f"Additional {index + 1}"
-        group_id = generate_skill_group_id(existing_ids, label)
-        existing_ids.add(group_id)
-        return {"id": group_id, "label": label, "values": coerce_string_list(raw_group)}
+        existing_labels.add(label.lower())
+        return {"label": label, "values": coerce_string_list(raw_group)}
 
     raw_id = raw_group.get("id") or raw_group.get("key")
     raw_label = raw_group.get("label") or raw_group.get("title") or raw_group.get("name")
     label = ""
     if isinstance(raw_label, str) and raw_label.strip():
         label = raw_label.strip()
+    elif isinstance(raw_id, str) and raw_id.strip():
+        raw_id_val = raw_id.strip()
+        if raw_id_val in DEFAULT_SKILL_GROUP_LABELS_BY_ID:
+            label = DEFAULT_SKILL_GROUP_LABELS_BY_ID[raw_id_val]
+        else:
+            label = prettify_skill_group_label(raw_id_val)
 
-    if isinstance(raw_id, str) and raw_id.strip():
-        group_id = raw_id.strip()
-    elif label:
-        group_id = generate_skill_group_id(existing_ids, label)
-    else:
-        fallback_label = f"Additional {index + 1}"
-        group_id = generate_skill_group_id(existing_ids, fallback_label)
-        label = fallback_label
+    if not label:
+        label = f"Additional {index + 1}"
 
-    if group_id in DEFAULT_SKILL_GROUP_LABELS_BY_ID and not label:
-        label = DEFAULT_SKILL_GROUP_LABELS_BY_ID[group_id]
-    elif not label:
-        label = prettify_skill_group_label(group_id)
-
-    if group_id in existing_ids:
-        group_id = generate_skill_group_id(existing_ids, label)
-    existing_ids.add(group_id)
+    existing_labels.add(label.lower())
 
     values = coerce_string_list(
         raw_group.get("values")
@@ -178,13 +171,13 @@ def _normalize_group_dict(
         else raw_group.get("content")
     )
 
-    return {"id": group_id, "label": label, "values": values}
+    return {"label": label, "values": values}
 
 
 def _groups_from_mapping(
     mapping: dict[str, Any],
     *,
-    existing_ids: set[str],
+    existing_labels: set[str],
 ) -> list[dict[str, Any]]:
     if not mapping:
         return []
@@ -199,10 +192,9 @@ def _groups_from_mapping(
 
     if legacy_keys_present:
         for group_id, default_label in DEFAULT_SKILL_GROUP_SPECS:
-            existing_ids.add(group_id)
+            existing_labels.add(default_label.lower())
             groups.append(
                 {
-                    "id": group_id,
                     "label": default_label,
                     "values": coerce_string_list(mapping.get(group_id)),
                 }
@@ -213,7 +205,7 @@ def _groups_from_mapping(
             _normalize_group_dict(
                 {"id": key, "label": prettify_skill_group_label(key), "values": mapping.get(key)},
                 index=len(groups),
-                existing_ids=existing_ids,
+                existing_labels=existing_labels,
             )
         )
 
@@ -226,14 +218,14 @@ def normalize_skill_groups(
     seed_defaults_if_empty: bool = True,
 ) -> dict[str, Any]:
     """Normalize legacy and grouped skills payloads to `{'groups': [...]}`."""
-    existing_ids: set[str] = set()
+    existing_labels: set[str] = set()
 
     if value is None:
         return default_skills_section() if seed_defaults_if_empty else {"groups": []}
 
     if isinstance(value, list):
         groups = [
-            _normalize_group_dict(raw_group, index=index, existing_ids=existing_ids)
+            _normalize_group_dict(raw_group, index=index, existing_labels=existing_labels)
             for index, raw_group in enumerate(value)
         ]
         if not groups and seed_defaults_if_empty:
@@ -244,7 +236,7 @@ def normalize_skill_groups(
         payload = value.get("skills") if isinstance(value.get("skills"), dict) else value
         if isinstance(payload.get("groups"), list):
             groups = [
-                _normalize_group_dict(raw_group, index=index, existing_ids=existing_ids)
+                _normalize_group_dict(raw_group, index=index, existing_labels=existing_labels)
                 for index, raw_group in enumerate(payload.get("groups") or [])
             ]
 
@@ -254,20 +246,21 @@ def normalize_skill_groups(
                     for key, item in payload.items()
                     if key != "groups" and key not in {"sectionType", "text", "items", "strings", "values"}
                 },
-                existing_ids=existing_ids,
+                existing_labels=existing_labels,
             )
 
+            existing_group_labels = {g["label"].lower() for g in groups}
             groups.extend(
                 extra_group
                 for extra_group in extras
-                if not any(group["id"] == extra_group["id"] for group in groups)
+                if extra_group["label"].lower() not in existing_group_labels
             )
 
             if not groups and seed_defaults_if_empty:
                 groups = default_skill_groups()
             return {"groups": groups}
 
-        groups = _groups_from_mapping(payload, existing_ids=existing_ids)
+        groups = _groups_from_mapping(payload, existing_labels=existing_labels)
         if not groups and seed_defaults_if_empty:
             groups = default_skill_groups()
         return {"groups": groups}
@@ -284,7 +277,6 @@ def normalize_additional_groups(
     return {
         "groups": [
             {
-                "id": group.get("id", ""),
                 "label": group.get("label", ""),
                 "items": coerce_string_list(group.get("values")),
             }
@@ -324,29 +316,25 @@ def restore_missing_additional_items(original: Any, candidate: Any) -> dict[str,
     if not original_groups:
         return {"groups": candidate_groups}
 
-    existing_ids = {str(group.get("id", "")).strip() for group in candidate_groups if group.get("id")}
     current_counter = additional_items_counter(candidate_groups)
     original_counter = additional_items_counter(original_groups)
     missing_counter = original_counter - current_counter
     if not missing_counter:
         return {"groups": candidate_groups}
 
-    by_id = {
-        str(group.get("id", "")).strip(): group
+    by_label = {
+        str(group.get("label", "")).strip().lower(): group
         for group in candidate_groups
-        if isinstance(group, dict) and group.get("id")
+        if isinstance(group, dict)
     }
 
     for original_group in original_groups:
-        group_id = str(original_group.get("id", "")).strip()
-        target_group = by_id.get(group_id)
+        label = str(original_group.get("label", "")).strip()
+        target_group = by_label.get(label.lower())
         if target_group is None:
-            label = str(original_group.get("label") or prettify_skill_group_label(group_id))
-            resolved_id = group_id or generate_skill_group_id(existing_ids, label)
-            existing_ids.add(resolved_id)
-            target_group = {"id": resolved_id, "label": label, "values": []}
+            target_group = {"label": label, "values": []}
             candidate_groups.append(target_group)
-            by_id[resolved_id] = target_group
+            by_label[label.lower()] = target_group
 
         target_items = coerce_string_list(target_group.get("values"))
         for item in coerce_string_list(original_group.get("values")):

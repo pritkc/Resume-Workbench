@@ -720,12 +720,40 @@ def migrate_legacy_theme_settings(settings: RenderThemeSettings) -> RenderThemeS
     return RenderThemeSettings.from_payload(payload, uses_theme_profiles=True)
 
 
+_RENDERCV_KNOWN_TEMPLATE_KEYS = frozenset({
+    "footer",
+    "top_note",
+    "single_date",
+    "date_range",
+    "time_span",
+    "one_line_entry",
+    "education_entry",
+    "normal_entry",
+    "experience_entry",
+    "publication_entry",
+})
+
+
+def _strip_unknown_template_keys(design: dict[str, Any]) -> dict[str, Any]:
+    """Remove any template keys not accepted by RenderCV to prevent validation errors."""
+    templates = design.get("templates")
+    if not isinstance(templates, dict):
+        return design
+    unknown = [k for k in templates if k not in _RENDERCV_KNOWN_TEMPLATE_KEYS]
+    if not unknown:
+        return design
+    cleaned = deepcopy(design)
+    for key in unknown:
+        cleaned["templates"].pop(key, None)
+    return cleaned
+
+
 def build_design(settings: RenderThemeSettings) -> dict[str, object]:
     if settings.uses_theme_profiles:
         resolved = _resolve_theme_profile_state(
             settings.theme_id, settings.theme_profiles.get(settings.theme_id)
         )
-        return deepcopy(resolved["design"])
+        return _strip_unknown_template_keys(deepcopy(resolved["design"]))
 
     density = _LEGACY_DENSITY_MAP[settings.density_profile]
     accent = _ACCENT_COLORS[settings.accent_color]
@@ -773,7 +801,7 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
     if settings.design:
         merged = _deep_merge(merged, settings.design)
     merged["theme"] = settings.theme_id
-    return merged
+    return _strip_unknown_template_keys(merged)
 
 
 def build_locale(settings: RenderThemeSettings) -> dict[str, object] | None:

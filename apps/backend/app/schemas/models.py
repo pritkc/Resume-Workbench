@@ -484,6 +484,12 @@ class Project(BaseModel):
 
         data = copy.deepcopy(value)
 
+        # Accept 'tech_stacks' from the LLM-facing tailoring layer as alias for 'summary'
+        if "tech_stacks" in data and "summary" not in data:
+            data["summary"] = data.pop("tech_stacks")
+        elif "tech_stacks" in data:
+            data.pop("tech_stacks")
+
         summary = _coerce_optional_text(data.get("summary") or data.get("role"))
         data["summary"] = summary
         data["role"] = _coerce_text(data.get("role") or summary)
@@ -516,7 +522,6 @@ class Project(BaseModel):
 class SkillGroup(BaseModel):
     """Flexible label/value group inside the skills section."""
 
-    id: str = ""
     label: str = ""
     values: list[str] = Field(default_factory=list)
 
@@ -1358,7 +1363,36 @@ class ResumeChange(BaseModel):
         default=None, description="Current text at path — for verification"
     )
     value: str | list[str] | list[dict[str, Any]] = Field(description="New content")
-    reason: str = Field(description="Why this change helps match the JD")
+    reason: str = Field(default="", description="Why this change helps match the JD")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalise_op_alias(cls, data: Any) -> Any:
+        """Accept lean v3 prompt field aliases.
+
+        - 'op' → 'action'  (v3 system prompt uses 'op')
+        - 'after' / 'new' → 'value'  (LLM sometimes returns 'after' for replace ops)
+        - list-valued 'original' → coerce to JSON string (skills group changes)
+        """
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        if "action" not in data and "op" in data:
+            data["action"] = data.pop("op")
+        for alt_key in ("after", "new", "tailored", "updated", "text", "content", "new_value", "new_text"):
+            if "value" not in data and alt_key in data:
+                data["value"] = data.pop(alt_key)
+                break
+        # Last resort: if still no value but there's an 'original', use empty string
+        if "value" not in data and "action" in data:
+            data["value"] = ""
+        if "original" in data and isinstance(data["original"], (list, dict)):
+            import json as _json
+            data["original"] = _json.dumps(data["original"])
+        # Wrap a single-dict value in a list so the union validator can accept it
+        if "value" in data and isinstance(data["value"], dict):
+            data["value"] = [data["value"]]
+        return data
 
 
 class ImproveDiffResult(BaseModel):

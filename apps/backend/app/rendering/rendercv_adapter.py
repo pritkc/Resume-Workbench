@@ -14,7 +14,6 @@ from app.services.additional_groups import (
     coerce_string_list,
     default_skills_section,
     extract_skill_groups,
-    generate_skill_group_id,
     normalize_additional_groups,
     normalize_skill_groups,
 )
@@ -781,23 +780,19 @@ def rendercv_cv_to_resume_data(
     summary_items = _text_list(sections.get("summary"))
     skills_entries = sections.get("skills") if isinstance(sections.get("skills"), list) else []
     skill_groups: list[dict[str, Any]] = []
-    existing_group_ids: set[str] = set()
+    existing_group_labels: set[str] = set()
 
     for entry in skills_entries:
         if isinstance(entry, str):
-            group_id = (
-                "technicalSkills"
-                if "technicalSkills" not in existing_group_ids
-                else generate_skill_group_id(existing_group_ids, "Technical Skills")
-            )
-            existing_group_ids.add(group_id)
-            skill_groups.append(
-                {
-                    "id": group_id,
-                    "label": _default_group_label_for_id("technicalSkills", base_resume_data),
-                    "values": _split_csv(entry),
-                }
-            )
+            tech_label = _default_group_label_for_id("technicalSkills", base_resume_data)
+            if tech_label.lower() not in existing_group_labels:
+                existing_group_labels.add(tech_label.lower())
+                skill_groups.append(
+                    {
+                        "label": tech_label,
+                        "values": _split_csv(entry),
+                    }
+                )
             continue
 
         if not isinstance(entry, dict):
@@ -806,16 +801,9 @@ def rendercv_cv_to_resume_data(
         label = _clean_text(str(entry.get("label") or entry.get("title") or "")) or "Additional"
         details = _skill_entry_items(entry)
 
-        default_group_id = _group_id_from_label(label)
-        if default_group_id and default_group_id not in existing_group_ids:
-            group_id = default_group_id
-        else:
-            group_id = generate_skill_group_id(existing_group_ids, label)
-
-        existing_group_ids.add(group_id)
+        existing_group_labels.add(label.lower())
         skill_groups.append(
             {
-                "id": group_id,
                 "label": label,
                 "values": details,
             }
@@ -823,25 +811,27 @@ def rendercv_cv_to_resume_data(
 
     certifications = _text_list(sections.get("certifications"))
     if certifications:
-        skill_groups.append(
-            {
-                "id": "certificationsTraining",
-                "label": _default_group_label_for_id("certificationsTraining", base_resume_data),
-                "values": certifications,
-            }
-        )
-        existing_group_ids.add("certificationsTraining")
+        cert_label = _default_group_label_for_id("certificationsTraining", base_resume_data)
+        if cert_label.lower() not in existing_group_labels:
+            skill_groups.append(
+                {
+                    "label": cert_label,
+                    "values": certifications,
+                }
+            )
+            existing_group_labels.add(cert_label.lower())
 
     awards = _text_list(sections.get("awards"))
     if awards:
-        skill_groups.append(
-            {
-                "id": "awards",
-                "label": _default_group_label_for_id("awards", base_resume_data),
-                "values": awards,
-            }
-        )
-        existing_group_ids.add("awards")
+        awards_label = _default_group_label_for_id("awards", base_resume_data)
+        if awards_label.lower() not in existing_group_labels:
+            skill_groups.append(
+                {
+                    "label": awards_label,
+                    "values": awards,
+                }
+            )
+            existing_group_labels.add(awards_label.lower())
 
     work_experience = []
     for index, item in enumerate(sections.get("experience") or [], start=1):

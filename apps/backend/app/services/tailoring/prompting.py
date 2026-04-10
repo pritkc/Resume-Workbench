@@ -59,13 +59,12 @@ def _resolve_strategy(prompt_id: str | None) -> tuple[str, dict[str, str], str]:
 
 
 def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> str:
-    top_level_keys = response_contract.top_level_keys
     return (
-        "Output one COMPLETE JSON object with these top-level keys only: "
-        f"{json.dumps(top_level_keys, ensure_ascii=True)}. "
-        "Do not include personalInfo, sectionMeta, or education. "
-        "The changes array must use indexed paths for each actual edit. "
-        "Do not omit arrays or objects, even when they are empty. "
+        'Output a JSON object with keys "summary", "experience", "projects", "skills". '
+        "summary: one sentence. "
+        "experience/projects: object keyed by 0-based entry index with a bullets sub-object. "
+        "skills: array of {label, values} objects. "
+        "Do not include personalInfo, sectionMeta, education, id, company, location, or dates. "
         "Start with { and end with }."
     )
 
@@ -88,7 +87,7 @@ def build_prompt_context(
         else original_resume_markdown
     )
     response_contract_json = json.dumps(
-        response_contract.model_dump(exclude_none=True),
+        response_contract.to_prompt_dict(),
         separators=(',', ':'),
         ensure_ascii=True,
     )

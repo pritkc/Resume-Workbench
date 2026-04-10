@@ -133,91 +133,86 @@ export function DiffPreviewModal({
         }
       }}
     >
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-6 bg-[#F0F0E8] border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
-        <DialogHeader className="border-b-2 border-black pb-4 bg-white -mx-6 -mt-6 px-6 pt-6">
-          <DialogTitle className="font-serif text-2xl font-bold uppercase tracking-tight">
+      <DialogContent className="max-w-6xl w-[92vw] max-h-[95vh] overflow-hidden flex flex-col p-6 bg-[#F0F0E8] border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
+        <DialogHeader className="border-b-2 border-black pb-3 bg-white -mx-6 -mt-6 px-6 pt-4">
+          <DialogTitle className="font-serif text-xl font-bold uppercase tracking-tight">
             {t('tailor.diffModal.title')}
           </DialogTitle>
-          <p className="font-mono text-xs text-gray-600 mt-2">
+          <p className="font-mono text-xs text-gray-600 mt-1">
             {'// '}
             {t('tailor.diffModal.subtitle')}
           </p>
         </DialogHeader>
 
-        {/* Summary cards */}
-        <div className="border-2 border-black bg-white p-4 mt-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-3 h-3 bg-[#1D4ED8]"></div>
-            <h3 className="font-mono text-sm font-bold uppercase tracking-wider">
-              {t('tailor.diffModal.summary')}
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <StatCard
-              label={t('tailor.diffModal.additionalItemsAdded')}
-              value={diffSummary.additional_items_added}
-              variant="success"
-            />
-            <StatCard
-              label={t('tailor.diffModal.additionalItemsRemoved')}
-              value={diffSummary.additional_items_removed}
-              variant="warning"
-            />
-            <StatCard
-              label={t('tailor.diffModal.additionalGroupsModified')}
-              value={diffSummary.additional_groups_modified}
-              variant="info"
-            />
-            <StatCard
-              label={t('tailor.diffModal.descriptionsModified')}
-              value={diffSummary.descriptions_modified}
-              variant="info"
-            />
-            <StatCard
-              label={t('tailor.diffModal.highRiskChanges')}
-              value={diffSummary.high_risk_changes}
-              variant={diffSummary.high_risk_changes > 0 ? 'danger' : 'success'}
-            />
+        {/* Summary cards — compact inline row */}
+        <div className="border-2 border-black bg-white px-3 py-2 mt-3">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-2 h-2 bg-[#1D4ED8]"></div>
+              <span className="font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
+                {t('tailor.diffModal.summary')}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2 flex-1">
+              <InlineStat
+                label={t('tailor.diffModal.additionalItemsAdded')}
+                value={diffSummary.additional_items_added}
+                variant="success"
+              />
+              <InlineStat
+                label={t('tailor.diffModal.additionalItemsRemoved')}
+                value={diffSummary.additional_items_removed}
+                variant="warning"
+              />
+              <InlineStat
+                label={t('tailor.diffModal.additionalGroupsModified')}
+                value={diffSummary.additional_groups_modified}
+                variant="info"
+              />
+              <InlineStat
+                label={t('tailor.diffModal.descriptionsModified')}
+                value={diffSummary.descriptions_modified}
+                variant="info"
+              />
+              <InlineStat
+                label={t('tailor.diffModal.highRiskChanges')}
+                value={diffSummary.high_risk_changes}
+                variant={diffSummary.high_risk_changes > 0 ? 'danger' : 'success'}
+              />
+            </div>
           </div>
 
           {diffSummary.high_risk_changes > 0 && (
-            <div className="mt-4 border-2 border-[#F97316] bg-[#FFF7ED] p-3 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-[#F97316] shrink-0 mt-0.5" />
-              <div>
-                <p className="font-mono text-xs font-bold uppercase text-[#C2410C]">
-                  {t('tailor.diffModal.warningTitle', {
-                    count: diffSummary.high_risk_changes,
-                  })}
-                </p>
-                <p className="font-mono text-xs text-[#C2410C] mt-1">
-                  {t('tailor.diffModal.warningMessage')}
-                </p>
-              </div>
+            <div className="mt-2 border border-[#F97316] bg-[#FFF7ED] px-2 py-1.5 flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-[#F97316] shrink-0" />
+              <p className="font-mono text-xs text-[#C2410C]">
+                {t('tailor.diffModal.warningMessage')}
+              </p>
             </div>
           )}
         </div>
 
         {changeBreakdown && (
-          <div className="border-2 border-black bg-white p-4 mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 bg-[#15803D]"></div>
-              <h3 className="font-mono text-sm font-bold uppercase tracking-wider">
-                Change Attribution
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <StatCard label="LLM applied" value={changeBreakdown.llm_applied_changes} variant="success" />
-              <StatCard label="Cleanup only" value={changeBreakdown.cleanup_only_changes} variant="warning" />
-              <StatCard label="Rejected" value={changeBreakdown.llm_rejected_changes} variant="danger" />
-              <StatCard label="Numeric risks" value={changeBreakdown.numeric_claim_changes} variant="warning" />
-              <StatCard label="Skill changes" value={changeBreakdown.skill_changes} variant="info" />
-              <StatCard
-                label={`Location: ${changeBreakdown.location_source}`}
-                value={changeBreakdown.location_value ?? 'n/a'}
-                variant={changeBreakdown.location_source === 'jd' ? 'success' : 'info'}
-              />
+          <div className="border-2 border-black bg-white px-3 py-2 mt-2">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="w-2 h-2 bg-[#15803D]"></div>
+                <span className="font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
+                  Attribution
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 flex-1">
+                <InlineStat label="LLM applied" value={changeBreakdown.llm_applied_changes} variant="success" />
+                <InlineStat label="Cleanup only" value={changeBreakdown.cleanup_only_changes} variant="warning" />
+                <InlineStat label="Rejected" value={changeBreakdown.llm_rejected_changes} variant="danger" />
+                <InlineStat label="Numeric risks" value={changeBreakdown.numeric_claim_changes} variant="warning" />
+                <InlineStat label="Skill changes" value={changeBreakdown.skill_changes} variant="info" />
+                <InlineStat
+                  label={`Location: ${changeBreakdown.location_source}`}
+                  value={changeBreakdown.location_value ?? 'n/a'}
+                  variant={changeBreakdown.location_source === 'jd' ? 'success' : 'info'}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -367,14 +362,14 @@ export function DiffPreviewModal({
   );
 }
 
-// Helper component: stat card
+// Helper component: compact inline stat badge
 interface StatCardProps {
   label: string;
   value: number | string;
   variant: 'success' | 'warning' | 'danger' | 'info';
 }
 
-function StatCard({ label, value, variant }: StatCardProps) {
+function InlineStat({ label, value, variant }: StatCardProps) {
   const colors = {
     success: 'border-[#15803D] bg-[#F0FDF4] text-[#15803D]',
     warning: 'border-[#F97316] bg-[#FFF7ED] text-[#F97316]',
@@ -383,9 +378,9 @@ function StatCard({ label, value, variant }: StatCardProps) {
   };
 
   return (
-    <div className={`border-2 p-3 ${colors[variant]}`}>
-      <div className="font-mono text-2xl font-bold">{value}</div>
-      <div className="font-mono text-xs uppercase tracking-wider mt-1">{label}</div>
+    <div className={`border px-2 py-0.5 flex items-center gap-1.5 ${colors[variant]}`}>
+      <span className="font-mono text-sm font-bold">{value}</span>
+      <span className="font-mono text-xs uppercase tracking-wide opacity-75">{label}</span>
     </div>
   );
 }

@@ -87,7 +87,6 @@ export interface Project {
 }
 
 export interface SkillGroup {
-  id: string;
   label: string;
   values: string[];
 }

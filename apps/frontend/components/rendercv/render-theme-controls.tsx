@@ -752,7 +752,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             </RenderCvRow>
           </RenderCvSection>
 
-          <RenderCvSection title="Normal Entry Template">
+          <RenderCvSection title="Project / Normal Entry Template">
             <RenderCvRow label="Main Column" fieldHint={TEMPLATE_HINTS.normal_entry}>
               <RenderCvTextarea
                 value={settings.design.templates?.normal_entry?.main_column}
@@ -814,6 +814,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
               />
             </RenderCvRow>
           </RenderCvSection>
+
         </div>
       ) : null}
     </div>

@@ -40,12 +40,12 @@ def _fake_resume_record(sample_resume: dict) -> dict:
     }
 
 
-def _group_items(resume_data: dict, group_id: str) -> list[str]:
+def _group_items(resume_data: dict, group_label: str) -> list[str]:
     resume_data["additional"] = normalize_additional_groups(resume_data.get("additional"))
     for group in resume_data["additional"]["groups"]:
-        if group["id"] == group_id:
+        if group["label"] == group_label:
             return group["items"]
-    raise AssertionError(f"Missing additional group: {group_id}")
+    raise AssertionError(f"Missing additional group with label: {group_label}")
 
 
 def _fake_tailoring_result(
@@ -70,9 +70,9 @@ def _fake_tailoring_result(
 async def test_preview_generates_application_pack_metadata(sample_resume: dict, client):
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Tailored summary"
-    _group_items(improved, "technicalSkills").append("BogusSkill")
+    _group_items(improved, "Technical Skills").append("BogusSkill")
     service_output = copy.deepcopy(improved)
-    _group_items(service_output, "technicalSkills").remove("BogusSkill")
+    _group_items(service_output, "Technical Skills").remove("BogusSkill")
 
     with (
         patch("app.routers.resumes.db") as mock_db,
@@ -132,7 +132,7 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     technical_group = next(
         group
         for group in data["resume_preview"]["additional"]["groups"]
-        if group["id"] == "technicalSkills"
+        if group["label"] == "Technical Skills"
     )
     assert "BogusSkill" not in technical_group["items"]
     update_run_payload = mock_db.update_generation_run.call_args.args[1]

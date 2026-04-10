@@ -185,21 +185,26 @@ def _normalize_string_list(value: Any, field_name: str) -> list[str]:
     return normalized
 
 
+def _group_slug(group: dict[str, Any]) -> str:
+    label = str(group.get("label", "")).strip()
+    return label.lower().replace(" ", "_") or "skills"
+
+
 def _build_additional_item_index(value: Any) -> dict[str, tuple[str, str]]:
     index: dict[str, tuple[str, str]] = {}
     for group in extract_additional_groups(value):
-        group_id = str(group.get("id", "")).strip()
-        for item in _normalize_string_list(group.get("values", []), f"skills.groups[{group_id}]"):
+        group_slug = _group_slug(group)
+        for item in _normalize_string_list(group.get("values", []), f"skills.groups[{group_slug}]"):
             key = item.casefold()
             if key not in index:
-                index[key] = (item, group_id)
+                index[key] = (item, group_slug)
     return index
 
 
 def _format_additional_groups(value: Any) -> str:
     parts: list[str] = []
     for group in extract_additional_groups(value):
-        label = str(group.get("label") or group.get("id") or "Skills").strip()
+        label = str(group.get("label", "")).strip() or "Skills"
         items = _normalize_string_list(group.get("values", []), f"{label}.values")
         parts.append(f"{label}: {', '.join(items)}" if items else label)
     return " | ".join(parts)

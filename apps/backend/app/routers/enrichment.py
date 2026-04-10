@@ -789,13 +789,13 @@ async def apply_regenerated_items(
             skills = normalize_skill_groups(updated_data.get("skills") or updated_data.get("additional"))
             groups = skills.get("groups", [])
             resolved_group: dict | None = None
-            target_group_id = item.group_id or item_id.replace("additional_", "", 1)
+            target_group_label = item.group_id or item_id.replace("additional_", "", 1)
 
             for group in groups:
                 if not isinstance(group, dict):
                     continue
-                group_id = str(group.get("id", "")).strip()
-                if group_id and group_id == target_group_id:
+                group_label = str(group.get("label", "")).strip()
+                if group_label and group_label == target_group_label:
                     resolved_group = group
                     break
 

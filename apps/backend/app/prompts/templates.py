@@ -1,8 +1,8 @@
 """LLM prompt templates for resume processing."""
 
 PROMPT_VERSIONS = {
-    "tailoring_system": "v2.0",
-    "tailoring_user": "v2.0",
+    "tailoring_system": "v3.1",
+    "tailoring_user": "v3.1",
     "parse_resume": "v2.2",
     "extract_keywords": "v1.0",
     "cover_letter": "v1.3",
@@ -33,8 +33,8 @@ RESUME_SCHEMA_COMPACT = """{
   "summary":"string",
   "workExperience":[{"id":1,"position":"...","company":"...","location":"...or null","date":"Jan 2020 - Present","start_date":"2020-01 or null","end_date":"present or 2023-12 or null","summary":"...or null","highlights":["bullet1","bullet2"]}],
   "education":[{"id":1,"institution":"...","area":"...or null","degree":"...or null","location":"...or null","date":"2014 - 2018","start_date":"2014 or null","end_date":"2018 or null","summary":"string or null","highlights":["bullet1"]}],
-  "personalProjects":[{"id":1,"name":"...","summary":"...or null","date":"Mar 2021 - Present","github":"...or null","website":"...or null","highlights":["bullet1"]}],
-  "skills":{"groups":[{"id":"technicalSkills","label":"Technical Skills","values":["Python","AWS"]},{"id":"languages","label":"Languages","values":["English (Native)"]}]},
+  "personalProjects":[{"id":1,"name":"...","tech_stacks":"React, TypeScript, AWS or null","date":"Mar 2021 - Present","github":"...or null","website":"...or null","highlights":["bullet1"]}],
+  "skills":{"groups":[{"label":"Technical Skills","values":["Python","AWS"]},{"label":"Languages","values":["English (Native)"]}]},
   "customSections":{"publications":{"sectionType":"itemList","items":[{"id":1,"title":"...","subtitle":"...","years":"Jun 2023","description":["..."]}]},"volunteer_work":{"sectionType":"text","text":"..."}}
 }"""
 
@@ -90,32 +90,35 @@ Rules:
 Job description:
 {job_description}"""
 
-TAILORING_SYSTEM_PROMPT = """You are an expert resume editor. Output only valid JSON.
+TAILORING_SYSTEM_PROMPT = """You are an expert resume editor. Output only valid JSON — no markdown fences, no commentary.
 
-TRUTHFULNESS (violation = interview harm):
-- Never invent skills, tools, certifications, metrics, companies, or dates not in the original resume
+HONESTY (violation = interview harm):
+- Never invent skills, tools, certifications, metrics, companies, or dates
 - Never upgrade experience level or add new employers
-- Copy date ranges exactly including months
-- Every original skill value must appear exactly once in output
+- Skill values must each appear exactly once; relabeling and regrouping is allowed
 
-STRUCTURE:
-- One complete JSON object, no markdown fences, no commentary
-- Double-quoted keys and strings, no trailing commas
-- Follow the response contract: respect entry counts, immutable fields, and editable fields
-- Do not add extra top-level keys beyond what the contract specifies
-- Populate the `changes` array with indexed paths for each actual edit you made
-- Keep `skills` editable and grounded: regroup/relabel is allowed, inventing skill values is not
+OUTPUT:
+- JSON with exactly these keys: "summary", "experience", "projects", "skills"
+- summary: one sentence — "[N]+ years in [domain], [1-2 JD strengths]." No second sentence.
+- experience / projects: object keyed by 0-based entry index (string "0", "1", …)
+  - only include entries you are changing
+  - each entry: { "bullets": { "INDEX": "rewritten text" } }
+  - projects may also include "tech_stacks": "new tagline"
+  - INDEX must be within bullet_counts for that entry — no new indices
+  - omit an index to keep that bullet unchanged
+- skills: array of { "label": "...", "values": [...] } when any group changes; omit key otherwise
+  - total value count must equal skills_values from contract — no new values
+- Do NOT emit: id, company, location, dates, role, github, website, customSections, changes[]
 
 VOICE:
-- Direct, specific, active verbs matching the candidate's original register
-- Avoid: spearheaded, leveraged, orchestrated, utilized, facilitated, synergy, robust, scalable, holistic, proactive
-- Prefer: led, built, designed, ran, managed, improved, reduced, created
-- Never use em-dash characters"""
+- Active verbs: led, built, designed, ran, managed, improved, reduced, created
+- Banned: spearheaded, leveraged, orchestrated, utilized, facilitated, synergy, robust, scalable, holistic, proactive
+- No em-dash"""
 
 TAILORING_MODE_CONSTRAINTS = {
-    "nudge": "Rephrase only. Do not add or remove bullets. Keep every description array the same length.",
-    "keywords": "Integrate supported JD keywords into existing bullet phrasing. Do not add or remove bullets. Each keyword should appear in context that demonstrates concrete experience.",
-    "full": "Make targeted, high-signal tailoring edits. You may add at most one bullet per entry, elaborating on evidence already present. Do not invent new responsibilities.",
+    "nudge": "Rewrite bullets conservatively. Only address bullets that clearly benefit from small wording improvement. Omit entries with no changes. No new bullets.",
+    "keywords": "Weave JD keywords into existing bullets. Only rewrite bullets where a keyword fits naturally. Omit entries with no changes. No new bullets.",
+    "full": "Rewrite bullets to strongly match the JD. You may rewrite any existing bullet at its index. Omit entries with no changes. No new bullets — only rewrite what is already there.",
 }
 
 IMPROVE_STRATEGY_GUIDANCE = {
@@ -125,7 +128,7 @@ IMPROVE_STRATEGY_GUIDANCE = {
             "already strongly supports the job."
         ),
         "description_rule": (
-            "Keep every description array the same length and preserve bullet ordering."
+            "Rewrite only bullets that benefit from improvement. Preserve all others unchanged."
         ),
     },
     "keywords": {
@@ -134,7 +137,7 @@ IMPROVE_STRATEGY_GUIDANCE = {
             "scope, voice, and structure."
         ),
         "description_rule": (
-            "Keep every description array the same length and preserve bullet ordering."
+            "Rewrite only bullets where a keyword fits naturally. Preserve all others unchanged."
         ),
     },
     "full": {
@@ -143,9 +146,7 @@ IMPROVE_STRATEGY_GUIDANCE = {
             "grounded in the original resume."
         ),
         "description_rule": (
-            "Keep description arrays close to the original size. You may add at most "
-            "one supported bullet within an existing work or project entry when it "
-            "directly elaborates on evidence already present in that same entry."
+            "Rewrite bullets to strongly match the JD. No new bullets beyond the original count."
         ),
     },
 }
@@ -154,14 +155,15 @@ IMPROVE_RESUME_PROMPT_TEMPLATE = """Tailor this resume for the target job.
 
 MODE: {mode_id} — {mode_constraint}
 
-EXAMPLE:
-Original: "Worked on backend systems"
-For JD mentioning "Kubernetes, CI/CD":
-Tailored: "Built and maintained backend services deployed across Kubernetes clusters with automated CI/CD pipelines"
+REWRITING EXAMPLE:
+Original bullet: "Worked on backend systems"
+JD mentions: Kubernetes, CI/CD
+Rewritten: "Built and maintained backend services across Kubernetes clusters with automated CI/CD pipelines"
 
-SUMMARY GUIDANCE: Open with "[N]+ years in [relevant domain]". Reference 1-2 JD-matching strengths. Max 3 sentences.
+Output format example (2 changed bullets in entry 0, 1 changed bullet in entry 1):
+{{"summary":"5+ years in Python backend engineering with expertise in high-throughput APIs and CI/CD.","experience":{{"0":{{"bullets":{{"1":"Built and maintained..."}}}},"1":{{"bullets":{{"2":"Improved CI/CD..."}}}}}}}}
 
-Generate all rewritten text in {output_language}.
+Output language: {output_language}
 
 JOB ANALYSIS:
 {job_analysis}
@@ -173,13 +175,7 @@ RESUME:
 {original_resume}
 
 RESPONSE CONTRACT:
-{response_contract}
-
-CHANGES ARRAY RULES:
-- Each change path must point to the exact edited field or bullet index
-- Use `replace` for edited strings, `append` for newly added bullets, and `regroup` for `skills.groups`
-- `original` must match the pre-edit text at that path when available
-- If you edit nothing, return an empty `changes` array"""
+{response_contract}"""
 
 IMPROVE_PROMPT_OPTIONS = [
     {

@@ -43,7 +43,7 @@ def test_rendercv_yaml_sections_round_trip_to_resume_and_theme(sample_resume: di
     assert parsed_resume["personalInfo"]["name"] == sample_resume["personalInfo"]["name"]
     assert parsed_resume["workExperience"][0]["company"] == sample_resume["workExperience"][0]["company"]
     technical_group = next(
-        group for group in parsed_resume["additional"]["groups"] if group["id"] == "technicalSkills"
+        group for group in parsed_resume["additional"]["groups"] if group["label"] == "Technical Skills"
     )
     assert technical_group["items"] == sample_resume["additional"]["technicalSkills"]
     assert parsed_theme.theme_id == "engineeringresumes"
@@ -106,7 +106,7 @@ def test_rendercv_yaml_sections_preserve_custom_skill_group_labels(sample_resume
     )
 
     languages_group = next(
-        group for group in parsed_resume["additional"]["groups"] if group["id"] == "languages"
+        group for group in parsed_resume["additional"]["groups"] if group["label"] == "Languages & Frameworks"
     )
     assert languages_group["label"] == "Languages & Frameworks"
     assert languages_group["items"] == ["English", "Python"]
@@ -135,7 +135,7 @@ def test_rendercv_yaml_sections_support_skill_details_as_yaml_lists() -> None:
     )
 
     assert parsed_resume["additional"]["groups"] == [
-        {"id": "ml", "label": "ML", "items": ["PyTorch", "TensorFlow"]}
+        {"label": "ML", "items": ["PyTorch", "TensorFlow"]}
     ]
 
 

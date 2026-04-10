@@ -87,7 +87,7 @@ def build_response_contract(
         "personalProjects": TailoringSectionContract(
             type="array",
             entry_count=0,
-            editable_fields=["summary", "description"],
+            editable_fields=["tech_stacks", "description"],
             immutable_fields=["id", "name", "role", "date", "years", "github", "website"],
         ),
         "skills": TailoringSectionContract(
@@ -101,7 +101,6 @@ def build_response_contract(
                 "groups": TailoringSectionContract(
                     type="array",
                     editable_fields=["label", "values"],
-                    immutable_fields=["id"],
                 )
             },
         ),
@@ -142,8 +141,8 @@ def build_response_contract(
     sections["personalProjects"] = TailoringSectionContract(
         type="array",
         entry_count=len(project_entries),
-        immutable_fields=_immutable_fields(project_keys, {"summary", "description"}),
-        editable_fields=["summary", "description"],
+        immutable_fields=_immutable_fields(project_keys, {"tech_stacks", "description"}),
+        editable_fields=["tech_stacks", "description"],
     )
 
     skills = resume_payload.skills.model_dump()
@@ -161,7 +160,6 @@ def build_response_contract(
                 type="array",
                 entry_count=len(groups) if isinstance(groups, list) else 0,
                 editable_fields=["label", "values"],
-                immutable_fields=["id"],
             )
         },
     )
@@ -177,9 +175,18 @@ def build_response_contract(
         },
     )
 
+    skills_values_count = sum(
+        len(g.values) for g in resume_payload.skills.groups
+    )
+
     return TailoringResponseContract(
         prompt_mode=prompt_id,
         top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
         mode_rules=_mode_rules(prompt_id),
         sections=sections,
+        experience_entries=[e.company for e in work_entries],
+        experience_bullet_counts=[len(e.description) for e in work_entries],
+        project_entries=[e.name for e in project_entries],
+        project_bullet_counts=[len(e.description) for e in project_entries],
+        skills_values_count=skills_values_count,
     )

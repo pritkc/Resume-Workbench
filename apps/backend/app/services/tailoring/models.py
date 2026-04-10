@@ -135,13 +135,19 @@ class TailoringExperience(BaseModel):
 
 
 class TailoringProject(BaseModel):
-    """Canonical project entry sent to and read from the LLM."""
+    """Canonical project entry sent to and read from the LLM.
+
+    The 'tech_stacks' field carries what is stored as 'summary' in the resume
+    data, but is renamed in the LLM prompt to discourage hallucination —
+    the model treats it as a factual tech-stack annotation rather than a
+    free-form narrative summary.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     id: int = 0
     name: str = ""
-    summary: str | None = None
+    tech_stacks: str | None = None
     role: str = ""
     date: str = ""
     years: str = ""
@@ -158,6 +164,9 @@ class TailoringProject(BaseModel):
         if "description" not in data and "highlights" in data:
             data["description"] = copy.deepcopy(data.get("highlights"))
         data.pop("highlights", None)
+        # Accept 'summary' from LLM responses or legacy payloads
+        if "tech_stacks" not in data and "summary" in data:
+            data["tech_stacks"] = data.pop("summary")
         return data
 
     @field_validator("name", "role", "date", "years", mode="before")
@@ -165,7 +174,7 @@ class TailoringProject(BaseModel):
     def _normalize_text(cls, value: Any) -> str:
         return _coerce_text(value)
 
-    @field_validator("summary", "github", "website", mode="before")
+    @field_validator("tech_stacks", "github", "website", mode="before")
     @classmethod
     def _normalize_optional_text(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
@@ -175,9 +184,15 @@ class TailoringProject(BaseModel):
     def _normalize_description(cls, value: Any) -> list[str]:
         return _coerce_bullet_list(value)
 
+    def to_resume_entry_dict(self) -> dict[str, Any]:
+        """Convert back to resume data format (tech_stacks → summary)."""
+        data = self.model_dump()
+        data["summary"] = data.pop("tech_stacks", None)
+        return data
+
     @classmethod
     def from_resume_entry(cls, entry: dict[str, Any]) -> "TailoringProject":
-        summary = _coerce_optional_text(entry.get("summary") or entry.get("role"))
+        tech_stacks = _coerce_optional_text(entry.get("summary") or entry.get("tech_stacks") or entry.get("role"))
         date = _coerce_text(entry.get("date") or entry.get("years"))
         years = _coerce_text(entry.get("years") or date)
         description = _coerce_bullet_list(entry.get("description"))
@@ -186,8 +201,8 @@ class TailoringProject(BaseModel):
         return cls(
             id=int(entry.get("id") or 0),
             name=_coerce_text(entry.get("name")),
-            summary=summary,
-            role=_coerce_text(entry.get("role") or summary),
+            tech_stacks=tech_stacks,
+            role=_coerce_text(entry.get("role") or tech_stacks),
             date=date,
             years=years,
             github=_coerce_optional_text(entry.get("github")),
@@ -264,6 +279,38 @@ class TailoringLLMResponse(TailoringResumePayload):
     changes: list[ResumeChange] = Field(default_factory=list)
 
 
+class CompactBulletDiff(BaseModel):
+    """Per-entry diff in the compact addressed output format."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    tech_stacks: str | None = None
+    bullets: dict[str, str] = Field(default_factory=dict)
+
+
+class TailoringLLMResponseV2(BaseModel):
+    """Compact LLM response: only changed content, addressed by index.
+
+    extra='ignore' so any legacy keys (workExperience, changes[], id, etc.)
+    are silently dropped without a ValidationError.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    summary: str = ""
+    experience: dict[str, CompactBulletDiff] = Field(default_factory=dict)
+    projects: dict[str, CompactBulletDiff] = Field(default_factory=dict)
+    skills: list[dict[str, Any]] | None = None
+
+    @field_validator("skills", mode="before")
+    @classmethod
+    def _normalize_skills(cls, v: Any) -> Any:
+        """Accept {"groups": [...]} dict shape in addition to a bare list."""
+        if isinstance(v, dict):
+            return v.get("groups") or None
+        return v
+
+
 class TailoringJobAnalysis(BaseModel):
     """Compact job-analysis block shared with the tailoring prompt."""
 
@@ -312,13 +359,44 @@ class TailoringResponseContract(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: str = "tailoring_resume_v2"
+    schema_version: str = "tailoring_resume_v3"
     prompt_mode: str
     top_level_keys: list[str] = Field(
         default_factory=lambda: list(TAILORING_RESPONSE_TOP_LEVEL_KEYS)
     )
     mode_rules: list[str] = Field(default_factory=list)
     sections: dict[str, TailoringSectionContract] = Field(default_factory=dict)
+
+    # Compact address data — populated by build_response_contract
+    experience_entries: list[str] = Field(default_factory=list)
+    experience_bullet_counts: list[int] = Field(default_factory=list)
+    project_entries: list[str] = Field(default_factory=list)
+    project_bullet_counts: list[int] = Field(default_factory=list)
+    skills_values_count: int = 0
+
+    def to_prompt_dict(self) -> dict[str, Any]:
+        """Return compact address contract for the LLM prompt."""
+        out: dict[str, Any] = {
+            "mode": self.prompt_mode,
+            "output_keys": ["summary", "experience", "projects", "skills"],
+        }
+
+        if self.experience_entries:
+            out["experience"] = {
+                "entries": self.experience_entries,
+                "bullet_counts": self.experience_bullet_counts,
+            }
+
+        if self.project_entries:
+            out["projects"] = {
+                "entries": self.project_entries,
+                "bullet_counts": self.project_bullet_counts,
+            }
+
+        if self.skills_values_count > 0:
+            out["skills_values"] = self.skills_values_count
+
+        return out
 
 
 class TailoringResult(BaseModel):

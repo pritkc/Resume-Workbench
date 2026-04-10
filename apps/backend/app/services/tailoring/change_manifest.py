@@ -16,7 +16,7 @@ _ALLOWED_PATH_PATTERNS = (
     re.compile(r"^summary$"),
     re.compile(r"^workExperience\[\d+\]\.summary$"),
     re.compile(r"^workExperience\[\d+\]\.description(\[\d+\])?$"),
-    re.compile(r"^personalProjects\[\d+\]\.summary$"),
+    re.compile(r"^personalProjects\[\d+\]\.(?:summary|tech_stacks)$"),
     re.compile(r"^personalProjects\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^skills\.groups$"),
     re.compile(r"^customSections\.[^.]+\.text$"),
@@ -182,11 +182,14 @@ def build_change_manifest(
             if not isinstance(original_entry, dict) or not isinstance(updated_entry, dict):
                 continue
             base_path = f"{section_key}[{index}]"
+            # personalProjects uses 'tech_stacks' in LLM payloads (mapped back to 'summary')
+            orig_summary = original_entry.get("summary") or original_entry.get("tech_stacks")
+            updated_summary = updated_entry.get("summary") or updated_entry.get("tech_stacks")
             _append_summary_change(
                 changes,
                 path=f"{base_path}.summary",
-                original=original_entry.get("summary"),
-                updated=updated_entry.get("summary"),
+                original=orig_summary,
+                updated=updated_summary,
                 reason="Updated section summary for job alignment.",
             )
             _append_list_changes(

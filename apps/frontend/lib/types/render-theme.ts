@@ -480,7 +480,7 @@ export const TEMPLATE_HINTS = {
   one_line_entry: 'Placeholders: LABEL, DETAILS.',
   education_entry:
     'Placeholders: INSTITUTION, AREA, DEGREE, DEGREE_WITH_AREA, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
-  normal_entry: 'Placeholders: NAME, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
+  normal_entry: 'Used for Projects. Placeholders: NAME, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
   experience_entry: 'Placeholders: COMPANY, POSITION, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
   publication_entry: 'Placeholders: TITLE, AUTHORS, SUMMARY, DOI, URL, JOURNAL, DATE.',
 } as const;
@@ -765,7 +765,7 @@ function buildLegacyDefaultDesign(
         date_and_location_column: 'DATE',
       },
       normal_entry: {
-        main_column: '**NAME** -- **LOCATION**\nSUMMARY\nHIGHLIGHTS',
+        main_column: '**NAME** *| SUMMARY*\nHIGHLIGHTS',
         date_and_location_column: 'DATE',
       },
       experience_entry: {

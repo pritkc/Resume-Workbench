@@ -8,41 +8,44 @@ type Translator = (key: string, params?: Record<string, string | number>) => str
 
 export const DEFAULT_ADDITIONAL_GROUP_SPECS = [
   {
-    id: 'technicalSkills',
     label: 'Technical Skills',
     translationKey: 'resume.additionalDefaults.technicalSkills',
   },
   {
-    id: 'languages',
     label: 'Languages',
     translationKey: 'resume.additionalDefaults.languages',
   },
   {
-    id: 'certificationsTraining',
     label: 'Training & Certifications',
     translationKey: 'resume.additionalDefaults.certificationsTraining',
   },
   {
-    id: 'awards',
     label: 'Awards',
     translationKey: 'resume.additionalDefaults.awards',
   },
 ] as const;
 
-type DefaultAdditionalGroupId = (typeof DEFAULT_ADDITIONAL_GROUP_SPECS)[number]['id'];
+type DefaultAdditionalGroupLabel = (typeof DEFAULT_ADDITIONAL_GROUP_SPECS)[number]['label'];
 
-const DEFAULT_LABEL_BY_ID = Object.fromEntries(
-  DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => [spec.id, spec.label])
-) as Record<DefaultAdditionalGroupId, string>;
+const DEFAULT_TRANSLATION_KEY_BY_LABEL = Object.fromEntries(
+  DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => [spec.label, spec.translationKey])
+) as Record<DefaultAdditionalGroupLabel, string>;
 
-const DEFAULT_TRANSLATION_KEY_BY_ID = Object.fromEntries(
-  DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => [spec.id, spec.translationKey])
-) as Record<DefaultAdditionalGroupId, string>;
+const DEFAULT_LABELS: Set<string> = new Set(
+  DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => spec.label)
+);
 
 type SkillsSectionInput = SkillsSection | null | undefined;
 
-function isDefaultGroupId(value: string): value is DefaultAdditionalGroupId {
-  return value in DEFAULT_LABEL_BY_ID;
+const LEGACY_ID_TO_LABEL: Record<string, string> = {
+  technicalSkills: 'Technical Skills',
+  languages: 'Languages',
+  certificationsTraining: 'Training & Certifications',
+  awards: 'Awards',
+};
+
+function isDefaultLabel(value: string): value is DefaultAdditionalGroupLabel {
+  return DEFAULT_LABELS.has(value);
 }
 
 function toStringList(value: unknown): string[] {
@@ -62,7 +65,6 @@ function toStringList(value: unknown): string[] {
 
 export function createDefaultSkillGroups(): SkillGroup[] {
   return DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => ({
-    id: spec.id,
     label: spec.label,
     values: [],
   }));
@@ -77,32 +79,13 @@ export function createDefaultSkillsSection(): SkillsSection {
 export const createDefaultAdditionalGroups = createDefaultSkillGroups;
 export const createDefaultAdditionalInfo = createDefaultSkillsSection;
 
-export function generateAdditionalGroupId(
-  groups: Array<Pick<SkillGroup, 'id' | 'label'>> = [],
-  preferredLabel = 'Skills'
-): string {
-  const existingIds = new Set(
-    groups
-      .map((group) => (typeof group.id === 'string' ? group.id.trim() : ''))
-      .filter(Boolean)
-      .map((id) => id.toLowerCase())
-  );
-
-  const normalizedBase = preferredLabel
+function prettifyLabel(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  const base = normalizedBase || 'skills';
-
-  let candidate = base;
-  let counter = 2;
-  while (existingIds.has(candidate.toLowerCase())) {
-    candidate = `${base}-${counter}`;
-    counter += 1;
-  }
-
-  return candidate;
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function buildLegacyGroups(skills: SkillsSectionInput): SkillGroup[] {
@@ -113,17 +96,30 @@ function buildLegacyGroups(skills: SkillsSectionInput): SkillGroup[] {
   const groups: SkillGroup[] = [];
 
   for (const spec of DEFAULT_ADDITIONAL_GROUP_SPECS) {
-    const rawItems = (skills as Record<string, unknown>)[spec.id];
-    if (rawItems !== undefined) {
-      groups.push({
-        id: spec.id,
-        label: spec.label,
-        values: toStringList(rawItems),
-      });
+    const legacyKey = Object.entries(LEGACY_ID_TO_LABEL).find(
+      ([, label]) => label === spec.label
+    )?.[0];
+    if (legacyKey) {
+      const rawItems = (skills as Record<string, unknown>)[legacyKey];
+      if (rawItems !== undefined) {
+        groups.push({
+          label: spec.label,
+          values: toStringList(rawItems),
+        });
+      }
     }
   }
 
   return groups;
+}
+
+function resolveLabel(rawLabel: string, rawId?: string): string {
+  if (rawLabel) return rawLabel;
+  if (rawId) {
+    if (rawId in LEGACY_ID_TO_LABEL) return LEGACY_ID_TO_LABEL[rawId];
+    return prettifyLabel(rawId);
+  }
+  return '';
 }
 
 export function normalizeAdditionalGroups(
@@ -147,35 +143,30 @@ export function normalizeAdditionalGroups(
         return null;
       }
 
-      const rawGroup = group as Partial<SkillGroup> & { items?: unknown };
+      const rawGroup = group as Partial<SkillGroup> & { id?: string; items?: unknown };
+      const rawLabel = typeof rawGroup.label === 'string' ? rawGroup.label.trim() : '';
+      const rawId = typeof rawGroup.id === 'string' ? rawGroup.id.trim() : '';
       return {
-        id: typeof rawGroup.id === 'string' ? rawGroup.id.trim() : '',
-        label: typeof rawGroup.label === 'string' ? rawGroup.label : '',
+        label: resolveLabel(rawLabel, rawId),
         values: toStringList(rawGroup.values ?? rawGroup.items),
       };
     }) ?? buildLegacyGroups(skills);
 
   const normalized: SkillGroup[] = [];
-  const existingIds = new Set<string>();
+  const seenLabels = new Set<string>();
 
   for (const source of sourceGroups) {
     if (!source) {
       continue;
     }
 
-    const nextId = source.id || generateAdditionalGroupId(normalized, source.label || 'Skills');
-    const dedupedId = existingIds.has(nextId.toLowerCase())
-      ? generateAdditionalGroupId(normalized, nextId)
-      : nextId;
-    existingIds.add(dedupedId.toLowerCase());
+    const label = source.label || 'Skills';
+    const labelKey = label.toLowerCase();
+    if (seenLabels.has(labelKey)) continue;
+    seenLabels.add(labelKey);
 
     normalized.push({
-      id: dedupedId,
-      label:
-        source.label ||
-        (isDefaultGroupId(dedupedId)
-          ? DEFAULT_LABEL_BY_ID[dedupedId]
-          : prettifyGroupLabel(dedupedId)),
+      label,
       values: source.values,
     });
   }
@@ -241,28 +232,28 @@ export function formatAdditionalGroupItems(items?: string[]): string {
 }
 
 export function getDefaultAdditionalGroupLabel(
-  groupId: string,
+  label: string,
   t?: Translator
 ): string | undefined {
-  if (!isDefaultGroupId(groupId)) {
+  if (!isDefaultLabel(label)) {
     return undefined;
   }
 
   if (!t) {
-    return DEFAULT_LABEL_BY_ID[groupId];
+    return label;
   }
 
-  return t(DEFAULT_TRANSLATION_KEY_BY_ID[groupId]);
+  return t(DEFAULT_TRANSLATION_KEY_BY_LABEL[label]);
 }
 
 export function getAdditionalGroupDisplayLabel(group: SkillGroup, t?: Translator): string {
   const rawLabel = typeof group.label === 'string' ? group.label : '';
   const normalizedRawLabel = rawLabel.trim();
-  const defaultLabel = getDefaultAdditionalGroupLabel(group.id, t);
-  const defaultEnglish = isDefaultGroupId(group.id) ? DEFAULT_LABEL_BY_ID[group.id] : undefined;
+  const defaultLabel = getDefaultAdditionalGroupLabel(normalizedRawLabel, t);
+  const defaultEnglish = isDefaultLabel(normalizedRawLabel) ? normalizedRawLabel : undefined;
 
   if (!normalizedRawLabel) {
-    return defaultLabel || prettifyGroupLabel(group.id);
+    return 'Skills';
   }
 
   if (defaultLabel && defaultEnglish && rawLabel === defaultEnglish) {
@@ -285,18 +276,36 @@ export function getAdditionalGroupsWithContent(skills: SkillsSectionInput): Skil
 }
 
 export function prettifyGroupLabel(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (match) => match.toUpperCase());
+  return prettifyLabel(value);
 }
 
-export function buildRegenerateItemIdForGroup(groupId: string): string {
-  return `additional_${groupId}`;
+export function buildRegenerateItemIdForGroup(group: SkillGroup): string {
+  const slug = group.label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return `additional_${slug || 'group'}`;
 }
 
 export function normalizeResumeData(resumeData: ResumeData): ResumeData {
   return normalizeResumeSkills(resumeData);
+}
+
+/** @deprecated Use label-based approach. Kept for backward compatibility only. */
+export function generateAdditionalGroupId(
+  groups: Array<Pick<SkillGroup, 'label'>> = [],
+  preferredLabel = 'Skills'
+): string {
+  const existingLabels = new Set(
+    groups.map((g) => g.label.trim().toLowerCase())
+  );
+  const base = preferredLabel.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'skills';
+  let candidate = base;
+  let counter = 2;
+  while (existingLabels.has(candidate.toLowerCase())) {
+    candidate = `${base}-${counter}`;
+    counter += 1;
+  }
+  return candidate;
 }

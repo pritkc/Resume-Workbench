@@ -23,10 +23,12 @@ from app.services.tailoring.contracts import build_response_contract
 from app.services.tailoring.diffing import calculate_resume_diff
 from app.services.tailoring.models import (
     TailoringLLMResponse,
+    TailoringLLMResponseV2,
     TailoringResult,
     TailoringResumePayload,
 )
 from app.services.tailoring.preservation import (
+    apply_compact_diff,
     finalize_tailored_resume,
     rehydrate_tailoring_resume,
 )
@@ -104,14 +106,40 @@ async def generate_tailored_resume(
     )
 
     _check_for_truncation(result)
-    llm_response = TailoringLLMResponse.model_validate(result)
-    tailored_payload = TailoringResumePayload.model_validate(
-        llm_response.model_dump(exclude={"changes"})
+
+    # Try compact v2 format first; fall back to legacy full-body format
+    llm_response_v2 = TailoringLLMResponseV2.model_validate(result)
+    has_compact_content = bool(
+        llm_response_v2.summary
+        or llm_response_v2.experience
+        or llm_response_v2.projects
+        or llm_response_v2.skills is not None
     )
-    raw_llm_resume_data = rehydrate_tailoring_resume(
-        tailored_payload,
-        original_resume_data=original_resume_data,
-    )
+
+    declared_changes: list = []
+    if has_compact_content and original_resume_data is not None:
+        raw_llm_resume_data = apply_compact_diff(
+            original_resume_data,
+            llm_response_v2.model_dump(exclude_none=True),
+        )
+    else:
+        if not has_compact_content:
+            logger.warning("LLM returned no compact content — falling back to legacy full-body parse")
+        llm_response = TailoringLLMResponse.model_validate(result)
+        tailored_payload = TailoringResumePayload.model_validate(
+            llm_response.model_dump(exclude={"changes"})
+        )
+        raw_llm_resume_data = rehydrate_tailoring_resume(
+            tailored_payload,
+            original_resume_data=original_resume_data,
+        )
+        declared_changes = llm_response.changes
+
+    # Build a TailoringResumePayload from the reconstructed dict for finalize
+    tailored_payload = TailoringResumePayload.from_resume_data(raw_llm_resume_data)
+    if tailored_payload is None:
+        tailored_payload = TailoringResumePayload()
+
     resume_data, warnings, location_source, location_value = finalize_tailored_resume(
         payload=tailored_payload,
         original_resume_data=original_resume_data,
@@ -126,10 +154,10 @@ async def generate_tailored_resume(
     _, cleanup_changes = calculate_resume_diff(raw_llm_resume_data, resume_data)
     _accepted_declared_changes, rejected_declared_changes = validate_declared_changes(
         original_resume_data,
-        llm_response.changes,
+        declared_changes,
     )
     stage_breakdown = build_stage_breakdown(
-        declared_changes=llm_response.changes,
+        declared_changes=declared_changes,
         computed_llm_changes=computed_llm_changes,
         applied_changes=applied_changes,
         rejected_declared_changes=rejected_declared_changes,
@@ -144,7 +172,7 @@ async def generate_tailored_resume(
         used_structured_resume_input=prompt_context.used_structured_resume_input,
         raw_llm_resume_data=raw_llm_resume_data,
         change_manifest=applied_changes,
-        declared_changes=llm_response.changes,
+        declared_changes=declared_changes,
         rejected_declared_changes=rejected_declared_changes,
         cleanup_changes=cleanup_changes,
         stage_breakdown=stage_breakdown,

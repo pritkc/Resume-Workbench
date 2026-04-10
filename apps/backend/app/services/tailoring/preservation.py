@@ -230,6 +230,105 @@ def protect_custom_sections(
     return result
 
 
+def _all_skill_values(resume_data: dict[str, Any]) -> set[str]:
+    skills = resume_data.get("skills") or resume_data.get("additional") or {}
+    groups = skills.get("groups", [])
+    return {v for group in groups for v in (group.get("values") or []) if isinstance(v, str)}
+
+
+def _strip_invented_skills(
+    skills_diff: list[dict[str, Any]],
+    allowed: set[str],
+) -> list[dict[str, Any]]:
+    return [
+        {"label": g.get("label", ""), "values": [v for v in (g.get("values") or []) if v in allowed]}
+        for g in skills_diff
+    ]
+
+
+def apply_compact_diff(
+    original_resume_data: dict[str, Any],
+    diff: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply a compact addressed diff onto the original resume.
+
+    Returns a dict in TailoringResumePayload shape so all downstream code
+    (finalize_tailored_resume, build_change_manifest, etc.) is unchanged.
+    """
+    result = copy.deepcopy(original_resume_data)
+
+    if "summary" in diff and isinstance(diff["summary"], str) and diff["summary"].strip():
+        result["summary"] = diff["summary"].strip()
+
+    for diff_key, resume_key in [("experience", "workExperience"), ("projects", "personalProjects")]:
+        section_diff = diff.get(diff_key)
+        if not isinstance(section_diff, dict):
+            continue
+        entries = result.get(resume_key, [])
+        for entry_idx_str, entry_diff in section_diff.items():
+            try:
+                entry_idx = int(entry_idx_str)
+            except (ValueError, TypeError):
+                logger.warning("compact_diff: non-integer entry key %r in %s — skipped", entry_idx_str, diff_key)
+                continue
+            if entry_idx < 0 or entry_idx >= len(entries):
+                logger.warning(
+                    "compact_diff: %s index %d out of range (len=%d) — skipped",
+                    diff_key, entry_idx, len(entries),
+                )
+                continue
+            if not isinstance(entry_diff, dict):
+                continue
+
+            entry = entries[entry_idx]
+
+            if diff_key == "projects" and "tech_stacks" in entry_diff:
+                ts = entry_diff["tech_stacks"]
+                if isinstance(ts, str):
+                    entry["summary"] = ts.strip() or None
+
+            bullets_diff = entry_diff.get("bullets")
+            if isinstance(bullets_diff, dict):
+                desc = list(entry.get("description") or [])
+                orig_len = len(desc)
+                for bullet_idx_str, bullet_text in bullets_diff.items():
+                    try:
+                        bullet_idx = int(bullet_idx_str)
+                    except (ValueError, TypeError):
+                        logger.warning("compact_diff: non-integer bullet key %r — skipped", bullet_idx_str)
+                        continue
+                    if bullet_idx < 0 or bullet_idx >= orig_len:
+                        logger.warning(
+                            "compact_diff: bullet index %d out of range (orig_len=%d) in %s[%d] — skipped",
+                            bullet_idx, orig_len, diff_key, entry_idx,
+                        )
+                        continue
+                    if not isinstance(bullet_text, str) or not bullet_text.strip():
+                        logger.warning(
+                            "compact_diff: empty/non-string bullet at %s[%d].bullets[%d] — skipped",
+                            diff_key, entry_idx, bullet_idx,
+                        )
+                        continue
+                    desc[bullet_idx] = bullet_text.strip()
+                entry["description"] = desc
+
+    skills_diff = diff.get("skills")
+    if isinstance(skills_diff, list):
+        original_values = _all_skill_values(original_resume_data)
+        new_values = {
+            v for group in skills_diff
+            for v in (group.get("values") or [])
+            if isinstance(v, str)
+        }
+        invented = new_values - original_values
+        if invented:
+            logger.warning("compact_diff: invented skill values %s — stripping", sorted(invented))
+            skills_diff = _strip_invented_skills(skills_diff, original_values)
+        result.setdefault("skills", {})["groups"] = skills_diff
+
+    return result
+
+
 def apply_local_resume_cleanup(
     source_data: dict[str, Any] | None,
     improved_data: dict[str, Any],

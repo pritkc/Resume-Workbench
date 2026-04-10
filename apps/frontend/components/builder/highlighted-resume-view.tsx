@@ -175,14 +175,14 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
         {/* Skills */}
         {skillGroups.length > 0 && (
           <Section title={t('resume.sections.skills')} icon={<Wrench className="w-4 h-4" />}>
-            {skillGroups.map((group) => (
-              <div key={group.id} className="mb-3">
+            {skillGroups.map((group, groupIndex) => (
+              <div key={`${group.label}-${groupIndex}`} className="mb-3">
                 <div className="text-xs font-mono uppercase text-gray-500 mb-1">
                   {getAdditionalGroupDisplayLabel(group, t)}
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {group.values.map((item, index) => (
-                    <SkillTag key={`${group.id}-${index}`} text={item} keywords={keywords} />
+                    <SkillTag key={`${group.label}-${index}`} text={item} keywords={keywords} />
                   ))}
                 </div>
               </div>

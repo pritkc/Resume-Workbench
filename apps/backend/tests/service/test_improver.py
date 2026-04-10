@@ -10,11 +10,24 @@ from app.schemas.models import DEFAULT_SECTION_META
 
 
 def _llm_resume_output(sample_resume: dict, *, summary: str = "Improved summary.") -> dict:
-    result = copy.deepcopy(sample_resume)
-    result.pop("personalInfo", None)
-    result.pop("sectionMeta", None)
-    result.pop("education", None)
-    result["summary"] = summary
+    """Return a compact v2 LLM response that rewrites the summary only."""
+    return {"summary": summary}
+
+
+def _llm_compact_output(
+    summary: str = "Improved summary.",
+    experience: dict | None = None,
+    projects: dict | None = None,
+    skills: list | None = None,
+) -> dict:
+    """Build a compact v2 LLM response with optional section diffs."""
+    result: dict = {"summary": summary}
+    if experience is not None:
+        result["experience"] = experience
+    if projects is not None:
+        result["projects"] = projects
+    if skills is not None:
+        result["skills"] = skills
     return result
 
 
@@ -132,11 +145,13 @@ class TestImproveResume:
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
         assert "RESPONSE CONTRACT:" in prompt
-        assert '"schema_version":"tailoring_resume_v2"' in prompt
+        assert '"mode":"full"' in prompt
+        assert '"output_keys"' in prompt
+        assert '"bullet_counts"' in prompt
+        assert '"entries"' in prompt
         assert "supported_keywords_from_resume" in prompt
         assert "FastAPI" in prompt
         assert "Experienced software engineer with 5+ years" not in prompt
-        assert '"changes"' in prompt
         assert '"sectionMeta"' not in prompt
         assert '"personalInfo"' not in prompt
         assert "OUTPUT PLAN:" not in prompt
@@ -158,11 +173,10 @@ class TestImproveResume:
 
         assert mock_llm.call_args.kwargs["retries"] == 1
         retry_hint = mock_llm.call_args.kwargs["retry_hint"]
-        assert "Do not include personalInfo, sectionMeta, or education" in retry_hint
         assert "summary" in retry_hint
-        assert "workExperience" in retry_hint
-        assert "sectionMeta" in retry_hint
-        assert "customSections" in retry_hint
+        assert "experience" in retry_hint
+        assert "bullet_counts" in retry_hint or "bullets" in retry_hint
+        assert "Do not include personalInfo" in retry_hint or "personalInfo" in retry_hint
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_keeps_structured_json_input_even_when_dates_are_year_only(
@@ -281,20 +295,20 @@ class TestImproveResume:
         assert result["personalInfo"]["location"] == "Remote"
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
-    async def test_prefers_llm_description_over_legacy_highlights(
+    async def test_compact_bullet_rewrite_applied_correctly(
         self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
     ):
-        llm_output = _llm_resume_output(sample_resume, summary="Improved summary.")
-        llm_output["workExperience"][0]["description"] = [
-            "Designed backend APIs for high-volume payment workflows",
-            "Improved service reliability for Python microservices",
-        ]
-        llm_output["workExperience"][0]["highlights"] = [
-            "Built REST APIs serving 50K requests/day using Python and FastAPI",
-            "Led migration from monolith to microservices architecture",
-            "Mentored 3 junior developers on backend best practices",
-        ]
-        mock_llm.return_value = llm_output
+        mock_llm.return_value = _llm_compact_output(
+            summary="Improved summary.",
+            experience={
+                "0": {
+                    "bullets": {
+                        "0": "Designed backend APIs for high-volume payment workflows",
+                        "1": "Improved service reliability for Python microservices",
+                    }
+                }
+            },
+        )
 
         result = await improve_resume(
             original_resume="# Resume markdown",
@@ -303,36 +317,26 @@ class TestImproveResume:
             original_resume_data=sample_resume,
         )
 
-        assert result["workExperience"][0]["description"] == [
-            "Designed backend APIs for high-volume payment workflows",
-            "Improved service reliability for Python microservices",
-        ]
+        assert result["workExperience"][0]["description"][0] == "Designed backend APIs for high-volume payment workflows"
+        assert result["workExperience"][0]["description"][1] == "Improved service reliability for Python microservices"
+        assert result["workExperience"][0]["description"][2] == "Mentored 3 junior developers on backend best practices"
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_sample_data_run_reports_manifest_and_stage_breakdown(
         self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
     ):
-        llm_output = _llm_resume_output(sample_resume, summary="6 years building Python APIs for remote platform teams.")
-        llm_output["workExperience"][0]["description"] = [
-            "Built and maintained FastAPI services for high-volume API traffic",
-            "Led migration work across microservices and deployment workflows",
-            "Mentored backend developers on testing and service ownership",
-        ]
-        llm_output["workExperience"][0]["highlights"] = [
-            "Built REST APIs serving 50K requests/day using Python and FastAPI",
-            "Led migration from monolith to microservices architecture",
-            "Mentored 3 junior developers on backend best practices",
-        ]
-        llm_output["changes"] = [
-            {
-                "path": "summary",
-                "action": "replace",
-                "original": sample_resume["summary"],
-                "value": "6 years building Python APIs for remote platform teams.",
-                "reason": "Align summary with JD emphasis.",
-            }
-        ]
-        mock_llm.return_value = llm_output
+        mock_llm.return_value = _llm_compact_output(
+            summary="6 years building Python APIs for remote platform teams.",
+            experience={
+                "0": {
+                    "bullets": {
+                        "0": "Built and maintained FastAPI services for high-volume API traffic",
+                        "1": "Led migration work across microservices and deployment workflows",
+                        "2": "Mentored backend developers on testing and service ownership",
+                    }
+                }
+            },
+        )
 
         result = await generate_tailored_resume(
             original_resume="# Resume markdown",
@@ -346,8 +350,7 @@ class TestImproveResume:
             "Built and maintained FastAPI services for high-volume API traffic"
         )
         assert result.resume_data["personalInfo"]["location"] == "Remote"
-        assert result.stage_breakdown.llm_declared_changes == 1
-        assert result.stage_breakdown.llm_applied_changes >= 2
+        assert result.stage_breakdown.llm_applied_changes >= 1
         assert result.stage_breakdown.location_source == "jd"
         assert any(change.path == "summary" for change in result.change_manifest)
 

@@ -39,8 +39,8 @@ export function AdditionalGroupSection({
     <div className={className}>
       <h3 className={headingClassName}>{displayName || t('resume.sections.skills')}</h3>
       <div className={bodyClassName}>
-        {groups.map((group) => (
-          <div key={group.id} className={cn('flex', rowClassName)}>
+        {groups.map((group, index) => (
+          <div key={`${group.label}-${index}`} className={cn('flex', rowClassName)}>
             <span className={labelClassName}>{getAdditionalGroupDisplayLabel(group, t)}:</span>
             <span className={valueClassName}>{group.values.join(', ')}</span>
           </div>

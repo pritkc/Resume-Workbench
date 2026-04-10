@@ -787,10 +787,10 @@ const ResumeBuilderContent = () => {
   const additionalGroupItemsForRegenerate: RegenerateItemInput[] = useMemo(() => {
     return getAdditionalGroupsWithContent(resumeData.skills ?? resumeData.additional).map(
       (group) => ({
-        item_id: buildRegenerateItemIdForGroup(group.id),
+        item_id: buildRegenerateItemIdForGroup(group),
         item_type: 'additionalGroup' as const,
         title: getAdditionalGroupDisplayLabel(group, t),
-        group_id: group.id,
+        group_id: group.label,
         current_content: group.values,
       })
     );

@@ -430,7 +430,7 @@ class TestDraftResumeFlows:
         assert resp.status_code == 200
         payload = resp.json()
         groups = payload["data"]["processed_resume"]["additional"]["groups"]
-        languages_group = next(group for group in groups if group["id"] == "languages")
+        languages_group = next(group for group in groups if group["label"] == "Languages & Frameworks")
         assert languages_group["label"] == "Languages & Frameworks"
         assert languages_group["items"] == ["English", "Python"]
         assert "Languages & Frameworks" in payload["yaml_sections"]["cv"]
