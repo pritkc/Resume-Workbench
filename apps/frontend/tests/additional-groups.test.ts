@@ -8,13 +8,7 @@ describe('additional group utils', () => {
   it('preserves label spaces while editing', () => {
     const [group] = normalizeAdditionalGroups(
       {
-        groups: [
-          {
-            id: 'ml',
-            label: 'Machine Learning',
-            items: [],
-          },
-        ],
+        groups: [{ label: 'Machine Learning', values: [] }],
       },
       { seedDefaultsIfEmpty: false }
     );
@@ -26,9 +20,8 @@ describe('additional group utils', () => {
   it('keeps trailing spaces instead of snapping back to the default translated label', () => {
     const label = getAdditionalGroupDisplayLabel(
       {
-        id: 'technicalSkills',
         label: 'Technical Skills ',
-        items: [],
+        values: [],
       },
       (key) =>
         key === 'resume.additionalDefaults.technicalSkills' ? 'Compétences techniques' : key

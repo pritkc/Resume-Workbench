@@ -463,7 +463,7 @@ def calculate_resume_diff(
         original.get("workExperience", []),
         improved.get("workExperience", []),
         _format_experience_entry,
-        {"description", "highlights", "summary"},
+        {"description", "highlights", "summary", "position", "title"},
     )
     _append_entry_changes(
         changes,
@@ -481,7 +481,7 @@ def calculate_resume_diff(
         original.get("personalProjects", []),
         improved.get("personalProjects", []),
         _format_project_entry,
-        {"description", "highlights", "summary"},
+        {"description", "highlights", "summary", "name"},
     )
 
     summary = ResumeDiffSummary(

@@ -567,6 +567,7 @@
       "additionalGroupsModified": "変更された追加グループ",
       "highRiskChanges": "高リスクの変更",
       "warningTitle": "高リスクな追加が {count} 件検出されました",
+      "changeAttribution": "変更の帰属",
       "warningMessage": "これらのスキルが元の履歴書に実際に存在する、または説明内に反映されていることを確認してください",
       "summaryChanges": "概要の変更",
       "additionalItemChanges": "追加項目の変更",

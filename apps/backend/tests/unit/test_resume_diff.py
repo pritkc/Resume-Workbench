@@ -282,6 +282,7 @@ def test_experience_title_change_detected() -> None:
     assert title_changes[0].original_value == "Software Engineer"
     assert title_changes[0].new_value == "Senior Software Engineer"
     assert title_changes[0].field_path == "workExperience[0].position"
+    assert not any(c.field_type == "experience" for c in changes)
 
 
 def test_project_title_change_detected() -> None:
@@ -304,6 +305,7 @@ def test_project_title_change_detected() -> None:
     assert title_changes[0].original_value == "My App"
     assert title_changes[0].new_value == "My App — Production-Grade Platform"
     assert title_changes[0].field_path == "personalProjects[0].name"
+    assert not any(c.field_type == "project" for c in changes)
 
 
 def test_unchanged_titles_produce_no_title_diff() -> None:

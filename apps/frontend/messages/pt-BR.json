@@ -567,6 +567,7 @@
       "additionalGroupsModified": "Grupos adicionais modificados",
       "highRiskChanges": "Alterações de alto risco",
       "warningTitle": "Detectadas {count} adições de alto risco",
+      "changeAttribution": "Atribuição de alterações",
       "warningMessage": "Confirme que estas adições existem no seu currículo original ou estão refletidas nas descrições",
       "summaryChanges": "Alterações do resumo",
       "additionalItemChanges": "Alterações em itens adicionais",

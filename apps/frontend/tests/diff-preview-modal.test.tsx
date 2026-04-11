@@ -111,7 +111,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('Change Attribution')).toBeInTheDocument();
+    expect(screen.getByText('tailor.diffModal.changeAttribution')).toBeInTheDocument();
     expect(screen.getByText('Remote')).toBeInTheDocument();
   });
 

@@ -186,11 +186,20 @@ export function DiffPreviewModal({
           </div>
 
           {diffSummary.high_risk_changes > 0 && (
-            <div className="mt-2 border border-[#F97316] bg-[#FFF7ED] px-2 py-1.5 flex items-center gap-2">
-              <AlertTriangle className="w-3.5 h-3.5 text-[#F97316] shrink-0" />
-              <p className="font-mono text-xs text-[#C2410C]">
-                {t('tailor.diffModal.warningMessage')}
-              </p>
+            <div className="mt-2 border border-[#F97316] bg-[#FFF7ED] px-2 py-1.5 flex flex-col gap-1">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-[#F97316] shrink-0 mt-0.5" />
+                <div className="min-w-0 space-y-1">
+                  <p className="font-mono text-xs font-bold text-[#C2410C]">
+                    {t('tailor.diffModal.warningTitle', {
+                      count: diffSummary.high_risk_changes,
+                    })}
+                  </p>
+                  <p className="font-mono text-xs text-[#C2410C]">
+                    {t('tailor.diffModal.warningMessage')}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -201,7 +210,7 @@ export function DiffPreviewModal({
               <div className="flex items-center gap-1.5 shrink-0">
                 <div className="w-2 h-2 bg-[#15803D]"></div>
                 <span className="font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
-                  Attribution
+                  {t('tailor.diffModal.changeAttribution')}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2 flex-1">

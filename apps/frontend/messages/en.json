@@ -567,6 +567,7 @@
       "additionalGroupsModified": "Additional Groups Modified",
       "highRiskChanges": "High Risk Changes",
       "warningTitle": "Detected {count} high-risk addition(s)",
+      "changeAttribution": "Change Attribution",
       "warningMessage": "Please confirm these additions exist in your original resume or are reflected in your descriptions",
       "summaryChanges": "Summary Changes",
       "additionalItemChanges": "Additional Item Changes",

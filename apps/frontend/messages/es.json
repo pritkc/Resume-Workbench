@@ -567,6 +567,7 @@
       "additionalGroupsModified": "Grupos adicionales modificados",
       "highRiskChanges": "Cambios de alto riesgo",
       "warningTitle": "Se detectaron {count} habilidad(es) completamente nueva(s)",
+      "changeAttribution": "Atribución de cambios",
       "warningMessage": "Por favor, confirma que estas habilidades realmente existen en tu currículum original o se reflejan en tus descripciones",
       "summaryChanges": "Cambios en resumen",
       "additionalItemChanges": "Cambios en elementos adicionales",

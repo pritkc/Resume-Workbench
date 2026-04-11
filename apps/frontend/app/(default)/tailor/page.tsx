@@ -15,6 +15,10 @@ import {
   confirmImproveResume,
 } from '@/lib/api/resume';
 import {
+  normalizeRenderThemeSettings,
+  type RenderThemeSettings,
+} from '@/lib/types/render-theme';
+import {
   fetchGenerationDefaults,
   fetchPromptConfig,
   updateGenerationDefaults,
@@ -212,6 +216,24 @@ export default function TailorPage() {
     ) {
       throw new Error('Resume preview data is invalid.');
     }
+    const boldKeywords = result.data.bold_keywords ?? [];
+    const previewTheme = result.data.theme_settings;
+    const normalizedBase = normalizeRenderThemeSettings(previewTheme ?? undefined);
+
+    let theme_settings: RenderThemeSettings | undefined;
+    if (boldKeywords.length > 0) {
+      theme_settings = normalizeRenderThemeSettings({
+        ...normalizedBase,
+        bold_keywords: true,
+        settings: {
+          ...normalizedBase.settings,
+          bold_keywords: boldKeywords,
+        },
+      });
+    } else if (previewTheme != null) {
+      theme_settings = normalizedBase;
+    }
+
     return {
       resume_id: masterResumeId,
       job_id: result.data.job_id,
@@ -225,6 +247,7 @@ export default function TailorPage() {
       generation_run_id: result.data.generation_run_id ?? null,
       include_cover_letter: includeCoverLetter,
       include_outreach_message: includeOutreachMessage,
+      ...(theme_settings !== undefined ? { theme_settings } : {}),
     };
   };
 

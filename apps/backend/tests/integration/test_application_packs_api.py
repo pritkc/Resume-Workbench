@@ -51,6 +51,7 @@ def _group_items(resume_data: dict, group_label: str) -> list[str]:
 def _fake_tailoring_result(
     resume_data: dict,
     warnings: list[str] | None = None,
+    bold_keywords: list[str] | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         resume_data=copy.deepcopy(resume_data),
@@ -63,6 +64,7 @@ def _fake_tailoring_result(
         rejected_declared_changes=[],
         cleanup_changes=[],
         stage_breakdown=TailoringStageBreakdown(),
+        bold_keywords=bold_keywords or [],
     )
 
 

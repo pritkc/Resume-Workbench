@@ -567,6 +567,7 @@
       "additionalGroupsModified": "修改附加分组",
       "highRiskChanges": "高风险变更",
       "warningTitle": "检测到 {count} 项高风险新增内容",
+      "changeAttribution": "变更归因",
       "warningMessage": "请确认这些新增内容确实存在于您的原始简历中，或在描述中有所体现",
       "summaryChanges": "摘要变更",
       "additionalItemChanges": "附加项变更",
