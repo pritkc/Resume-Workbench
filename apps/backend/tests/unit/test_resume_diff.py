@@ -260,3 +260,70 @@ def test_no_changes_returns_empty() -> None:
 
     assert summary.total_changes == 0
     assert len(changes) == 0
+
+
+def test_experience_title_change_detected() -> None:
+    original = {
+        "workExperience": [
+            {"title": "Software Engineer", "company": "Acme", "years": "2022", "description": []}
+        ]
+    }
+    improved = {
+        "workExperience": [
+            {"title": "Senior Software Engineer", "company": "Acme", "years": "2022", "description": []}
+        ]
+    }
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    title_changes = [c for c in changes if c.field_type == "experience_title"]
+    assert len(title_changes) == 1
+    assert title_changes[0].change_type == "modified"
+    assert title_changes[0].original_value == "Software Engineer"
+    assert title_changes[0].new_value == "Senior Software Engineer"
+    assert title_changes[0].field_path == "workExperience[0].position"
+
+
+def test_project_title_change_detected() -> None:
+    original = {
+        "personalProjects": [
+            {"name": "My App", "description": []}
+        ]
+    }
+    improved = {
+        "personalProjects": [
+            {"name": "My App — Production-Grade Platform", "description": []}
+        ]
+    }
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    title_changes = [c for c in changes if c.field_type == "project_title"]
+    assert len(title_changes) == 1
+    assert title_changes[0].change_type == "modified"
+    assert title_changes[0].original_value == "My App"
+    assert title_changes[0].new_value == "My App — Production-Grade Platform"
+    assert title_changes[0].field_path == "personalProjects[0].name"
+
+
+def test_unchanged_titles_produce_no_title_diff() -> None:
+    original = {
+        "workExperience": [
+            {"position": "Engineer", "company": "Corp", "years": "2023", "description": ["Built things"]}
+        ],
+        "personalProjects": [
+            {"name": "Tool", "description": ["Did stuff"]}
+        ],
+    }
+    improved = {
+        "workExperience": [
+            {"position": "Engineer", "company": "Corp", "years": "2023", "description": ["Rebuilt things"]}
+        ],
+        "personalProjects": [
+            {"name": "Tool", "description": ["Improved stuff"]}
+        ],
+    }
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    assert not any(c.field_type in {"experience_title", "project_title"} for c in changes)

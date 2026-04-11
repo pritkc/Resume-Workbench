@@ -478,7 +478,6 @@ class TailoringResponseContract(BaseModel):
     project_entries: list[str] = Field(default_factory=list)
     project_bullet_counts: list[int] = Field(default_factory=list)
     project_tech_stacks: list[str] = Field(default_factory=list)
-    skills_values_count: int = 0
 
     def to_prompt_dict(self) -> dict[str, Any]:
         """Return compact address contract for the LLM prompt."""

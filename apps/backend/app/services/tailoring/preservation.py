@@ -411,7 +411,11 @@ def finalize_tailored_resume(
     result = restore_original_dates(original_resume_data, result)
     if original_resume_markdown:
         result = restore_dates_from_markdown(result, original_resume_markdown)
-    result = preserve_original_skills(original_resume_data, result)
+    # In 2.0, the LLM is allowed to regroup and expand skills. If it returned a skills
+    # structure, treat it as authoritative and skip re-injection of original values.
+    llm_returned_skills = bool(payload.skills and payload.skills.groups)
+    if not llm_returned_skills:
+        result = preserve_original_skills(original_resume_data, result)
     result = protect_custom_sections(original_resume_data, result)
     result["sectionMeta"] = rehydrate_section_meta(
         result.get("customSections"),

@@ -876,8 +876,10 @@ class ResumeFieldDiff(BaseModel):
         "description",
         "summary",
         "experience",
+        "experience_title",
         "education",
         "project",
+        "project_title",
     ]
     change_type: Literal["added", "removed", "modified"]
     original_value: str | None = None

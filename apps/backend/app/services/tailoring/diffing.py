@@ -397,6 +397,45 @@ def calculate_resume_diff(
 
     original_experiences = original.get("workExperience", [])
     improved_experiences = improved.get("workExperience", [])
+
+    # Detect experience title/position changes specifically before generic entry diff
+    for idx, (orig, impr) in enumerate(zip(original_experiences, improved_experiences)):
+        if not isinstance(orig, dict) or not isinstance(impr, dict):
+            continue
+        orig_pos = _first_text(orig, "position", "title")
+        improved_pos = _first_text(impr, "position", "title")
+        if orig_pos and improved_pos and orig_pos != improved_pos:
+            changes.append(
+                ResumeFieldDiff(
+                    field_path=f"workExperience[{idx}].position",
+                    field_type="experience_title",
+                    change_type="modified",
+                    original_value=orig_pos,
+                    new_value=improved_pos,
+                    confidence="medium",
+                )
+            )
+
+    # Detect project name changes specifically before generic entry diff
+    original_projects = original.get("personalProjects", [])
+    improved_projects = improved.get("personalProjects", [])
+    for idx, (orig, impr) in enumerate(zip(original_projects, improved_projects)):
+        if not isinstance(orig, dict) or not isinstance(impr, dict):
+            continue
+        orig_name = _clean_text(orig.get("name"))
+        improved_name = _clean_text(impr.get("name"))
+        if orig_name and improved_name and orig_name != improved_name:
+            changes.append(
+                ResumeFieldDiff(
+                    field_path=f"personalProjects[{idx}].name",
+                    field_type="project_title",
+                    change_type="modified",
+                    original_value=orig_name,
+                    new_value=improved_name,
+                    confidence="medium",
+                )
+            )
+
     max_experience_len = max(len(original_experiences), len(improved_experiences))
     confidences = DiffConfidence(added="medium", removed="low", modified="medium")
     for idx in range(max_experience_len):

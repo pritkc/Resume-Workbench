@@ -158,7 +158,14 @@ def verify_generated_resume_result(
             warnings.append("Keyword mode changed section structure more than expected")
 
     if prompt_id in {"keywords", "full"}:
-        supported_keywords = find_supported_keywords(job_keywords, original)
+        ats_keywords = job_keywords.get("ats_keywords")
+        if ats_keywords and isinstance(ats_keywords, list):
+            # 2.0 pipeline: use the richer ats_keywords list from JDIntelligence,
+            # filtered to only those that appeared in the original resume
+            original_text = extract_resume_text(original)
+            supported_keywords = [k for k in ats_keywords if keyword_in_text(k, original_text)]
+        else:
+            supported_keywords = find_supported_keywords(job_keywords, original)
         if supported_keywords:
             result_text = extract_resume_text(result)
             missing_keywords = [

@@ -19,6 +19,7 @@ def _llm_compact_output(
     experience: dict | None = None,
     projects: dict | None = None,
     skills: list | None = None,
+    bold_keywords: list[str] | None = None,
 ) -> dict:
     """Build a compact v2 LLM response with optional section diffs."""
     result: dict = {"summary": summary}
@@ -28,6 +29,8 @@ def _llm_compact_output(
         result["projects"] = projects
     if skills is not None:
         result["skills"] = skills
+    if bold_keywords is not None:
+        result["bold_keywords"] = bold_keywords
     return result
 
 
@@ -358,6 +361,22 @@ class TestImproveResume:
         assert result.stage_breakdown.llm_applied_changes >= 1
         assert result.stage_breakdown.location_source == "jd"
         assert any(change.path == "summary" for change in result.change_manifest)
+
+    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    async def test_bold_keywords_flow_into_tailoring_result(
+        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+    ):
+        mock_llm.return_value = _llm_compact_output(
+            summary="5 years building distributed systems.",
+            bold_keywords=["Kubernetes", "microservices", "CI/CD", "REST APIs"],
+        )
+        result = await generate_tailored_resume(
+            original_resume="# Resume markdown",
+            job_description=sample_job_description,
+            job_keywords=sample_job_keywords,
+            original_resume_data=sample_resume,
+        )
+        assert result.bold_keywords == ["Kubernetes", "microservices", "CI/CD", "REST APIs"]
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_raises_on_invalid_json(self, mock_llm):

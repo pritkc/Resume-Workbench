@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from app.llm import complete_json
-from app.prompts import EXTRACT_KEYWORDS_PROMPT, EXTRACT_KEYWORDS_SYSTEM_PROMPT, PROMPT_VERSIONS
+from app.prompts import PROMPT_VERSIONS
 from app.prompts.templates import EXTRACT_JD_INTELLIGENCE_PROMPT, EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
 from app.services.cover_letter import extract_job_target_metadata
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
@@ -188,7 +188,7 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
         result["core_title"] = target_metadata.get("role")
     if not result.get("company_name"):
         result["company_name"] = target_metadata.get("company")
-    if not result.get("location") and isinstance(result.get("location"), type(None)):
+    if result.get("location") is None:
         result["location"] = target_metadata.get("location")
 
     return result

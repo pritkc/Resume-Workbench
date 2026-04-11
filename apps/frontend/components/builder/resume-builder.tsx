@@ -824,13 +824,22 @@ const ResumeBuilderContent = () => {
   }, [themeSettings]);
 
   useEffect(() => {
-    if (!improvedData?.data?.theme_settings) {
+    if (!improvedData?.data?.theme_settings && !improvedData?.data?.bold_keywords?.length) {
       return;
     }
-    setThemeSettings(improvedThemeSettings);
-    setLastSavedThemeSettings(improvedThemeSettings);
+    const boldKeywords = improvedData?.data?.bold_keywords;
+    const newSettings =
+      boldKeywords && boldKeywords.length > 0
+        ? {
+            ...improvedThemeSettings,
+            bold_keywords: true,
+            settings: { ...improvedThemeSettings.settings, bold_keywords: boldKeywords },
+          }
+        : improvedThemeSettings;
+    setThemeSettings(newSettings);
+    setLastSavedThemeSettings(newSettings);
     setYamlNeedsSync(true);
-  }, [improvedData?.data?.theme_settings, improvedThemeSettings]);
+  }, [improvedData?.data?.theme_settings, improvedData?.data?.bold_keywords, improvedThemeSettings]);
 
   // Warn user before leaving with unsaved changes
   useEffect(() => {

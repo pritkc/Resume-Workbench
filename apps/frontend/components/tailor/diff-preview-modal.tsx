@@ -120,6 +120,9 @@ export function DiffPreviewModal({
   const additionalItemChanges = detailedChanges.filter((c) => c.field_type === 'additional_item');
   const additionalGroupChanges = detailedChanges.filter((c) => c.field_type === 'additional_group');
   const descChanges = detailedChanges.filter((c) => c.field_type === 'description');
+  const titleChanges = detailedChanges.filter(
+    (c) => c.field_type === 'experience_title' || c.field_type === 'project_title'
+  );
   const experienceChanges = detailedChanges.filter((c) => c.field_type === 'experience');
   const educationChanges = detailedChanges.filter((c) => c.field_type === 'education');
   const projectChanges = detailedChanges.filter((c) => c.field_type === 'project');
@@ -238,6 +241,20 @@ export function DiffPreviewModal({
               onToggle={() => toggleSection('summary')}
             >
               {summaryChanges.map((change, idx) => (
+                <ChangeItem key={idx} change={change} />
+              ))}
+            </ChangeSection>
+          )}
+
+          {/* Title enhancements */}
+          {titleChanges.length > 0 && (
+            <ChangeSection
+              title="Title Enhancements"
+              count={titleChanges.length}
+              isExpanded={expandedSections.has('titles')}
+              onToggle={() => toggleSection('titles')}
+            >
+              {titleChanges.map((change, idx) => (
                 <ChangeItem key={idx} change={change} />
               ))}
             </ChangeSection>

@@ -64,8 +64,10 @@ export interface ResumeFieldDiff {
     | 'description'
     | 'summary'
     | 'experience'
+    | 'experience_title'
     | 'education'
-    | 'project';
+    | 'project'
+    | 'project_title';
   change_type: 'added' | 'removed' | 'modified';
   original_value?: string;
   new_value?: string;
@@ -129,6 +131,7 @@ export interface Data {
   detailed_changes?: ResumeFieldDiff[];
   change_manifest?: ResumeChange[];
   change_breakdown?: TailoringStageBreakdown;
+  bold_keywords?: string[];
 }
 
 export interface ImprovedResult {

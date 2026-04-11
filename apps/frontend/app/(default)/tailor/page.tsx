@@ -232,7 +232,15 @@ export default function TailorPage() {
     const confirmed = await confirmImproveResume(buildConfirmPayload(result));
     incrementImprovements();
     incrementResumes();
-    setImprovedData(confirmed);
+
+    // Preserve bold_keywords from preview: the confirm endpoint doesn't re-run the LLM
+    // so it won't produce bold_keywords. Carry them forward so the builder can apply them.
+    const boldKeywords = result.data.bold_keywords;
+    const augmented: ImprovedResult =
+      boldKeywords && boldKeywords.length > 0
+        ? { ...confirmed, data: { ...confirmed.data, bold_keywords: boldKeywords } }
+        : confirmed;
+    setImprovedData(augmented);
 
     const newResumeId = confirmed?.data?.resume_id;
     if (newResumeId) {
