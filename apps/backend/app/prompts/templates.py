@@ -5,8 +5,8 @@ PROMPT_VERSIONS = {
     "tailoring_user": "v4.0",
     "parse_resume": "v2.2",
     "extract_keywords": "v2.0",
-    "cover_letter": "v1.3",
-    "outreach": "v1.3",
+    "cover_letter": "v2.0",
+    "outreach": "v2.0",
     "enrichment_analyze": "v1.1",
     "enrichment_enhance": "v1.1",
     "enrichment_regenerate_item": "v1.1",
@@ -267,12 +267,11 @@ DEFAULT_IMPROVE_PROMPT_ID = "keywords"
 
 IMPROVE_RESUME_PROMPT = IMPROVE_RESUME_PROMPT_TEMPLATE
 
-COVER_LETTER_PROMPT = """Write one finished cover letter for this job application.
+COVER_LETTER_PROMPT = """Write one cover letter the candidate could send as-is. It should read like they typed it themselves: clear, calm, and short. No template voice, no performance.
 
 IMPORTANT:
 - Write in {output_language}
-- Output plain text only
-- Return exactly one finished cover letter
+- Plain text only, one letter only
 - Do NOT use em dash ("—") anywhere in the output
 
 JOB TARGET (JSON):
@@ -284,25 +283,35 @@ JOB DESCRIPTION EXCERPT:
 CANDIDATE PROFILE (JSON):
 {resume_profile}
 
-RULES:
-- 120-180 words
-- 3 to 4 short paragraphs
-- Opening: reference one specific job detail (product, team, stack, or problem), not generic excitement
-- Body: highlight 1-2 directly relevant qualifications grounded in the candidate profile
-- Closing: simple availability to talk, no desperate enthusiasm
-- If the candidate is pivoting, frame the move as intentional and relevant
-- Do NOT invent facts, metrics, or names
-- Do NOT use placeholder text or bracketed names
-- Do NOT add a signature block, heading, or markdown formatting
-- Return the final answer immediately, not a draft
+VOICE (match the resume tailoring standard):
+- Sound human: direct sentences, normal words, one thought per sentence
+- Confidence without selling: state fit and proof; do not hype, flatter the company, or pad with adjectives
+- Respect their time: no throat-clearing, no repeating the posting back to them, no "I am writing to apply"
+- Specific over generic: tie the opening to one concrete detail from the JD (product, stack, problem, team mandate), not generic interest
+- Banned tone and vocabulary: spearheaded, leveraged, orchestrated, utilized, facilitated, synergy, robust, scalable, holistic, proactive, streamlined, cutting-edge, state-of-the-art, thrilled, passionate, excited to, game-changer, delve, tapestry, landscape (when buzzwordy)
+- No rhetorical questions, no clichés ("perfect fit", "dream role"), no emojis
+
+STRUCTURE:
+- About 95-165 words in 3 tight paragraphs (use 4 only if needed for a career pivot)
+- Paragraph 1: why this role, anchored in one JD-specific detail
+- Paragraph 2: 1-2 relevant facts from the profile only (role, scope, tech, or outcome). No invented metrics or employers
+- Paragraph 3: brief, neutral close (open to a conversation). No desperation, no oversharing
+
+FACTS:
+- Do NOT invent facts, metrics, titles, or names
+- Do NOT use placeholder text, brackets, or "Hiring Manager" style fake names
+- If the candidate is changing direction, one honest line is enough; stay relevant
+
+FORMAT:
+- No letterhead, no markdown, no bullet lists in the body, no signature block with address blocks
+- Return the final letter only, not a draft or plan
 """
 
-OUTREACH_MESSAGE_PROMPT = """Write one finished cold outreach message for LinkedIn or email about this job opportunity.
+OUTREACH_MESSAGE_PROMPT = """Write one short personal message (LinkedIn or email body) about this opportunity. It should feel like a busy professional sent it between meetings: brief, specific, not mass-blast.
 
 IMPORTANT:
 - Write in {output_language}
-- Output plain text only
-- Return exactly one finished outreach message
+- Plain text only, one message only
 - Do NOT use em dash ("—") anywhere in the output
 
 JOB TARGET (JSON):
@@ -314,18 +323,21 @@ JOB DESCRIPTION EXCERPT:
 CANDIDATE PROFILE (JSON):
 {resume_profile}
 
-RULES:
-- 65-110 words total
-- 3 to 5 short sentences
-- Open with one specific job detail, never with "I'm reaching out" or "I saw your posting"
-- Mention the strongest relevant qualification with one concrete detail if supported
-- End with one low-friction ask
-- Tone: warm, confident peer; not stiff, not overly eager
-- If the recipient name is unknown, do not invent one and do not use a greeting placeholder
-- Do NOT use phrases like "excited about" or "passionate about"
+VOICE (match the resume tailoring standard):
+- Peer tone: confident, not salesy; warm enough to be civil, never eager or ingratiating
+- No template openers: do not start with "I'm reaching out", "I hope this finds you well", "I came across your posting", or "I wanted to touch base"
+- No hype: avoid excited, passionate, thrilled, amazing, incredible, synergy, leverage, circle back, pick your brain
+- Respect their time: about 50-95 words, 3-4 short sentences unless a fifth is needed for clarity
+- First sentence: one concrete anchor from the role or company (from the JD), not a self-introduction
+- One sentence: strongest relevant credential with a concrete detail only if it is in the profile
+- Last sentence: one low-friction ask (e.g., short call, right person to speak with). No pressure, no fake urgency
+
+FACTS:
 - Do NOT invent facts, metrics, or names
-- Do NOT add a subject line, signature block, or markdown formatting
-- Return the final answer immediately, not a draft
+- If the recipient's name is not in JOB TARGET, do not invent a name or use "Dear [Name]" placeholders
+- Do NOT add a subject line, signature block, or markdown
+
+Return the final message only, not a draft or plan
 """
 
 # Alias for backward compatibility
@@ -336,14 +348,14 @@ EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT = "You are a job description analyst. Extr
 # Kept for backward compatibility
 EXTRACT_KEYWORDS_SYSTEM_PROMPT = EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
 COVER_LETTER_SYSTEM_PROMPT = (
-    "You are a professional career coach and resume writer. "
-    "Write one strong, personalized final cover letter only. "
-    "Do not show planning, analysis, alternatives, placeholders, or scaffolding."
+    "You write concise job application letters in the candidate's own voice: human, direct, and credible. "
+    "Output one final cover letter in plain text only. "
+    "No planning steps, no alternatives, no placeholders, no markdown."
 )
 OUTREACH_SYSTEM_PROMPT = (
-    "You are a professional networking coach. "
-    "Write one genuine, polished final outreach message only. "
-    "Do not show planning, analysis, alternatives, placeholders, or scaffolding."
+    "You write short professional outreach notes that sound personally composed, not generated. "
+    "Output one final message in plain text only. "
+    "No planning steps, no alternatives, no placeholders, no markdown."
 )
 ENRICHMENT_ANALYZE_SYSTEM_PROMPT = "You are a professional resume analyst. Output only valid JSON."
 ENRICHMENT_ENHANCE_SYSTEM_PROMPT = "You are a professional resume writer. Output only valid JSON."

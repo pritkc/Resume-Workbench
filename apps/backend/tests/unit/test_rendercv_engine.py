@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from rendercv.renderer.pdf_png import get_package_path
 
 from app.rendering.rendercv_engine import render_resume_bundle
 from app.rendering.theme_profiles import RenderThemeSettings
@@ -27,6 +28,31 @@ def _extract_pdftotext(pdf_path: Path) -> str:
         check=True,
     )
     return result.stdout
+
+
+def test_rendercv_engine_recovers_after_bundled_typst_package_temp_removed(
+    sample_resume: dict,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """RenderCV caches a temp copy of the Typst package; ensure we recover if it is deleted."""
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    first = render_resume_bundle(
+        sample_resume,
+        RenderThemeSettings(theme_id="classic"),
+        identifier="pkg_cache_first",
+    )
+    assert first.pdf_path is not None and first.pdf_path.exists()
+
+    shutil.rmtree(get_package_path(), ignore_errors=True)
+
+    second = render_resume_bundle(
+        sample_resume,
+        RenderThemeSettings(theme_id="classic"),
+        identifier="pkg_cache_second",
+    )
+    assert second.pdf_path is not None and second.pdf_path.exists()
 
 
 def test_rendercv_engine_generates_pdf_png_and_yaml(

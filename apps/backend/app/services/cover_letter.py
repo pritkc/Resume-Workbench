@@ -73,14 +73,14 @@ _TITLE_TRAILING_QUALIFIER_RE = re.compile(
 MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2200
 
 _COVER_LETTER_RETRY_HINT = (
-    "Return one complete cover letter in plain text only. Stay between 120 and 180 words, "
-    "use 3 to 4 short paragraphs, end with a complete closing sentence, and return the final answer immediately. "
-    "Do not use placeholders, markdown, draft notes, or signature blocks."
+    "Return one complete cover letter in plain text only. Stay between 95 and 165 words, "
+    "use 3 tight paragraphs (4 only if needed), human direct tone, end with a complete closing sentence. "
+    "No placeholders, markdown, draft notes, signature blocks, or em dashes."
 )
 _OUTREACH_RETRY_HINT = (
-    "Return one complete outreach message in plain text only. Stay between 65 and 110 words, "
-    "use 3 to 5 short sentences, avoid placeholders, end with one low-friction ask, and return the final answer immediately. "
-    "Do not stop mid-sentence or add a signature block."
+    "Return one complete outreach message in plain text only. Stay between 50 and 95 words, "
+    "3-4 short sentences, specific opening, one low-friction ask at the end. "
+    "No placeholders, template openers, or signature block. Do not stop mid-sentence."
 )
 
 

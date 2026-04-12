@@ -16,6 +16,7 @@ from rendercv.renderer.pdf_png import (
     copy_photo_next_to_typst_file,
     generate_pdf,
     generate_png,
+    get_package_path,
     get_typst_compiler,
 )
 from rendercv.renderer.typst import generate_typst
@@ -28,6 +29,18 @@ from app.rendering.theme_profiles import RenderThemeSettings
 logger = logging.getLogger(__name__)
 
 _ATS_PDF_STANDARDS = ["a-2u"]
+
+
+def _reset_rendercv_typst_caches() -> None:
+    """Clear RenderCV's cached Typst package dir and compiler.
+
+    RenderCV caches the path to a temp directory that mirrors the bundled
+    ``rendercv`` Typst package. If that temp directory is removed (OS temp
+    cleanup, etc.), compilation fails looking for ``typst.toml``. Resetting
+    before each render ensures a fresh package path.
+    """
+    get_package_path.cache_clear()
+    get_typst_compiler.cache_clear()
 
 
 class RenderCVRenderError(RuntimeError):
@@ -76,6 +89,7 @@ def _generate_pdf_with_ats_profile(model: Any, typst_path: Path | None) -> Path 
             "Falling back to default Typst PDF compilation without explicit ATS profile.",
             exc_info=True,
         )
+        _reset_rendercv_typst_caches()
         return generate_pdf(model, typst_path)
 
 
@@ -88,6 +102,8 @@ def render_resume_bundle(
     bundle_id = _default_identifier(identifier)
     work_dir = (settings.rendercv_work_dir / bundle_id).resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
+
+    _reset_rendercv_typst_caches()
 
     payload = resume_to_rendercv_payload(resume_data, theme_settings)
     yaml_path = work_dir / f"{bundle_id}.yaml"
