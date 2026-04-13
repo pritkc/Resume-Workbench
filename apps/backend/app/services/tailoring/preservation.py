@@ -8,7 +8,11 @@ import re
 from typing import Any
 
 from app.schemas import ResumeData, normalize_resume_data
-from app.services.additional_groups import restore_missing_additional_items
+from app.services.additional_groups import (
+    coerce_string_list,
+    normalize_skill_groups,
+    restore_missing_additional_items,
+)
 from app.services.cover_letter import sanitize_job_location
 from app.services.parser import restore_dates_from_markdown
 from app.services.refiner import (
@@ -261,9 +265,18 @@ def apply_compact_diff(
         result["summary"] = diff["summary"].strip()
 
     for diff_key, resume_key in [("experience", "workExperience"), ("projects", "personalProjects")]:
-        section_diff = diff.get(diff_key)
-        if not isinstance(section_diff, dict):
+        section_diff_raw = diff.get(diff_key)
+        if isinstance(section_diff_raw, list):
+            section_diff = {
+                str(index): entry_diff
+                for index, entry_diff in enumerate(section_diff_raw)
+                if isinstance(entry_diff, dict)
+            }
+        elif isinstance(section_diff_raw, dict):
+            section_diff = section_diff_raw
+        else:
             continue
+
         entries = result.get(resume_key, [])
         for entry_idx_str, entry_diff in section_diff.items():
             try:
@@ -298,9 +311,26 @@ def apply_compact_diff(
                 if isinstance(ts, str):
                     entry["summary"] = ts.strip() or None
 
-            bullets_diff = entry_diff.get("bullets")
+            bullets_diff_raw = entry_diff.get("bullets")
+            if bullets_diff_raw is None:
+                bullets_diff_raw = entry_diff.get("description")
+            if bullets_diff_raw is None:
+                bullets_diff_raw = entry_diff.get("highlights")
+
+            if isinstance(bullets_diff_raw, list):
+                bullets_diff = {
+                    str(index): bullet
+                    for index, bullet in enumerate(bullets_diff_raw)
+                }
+            elif isinstance(bullets_diff_raw, dict):
+                bullets_diff = bullets_diff_raw
+            else:
+                bullets_diff = None
+
             if isinstance(bullets_diff, dict):
-                desc = list(entry.get("description") or [])
+                desc = coerce_string_list(entry.get("description"))
+                if not desc:
+                    desc = coerce_string_list(entry.get("highlights"))
                 orig_len = len(desc)
                 for bullet_idx_str, bullet_text in bullets_diff.items():
                     try:
@@ -322,10 +352,16 @@ def apply_compact_diff(
                         continue
                     desc[bullet_idx] = bullet_text.strip()
                 entry["description"] = desc
+                if "highlights" in entry and isinstance(entry.get("highlights"), list):
+                    entry["highlights"] = list(desc)
 
     skills_diff = diff.get("skills")
-    if isinstance(skills_diff, list):
-        result.setdefault("skills", {})["groups"] = skills_diff
+    if isinstance(skills_diff, (list, dict)):
+        normalized_skills = normalize_skill_groups(
+            skills_diff,
+            seed_defaults_if_empty=False,
+        )
+        result.setdefault("skills", {})["groups"] = normalized_skills.get("groups", [])
 
     return result
 
@@ -411,11 +447,9 @@ def finalize_tailored_resume(
     result = restore_original_dates(original_resume_data, result)
     if original_resume_markdown:
         result = restore_dates_from_markdown(result, original_resume_markdown)
-    # In 2.0, the LLM is allowed to regroup and expand skills. If it returned a skills
-    # structure, treat it as authoritative and skip re-injection of original values.
-    llm_returned_skills = bool(payload.skills and payload.skills.groups)
-    if not llm_returned_skills:
-        result = preserve_original_skills(original_resume_data, result)
+    # Always restore any dropped original skill values. LLM regrouping is preserved,
+    # but omissions are patched to keep the master resume truthfully complete.
+    result = preserve_original_skills(original_resume_data, result)
     result = protect_custom_sections(original_resume_data, result)
     result["sectionMeta"] = rehydrate_section_meta(
         result.get("customSections"),

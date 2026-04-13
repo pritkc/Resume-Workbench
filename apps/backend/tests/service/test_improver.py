@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.improver import extract_job_keywords, improve_resume, generate_tailored_resume
+from app.services.additional_groups import flatten_additional_items
 from app.schemas.models import DEFAULT_SECTION_META
 
 
@@ -361,6 +362,51 @@ class TestImproveResume:
         assert result.stage_breakdown.llm_applied_changes >= 1
         assert result.stage_breakdown.location_source == "master"
         assert any(change.path == "summary" for change in result.change_manifest)
+
+    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    async def test_legacy_full_body_response_applies_bullets_and_restores_missing_skills(
+        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+    ):
+        legacy_output = copy.deepcopy(sample_resume)
+        legacy_output["summary"] = "Tailored summary from legacy full-body output."
+        legacy_output["workExperience"][0]["description"][0] = (
+            "Legacy full-body rewrite for experience bullet."
+        )
+        legacy_output["personalProjects"][0]["description"][0] = (
+            "Legacy full-body rewrite for project bullet."
+        )
+        legacy_output["skills"] = {
+            "groups": [
+                {
+                    "label": "Technical Skills",
+                    "values": ["Python", "FastAPI"],
+                }
+            ]
+        }
+
+        mock_llm.return_value = legacy_output
+
+        result = await improve_resume(
+            original_resume="# Resume markdown",
+            job_description=sample_job_description,
+            job_keywords=sample_job_keywords,
+            original_resume_data=sample_resume,
+        )
+
+        assert result["summary"] == "Tailored summary from legacy full-body output."
+        assert result["workExperience"][0]["description"][0] == (
+            "Legacy full-body rewrite for experience bullet."
+        )
+        assert result["personalProjects"][0]["description"][0] == (
+            "Legacy full-body rewrite for project bullet."
+        )
+        merged_skill_values = set(
+            flatten_additional_items(result.get("skills") or result.get("additional"))
+        )
+        assert "Python" in merged_skill_values
+        assert "FastAPI" in merged_skill_values
+        # This value was omitted by the LLM output and should be restored from source.
+        assert "Docker" in merged_skill_values
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_bold_keywords_flow_into_tailoring_result(

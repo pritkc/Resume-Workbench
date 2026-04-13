@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.llm import complete_json
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_STRATEGY_GUIDANCE, PROMPT_VERSIONS
 
@@ -41,6 +43,19 @@ def _check_for_truncation(data: dict[str, Any]) -> None:
         logger.warning(
             "Resume has empty workExperience - possible truncation or unusual resume"
         )
+
+
+def _looks_like_legacy_full_body_response(result: dict[str, Any]) -> bool:
+    work_experience = result.get("workExperience")
+    personal_projects = result.get("personalProjects")
+    return bool(
+        isinstance(work_experience, list)
+        or isinstance(personal_projects, list)
+        or "customSections" in result
+        or "personalInfo" in result
+        or "education" in result
+        or "changes" in result
+    )
 
 
 async def generate_tailored_resume(
@@ -94,15 +109,17 @@ async def generate_tailored_resume(
 
     # Try compact v2 format first; fall back to legacy full-body format
     llm_response_v2 = TailoringLLMResponseV2.model_validate(result)
+    legacy_full_body_response = _looks_like_legacy_full_body_response(result)
     has_compact_content = bool(
-        llm_response_v2.summary
-        or llm_response_v2.experience
+        llm_response_v2.experience
         or llm_response_v2.projects
         or llm_response_v2.skills is not None
+        or llm_response_v2.bold_keywords
+        or (llm_response_v2.summary and not legacy_full_body_response)
     )
 
     declared_changes: list = []
-    if has_compact_content and original_resume_data is not None:
+    if has_compact_content and not legacy_full_body_response and original_resume_data is not None:
         raw_llm_resume_data = apply_compact_diff(
             original_resume_data,
             llm_response_v2.model_dump(exclude_none=True),
@@ -110,15 +127,24 @@ async def generate_tailored_resume(
     else:
         if not has_compact_content:
             logger.warning("LLM returned no compact content — falling back to legacy full-body parse")
-        llm_response = TailoringLLMResponse.model_validate(result)
-        tailored_payload = TailoringResumePayload.model_validate(
-            llm_response.model_dump(exclude={"changes"})
-        )
+        try:
+            llm_response = TailoringLLMResponse.model_validate(result)
+            tailored_payload = TailoringResumePayload.model_validate(
+                llm_response.model_dump(exclude={"changes"})
+            )
+            declared_changes = llm_response.changes
+        except ValidationError:
+            logger.warning(
+                "Legacy full-body parse failed strict schema validation; "
+                "falling back to tolerant payload extraction."
+            )
+            tailored_payload = TailoringResumePayload.from_resume_data(result)
+            if tailored_payload is None:
+                tailored_payload = TailoringResumePayload()
         raw_llm_resume_data = rehydrate_tailoring_resume(
             tailored_payload,
             original_resume_data=original_resume_data,
         )
-        declared_changes = llm_response.changes
 
     # Build a TailoringResumePayload from the reconstructed dict for finalize
     tailored_payload = TailoringResumePayload.from_resume_data(raw_llm_resume_data)

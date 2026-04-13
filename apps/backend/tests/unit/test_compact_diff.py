@@ -91,6 +91,21 @@ class TestApplyCompactDiff:
         assert desc[1] == "Led migration to microservices"
         assert desc[2] == "Bullet C"
 
+    def test_section_diff_as_list_is_supported(self, base_resume):
+        diff = {"experience": [{"bullets": {"0": "List-form entry bullet"}}]}
+        result = apply_compact_diff(base_resume, diff)
+        assert result["workExperience"][0]["description"][0] == "List-form entry bullet"
+
+    def test_description_alias_is_supported_for_bullets(self, base_resume):
+        diff = {"experience": {"0": {"description": {"1": "Description-alias bullet"}}}}
+        result = apply_compact_diff(base_resume, diff)
+        assert result["workExperience"][0]["description"][1] == "Description-alias bullet"
+
+    def test_highlights_alias_list_is_supported_for_bullets(self, base_resume):
+        diff = {"projects": {"0": {"highlights": ["Project bullet rewritten"]}}}
+        result = apply_compact_diff(base_resume, diff)
+        assert result["personalProjects"][0]["description"][0] == "Project bullet rewritten"
+
     def test_absent_entry_unchanged(self, base_resume):
         diff = {"experience": {"1": {"bullets": {"0": "New payment bullet"}}}}
         result = apply_compact_diff(base_resume, diff)
@@ -142,6 +157,19 @@ class TestApplyCompactDiff:
         diff = {"skills": new_skills}
         result = apply_compact_diff(base_resume, diff)
         assert result["skills"]["groups"] == new_skills
+
+    def test_skills_dict_shape_with_groups_is_supported(self, base_resume):
+        diff = {
+            "skills": {
+                "groups": [
+                    {"label": "Backend", "values": ["Python", "SQL"]},
+                    {"label": "Platform", "values": ["Docker"]},
+                ]
+            }
+        }
+        result = apply_compact_diff(base_resume, diff)
+        assert result["skills"]["groups"][0]["label"] == "Backend"
+        assert result["skills"]["groups"][0]["values"] == ["Python", "SQL"]
 
     def test_skills_absent_key_unchanged(self, base_resume):
         diff = {"summary": "New summary."}
