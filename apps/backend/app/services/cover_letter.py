@@ -4,16 +4,14 @@ import json
 import re
 from typing import Any
 
-from app.llm import complete
+from app.llm import complete_json
 from app.prompts import (
-    COVER_LETTER_SYSTEM_PROMPT,
-    OUTREACH_SYSTEM_PROMPT,
+    COMBINED_MESSAGES_SYSTEM_PROMPT,
     PROMPT_VERSIONS,
     get_language_name,
 )
 from app.prompts.templates import (
-    COVER_LETTER_PROMPT,
-    OUTREACH_MESSAGE_PROMPT,
+    COVER_LETTER_OUTREACH_PROMPT,
 )
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
@@ -206,17 +204,9 @@ _TITLE_TRAILING_QUALIFIER_RE = re.compile(
 
 MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2200
 
-_COVER_LETTER_RETRY_HINT = (
-    "Return one complete cover letter in plain text only. Stay between 95 and 165 words, "
-    "use 3 tight paragraphs (4 only if needed), human direct tone, end with a complete closing sentence. "
-    "No placeholders, markdown, draft notes, signature blocks, or em dashes. "
-    "Return the final answer immediately."
-)
-_OUTREACH_RETRY_HINT = (
-    "Return one complete outreach message in plain text only. Stay between 50 and 95 words, "
-    "3-4 short sentences, specific opening, one low-friction ask at the end. "
-    "No placeholders, template openers, or signature block. Do not stop mid-sentence. "
-    "Return the final answer immediately."
+_COMBINED_MESSAGES_RETRY_HINT = (
+    "Return a complete JSON object with both keys: cover_letter and outreach_message. "
+    "Each value must be a complete plain-text message, not truncated."
 )
 
 
@@ -500,48 +490,59 @@ def _build_message_prompt_inputs(
     }
 
 
-async def generate_cover_letter(
+def _coerce_message_text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+async def generate_cover_letter_and_outreach(
     resume_data: dict[str, Any],
     job_description: str,
     language: str = "en",
-) -> str:
-    """Generate a cover letter based on resume and job description.
-
-    Args:
-        resume_data: Structured resume data (ResumeData format)
-        job_description: Target job description text
-        language: Output language code (en, es, zh, ja)
-
-    Returns:
-        Generated cover letter as plain text
-    """
+) -> tuple[str, str]:
+    """Generate cover letter and outreach message together in one LLM call."""
     output_language = get_language_name(language)
     prompt_inputs = _build_message_prompt_inputs(resume_data, job_description)
-
-    prompt = COVER_LETTER_PROMPT.format(
+    prompt = COVER_LETTER_OUTREACH_PROMPT.format(
         job_target=prompt_inputs["job_target"],
         job_description=prompt_inputs["job_description"],
         resume_profile=prompt_inputs["resume_profile"],
         output_language=output_language,
     )
 
-    result = await complete(
+    result = await complete_json(
         prompt=prompt,
-        system_prompt=COVER_LETTER_SYSTEM_PROMPT,
-        max_tokens=2048,
+        system_prompt=COMBINED_MESSAGES_SYSTEM_PROMPT,
+        max_tokens=3072,
         retries=3,
-        retry_hint=_COVER_LETTER_RETRY_HINT,
-        retry_max_tokens=4096,
-        operation="cover_letter_generate",
+        retry_hint=_COMBINED_MESSAGES_RETRY_HINT,
+        operation="cover_letter_outreach_generate",
         metadata={
             "job_description_chars": len(job_description),
             "prompt_job_description_chars": len(prompt_inputs["job_description"]),
             "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
-            "prompt_version": PROMPT_VERSIONS.get("cover_letter", "unknown"),
+            "prompt_version": PROMPT_VERSIONS.get("cover_letter_outreach", "unknown"),
         },
     )
 
-    return result.strip()
+    cover_letter = _coerce_message_text(result.get("cover_letter"))
+    outreach_message = _coerce_message_text(result.get("outreach_message"))
+    if not cover_letter or not outreach_message:
+        raise ValueError("Combined message generation returned missing fields")
+    return cover_letter, outreach_message
+
+
+async def generate_cover_letter(
+    resume_data: dict[str, Any],
+    job_description: str,
+    language: str = "en",
+) -> str:
+    """Backward-compatible helper that now relies on the merged generator."""
+    cover_letter, _outreach = await generate_cover_letter_and_outreach(
+        resume_data,
+        job_description,
+        language,
+    )
+    return cover_letter
 
 
 async def generate_outreach_message(
@@ -549,40 +550,10 @@ async def generate_outreach_message(
     job_description: str,
     language: str = "en",
 ) -> str:
-    """Generate a cold outreach message for networking.
-
-    Args:
-        resume_data: Structured resume data (ResumeData format)
-        job_description: Target job description text
-        language: Output language code (en, es, zh, ja)
-
-    Returns:
-        Generated outreach message as plain text
-    """
-    output_language = get_language_name(language)
-    prompt_inputs = _build_message_prompt_inputs(resume_data, job_description)
-
-    prompt = OUTREACH_MESSAGE_PROMPT.format(
-        job_target=prompt_inputs["job_target"],
-        job_description=prompt_inputs["job_description"],
-        resume_profile=prompt_inputs["resume_profile"],
-        output_language=output_language,
+    """Backward-compatible helper that now relies on the merged generator."""
+    _cover_letter, outreach_message = await generate_cover_letter_and_outreach(
+        resume_data,
+        job_description,
+        language,
     )
-
-    result = await complete(
-        prompt=prompt,
-        system_prompt=OUTREACH_SYSTEM_PROMPT,
-        max_tokens=1536,
-        retries=3,
-        retry_hint=_OUTREACH_RETRY_HINT,
-        retry_max_tokens=3072,
-        operation="outreach_generate",
-        metadata={
-            "job_description_chars": len(job_description),
-            "prompt_job_description_chars": len(prompt_inputs["job_description"]),
-            "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
-            "prompt_version": PROMPT_VERSIONS.get("outreach", "unknown"),
-        },
-    )
-
-    return result.strip()
+    return outreach_message

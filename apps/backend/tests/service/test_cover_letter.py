@@ -6,6 +6,7 @@ from app.services.cover_letter import (
     build_job_target_title,
     extract_job_target_metadata,
     generate_cover_letter,
+    generate_cover_letter_and_outreach,
     generate_outreach_message,
 )
 from app.services.message_profiles import CandidatePromptProfile
@@ -174,45 +175,75 @@ class TestCandidatePromptProfile:
 
 
 class TestGeneratedMessages:
-    @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
-    async def test_outreach_uses_compact_profile_and_retry_hint(
-        self, mock_complete, sample_resume, sample_job_description
+    @patch("app.services.cover_letter.complete_json", new_callable=AsyncMock)
+    async def test_combined_generation_uses_single_json_call(
+        self, mock_complete_json, sample_resume, sample_job_description
     ):
-        mock_complete.return_value = "Worth a quick chat?"
+        mock_complete_json.return_value = {
+            "cover_letter": "Thanks for considering my application.",
+            "outreach_message": "Open to a quick intro call this week?",
+        }
 
-        await generate_outreach_message(sample_resume, sample_job_description)
+        cover_letter, outreach = await generate_cover_letter_and_outreach(
+            sample_resume,
+            sample_job_description,
+        )
 
-        kwargs = mock_complete.call_args.kwargs
+        kwargs = mock_complete_json.call_args.kwargs
         prompt = kwargs["prompt"]
+        assert "JOB TARGET (JSON):" in prompt
         assert "CANDIDATE PROFILE (JSON):" in prompt
+        assert kwargs["operation"] == "cover_letter_outreach_generate"
+        assert kwargs["max_tokens"] == 3072
+        assert kwargs["retries"] == 3
+        assert kwargs["metadata"]["candidate_profile_chars"] < 900
+        assert cover_letter == "Thanks for considering my application."
+        assert outreach == "Open to a quick intro call this week?"
+
+    @patch("app.services.cover_letter.complete_json", new_callable=AsyncMock)
+    async def test_outreach_uses_merged_json_generator(
+        self, mock_complete_json, sample_resume, sample_job_description
+    ):
+        mock_complete_json.return_value = {
+            "cover_letter": "Thanks for your consideration.",
+            "outreach_message": "Worth a quick chat?",
+        }
+
+        outreach = await generate_outreach_message(sample_resume, sample_job_description)
+
+        kwargs = mock_complete_json.call_args.kwargs
+        prompt = kwargs["prompt"]
+        assert "JOB TARGET (JSON):" in prompt
         assert '"experience"' in prompt
         assert '"sectionMeta"' not in prompt
         assert "jane@example.com" not in prompt
         assert "linkedin.com/in/janedoe" not in prompt
-        assert kwargs["max_tokens"] == 1536
+        assert kwargs["operation"] == "cover_letter_outreach_generate"
+        assert kwargs["max_tokens"] == 3072
         assert kwargs["retries"] == 3
-        assert kwargs["retry_max_tokens"] == 3072
-        assert "return the final answer immediately" in kwargs["retry_hint"].lower()
         assert kwargs["metadata"]["candidate_profile_chars"] < 900
+        assert outreach == "Worth a quick chat?"
 
-    @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
-    async def test_cover_letter_uses_compact_profile_and_retry_hint(
-        self, mock_complete, sample_resume, sample_job_description
+    @patch("app.services.cover_letter.complete_json", new_callable=AsyncMock)
+    async def test_cover_letter_uses_merged_json_generator(
+        self, mock_complete_json, sample_resume, sample_job_description
     ):
-        mock_complete.return_value = "Thanks for your time."
+        mock_complete_json.return_value = {
+            "cover_letter": "Thanks for your time.",
+            "outreach_message": "Quick intro?",
+        }
 
-        await generate_cover_letter(sample_resume, sample_job_description)
+        cover_letter = await generate_cover_letter(sample_resume, sample_job_description)
 
-        kwargs = mock_complete.call_args.kwargs
+        kwargs = mock_complete_json.call_args.kwargs
         prompt = kwargs["prompt"]
         assert "JOB TARGET (JSON):" in prompt
         assert "CANDIDATE PROFILE (JSON):" in prompt
         assert "Acme Corp" in prompt
         assert '"sectionMeta"' not in prompt
         assert "jane@example.com" not in prompt
-        assert kwargs["max_tokens"] == 2048
+        assert kwargs["operation"] == "cover_letter_outreach_generate"
+        assert kwargs["max_tokens"] == 3072
         assert kwargs["retries"] == 3
-        assert kwargs["retry_max_tokens"] == 4096
-        assert "complete cover letter" in kwargs["retry_hint"]
-        assert "return the final answer immediately" in kwargs["retry_hint"].lower()
         assert kwargs["metadata"]["candidate_profile_chars"] < 900
+        assert cover_letter == "Thanks for your time."

@@ -7,6 +7,7 @@ PROMPT_VERSIONS = {
     "extract_keywords": "v2.0",
     "cover_letter": "v2.0",
     "outreach": "v2.0",
+    "cover_letter_outreach": "v1.0",
     "application_questions_generate": "v1.0",
     "enrichment_analyze": "v1.1",
     "enrichment_enhance": "v1.1",
@@ -345,6 +346,51 @@ FACTS:
 Return the final message only, not a draft or plan
 """
 
+COVER_LETTER_OUTREACH_PROMPT = """Generate both outputs in one pass using the same context:
+1) a cover letter
+2) a short outreach message
+
+IMPORTANT:
+- Write both outputs in {output_language}
+- Output JSON only with this exact shape:
+{{
+  "cover_letter": "string",
+  "outreach_message": "string"
+}}
+- Do NOT use em dash ("—") anywhere in either string
+- Do not add extra keys or markdown
+
+JOB TARGET (JSON):
+{job_target}
+
+JOB DESCRIPTION EXCERPT:
+{job_description}
+
+CANDIDATE PROFILE (JSON):
+{resume_profile}
+
+COVER LETTER REQUIREMENTS:
+- 95-165 words, 3 tight paragraphs (4 only for a genuine pivot)
+- Human, direct, specific, no template voice, no hype
+- Anchor paragraph 1 in one concrete JD detail
+- Paragraph 2 includes 1-2 profile-grounded facts only (no invented metrics/facts)
+- Paragraph 3 ends with a clean, neutral closing
+- Plain text body only (no letterhead, markdown, signature block)
+
+OUTREACH MESSAGE REQUIREMENTS:
+- 50-95 words, 3-4 short sentences
+- Peer-professional tone: concise, confident, not salesy
+- Start with one concrete role/company anchor from JD
+- Include one strongest relevant credential from profile
+- End with one low-friction ask
+- Plain text only (no subject line, no signature block, no markdown)
+
+FACTS:
+- Use only information from provided JSON/context
+- Do not invent names, metrics, employers, dates, or credentials
+- If recipient name is unknown, do not invent one
+"""
+
 APPLICATION_QUESTIONS_PROMPT = """Write personalized answers for job-application custom questions using only the provided resume/JD context.
 
 STYLE:
@@ -404,6 +450,11 @@ OUTREACH_SYSTEM_PROMPT = (
     "You write short professional outreach notes that sound personally composed, not generated. "
     "Output one final message in plain text only. "
     "No planning steps, no alternatives, no placeholders, no markdown."
+)
+COMBINED_MESSAGES_SYSTEM_PROMPT = (
+    "You write concise, professional cover letters and outreach messages grounded only in provided context. "
+    "Output valid JSON only with keys cover_letter and outreach_message. "
+    "No markdown, no placeholders, no extra keys."
 )
 APPLICATION_QUESTIONS_SYSTEM_PROMPT = (
     "You answer job-application custom questions using only supplied context. "

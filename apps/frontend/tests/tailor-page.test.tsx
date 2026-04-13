@@ -172,12 +172,12 @@ describe('TailorPage', () => {
     });
     fetchGenerationDefaults.mockResolvedValue({
       include_cover_letter: true,
-      include_outreach_message: false,
+      include_outreach_message: true,
       prompt_id: 'keywords',
     });
     updateGenerationDefaults.mockResolvedValue({
       include_cover_letter: true,
-      include_outreach_message: false,
+      include_outreach_message: true,
       prompt_id: 'keywords',
     });
   });
@@ -185,16 +185,7 @@ describe('TailorPage', () => {
   it('loads last-used defaults and confirms the request-scoped tailoring payload', async () => {
     render(<TailorPage />);
 
-    await waitFor(() =>
-      expect(screen.getByRole('switch', { name: 'Cover letter' })).toHaveAttribute(
-        'aria-checked',
-        'true'
-      )
-    );
-    expect(screen.getByRole('switch', { name: 'LinkedIn message' })).toHaveAttribute(
-      'aria-checked',
-      'false'
-    );
+    await waitFor(() => expect(screen.getByText('keywords')).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText('tailor.jobDescriptionPlaceholder'), {
       target: {
@@ -209,8 +200,6 @@ describe('TailorPage', () => {
     expect(screen.getAllByAltText('preview.png').length).toBeGreaterThan(0);
     expect(updateGenerationDefaults).toHaveBeenCalledWith({
       prompt_id: 'keywords',
-      include_cover_letter: true,
-      include_outreach_message: false,
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'tailor.diffModal.confirmButton' }));
@@ -224,7 +213,7 @@ describe('TailorPage', () => {
         application_pack_id: 'pack-123',
         generation_run_id: 'run-123',
         include_cover_letter: true,
-        include_outreach_message: false,
+        include_outreach_message: true,
       })
     );
     expect(setImprovedData).toHaveBeenCalledWith(confirmedResult);

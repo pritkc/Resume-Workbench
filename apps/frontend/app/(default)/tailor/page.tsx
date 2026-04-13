@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
 import type { ImprovedResult } from '@/components/common/resume_previewer_context';
 import type { ResumeData } from '@/components/dashboard/resume-component';
@@ -32,8 +31,6 @@ import { AdditionalQuestionsPanel } from '@/components/application/additional-qu
 const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 
 type StoredGenerationDefaults = {
-  include_cover_letter: boolean;
-  include_outreach_message: boolean;
   prompt_id: string;
 };
 
@@ -55,8 +52,6 @@ function readStoredGenerationDefaults(): StoredGenerationDefaults | null {
 
     return {
       prompt_id: parsed.prompt_id,
-      include_cover_letter: Boolean(parsed.include_cover_letter),
-      include_outreach_message: Boolean(parsed.include_outreach_message),
     };
   } catch {
     window.localStorage.removeItem(GENERATION_DEFAULTS_STORAGE_KEY);
@@ -91,8 +86,6 @@ export default function TailorPage() {
   const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('keywords');
-  const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
-  const [includeOutreachMessage, setIncludeOutreachMessage] = useState(false);
   const [promptLoading, setPromptLoading] = useState(false);
   const hasUserSelectedPrompt = useRef(false);
   const missingDiffConfirmInFlight = useRef(false);
@@ -163,8 +156,6 @@ export default function TailorPage() {
 
     if (localDefaults && !hasUserSelectedPrompt.current) {
       setSelectedPromptId(localDefaults.prompt_id);
-      setIncludeCoverLetter(localDefaults.include_cover_letter);
-      setIncludeOutreachMessage(localDefaults.include_outreach_message);
     }
 
     const loadPromptConfig = async () => {
@@ -179,12 +170,7 @@ export default function TailorPage() {
           const resolvedDefaults = generationDefaults ?? localDefaults;
 
           if (resolvedDefaults) {
-            storeGenerationDefaults(resolvedDefaults);
-            setIncludeCoverLetter(resolvedDefaults.include_cover_letter);
-            setIncludeOutreachMessage(resolvedDefaults.include_outreach_message);
-          } else {
-            setIncludeCoverLetter(false);
-            setIncludeOutreachMessage(false);
+            storeGenerationDefaults({ prompt_id: resolvedDefaults.prompt_id });
           }
 
           if (!hasUserSelectedPrompt.current) {
@@ -260,8 +246,8 @@ export default function TailorPage() {
         })) ?? [],
       application_pack_id: result.data.application_pack_id ?? null,
       generation_run_id: result.data.generation_run_id ?? null,
-      include_cover_letter: includeCoverLetter,
-      include_outreach_message: includeOutreachMessage,
+      include_cover_letter: true,
+      include_outreach_message: true,
       ...(theme_settings !== undefined ? { theme_settings } : {}),
     };
   };
@@ -310,8 +296,8 @@ export default function TailorPage() {
       setGenerateStage('tailoring');
       const result = await previewImproveResume(resumeId, jobId, {
         promptId: selectedPromptId,
-        includeCoverLetter,
-        includeOutreachMessage,
+        includeCoverLetter: true,
+        includeOutreachMessage: true,
         signal: generationAbortRef.current?.signal,
       });
       setAdditionalQuestionContext({
@@ -373,8 +359,6 @@ export default function TailorPage() {
     const resumeId = masterResumeId;
     const nextDefaults: StoredGenerationDefaults = {
       prompt_id: selectedPromptId,
-      include_cover_letter: includeCoverLetter,
-      include_outreach_message: includeOutreachMessage,
     };
     storeGenerationDefaults(nextDefaults);
 
@@ -620,22 +604,9 @@ export default function TailorPage() {
             </div>
 
             <div className="space-y-2 border border-black bg-white p-3">
-              <ToggleSwitch
-                checked={includeCoverLetter}
-                onCheckedChange={setIncludeCoverLetter}
-                label="Cover letter"
-                description="Generate with this resume"
-                disabled={isLoading}
-                density="compact"
-              />
-              <ToggleSwitch
-                checked={includeOutreachMessage}
-                onCheckedChange={setIncludeOutreachMessage}
-                label="LinkedIn message"
-                description="Generate with this resume"
-                disabled={isLoading}
-                density="compact"
-              />
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
+                Cover letter + LinkedIn message are generated together.
+              </p>
             </div>
 
             {error && (

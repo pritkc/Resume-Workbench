@@ -8,7 +8,6 @@ import json
 import logging
 import re
 import unicodedata
-from collections.abc import Awaitable
 from pathlib import Path
 from typing import Any, NoReturn
 from uuid import uuid4
@@ -76,8 +75,7 @@ from app.services.improver import (
 from app.services.cover_letter import (
     build_job_target_title,
     extract_job_target_metadata,
-    generate_cover_letter,
-    generate_outreach_message,
+    generate_cover_letter_and_outreach,
     sanitize_job_location,
 )
 from app.services.resume_codes import (
@@ -120,25 +118,6 @@ def _resolve_prompt_id(request_prompt_id: str | None) -> str:
         return generation_default_prompt
 
     return _get_default_prompt_id()
-
-
-def _resolve_generation_flags(
-    *,
-    include_cover_letter: bool | None,
-    include_outreach_message: bool | None,
-) -> tuple[bool, bool]:
-    generation_defaults = _get_generation_defaults_config()
-    resolved_cover_letter = (
-        include_cover_letter
-        if include_cover_letter is not None
-        else bool(generation_defaults.get("include_cover_letter", False))
-    )
-    resolved_outreach = (
-        include_outreach_message
-        if include_outreach_message is not None
-        else bool(generation_defaults.get("include_outreach_message", False))
-    )
-    return resolved_cover_letter, resolved_outreach
 
 
 def _hash_job_content(content: str) -> str:
@@ -828,8 +807,6 @@ async def _generate_auxiliary_messages(
     job_content: str,
     job_keywords: dict[str, Any] | None,
     language: str,
-    enable_cover_letter: bool,
-    enable_outreach: bool,
 ) -> tuple[str | None, str | None, str | None, list[str]]:
     """Generate auxiliary content and derive a stable resume title locally.
 
@@ -839,35 +816,16 @@ async def _generate_auxiliary_messages(
     outreach_message = None
     title = build_job_target_title(job_content, job_keywords=job_keywords)
     warnings: list[str] = []
-    generation_tasks: list[Awaitable[str]] = []
-    task_labels: list[str] = []
 
-    if enable_cover_letter:
-        generation_tasks.append(
-            generate_cover_letter(improved_data, job_content, language)
+    try:
+        cover_letter, outreach_message = await generate_cover_letter_and_outreach(
+            improved_data,
+            job_content,
+            language,
         )
-        task_labels.append("cover_letter")
-    if enable_outreach:
-        generation_tasks.append(
-            generate_outreach_message(improved_data, job_content, language)
-        )
-        task_labels.append("outreach")
-
-    results = await asyncio.gather(*generation_tasks, return_exceptions=True)
-    for label, result in zip(task_labels, results):
-        if isinstance(result, Exception):
-            logger.warning(
-                "%s generation failed: %s",
-                label,
-                result,
-                exc_info=result,
-            )
-            warnings.append(f"{label.replace('_', ' ').title()} generation failed")
-        else:
-            if label == "cover_letter":
-                cover_letter = result
-            elif label == "outreach":
-                outreach_message = result
+    except Exception as exc:
+        logger.warning("Combined message generation failed: %s", exc, exc_info=exc)
+        warnings.append("Combined message generation failed")
 
     return cover_letter, outreach_message, title, warnings
 
@@ -958,8 +916,6 @@ async def _resolve_confirm_auxiliary_messages(
     job_content: str,
     job_keywords: dict[str, Any] | None,
     language: str,
-    enable_cover_letter: bool,
-    enable_outreach: bool,
 ) -> tuple[str | None, str | None, str | None, list[str]]:
     """Reuse reviewed preview auxiliary outputs before regenerating anything."""
 
@@ -968,20 +924,10 @@ async def _resolve_confirm_auxiliary_messages(
         job_content,
         job_keywords=job_keywords,
     )
-    cover_letter = (
-        preview_auxiliary.get("cover_letter")
-        if enable_cover_letter
-        else None
-    )
-    outreach_message = (
-        preview_auxiliary.get("outreach_message")
-        if enable_outreach
-        else None
-    )
+    cover_letter = preview_auxiliary.get("cover_letter")
+    outreach_message = preview_auxiliary.get("outreach_message")
 
-    needs_cover_letter = enable_cover_letter and not cover_letter
-    needs_outreach = enable_outreach and not outreach_message
-    if not needs_cover_letter and not needs_outreach:
+    if cover_letter and outreach_message:
         return cover_letter, outreach_message, title, []
 
     generated_cover_letter, generated_outreach, generated_title, warnings = (
@@ -990,8 +936,6 @@ async def _resolve_confirm_auxiliary_messages(
             job_content,
             job_keywords,
             language,
-            needs_cover_letter,
-            needs_outreach,
         )
     )
     return (
@@ -1307,10 +1251,6 @@ async def improve_resume_preview_endpoint(
 
     language = get_content_language()
     prompt_id = _resolve_prompt_id(request.prompt_id)
-    enable_cover_letter, enable_outreach = _resolve_generation_flags(
-        include_cover_letter=request.include_cover_letter,
-        include_outreach_message=request.include_outreach_message,
-    )
     request_id = str(uuid4())
 
     stage_state = {"stage": "load_job_keywords"}
@@ -1333,8 +1273,6 @@ async def improve_resume_preview_endpoint(
                         request_theme_settings=request.theme_settings,
                         resume=resume,
                     ),
-                    enable_cover_letter=enable_cover_letter,
-                    enable_outreach=enable_outreach,
                     stage_state=stage_state,
                 ),
                 timeout=240.0,  # 4-minute hard limit
@@ -1362,8 +1300,6 @@ async def _improve_preview_flow(
     prompt_id: str,
     request_id: str,
     theme_settings: RenderThemeProfile,
-    enable_cover_letter: bool,
-    enable_outreach: bool,
     stage_state: dict[str, str] | None = None,
 ) -> ImproveResumeResponse:
     """Inner flow for improve/preview, extracted so it can be wrapped in wait_for."""
@@ -1451,8 +1387,6 @@ async def _improve_preview_flow(
         job["content"],
         job_keywords,
         language,
-        enable_cover_letter,
-        enable_outreach,
     )
     response_warnings.extend(aux_warnings)
     job = _backfill_job_target_metadata(
@@ -1605,10 +1539,6 @@ async def improve_resume_confirm_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    enable_cover_letter, enable_outreach = _resolve_generation_flags(
-        include_cover_letter=request.include_cover_letter,
-        include_outreach_message=request.include_outreach_message,
-    )
     language = get_content_language()
     theme_settings = _resolve_request_theme_settings(
         request_theme_settings=request.theme_settings,
@@ -1733,8 +1663,6 @@ async def improve_resume_confirm_endpoint(
                     else None
                 ),
                 language=language,
-                enable_cover_letter=enable_cover_letter,
-                enable_outreach=enable_outreach,
             )
             llm_summary = db.summarize_llm_calls(trace_id=request_id)
         response_warnings.extend(aux_warnings)
@@ -1923,7 +1851,7 @@ async def improve_resume_endpoint(
 
     Uses LLM to analyze the job and generate an optimized resume version
     with improvement suggestions. Also generates cover letter and outreach
-    message if enabled in feature configuration.
+    message together using a single merged message request.
     Persists the tailored resume and returns a non-null resume_id.
     """
     # Fetch resume
@@ -1936,10 +1864,6 @@ async def improve_resume_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    enable_cover_letter, enable_outreach = _resolve_generation_flags(
-        include_cover_letter=request.include_cover_letter,
-        include_outreach_message=request.include_outreach_message,
-    )
     language = get_content_language()
     stage_state = {"stage": "load_job_keywords"}
     detail = "Failed to improve resume. Please try again."
@@ -1995,7 +1919,7 @@ async def improve_resume_endpoint(
         # Generate improvement suggestions
         improvements = generate_improvements(job_keywords)
 
-        # Generate cover letter, outreach message, and title in parallel if enabled
+        # Generate cover letter, outreach message, and title.
         _set_stage(stage_state, "generate_auxiliary_messages")
         with llm_trace_scope(
             request_id,
@@ -2012,8 +1936,6 @@ async def improve_resume_endpoint(
                 job["content"],
                 job_keywords,
                 language,
-                enable_cover_letter,
-                enable_outreach,
             )
         response_warnings.extend(aux_warnings)
         job = _backfill_job_target_metadata(
@@ -2575,10 +2497,12 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
     # Get language setting
     language = get_content_language()
 
-    # Generate cover letter
+    # Generate both messages in one merged request.
     try:
-        cover_letter_content = await generate_cover_letter(
-            resume_data, job["content"], language
+        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+            resume_data,
+            job["content"],
+            language,
         )
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
@@ -2587,8 +2511,14 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
             detail="Failed to generate cover letter. Please try again.",
         )
 
-    # Save to resume record
-    db.update_resume(resume_id, {"cover_letter": cover_letter_content})
+    # Save both outputs from the merged generation.
+    db.update_resume(
+        resume_id,
+        {
+            "cover_letter": cover_letter_content,
+            "outreach_message": outreach_content,
+        },
+    )
 
     return GenerateContentResponse(
         content=cover_letter_content,
@@ -2646,10 +2576,12 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     # Get language setting
     language = get_content_language()
 
-    # Generate outreach message
+    # Generate both messages in one merged request.
     try:
-        outreach_content = await generate_outreach_message(
-            resume_data, job["content"], language
+        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+            resume_data,
+            job["content"],
+            language,
         )
     except Exception as e:
         logger.error(f"Outreach message generation failed: {e}")
@@ -2658,8 +2590,14 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
             detail="Failed to generate outreach message. Please try again.",
         )
 
-    # Save to resume record
-    db.update_resume(resume_id, {"outreach_message": outreach_content})
+    # Save both outputs from the merged generation.
+    db.update_resume(
+        resume_id,
+        {
+            "cover_letter": cover_letter_content,
+            "outreach_message": outreach_content,
+        },
+    )
 
     return GenerateContentResponse(
         content=outreach_content,
