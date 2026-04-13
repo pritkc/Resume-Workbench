@@ -33,6 +33,7 @@ interface ResumeModernTwoColumnProps {
   showContactIcons?: boolean;
   sectionHeadings?: Partial<ResumeSectionHeadings>;
   fallbackLabels?: Partial<ResumeFallbackLabels>;
+  showSummaryHeading?: boolean;
 }
 
 /**
@@ -51,6 +52,7 @@ export const ResumeModernTwoColumn: React.FC<ResumeModernTwoColumnProps> = ({
   showContactIcons = false,
   sectionHeadings,
   fallbackLabels,
+  showSummaryHeading = false,
 }) => {
   const { personalInfo, summary, workExperience, education, personalProjects, skills } = data;
 
@@ -185,9 +187,11 @@ export const ResumeModernTwoColumn: React.FC<ResumeModernTwoColumnProps> = ({
           {/* Summary Section */}
           {isSectionVisible('summary') && summary && (
             <div className={baseStyles['resume-section']}>
-              <h3 className={styles.sectionTitleAccent}>
-                {getSectionDisplayName('summary', headingFallbacks.summary)}
-              </h3>
+              {showSummaryHeading ? (
+                <h3 className={styles.sectionTitleAccent}>
+                  {getSectionDisplayName('summary', headingFallbacks.summary)}
+                </h3>
+              ) : null}
               <p className={`text-justify ${baseStyles['resume-text']}`}>{summary}</p>
             </div>
           )}

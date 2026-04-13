@@ -325,6 +325,33 @@ def _summary_section(summary: str | None) -> list[str] | None:
     return [cleaned] if cleaned else None
 
 
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    return default
+
+
+def _is_section_visible(section_meta: Any, key: str) -> bool:
+    if not isinstance(section_meta, list):
+        return True
+    for item in section_meta:
+        if not isinstance(item, dict):
+            continue
+        candidate_key = _clean_text(str(item.get("key") or ""))
+        if candidate_key != key:
+            continue
+        return _coerce_bool(item.get("isVisible"), default=True)
+    return True
+
+
 def _resolve_bold_keywords(theme_settings: RenderThemeSettings) -> list[str]:
     if not theme_settings.bold_keywords:
         return []
@@ -552,8 +579,9 @@ def resume_to_rendercv_payload(
     bold_keywords = _resolve_bold_keywords(theme_settings)
     sections: dict[str, object] = {}
 
+    summary_is_visible = _is_section_visible(resume_data.get("sectionMeta"), "summary")
     summary = _summary_section(resume_data.get("summary"))
-    if summary:
+    if summary and summary_is_visible:
         sections["summary"] = summary
 
     experience = _experience_entries(
@@ -611,6 +639,8 @@ def resume_to_rendercv_payload(
         # settings apply broad/global highlight behavior in downstream rendering.
         settings = copy.deepcopy(settings)
         settings.pop("bold_keywords", None)
+        settings.pop("show_summary_section", None)
+        settings.pop("show_summary_heading", None)
     if locale:
         payload["locale"] = locale
     if settings:

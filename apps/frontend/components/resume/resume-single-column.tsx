@@ -27,6 +27,7 @@ import styles from './styles/swiss-single.module.css';
 interface ResumeSingleColumnProps {
   data: ResumeData;
   showContactIcons?: boolean;
+  showSummaryHeading?: boolean;
 }
 
 /**
@@ -40,6 +41,7 @@ interface ResumeSingleColumnProps {
 export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
   data,
   showContactIcons = false,
+  showSummaryHeading = false,
 }) => {
   const { personalInfo, summary, workExperience, education, personalProjects, skills } = data;
 
@@ -117,7 +119,9 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
         if (!summary) return null;
         return (
           <div key={section.id} className={baseStyles['resume-section']}>
-            <h3 className={baseStyles['resume-section-title']}>{section.displayName}</h3>
+            {showSummaryHeading ? (
+              <h3 className={baseStyles['resume-section-title']}>{section.displayName}</h3>
+            ) : null}
             <p className={`text-justify ${baseStyles['resume-text']}`}>{summary}</p>
           </div>
         );

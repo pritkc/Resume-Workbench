@@ -83,6 +83,7 @@ _ACCENT_COLORS: dict[AccentColor, str] = {
     "red": "rgb(220, 38, 38)",
 }
 _FIXED_LINK_COLOR = "rgb(0, 79, 144)"
+_APP_RUNTIME_SETTING_KEYS = {"show_summary_heading"}
 
 _DENSITY_MAP: dict[DensityProfile, dict[str, str]] = {
     "compact": {
@@ -830,6 +831,21 @@ def build_settings(settings: RenderThemeSettings) -> dict[str, object] | None:
     return _deep_merge({}, settings.settings)
 
 
+def _merge_app_runtime_settings(
+    *,
+    base_settings: dict[str, Any] | None,
+    parsed_settings: dict[str, Any] | None,
+) -> dict[str, Any]:
+    merged = deepcopy(parsed_settings) if isinstance(parsed_settings, dict) else {}
+    if not isinstance(base_settings, dict):
+        return merged
+
+    for key in _APP_RUNTIME_SETTING_KEYS:
+        if key in base_settings and key not in merged:
+            merged[key] = deepcopy(base_settings[key])
+    return merged
+
+
 def theme_settings_from_rendercv_sections(
     *,
     design: dict[str, Any] | None = None,
@@ -903,11 +919,16 @@ def theme_settings_from_rendercv_sections(
     elif theme_id in theme_profiles:
         del theme_profiles[theme_id]
 
+    merged_settings = _merge_app_runtime_settings(
+        base_settings=base.settings,
+        parsed_settings=settings if settings is not None else base.settings,
+    )
+
     payload = {
         "theme_id": theme_id,
         "bold_keywords": base.bold_keywords,
         "locale": deepcopy(locale if locale is not None else base.locale),
-        "settings": deepcopy(settings if settings is not None else base.settings),
+        "settings": deepcopy(merged_settings),
         "theme_profiles": {
             key: profile.to_dict()
             for key, profile in theme_profiles.items()

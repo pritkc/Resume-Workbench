@@ -26,6 +26,7 @@ import styles from './styles/modern.module.css';
 interface ResumeModernProps {
   data: ResumeData;
   showContactIcons?: boolean;
+  showSummaryHeading?: boolean;
 }
 
 /**
@@ -37,7 +38,11 @@ interface ResumeModernProps {
  *
  * Section order: Determined by sectionMeta ordering
  */
-export const ResumeModern: React.FC<ResumeModernProps> = ({ data, showContactIcons = false }) => {
+export const ResumeModern: React.FC<ResumeModernProps> = ({
+  data,
+  showContactIcons = false,
+  showSummaryHeading = false,
+}) => {
   const { personalInfo, summary, workExperience, education, personalProjects, skills } = data;
 
   // Get sorted visible sections
@@ -114,7 +119,9 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({ data, showContactIco
         if (!summary) return null;
         return (
           <div key={section.id} className={baseStyles['resume-section']}>
-            <h3 className={styles['section-title-accent']}>{section.displayName}</h3>
+            {showSummaryHeading ? (
+              <h3 className={styles['section-title-accent']}>{section.displayName}</h3>
+            ) : null}
             <p className={`text-justify ${baseStyles['resume-text']}`}>{summary}</p>
           </div>
         );

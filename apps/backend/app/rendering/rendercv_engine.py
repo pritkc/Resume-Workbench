@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -29,6 +30,8 @@ from app.rendering.theme_profiles import RenderThemeSettings
 logger = logging.getLogger(__name__)
 
 _ATS_PDF_STANDARDS = ["a-2u"]
+_SUMMARY_HEADING_RE = re.compile(r"(?im)^==\s+summary[:\s]*\r?\n(?:\r?\n)?")
+_TYPST_DIMENSION_RE = re.compile(r"^\d+(?:\.\d+)?(?:cm|mm|in|pt|em|ex)$")
 
 
 def _reset_rendercv_typst_caches() -> None:
@@ -93,6 +96,52 @@ def _generate_pdf_with_ats_profile(model: Any, typst_path: Path | None) -> Path 
         return generate_pdf(model, typst_path)
 
 
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    return default
+
+
+def _show_summary_heading(theme_settings: RenderThemeSettings) -> bool:
+    runtime_settings = (
+        theme_settings.settings if isinstance(theme_settings.settings, dict) else {}
+    )
+    return _coerce_bool(runtime_settings.get("show_summary_heading"), default=False)
+
+
+def _resolve_summary_heading_gap(payload: dict[str, object]) -> str:
+    design = payload.get("design")
+    if not isinstance(design, dict):
+        return "0.5cm"
+    section_titles = design.get("section_titles")
+    if not isinstance(section_titles, dict):
+        return "0.5cm"
+    raw_gap = section_titles.get("space_above")
+    if isinstance(raw_gap, str):
+        normalized_gap = raw_gap.strip().lower()
+        if _TYPST_DIMENSION_RE.fullmatch(normalized_gap):
+            return normalized_gap
+    return "0.5cm"
+
+
+def _strip_summary_heading_from_typst(typst_path: Path, *, heading_gap: str) -> None:
+    try:
+        original = typst_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    updated = _SUMMARY_HEADING_RE.sub(f"#v({heading_gap})\n\n", original, count=1)
+    if updated != original:
+        typst_path.write_text(updated, encoding="utf-8")
+
+
 def render_resume_bundle(
     resume_data: dict[str, Any],
     theme_settings: RenderThemeSettings,
@@ -127,6 +176,11 @@ def render_resume_bundle(
             html_path=str(html_path),
         )
         generated_typst = generate_typst(model)
+        if generated_typst is not None and not _show_summary_heading(theme_settings):
+            _strip_summary_heading_from_typst(
+                generated_typst,
+                heading_gap=_resolve_summary_heading_gap(payload),
+            )
         generated_pdf = _generate_pdf_with_ats_profile(model, generated_typst)
         generated_pngs = generate_png(model, generated_typst) or []
         generated_markdown = generate_markdown(model)

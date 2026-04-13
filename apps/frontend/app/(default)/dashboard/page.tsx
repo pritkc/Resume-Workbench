@@ -6,7 +6,6 @@ import Link from 'next/link';
 import {
   AlertCircle,
   AlertTriangle,
-  ArrowUpRight,
   FileText,
   Loader2,
   Plus,
@@ -93,19 +92,6 @@ function resolveTargetMetadata(resume: ResumeListItem): {
     normalizeFilterValue(resume.target_location) || normalizeFilterValue(resume.location) || '';
 
   return { role, company, location };
-}
-
-function statusBadgeClass(status: ResumeListItem['processing_status'] | ProcessingStatus): string {
-  switch (status) {
-    case 'ready':
-      return 'border-green-600 bg-green-50 text-green-700';
-    case 'processing':
-      return 'border-blue-700 bg-blue-50 text-blue-700';
-    case 'failed':
-      return 'border-red-500 bg-red-50 text-red-600';
-    default:
-      return 'border-gray-300 bg-white text-gray-500';
-  }
 }
 
 export default function DashboardPage() {
@@ -630,8 +616,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="overflow-hidden">
-          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:gap-3">
-            {['Resume', 'Code', 'Role', 'Company', 'Location', 'Updated', 'Status', 'Open'].map(
+          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px] md:gap-3">
+            {['Resume', 'Code', 'Role', 'Company', 'Location', 'Updated'].map(
               (label) => (
                 <span
                   key={label}
@@ -662,11 +648,10 @@ export default function DashboardPage() {
                 const resolvedCode = resolveResumeCode(resume);
                 const updatedParts = formatDateTimeParts(resume.updated_at || resume.created_at);
                 return (
-                  <button
+                  <Link
                     key={resume.resume_id}
-                    type="button"
-                    onClick={() => router.push(`/resumes/${resume.resume_id}`)}
-                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:items-center"
+                    href={`/resumes/${resume.resume_id}`}
+                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px] md:items-center"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-serif text-lg font-bold leading-tight">{title}</p>
@@ -686,18 +671,7 @@ export default function DashboardPage() {
                       <div>{updatedParts.date}</div>
                       <div className="mt-1">{updatedParts.time}</div>
                     </div>
-                    <div>
-                      <span
-                        className={`inline-flex items-center border px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.16em] ${statusBadgeClass(resume.processing_status)}`}
-                      >
-                        {resume.processing_status}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 font-mono text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
-                      <span>Open</span>
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    </div>
-                  </button>
+                  </Link>
                 );
               })}
             </div>

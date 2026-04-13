@@ -4,6 +4,7 @@ from app.rendering.theme_profiles import (
     RenderThemeSettings,
     build_design,
     migrate_legacy_theme_settings,
+    theme_settings_from_rendercv_sections,
 )
 
 
@@ -93,3 +94,27 @@ def test_build_design_keeps_fixed_link_color_for_theme_profile_overrides() -> No
 
     assert design["colors"]["name"] == "rgb(220, 38, 38)"
     assert design["colors"]["links"] == "rgb(0, 79, 144)"
+
+
+def test_theme_settings_from_rendercv_sections_preserves_app_runtime_settings() -> None:
+    base = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {},
+            "settings": {
+                "current_date": "today",
+                "show_summary_heading": False,
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    parsed = theme_settings_from_rendercv_sections(
+        design=build_design(base),
+        locale={"language": "english"},
+        settings={"current_date": "2026-04-13"},
+        base_settings=base,
+    )
+
+    assert parsed.settings["current_date"] == "2026-04-13"
+    assert parsed.settings["show_summary_heading"] is False

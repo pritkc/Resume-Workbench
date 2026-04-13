@@ -201,6 +201,72 @@ def test_rendercv_engine_preserves_unicode_text_in_pdf(
     assert "\ufffd" not in extracted_text
 
 
+def test_rendercv_engine_controls_summary_section_and_heading_in_typst(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    resume = {
+        "personalInfo": {"name": "Test User", "email": "test@example.com"},
+        "summary": "Summary content for heading checks.",
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+
+    hidden_heading_bundle = render_resume_bundle(
+        resume,
+        RenderThemeSettings(
+            theme_id="classic",
+            settings={"show_summary_heading": False},
+        ),
+        identifier="summary_heading_hidden",
+    )
+    hidden_heading_typst = hidden_heading_bundle.typst_path.read_text(encoding="utf-8")
+    assert "Summary content for heading checks." in hidden_heading_typst
+    assert "== Summary" not in hidden_heading_typst
+    assert "#v(0.5cm)" in hidden_heading_typst
+
+    shown_heading_bundle = render_resume_bundle(
+        resume,
+        RenderThemeSettings(
+            theme_id="classic",
+            settings={"show_summary_heading": True},
+        ),
+        identifier="summary_heading_shown",
+    )
+    shown_heading_typst = shown_heading_bundle.typst_path.read_text(encoding="utf-8")
+    assert "== Summary" in shown_heading_typst
+
+    hidden_section_resume = {
+        **resume,
+        "sectionMeta": [
+            {
+                "id": "summary",
+                "key": "summary",
+                "displayName": "Summary",
+                "sectionType": "text",
+                "isDefault": True,
+                "isVisible": False,
+                "order": 0,
+            }
+        ],
+    }
+    hidden_section_bundle = render_resume_bundle(
+        hidden_section_resume,
+        RenderThemeSettings(
+            theme_id="classic",
+            settings={"show_summary_heading": True},
+        ),
+        identifier="summary_section_hidden",
+    )
+    hidden_section_typst = hidden_section_bundle.typst_path.read_text(encoding="utf-8")
+    assert "Summary content for heading checks." not in hidden_section_typst
+    assert "== Summary" not in hidden_section_typst
+
+
 def test_rendercv_engine_is_deterministic_for_same_input(
     sample_resume: dict,
     tmp_path: Path,

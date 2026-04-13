@@ -103,7 +103,10 @@ def test_rendercv_adapter_limits_auto_bold_keywords_to_experience_and_project_bu
         RenderThemeSettings(
             theme_id="classic",
             bold_keywords=True,
-            settings={"bold_keywords": ["FastAPI", "Kubernetes"]},
+            settings={
+                "bold_keywords": ["FastAPI", "Kubernetes"],
+                "show_summary_heading": False,
+            },
         ),
     )
 
@@ -119,6 +122,48 @@ def test_rendercv_adapter_limits_auto_bold_keywords_to_experience_and_project_bu
     assert payload["cv"]["sections"]["summary"] == ["FastAPI engineer with platform focus."]
     assert payload["cv"]["sections"]["skills"][0]["details"].startswith("FastAPI, Kubernetes")
     assert "bold_keywords" not in payload.get("settings", {})
+
+
+def test_rendercv_adapter_keeps_summary_content_and_strips_summary_heading_runtime_flags(
+    sample_resume_copy: dict,
+) -> None:
+    sample_resume_copy["summary"] = "Platform engineer focused on reliability."
+
+    payload = resume_to_rendercv_payload(
+        sample_resume_copy,
+        RenderThemeSettings(
+            theme_id="classic",
+            settings={
+                "show_summary_heading": False,
+            },
+        ),
+    )
+
+    assert payload["cv"]["sections"]["summary"] == ["Platform engineer focused on reliability."]
+    assert "show_summary_heading" not in payload.get("settings", {})
+
+
+def test_rendercv_adapter_honors_summary_section_visibility_from_section_meta(
+    sample_resume_copy: dict,
+) -> None:
+    sample_resume_copy["summary"] = "Platform engineer focused on reliability."
+
+    sample_resume_copy["sectionMeta"] = [
+        {
+            "id": "summary",
+            "key": "summary",
+            "displayName": "Summary",
+            "sectionType": "text",
+            "isDefault": True,
+            "isVisible": False,
+            "order": 0,
+        }
+    ]
+    payload_with_section_hidden = resume_to_rendercv_payload(
+        sample_resume_copy,
+        RenderThemeSettings(theme_id="classic"),
+    )
+    assert "summary" not in payload_with_section_hidden["cv"]["sections"]
 
 
 def test_rendercv_adapter_emits_repo_and_live_links_after_project_name(

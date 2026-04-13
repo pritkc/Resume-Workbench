@@ -13,6 +13,7 @@ import {
   RenderCvQuickNav,
   RenderCvRow,
   RenderCvSection,
+  RenderCvToggle,
   arrayToText,
   textToArray,
 } from './rendercv-controls-shared';
@@ -82,6 +83,15 @@ export function RenderRuntimeSettingsControls({
       />
 
       <RenderCvSection title="General">
+        <RenderCvRow
+          label="Show Summary Heading"
+          description="When section is enabled, hide the heading to save space."
+        >
+          <RenderCvToggle
+            checked={Boolean(settings.settings.show_summary_heading)}
+            onChange={(value) => updateRuntimeSetting(['show_summary_heading'], value)}
+          />
+        </RenderCvRow>
         <RenderCvRow label="Current Date" description="Use `today` or an ISO date.">
           <RenderCvInput
             value={settings.settings.current_date}

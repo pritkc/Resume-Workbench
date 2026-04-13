@@ -211,6 +211,7 @@ export interface RenderCvRuntimeSettings {
   current_date?: string;
   bold_keywords?: string[];
   pdf_title?: string;
+  show_summary_heading?: boolean;
   render_command?: Record<string, unknown>;
 }
 
@@ -504,7 +505,31 @@ const DEFAULT_RENDERCV_RUNTIME_SETTINGS: RenderCvRuntimeSettings = {
   current_date: 'today',
   bold_keywords: [],
   pdf_title: 'NAME - CV',
+  show_summary_heading: false,
 };
+
+function normalizeRuntimeSettings(
+  value: RenderCvRuntimeSettings,
+  source?: Record<string, unknown> | null
+): RenderCvRuntimeSettings {
+  const rest: RenderCvRuntimeSettings = { ...value };
+  delete rest.show_summary_heading;
+  const sourceShowSummaryHeading =
+    source && typeof source.show_summary_heading === 'boolean'
+      ? source.show_summary_heading
+      : undefined;
+  const showSummaryHeading =
+    typeof sourceShowSummaryHeading === 'boolean'
+      ? sourceShowSummaryHeading
+      : typeof value.show_summary_heading === 'boolean'
+        ? value.show_summary_heading
+        : false;
+
+  return {
+    ...rest,
+    show_summary_heading: showSummaryHeading,
+  };
+}
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -1102,10 +1127,13 @@ function normalizeLegacyRenderThemeSettings(
     DEFAULT_RENDERCV_LOCALE as Record<string, unknown>,
     (value?.locale ?? {}) as Record<string, unknown>
   ) as RenderCvLocale;
-  const runtimeSettings = deepMerge(
-    DEFAULT_RENDERCV_RUNTIME_SETTINGS as Record<string, unknown>,
+  const runtimeSettings = normalizeRuntimeSettings(
+    deepMerge(
+      DEFAULT_RENDERCV_RUNTIME_SETTINGS as Record<string, unknown>,
+      (value?.settings ?? {}) as Record<string, unknown>
+    ) as RenderCvRuntimeSettings,
     (value?.settings ?? {}) as Record<string, unknown>
-  ) as RenderCvRuntimeSettings;
+  );
 
   return {
     theme_id: themeId,
@@ -1206,10 +1234,13 @@ export function normalizeRenderThemeSettings(
     DEFAULT_RENDERCV_LOCALE as Record<string, unknown>,
     (value.locale ?? {}) as Record<string, unknown>
   ) as RenderCvLocale;
-  const runtimeSettings = deepMerge(
-    DEFAULT_RENDERCV_RUNTIME_SETTINGS as Record<string, unknown>,
+  const runtimeSettings = normalizeRuntimeSettings(
+    deepMerge(
+      DEFAULT_RENDERCV_RUNTIME_SETTINGS as Record<string, unknown>,
+      (value.settings ?? {}) as Record<string, unknown>
+    ) as RenderCvRuntimeSettings,
     (value.settings ?? {}) as Record<string, unknown>
-  ) as RenderCvRuntimeSettings;
+  );
 
   return {
     theme_id: themeId,

@@ -171,6 +171,7 @@ interface ResumeProps {
   settings?: TemplateSettings;
   sectionHeadings?: Partial<ResumeSectionHeadings>;
   fallbackLabels?: Partial<ResumeFallbackLabels>;
+  showSummaryHeading?: boolean;
 }
 
 /**
@@ -191,6 +192,7 @@ const Resume: React.FC<ResumeProps> = ({
   settings,
   sectionHeadings,
   fallbackLabels,
+  showSummaryHeading = false,
 }) => {
   // Merge provided settings with defaults
   const mergedSettings: TemplateSettings = {
@@ -215,17 +217,26 @@ const Resume: React.FC<ResumeProps> = ({
       style={cssVars}
     >
       {mergedSettings.template === 'swiss-single' && (
-        <ResumeSingleColumn data={resumeData} showContactIcons={mergedSettings.showContactIcons} />
+        <ResumeSingleColumn
+          data={resumeData}
+          showContactIcons={mergedSettings.showContactIcons}
+          showSummaryHeading={showSummaryHeading}
+        />
       )}
       {mergedSettings.template === 'swiss-two-column' && (
         <ResumeTwoColumn
           data={resumeData}
           showContactIcons={mergedSettings.showContactIcons}
           sectionHeadings={sectionHeadings}
+          showSummaryHeading={showSummaryHeading}
         />
       )}
       {mergedSettings.template === 'modern' && (
-        <ResumeModern data={resumeData} showContactIcons={mergedSettings.showContactIcons} />
+        <ResumeModern
+          data={resumeData}
+          showContactIcons={mergedSettings.showContactIcons}
+          showSummaryHeading={showSummaryHeading}
+        />
       )}
       {mergedSettings.template === 'modern-two-column' && (
         <ResumeModernTwoColumn
@@ -233,6 +244,7 @@ const Resume: React.FC<ResumeProps> = ({
           showContactIcons={mergedSettings.showContactIcons}
           sectionHeadings={sectionHeadings}
           fallbackLabels={fallbackLabels}
+          showSummaryHeading={showSummaryHeading}
         />
       )}
     </div>

@@ -124,4 +124,26 @@ describe('render theme state helpers', () => {
     expect(serialized).not.toHaveProperty('design');
     expect(serialized).not.toHaveProperty('page_size');
   });
+
+  it('defaults summary heading to hidden and preserves explicit heading visibility setting', () => {
+    const defaults = normalizeRenderThemeSettings({
+      theme_id: 'classic',
+      theme_profiles: {},
+    });
+    expect(defaults.settings.show_summary_heading).toBe(false);
+
+    const explicit = normalizeRenderThemeSettings({
+      theme_id: 'classic',
+      theme_profiles: {},
+      settings: {
+        show_summary_heading: true,
+      },
+    });
+    const serialized = serializeRenderThemeSettings(explicit);
+
+    expect(explicit.settings.show_summary_heading).toBe(true);
+    expect(serialized.settings).toMatchObject({
+      show_summary_heading: true,
+    });
+  });
 });

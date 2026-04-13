@@ -28,6 +28,7 @@ interface ResumeTwoColumnProps {
   data: ResumeData;
   showContactIcons?: boolean;
   sectionHeadings?: Partial<ResumeSectionHeadings>;
+  showSummaryHeading?: boolean;
 }
 
 /**
@@ -45,6 +46,7 @@ export const ResumeTwoColumn: React.FC<ResumeTwoColumnProps> = ({
   data,
   showContactIcons = false,
   sectionHeadings,
+  showSummaryHeading = false,
 }) => {
   const { personalInfo, summary, workExperience, education, personalProjects, skills } = data;
 
@@ -202,9 +204,11 @@ export const ResumeTwoColumn: React.FC<ResumeTwoColumnProps> = ({
           {/* Summary Section */}
           {isSectionVisible('summary') && summary && (
             <div className={baseStyles['resume-section']}>
-              <h3 className={baseStyles['resume-section-title']}>
-                {getSectionDisplayName('summary', headingFallbacks.summary)}
-              </h3>
+              {showSummaryHeading ? (
+                <h3 className={baseStyles['resume-section-title']}>
+                  {getSectionDisplayName('summary', headingFallbacks.summary)}
+                </h3>
+              ) : null}
               <p className={`text-justify ${baseStyles['resume-text-sm']}`}>{summary}</p>
             </div>
           )}
