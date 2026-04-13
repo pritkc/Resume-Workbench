@@ -770,6 +770,7 @@ class ResumeFetchData(BaseModel):
     """Data payload for resume fetch response."""
 
     resume_id: str
+    resume_code: str | None = None
     raw_resume: RawResume
     processed_resume: ResumeData | None = None
     cover_letter: str | None = None
@@ -791,6 +792,7 @@ class ResumeSummary(BaseModel):
     """Summary details for listing resumes."""
 
     resume_id: str
+    resume_code: str | None = None
     filename: str | None = None
     is_master: bool = False
     parent_id: str | None = None

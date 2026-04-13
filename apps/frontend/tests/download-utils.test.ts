@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeFilename } from '@/lib/utils/download';
+import { buildResumePdfFilename, sanitizeFilename } from '@/lib/utils/download';
 
 describe('sanitizeFilename', () => {
   describe('Basic functionality', () => {
@@ -400,5 +400,43 @@ describe('sanitizeFilename', () => {
       const graphemeCount = Array.from(result.slice(0, -4)).length;
       expect(graphemeCount).toBeLessThanOrEqual(100);
     });
+  });
+});
+
+describe('buildResumePdfFilename', () => {
+  it('builds first_last_code format for normal names', () => {
+    const result = buildResumePdfFilename({
+      fullName: 'Jane Doe',
+      resumeCode: 'Q7K2MW',
+      fallbackId: 'resume-123',
+    });
+    expect(result).toBe('jane_doe_Q7K2MW.pdf');
+  });
+
+  it('normalizes accented names and keeps code uppercase', () => {
+    const result = buildResumePdfFilename({
+      fullName: 'María García-López',
+      resumeCode: 'ab12cd',
+      fallbackId: 'resume-123',
+    });
+    expect(result).toBe('maria_lopez_AB12CD.pdf');
+  });
+
+  it('falls back to resume prefix when full name is missing', () => {
+    const result = buildResumePdfFilename({
+      fullName: '',
+      resumeCode: 'LMN789',
+      fallbackId: 'resume-123',
+    });
+    expect(result).toBe('resume_LMN789.pdf');
+  });
+
+  it('derives fallback code from id when resume code is missing', () => {
+    const result = buildResumePdfFilename({
+      fullName: 'Jane Doe',
+      resumeCode: null,
+      fallbackId: '123e4567-e89b-12d3-a456-426614174000',
+    });
+    expect(result).toMatch(/^jane_doe_[A-Z0-9]{6}\.pdf$/);
   });
 });

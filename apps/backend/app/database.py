@@ -32,6 +32,7 @@ from app.db.repositories import generation_runs as generation_run_repo
 from app.db.repositories import jobs as job_repo
 from app.db.repositories import llm_calls as llm_call_repo
 from app.db.repositories import resumes as resume_repo
+from app.services.resume_codes import derive_resume_code
 from app.db.session import get_engine, get_session_factory
 
 
@@ -46,6 +47,7 @@ def _iso(value: datetime | None) -> str | None:
 def _serialize_resume(record: Resume) -> dict[str, Any]:
     return {
         "resume_id": record.resume_id,
+        "resume_code": derive_resume_code(record.resume_id),
         "content": record.content,
         "content_type": record.content_type,
         "filename": record.filename,

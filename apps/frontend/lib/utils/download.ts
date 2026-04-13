@@ -60,3 +60,56 @@ export function sanitizeFilename(
   // Add .pdf extension
   return `${sanitized}.pdf`;
 }
+
+const SAFE_CODE_RE = /^[A-Z0-9]{4,12}$/;
+const NAME_TOKEN_RE = /[^A-Za-z0-9]+/g;
+
+function normalizeNameToken(value: string): string {
+  const ascii = value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(NAME_TOKEN_RE, '')
+    .toLowerCase();
+  return ascii.slice(0, 24);
+}
+
+function extractNameParts(fullName: string | null | undefined): { first: string; last: string } {
+  if (!fullName?.trim()) {
+    return { first: '', last: '' };
+  }
+  const ascii = fullName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  const tokens = ascii
+    .split(NAME_TOKEN_RE)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  if (tokens.length === 0) {
+    return { first: '', last: '' };
+  }
+
+  const first = normalizeNameToken(tokens[0]);
+  const last = tokens.length > 1 ? normalizeNameToken(tokens[tokens.length - 1]) : '';
+  return { first, last };
+}
+
+function normalizeResumeCode(code: string | null | undefined, fallbackId: string): string {
+  const trimmed = code?.trim().toUpperCase() ?? '';
+  if (SAFE_CODE_RE.test(trimmed)) {
+    return trimmed;
+  }
+  const compactFallback = fallbackId.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  return (compactFallback.slice(0, 6) || 'RESUME').padEnd(6, 'X');
+}
+
+export function buildResumePdfFilename(params: {
+  fullName?: string | null;
+  resumeCode?: string | null;
+  fallbackId: string;
+}): string {
+  const { first, last } = extractNameParts(params.fullName);
+  const code = normalizeResumeCode(params.resumeCode, params.fallbackId);
+
+  const nameParts = [first, last].filter(Boolean);
+  const prefix = nameParts.length > 0 ? nameParts.join('_') : 'resume';
+  return `${prefix}_${code}.pdf`;
+}

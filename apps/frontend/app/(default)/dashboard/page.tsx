@@ -31,7 +31,7 @@ import { useTranslations } from '@/lib/i18n';
 
 type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed' | 'loading';
 type DateFilter = 'all' | '7d' | '30d' | '90d';
-type SortOption = 'updated' | 'created' | 'company' | 'role';
+type SortOption = 'updated' | 'created' | 'company' | 'role' | 'code';
 const TITLE_SPLIT_RE = /^(.+?)\s*@\s*(.+)$/;
 
 function normalizeFilterValue(value?: string | null): string {
@@ -67,6 +67,10 @@ function resolveCompany(resume: ResumeListItem): string {
 
 function resolveLocation(resume: ResumeListItem): string {
   return resolveTargetMetadata(resume).location;
+}
+
+function resolveResumeCode(resume: ResumeListItem): string {
+  return normalizeFilterValue(resume.resume_code);
 }
 
 function resolveTargetMetadata(resume: ResumeListItem): {
@@ -327,7 +331,8 @@ export default function DashboardPage() {
       const role = resolveRole(resume);
       const company = resolveCompany(resume);
       const location = resolveLocation(resume);
-      const searchable = `${title} ${role} ${company} ${location}`.toLowerCase();
+      const resumeCode = resolveResumeCode(resume);
+      const searchable = `${title} ${role} ${company} ${location} ${resumeCode}`.toLowerCase();
 
       if (searchNeedle && !searchable.includes(searchNeedle)) {
         return false;
@@ -356,6 +361,9 @@ export default function DashboardPage() {
 
       if (sortBy === 'role') {
         return resolveRole(left).localeCompare(resolveRole(right));
+      }
+      if (sortBy === 'code') {
+        return resolveResumeCode(left).localeCompare(resolveResumeCode(right));
       }
 
       const leftDate = new Date(
@@ -559,7 +567,7 @@ export default function DashboardPage() {
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search title, role, or company"
+                placeholder="Search title, role, company, or code"
                 className="pl-9"
               />
             </label>
@@ -616,20 +624,23 @@ export default function DashboardPage() {
               <option value="created">Created</option>
               <option value="company">Company</option>
               <option value="role">Role</option>
+              <option value="code">Code</option>
             </select>
           </div>
         </div>
 
         <div className="overflow-hidden">
-          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:gap-3">
-            {['Resume', 'Role', 'Company', 'Location', 'Updated', 'Status', 'Open'].map((label) => (
-              <span
-                key={label}
-                className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500"
-              >
-                {label}
-              </span>
-            ))}
+          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:gap-3">
+            {['Resume', 'Code', 'Role', 'Company', 'Location', 'Updated', 'Status', 'Open'].map(
+              (label) => (
+                <span
+                  key={label}
+                  className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500"
+                >
+                  {label}
+                </span>
+              )
+            )}
           </div>
 
           {filteredResumes.length === 0 ? (
@@ -648,17 +659,22 @@ export default function DashboardPage() {
                 const resolvedRole = resolveRole(resume);
                 const resolvedCompany = resolveCompany(resume);
                 const resolvedLocation = resolveLocation(resume);
+                const resolvedCode = resolveResumeCode(resume);
                 const updatedParts = formatDateTimeParts(resume.updated_at || resume.created_at);
                 return (
                   <button
                     key={resume.resume_id}
                     type="button"
                     onClick={() => router.push(`/resumes/${resume.resume_id}`)}
-                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:items-center"
+                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:items-center"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-serif text-lg font-bold leading-tight">{title}</p>
+                      <p className="mt-1 font-mono text-xs uppercase tracking-[0.14em] text-gray-500 md:hidden">
+                        {resolvedCode || 'N/A'}
+                      </p>
                     </div>
+                    <div className="font-mono text-sm text-gray-700">{resolvedCode || 'N/A'}</div>
                     <div className="font-mono text-sm text-gray-700">{resolvedRole || 'N/A'}</div>
                     <div className="font-mono text-sm text-gray-700">
                       {resolvedCompany || 'N/A'}

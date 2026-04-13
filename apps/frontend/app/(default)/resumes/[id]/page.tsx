@@ -19,7 +19,7 @@ import { ArrowLeft, Edit, Download, Loader2, AlertCircle, Sparkles, Pencil } fro
 import { EnrichmentModal } from '@/components/enrichment/enrichment-modal';
 import { useTranslations } from '@/lib/i18n';
 import { useLanguage } from '@/lib/context/language-context';
-import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/utils/download';
+import { buildResumePdfFilename, downloadBlobAsFile, openUrlInNewTab } from '@/lib/utils/download';
 import { RenderPreviewPanel } from '@/components/rendercv/render-preview-panel';
 import {
   DEFAULT_RENDER_THEME_SETTINGS,
@@ -49,6 +49,7 @@ export default function ResumeViewerPage() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [resumeTitle, setResumeTitle] = useState<string | null>(null);
+  const [resumeCode, setResumeCode] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitleValue, setEditingTitleValue] = useState('');
   const [themeSettings, setThemeSettings] = useState<RenderThemeSettings>(
@@ -77,6 +78,7 @@ export default function ResumeViewerPage() {
 
         // Capture title for editable display (always set to clear stale state)
         setResumeTitle(data.title ?? null);
+        setResumeCode(data.resume_code ?? null);
         setApplicationPackId(data.application_pack_id ?? null);
         setThemeSettings(normalizeRenderThemeSettings(data.theme_settings));
 
@@ -191,7 +193,11 @@ export default function ResumeViewerPage() {
     setIsDownloading(true);
     try {
       const blob = await downloadResumePdf(resumeId, themeSettings, uiLanguage);
-      const filename = sanitizeFilename(resumeTitle, resumeId, 'resume');
+      const filename = buildResumePdfFilename({
+        fullName: resumeData?.personalInfo?.name ?? null,
+        resumeCode,
+        fallbackId: resumeId,
+      });
       downloadBlobAsFile(blob, filename);
       setShowDownloadSuccessDialog(true);
     } catch (err) {

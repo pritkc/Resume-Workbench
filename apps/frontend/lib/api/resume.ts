@@ -96,6 +96,7 @@ interface ResumeResponse {
   request_id: string;
   data: {
     resume_id: string;
+    resume_code?: string | null;
     raw_resume: {
       id: number | null;
       content: string;
@@ -335,6 +336,7 @@ async function throwDraftRequestError(response: Response, fallback: string): Pro
 
 export interface ResumeListItem {
   resume_id: string;
+  resume_code?: string | null;
   filename: string | null;
   is_master: boolean;
   parent_id: string | null;

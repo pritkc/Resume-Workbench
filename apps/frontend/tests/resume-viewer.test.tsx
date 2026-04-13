@@ -14,6 +14,7 @@ const decrementResumes = vi.fn();
 const setHasMasterResume = vi.fn();
 const downloadBlobAsFile = vi.fn();
 const openUrlInNewTab = vi.fn();
+const buildResumePdfFilename = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -52,7 +53,7 @@ vi.mock('@/lib/i18n', () => ({
 vi.mock('@/lib/utils/download', () => ({
   downloadBlobAsFile: (...args: unknown[]) => downloadBlobAsFile(...args),
   openUrlInNewTab: (...args: unknown[]) => openUrlInNewTab(...args),
-  sanitizeFilename: () => 'resume.pdf',
+  buildResumePdfFilename: (...args: unknown[]) => buildResumePdfFilename(...args),
 }));
 
 vi.mock('@/components/enrichment/enrichment-modal', () => ({
@@ -81,6 +82,8 @@ describe('ResumeViewerPage', () => {
     setHasMasterResume.mockReset();
     downloadBlobAsFile.mockReset();
     openUrlInNewTab.mockReset();
+    buildResumePdfFilename.mockReset();
+    buildResumePdfFilename.mockReturnValue('jane_doe_Q7K2MW.pdf');
     fetchJobDescription.mockResolvedValue({
       job_id: 'job-123',
       content: 'Senior Backend Engineer role',
@@ -88,6 +91,7 @@ describe('ResumeViewerPage', () => {
 
     fetchResume.mockResolvedValue({
       resume_id: 'resume-123',
+      resume_code: 'Q7K2MW',
       raw_resume: {
         id: null,
         content: '{}',
@@ -179,6 +183,11 @@ describe('ResumeViewerPage', () => {
         'en'
       )
     );
-    expect(downloadBlobAsFile).toHaveBeenCalled();
+    expect(buildResumePdfFilename).toHaveBeenCalledWith({
+      fullName: 'Jane Doe',
+      resumeCode: 'Q7K2MW',
+      fallbackId: 'resume-123',
+    });
+    expect(downloadBlobAsFile).toHaveBeenCalledWith(expect.any(Blob), 'jane_doe_Q7K2MW.pdf');
   });
 });

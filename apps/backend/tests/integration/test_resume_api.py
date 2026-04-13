@@ -1,4 +1,5 @@
 """Integration tests for resume CRUD endpoints."""
+import re
 from unittest.mock import patch, AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -6,6 +7,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
+from app.services.resume_codes import derive_resume_code
 
 
 @pytest.fixture
@@ -19,6 +21,7 @@ def mock_resume_record(sample_resume):
     """A resume DB record with all fields."""
     return {
         "resume_id": "res-123",
+        "resume_code": "Q7K2MW",
         "content": "# Jane Doe\nSenior Backend Engineer",
         "content_type": "md",
         "filename": "resume.pdf",
@@ -56,6 +59,7 @@ class TestGetResume:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["resume_id"] == "res-123"
+        assert data["resume_code"] == "Q7K2MW"
         assert data["processed_resume"] is not None
         assert data["processed_resume"]["summary"] != ""
         assert data["application_pack_id"] == "pack-123"
@@ -643,6 +647,7 @@ class TestListResumes:
         data = resp.json()["data"]
         assert len(data) == 1
         assert data[0]["resume_id"] == "tailored-1"
+        assert data[0]["resume_code"] == derive_resume_code("tailored-1")
 
     @patch("app.routers.resumes.db")
     async def test_list_includes_master_when_requested(self, mock_db, client):
@@ -656,6 +661,10 @@ class TestListResumes:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert len(data) == 2
+        assert all(
+            isinstance(item.get("resume_code"), str) and len(item["resume_code"]) == 6
+            for item in data
+        )
 
     @patch("app.routers.resumes.db")
     async def test_list_returns_target_metadata(self, mock_db, client):
@@ -861,3 +870,38 @@ class TestRetryProcessing:
         async with client:
             resp = await client.post("/api/v1/resumes/res-123/retry-processing")
         assert resp.status_code == 400
+
+
+class TestResumePdfDownload:
+    @patch("app.routers.resumes.store_rendercv_bundle")
+    @patch("app.routers.resumes.render_resume_bundle")
+    @patch("app.routers.resumes.db")
+    async def test_pdf_download_uses_professional_filename(
+        self,
+        mock_db,
+        mock_render_bundle,
+        mock_store_bundle,
+        client,
+        tmp_path,
+        mock_resume_record,
+    ):
+        mock_db.get_resume.return_value = mock_resume_record
+        mock_render_bundle.return_value = MagicMock()
+        pdf_file = tmp_path / "resume.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4 test")
+        mock_store_bundle.return_value = [
+            {
+                "kind": "resume_pdf",
+                "storage_path": str(pdf_file),
+            }
+        ]
+
+        async with client:
+            resp = await client.post("/api/v1/resumes/res-123/pdf", json={})
+
+        assert resp.status_code == 200
+        content_disposition = resp.headers.get("content-disposition", "")
+        assert re.search(
+            r'filename="jane_doe_[A-Z0-9]{6}\.pdf"',
+            content_disposition,
+        )

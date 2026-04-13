@@ -80,6 +80,10 @@ from app.services.cover_letter import (
     generate_outreach_message,
     sanitize_job_location,
 )
+from app.services.resume_codes import (
+    build_resume_pdf_filename,
+    derive_resume_code,
+)
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
 
 _URL_LIKE_RE = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
@@ -139,6 +143,39 @@ def _resolve_generation_flags(
 
 def _hash_job_content(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _resume_code_from_record(resume: dict[str, Any] | None, *, resume_id: str) -> str:
+    if isinstance(resume, dict):
+        code = resume.get("resume_code")
+        if isinstance(code, str) and code.strip():
+            return code.strip().upper()
+    return derive_resume_code(resume_id)
+
+
+def _extract_resume_full_name(resume_data: dict[str, Any] | None) -> str | None:
+    if not isinstance(resume_data, dict):
+        return None
+    personal_info = resume_data.get("personalInfo")
+    if not isinstance(personal_info, dict):
+        return None
+    name = personal_info.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return None
+
+
+def _resume_pdf_filename(
+    *,
+    resume: dict[str, Any],
+    resume_id: str,
+    resume_data: dict[str, Any] | None,
+) -> str:
+    return build_resume_pdf_filename(
+        full_name=_extract_resume_full_name(resume_data),
+        resume_code=_resume_code_from_record(resume, resume_id=resume_id),
+        fallback_resume_id=resume_id,
+    )
 
 
 def _normalize_payload(value: Any) -> Any:
@@ -506,6 +543,7 @@ def _default_theme_draft() -> RenderThemeProfile:
 def _build_resume_fetch_data(
     *,
     resume_id: str,
+    resume_code: str | None = None,
     raw_content: str,
     processed_data: dict[str, Any],
     theme_settings: RenderThemeProfile,
@@ -520,6 +558,7 @@ def _build_resume_fetch_data(
     created_at = raw_created_at or datetime.now(timezone.utc).isoformat()
     return ResumeFetchData(
         resume_id=resume_id,
+        resume_code=resume_code or derive_resume_code(resume_id),
         raw_resume=RawResume(
             id=None,
             content=raw_content,
@@ -1094,6 +1133,7 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
         request_id=str(uuid4()),
         data=ResumeFetchData(
             resume_id=resume_id,
+            resume_code=_resume_code_from_record(resume, resume_id=resume_id),
             raw_resume=raw_resume,
             processed_resume=processed_resume,
             cover_letter=resume.get("cover_letter"),
@@ -1229,6 +1269,10 @@ async def list_resumes(include_master: bool = Query(False)) -> ResumeListRespons
         summaries.append(
             ResumeSummary(
                 resume_id=resume["resume_id"],
+                resume_code=_resume_code_from_record(
+                    resume,
+                    resume_id=resume["resume_id"],
+                ),
                 filename=resume.get("filename"),
                 is_master=resume.get("is_master", False),
                 parent_id=resume.get("parent_id"),
@@ -2167,7 +2211,12 @@ async def download_resume_pdf_with_config(
     except RenderCVRenderError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    headers = {"Content-Disposition": f'attachment; filename="resume_{resume_id}.pdf"'}
+    download_name = _resume_pdf_filename(
+        resume=resume,
+        resume_id=resume_id,
+        resume_data=resume_data,
+    )
+    headers = {"Content-Disposition": f'attachment; filename="{download_name}"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
 
 
@@ -2243,7 +2292,12 @@ async def download_resume_pdf(
     except RenderCVRenderError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    headers = {"Content-Disposition": f'attachment; filename="resume_{resume_id}.pdf"'}
+    download_name = _resume_pdf_filename(
+        resume=resume,
+        resume_id=resume_id,
+        resume_data=resume_data,
+    )
+    headers = {"Content-Disposition": f'attachment; filename="{download_name}"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
 
 

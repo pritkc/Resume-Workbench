@@ -67,7 +67,12 @@ import {
   type RenderThemeSettings,
 } from '@/lib/types/render-theme';
 import { useLanguage } from '@/lib/context/language-context';
-import { downloadBlobAsFile, openUrlInNewTab, sanitizeFilename } from '@/lib/utils/download';
+import {
+  buildResumePdfFilename,
+  downloadBlobAsFile,
+  openUrlInNewTab,
+  sanitizeFilename,
+} from '@/lib/utils/download';
 import { cn } from '@/lib/utils';
 import {
   buildRegenerateItemIdForGroup,
@@ -688,6 +693,7 @@ const ResumeBuilderContent = () => {
   const [isOutreachSaving, setIsOutreachSaving] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [resumeTitle, setResumeTitle] = useState<string | null>(null);
+  const [resumeCode, setResumeCode] = useState<string | null>(null);
 
   // On-demand generation state
   const [isTailoredResume, setIsTailoredResume] = useState(false);
@@ -714,6 +720,7 @@ const ResumeBuilderContent = () => {
         const data = await fetchResume(resumeId);
         // Update resume title for downloads
         setResumeTitle(data.title ?? null);
+        setResumeCode(data.resume_code ?? null);
         if (data.processed_resume) {
           const nextResumeData = normalizeResumeSkills(data.processed_resume as ResumeData);
           const nextThemeSettings = data.theme_settings
@@ -869,6 +876,7 @@ const ResumeBuilderContent = () => {
           setIsTailoredResume(Boolean(data.parent_id));
           // Store resume title for downloads
           setResumeTitle(data.title ?? null);
+          setResumeCode(data.resume_code ?? null);
           if (data.theme_settings) {
             const normalizedThemeSettings = normalizeRenderThemeSettings(data.theme_settings);
             setThemeSettings(normalizedThemeSettings);
@@ -1352,7 +1360,11 @@ const ResumeBuilderContent = () => {
       }
       setIsDownloading(true);
       const blob = await downloadResumePdf(resumeId, themeSettings, uiLanguage);
-      const filename = sanitizeFilename(resumeTitle, resumeId, 'resume');
+      const filename = buildResumePdfFilename({
+        fullName: resumeData.personalInfo?.name ?? null,
+        resumeCode,
+        fallbackId: resumeId,
+      });
       downloadBlobAsFile(blob, filename);
       showNotification(t('builder.alerts.downloadSuccess'), 'success');
     } catch (error) {
