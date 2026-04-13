@@ -1,5 +1,6 @@
 """RenderCV adapter tests."""
 
+import copy
 import yaml
 
 from app.rendering.rendercv_adapter import (
@@ -82,6 +83,42 @@ def test_rendercv_adapter_prefers_description_over_highlights(sample_resume_copy
         "Canonical tailored bullet",
         "Another canonical tailored bullet",
     ]
+
+
+def test_rendercv_adapter_limits_auto_bold_keywords_to_experience_and_project_bullets(
+    sample_resume_copy: dict,
+) -> None:
+    themed_resume = copy.deepcopy(sample_resume_copy)
+    themed_resume["summary"] = "FastAPI engineer with platform focus."
+    themed_resume["workExperience"][0]["description"] = [
+        "Built FastAPI services and Kubernetes deployment tooling.",
+    ]
+    themed_resume["personalProjects"][0]["description"] = [
+        "Created FastAPI utilities for Kubernetes maintenance tasks.",
+    ]
+    themed_resume["additional"]["technicalSkills"] = ["FastAPI", "Kubernetes", "Python"]
+
+    payload = resume_to_rendercv_payload(
+        themed_resume,
+        RenderThemeSettings(
+            theme_id="classic",
+            bold_keywords=True,
+            settings={"bold_keywords": ["FastAPI", "Kubernetes"]},
+        ),
+    )
+
+    experience_bullets = payload["cv"]["sections"]["experience"][0]["highlights"]
+    project_bullets = payload["cv"]["sections"]["projects"][0]["highlights"]
+
+    assert experience_bullets == [
+        "Built **FastAPI** services and **Kubernetes** deployment tooling."
+    ]
+    assert project_bullets == [
+        "Created **FastAPI** utilities for **Kubernetes** maintenance tasks."
+    ]
+    assert payload["cv"]["sections"]["summary"] == ["FastAPI engineer with platform focus."]
+    assert payload["cv"]["sections"]["skills"][0]["details"].startswith("FastAPI, Kubernetes")
+    assert "bold_keywords" not in payload.get("settings", {})
 
 
 def test_rendercv_yaml_sections_preserve_custom_skill_group_labels(sample_resume: dict) -> None:

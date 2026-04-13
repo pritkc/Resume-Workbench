@@ -31,6 +31,7 @@ _NON_DIGIT_RE = re.compile(r"\D+")
 _MARKDOWN_LINK_RE = re.compile(r"^\[(?P<label>.+?)\]\((?P<url>[^)]+)\)$")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _FA_CLASS_TOKEN_RE = re.compile(r"\s+")
+_BOLD_BOUNDARY_CLASS = r"A-Za-z0-9"
 
 _KNOWN_SECTION_KEYS = {
     "summary",
@@ -321,6 +322,58 @@ def _summary_section(summary: str | None) -> list[str] | None:
     return [cleaned] if cleaned else None
 
 
+def _resolve_bold_keywords(theme_settings: RenderThemeSettings) -> list[str]:
+    if not theme_settings.bold_keywords:
+        return []
+    runtime_settings = theme_settings.settings
+    if not isinstance(runtime_settings, dict):
+        return []
+    raw_keywords = runtime_settings.get("bold_keywords")
+    if not isinstance(raw_keywords, list):
+        return []
+
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for item in raw_keywords:
+        if not isinstance(item, str):
+            continue
+        keyword = " ".join(item.split()).strip()
+        if len(keyword) < 2:
+            continue
+        key = keyword.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        keywords.append(keyword)
+
+    keywords.sort(key=len, reverse=True)
+    return keywords
+
+
+def _bold_keyword_in_text(text: str, keyword: str) -> str:
+    escaped = re.escape(keyword)
+    pattern = re.compile(
+        rf"(?<![{_BOLD_BOUNDARY_CLASS}])({escaped})(?![{_BOLD_BOUNDARY_CLASS}])",
+        re.IGNORECASE,
+    )
+
+    def _replace(match: re.Match[str]) -> str:
+        start = match.start(1)
+        end = match.end(1)
+        if text[max(0, start - 2):start] == "**" and text[end:end + 2] == "**":
+            return match.group(1)
+        return f"**{match.group(1)}**"
+
+    return pattern.sub(_replace, text)
+
+
+def _bold_keywords_in_bullet(text: str, keywords: list[str]) -> str:
+    result = text
+    for keyword in keywords:
+        result = _bold_keyword_in_text(result, keyword)
+    return result
+
+
 def _entry_date_fields(item: dict[str, Any]) -> dict[str, str]:
     start_date = _clean_text(item.get("start_date") or item.get("startDate"))
     end_date = _clean_text(item.get("end_date") or item.get("endDate"))
@@ -349,7 +402,11 @@ def _resume_date_label(item: dict[str, Any]) -> str:
     return end_date or ""
 
 
-def _experience_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _experience_entries(
+    entries: list[dict[str, Any]],
+    *,
+    bold_keywords: list[str],
+) -> list[dict[str, Any]]:
     return [
         {
             "company": item.get("company") or "Company",
@@ -358,7 +415,7 @@ def _experience_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "location": _clean_text(item.get("location")),
             "summary": _clean_text(item.get("summary")),
             "highlights": [
-                point
+                _bold_keywords_in_bullet(point, bold_keywords)
                 for point in (item.get("description") or item.get("highlights") or [])
                 if point
             ],
@@ -386,7 +443,11 @@ def _education_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def _project_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _project_entries(
+    entries: list[dict[str, Any]],
+    *,
+    bold_keywords: list[str],
+) -> list[dict[str, Any]]:
     project_rows: list[dict[str, Any]] = []
     for item in entries:
         name = _clean_text(item.get("name")) or "Project"
@@ -399,7 +460,7 @@ def _project_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "date": _clean_text(item.get("date") or item.get("years")),
                 "summary": _clean_text(item.get("summary") or item.get("role")),
                 "highlights": [
-                    point
+                    _bold_keywords_in_bullet(point, bold_keywords)
                     for point in (item.get("description") or item.get("highlights") or [])
                     if point
                 ],
@@ -479,13 +540,17 @@ def resume_to_rendercv_payload(
 ) -> dict[str, object]:
     personal_info = resume_data.get("personalInfo") or {}
     skills_section = resume_data.get("skills") or resume_data.get("additional") or {}
+    bold_keywords = _resolve_bold_keywords(theme_settings)
     sections: dict[str, object] = {}
 
     summary = _summary_section(resume_data.get("summary"))
     if summary:
         sections["summary"] = summary
 
-    experience = _experience_entries(resume_data.get("workExperience") or [])
+    experience = _experience_entries(
+        resume_data.get("workExperience") or [],
+        bold_keywords=bold_keywords,
+    )
     if experience:
         sections["experience"] = experience
 
@@ -493,7 +558,10 @@ def resume_to_rendercv_payload(
     if education:
         sections["education"] = education
 
-    projects = _project_entries(resume_data.get("personalProjects") or [])
+    projects = _project_entries(
+        resume_data.get("personalProjects") or [],
+        bold_keywords=bold_keywords,
+    )
     if projects:
         sections["projects"] = projects
 
@@ -529,6 +597,11 @@ def resume_to_rendercv_payload(
     }
     locale = build_locale(theme_settings)
     settings = build_settings(theme_settings)
+    if isinstance(settings, dict):
+        # Enforce bullet-only keyword bolding in adapter; do not let runtime
+        # settings apply broad/global highlight behavior in downstream rendering.
+        settings = copy.deepcopy(settings)
+        settings.pop("bold_keywords", None)
     if locale:
         payload["locale"] = locale
     if settings:
