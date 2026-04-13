@@ -167,8 +167,11 @@ OUTPUT FORMAT:
 - projects: object keyed by 0-based entry index
   - each entry: { "name": "enhanced title or omit", "tech_stacks": "updated tagline or omit", "bullets": { "INDEX": "text" } }
 - skills: array of { "label": "...", "values": [...] }
-  - regroup and relabel freely for JD relevance
-  - you may add skills the JD demands that the candidate can credibly claim
+  - keep this concise and simple: 3-6 groups max
+  - each group label should be short and clear (e.g., Backend, Cloud, Data, Languages, Certifications)
+  - retain highly relevant core skills from the base resume
+  - remove clearly irrelevant skills for this role
+  - avoid duplicates across groups
   - place JD-critical skills in the first groups
   - omit "skills" key entirely if no changes
 - bold_keywords: array of 10-20 strings — keywords from the final resume content that should be rendered bold, selected for maximum JD alignment
@@ -189,7 +192,7 @@ TAILORING_MODE_CONSTRAINTS = {
         "Maximum alignment. Rewrite bullets to strongly match the target role. "
         "Enhance titles with platform, domain, or scope context. "
         "Replace least applicable bullets with naturally fitting alternatives. "
-        "Regroup and expand skills for maximum JD coverage. "
+        "Regroup skills into concise, role-relevant categories. "
         "Every bullet should serve the candidate's case for this specific role."
     ),
 }
@@ -218,7 +221,7 @@ IMPROVE_STRATEGY_GUIDANCE = {
     "full": {
         "primary_goal": (
             "Maximize alignment with the target role. Rewrite for impact, "
-            "enhance titles, expand skills, and replace weak content."
+            "enhance titles, optimize skills relevance, and replace weak content."
         ),
         "description_rule": (
             "Rewrite all bullets for maximum JD alignment. Replace the least applicable "

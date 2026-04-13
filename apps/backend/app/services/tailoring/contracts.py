@@ -93,9 +93,9 @@ def build_response_contract(
         "skills": TailoringSectionContract(
             type="object",
             rules=[
-                "Keep every original skill value exactly once.",
-                "You may regroup labels and reorder groups.",
-                "Do not invent new skill values.",
+                "Return concise skills as label + values only.",
+                "Keep 3-6 groups max, with clear labels and no duplicates across groups.",
+                "Retain the most role-relevant core skills and remove clearly irrelevant items.",
             ],
             sections={
                 "groups": TailoringSectionContract(
@@ -151,9 +151,9 @@ def build_response_contract(
         type="object",
         entry_count=len(groups) if isinstance(groups, list) else 0,
         rules=[
-            "Keep every original skill value exactly once.",
-            "You may regroup labels and reorder groups.",
-            "Do not invent new skill values.",
+            "Return concise skills as label + values only.",
+            "Keep 3-6 groups max, with clear labels and no duplicates across groups.",
+            "Retain the most role-relevant core skills and remove clearly irrelevant items.",
         ],
         sections={
             "groups": TailoringSectionContract(

@@ -364,7 +364,7 @@ class TestImproveResume:
         assert any(change.path == "summary" for change in result.change_manifest)
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
-    async def test_legacy_full_body_response_applies_bullets_and_restores_missing_skills(
+    async def test_legacy_full_body_response_applies_bullets_and_trusts_llm_skills(
         self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
     ):
         legacy_output = copy.deepcopy(sample_resume)
@@ -405,8 +405,8 @@ class TestImproveResume:
         )
         assert "Python" in merged_skill_values
         assert "FastAPI" in merged_skill_values
-        # This value was omitted by the LLM output and should be restored from source.
-        assert "Docker" in merged_skill_values
+        # Omitted source-only skills should not be re-injected when LLM returns skills.
+        assert "Docker" not in merged_skill_values
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_bold_keywords_flow_into_tailoring_result(

@@ -10,6 +10,7 @@ from typing import Any
 from app.schemas import ResumeData, normalize_resume_data
 from app.services.additional_groups import (
     coerce_string_list,
+    normalize_additional_groups,
     normalize_skill_groups,
     restore_missing_additional_items,
 )
@@ -30,6 +31,8 @@ MONTH_PATTERN = re.compile(
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b",
     re.IGNORECASE,
 )
+_MAX_SKILL_GROUPS = 6
+_MAX_SKILLS_PER_GROUP = 14
 
 
 def _normalized_source_resume(
@@ -167,6 +170,48 @@ def preserve_original_skills(
         result.get("skills") or result.get("additional"),
     )
     return result
+
+
+def _simplify_skills_groups(value: Any) -> dict[str, Any]:
+    """Normalize skills into a compact label+values structure for UI/rendering.
+
+    Rules:
+    - keep at most `_MAX_SKILL_GROUPS` groups
+    - keep at most `_MAX_SKILLS_PER_GROUP` values per group
+    - deduplicate values globally (first occurrence wins)
+    - drop empty groups
+    """
+
+    normalized = normalize_skill_groups(value, seed_defaults_if_empty=False)
+    groups = normalized.get("groups", [])
+    if not isinstance(groups, list):
+        return {"groups": []}
+
+    simplified: list[dict[str, Any]] = []
+    seen_values: set[str] = set()
+
+    for raw_group in groups:
+        if len(simplified) >= _MAX_SKILL_GROUPS:
+            break
+        if not isinstance(raw_group, dict):
+            continue
+
+        label = str(raw_group.get("label", "")).strip() or "Skills"
+        values: list[str] = []
+        for item in coerce_string_list(raw_group.get("values")):
+            key = item.casefold()
+            if key in seen_values:
+                continue
+            seen_values.add(key)
+            values.append(item)
+            if len(values) >= _MAX_SKILLS_PER_GROUP:
+                break
+
+        if not values:
+            continue
+        simplified.append({"label": label, "values": values})
+
+    return {"groups": simplified}
 
 
 def protect_custom_sections(
@@ -357,11 +402,8 @@ def apply_compact_diff(
 
     skills_diff = diff.get("skills")
     if isinstance(skills_diff, (list, dict)):
-        normalized_skills = normalize_skill_groups(
-            skills_diff,
-            seed_defaults_if_empty=False,
-        )
-        result.setdefault("skills", {})["groups"] = normalized_skills.get("groups", [])
+        simplified_skills = _simplify_skills_groups(skills_diff)
+        result.setdefault("skills", {})["groups"] = simplified_skills.get("groups", [])
 
     return result
 
@@ -447,9 +489,14 @@ def finalize_tailored_resume(
     result = restore_original_dates(original_resume_data, result)
     if original_resume_markdown:
         result = restore_dates_from_markdown(result, original_resume_markdown)
-    # Always restore any dropped original skill values. LLM regrouping is preserved,
-    # but omissions are patched to keep the master resume truthfully complete.
-    result = preserve_original_skills(original_resume_data, result)
+    # Trust LLM-provided skills when present; keep original skills when not provided.
+    llm_returned_skills = bool(payload.skills and payload.skills.groups)
+    if not llm_returned_skills:
+        result = preserve_original_skills(original_resume_data, result)
+    result["skills"] = _simplify_skills_groups(
+        result.get("skills") or result.get("additional")
+    )
+    result["additional"] = normalize_additional_groups(result.get("skills"))
     result = protect_custom_sections(original_resume_data, result)
     result["sectionMeta"] = rehydrate_section_meta(
         result.get("customSections"),

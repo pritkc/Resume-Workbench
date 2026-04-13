@@ -171,6 +171,26 @@ class TestApplyCompactDiff:
         assert result["skills"]["groups"][0]["label"] == "Backend"
         assert result["skills"]["groups"][0]["values"] == ["Python", "SQL"]
 
+    def test_skills_are_simplified_and_deduplicated(self, base_resume):
+        diff = {
+            "skills": [
+                {"label": "Backend", "values": ["Python", "FastAPI", "SQL"]},
+                {"label": "Cloud", "values": ["AWS", "Docker"]},
+                {"label": "Data", "values": ["SQL", "Kafka"]},
+                {"label": "Infra", "values": ["Terraform"]},
+                {"label": "Lang", "values": ["Python", "Bash"]},
+                {"label": "Certs", "values": ["AWS SAA"]},
+                {"label": "Overflow", "values": ["ShouldNotAppear"]},
+            ]
+        }
+        result = apply_compact_diff(base_resume, diff)
+        groups = result["skills"]["groups"]
+        assert len(groups) == 6
+        flattened = [item for group in groups for item in group["values"]]
+        assert flattened.count("Python") == 1
+        assert flattened.count("SQL") == 1
+        assert "ShouldNotAppear" not in flattened
+
     def test_skills_absent_key_unchanged(self, base_resume):
         diff = {"summary": "New summary."}
         result = apply_compact_diff(base_resume, diff)

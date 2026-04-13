@@ -40,7 +40,7 @@ export function DiffPreviewModal({
 }: DiffPreviewModalProps) {
   const { t } = useTranslations();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['summary', 'additionalItems', 'descriptions', 'experience'])
+    new Set(['summary', 'skills', 'descriptions', 'experience'])
   );
 
   // Elapsed timer while confirming
@@ -119,6 +119,12 @@ export function DiffPreviewModal({
   const summaryChanges = detailedChanges.filter((c) => c.field_type === 'summary');
   const additionalItemChanges = detailedChanges.filter((c) => c.field_type === 'additional_item');
   const additionalGroupChanges = detailedChanges.filter((c) => c.field_type === 'additional_group');
+  const addedSkills = additionalItemChanges
+    .filter((c) => c.change_type === 'added' && Boolean(c.new_value))
+    .map((c) => c.new_value as string);
+  const removedSkills = additionalItemChanges
+    .filter((c) => c.change_type === 'removed' && Boolean(c.original_value))
+    .map((c) => c.original_value as string);
   const descChanges = detailedChanges.filter((c) => c.field_type === 'description');
   const titleChanges = detailedChanges.filter(
     (c) => c.field_type === 'experience_title' || c.field_type === 'project_title'
@@ -157,16 +163,6 @@ export function DiffPreviewModal({
               </span>
             </div>
             <div className="flex flex-wrap gap-2 flex-1">
-              <InlineStat
-                label={t('tailor.diffModal.additionalItemsAdded')}
-                value={diffSummary.additional_items_added}
-                variant="success"
-              />
-              <InlineStat
-                label={t('tailor.diffModal.additionalItemsRemoved')}
-                value={diffSummary.additional_items_removed}
-                variant="warning"
-              />
               <InlineStat
                 label={t('tailor.diffModal.additionalGroupsModified')}
                 value={diffSummary.additional_groups_modified}
@@ -289,31 +285,31 @@ export function DiffPreviewModal({
             </ChangeSection>
           )}
 
-          {/* Additional item changes */}
-          {additionalItemChanges.length > 0 && (
+          {/* Skills section changes */}
+          {(additionalGroupChanges.length > 0 || addedSkills.length > 0 || removedSkills.length > 0) && (
             <ChangeSection
-              title={t('tailor.diffModal.additionalItemChanges')}
-              count={additionalItemChanges.length}
-              isExpanded={expandedSections.has('additionalItems')}
-              onToggle={() => toggleSection('additionalItems')}
-            >
-              {additionalItemChanges.map((change, idx) => (
-                <ChangeItem key={idx} change={change} />
-              ))}
-            </ChangeSection>
-          )}
-
-          {/* Additional group changes */}
-          {additionalGroupChanges.length > 0 && (
-            <ChangeSection
-              title={t('tailor.diffModal.additionalGroupChanges')}
-              count={additionalGroupChanges.length}
-              isExpanded={expandedSections.has('additionalGroups')}
-              onToggle={() => toggleSection('additionalGroups')}
+              title="Skills Section Changes"
+              count={additionalGroupChanges.length + addedSkills.length + removedSkills.length}
+              isExpanded={expandedSections.has('skills')}
+              onToggle={() => toggleSection('skills')}
             >
               {additionalGroupChanges.map((change, idx) => (
                 <ChangeItem key={idx} change={change} />
               ))}
+              {addedSkills.length > 0 && (
+                <SkillHighlights
+                  title="New skills"
+                  values={addedSkills}
+                  colorClass="border-[#15803D] bg-[#F0FDF4] text-[#15803D]"
+                />
+              )}
+              {removedSkills.length > 0 && (
+                <SkillHighlights
+                  title="Removed skills"
+                  values={removedSkills}
+                  colorClass="border-[#B91C1C] bg-[#FEF2F2] text-[#B91C1C]"
+                />
+              )}
             </ChangeSection>
           )}
 
@@ -405,6 +401,33 @@ export function DiffPreviewModal({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SkillHighlights({
+  title,
+  values,
+  colorClass,
+}: {
+  title: string;
+  values: string[];
+  colorClass: string;
+}) {
+  const uniqueValues = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  if (uniqueValues.length === 0) {
+    return null;
+  }
+  return (
+    <div className="border border-black/20 p-3 bg-white">
+      <p className="font-mono text-xs font-bold uppercase tracking-wide text-gray-700 mb-2">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {uniqueValues.map((value) => (
+          <span key={value} className={`border px-2 py-0.5 font-mono text-xs ${colorClass}`}>
+            {value}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
