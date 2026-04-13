@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RenderPreviewPanel } from '@/components/rendercv/render-preview-panel';
 import {
   DEFAULT_RENDER_THEME_SETTINGS,
@@ -127,5 +127,17 @@ describe('RenderPreviewPanel', () => {
 
     expect(screen.getAllByText('RenderCV Preview')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Refresh preview' })).toBeInTheDocument();
+  });
+
+  it('opens large browser preview modal instead of navigating to raw PNG', async () => {
+    render(<RenderPreviewPanel resumeId="resume-123" settings={baseSettings} />);
+
+    const openPreviewButton = await screen.findByRole('button', {
+      name: 'Open large preview for preview.png',
+    });
+    fireEvent.click(openPreviewButton);
+
+    expect(await screen.findByText('Large Preview')).toBeInTheDocument();
+    expect(screen.getByAltText('preview.png large preview')).toBeInTheDocument();
   });
 });
