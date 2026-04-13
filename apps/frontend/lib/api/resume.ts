@@ -345,6 +345,10 @@ export interface ResumeListItem {
   target_company?: string | null;
   target_role?: string | null;
   target_location?: string | null;
+  // Legacy metadata keys from older payloads/backfills.
+  company?: string | null;
+  role?: string | null;
+  location?: string | null;
 }
 
 async function postImprove(

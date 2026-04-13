@@ -58,15 +58,37 @@ function deriveRoleCompanyFromTitle(
 }
 
 function resolveRole(resume: ResumeListItem): string {
-  const role = normalizeFilterValue(resume.target_role);
-  if (role) return role;
-  return deriveRoleCompanyFromTitle(resume.title)?.role || '';
+  return resolveTargetMetadata(resume).role;
 }
 
 function resolveCompany(resume: ResumeListItem): string {
-  const company = normalizeFilterValue(resume.target_company);
-  if (company) return company;
-  return deriveRoleCompanyFromTitle(resume.title)?.company || '';
+  return resolveTargetMetadata(resume).company;
+}
+
+function resolveLocation(resume: ResumeListItem): string {
+  return resolveTargetMetadata(resume).location;
+}
+
+function resolveTargetMetadata(resume: ResumeListItem): {
+  role: string;
+  company: string;
+  location: string;
+} {
+  const parsedTitle = deriveRoleCompanyFromTitle(resume.title);
+  const role =
+    normalizeFilterValue(resume.target_role) ||
+    normalizeFilterValue(resume.role) ||
+    parsedTitle?.role ||
+    '';
+  const company =
+    normalizeFilterValue(resume.target_company) ||
+    normalizeFilterValue(resume.company) ||
+    parsedTitle?.company ||
+    '';
+  const location =
+    normalizeFilterValue(resume.target_location) || normalizeFilterValue(resume.location) || '';
+
+  return { role, company, location };
 }
 
 function statusBadgeClass(status: ResumeListItem['processing_status'] | ProcessingStatus): string {
@@ -109,20 +131,27 @@ export default function DashboardPage() {
   const isTailorEnabled =
     Boolean(masterResumeId) && processingStatus === 'ready' && isLlmConfigured;
 
-  const formatDate = useCallback(
-    (value: string) => {
-      if (!value) return t('common.unknown');
+  const formatDateTimeParts = useCallback(
+    (value: string): { date: string; time: string } => {
+      const fallback = t('common.unknown');
+      if (!value) return { date: fallback, time: fallback };
       const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return t('common.unknown');
+      if (Number.isNaN(date.getTime())) return { date: fallback, time: fallback };
 
       const dateLocale =
         locale === 'es' ? 'es-ES' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
 
-      return date.toLocaleDateString(dateLocale, {
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric',
-      });
+      return {
+        date: date.toLocaleDateString(dateLocale, {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+        }),
+        time: date.toLocaleTimeString(dateLocale, {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      };
     },
     [locale, t]
   );
@@ -297,7 +326,8 @@ export default function DashboardPage() {
       const title = normalizeFilterValue(resume.title || resume.filename || 'Untitled resume');
       const role = resolveRole(resume);
       const company = resolveCompany(resume);
-      const searchable = `${title} ${role} ${company}`.toLowerCase();
+      const location = resolveLocation(resume);
+      const searchable = `${title} ${role} ${company} ${location}`.toLowerCase();
 
       if (searchNeedle && !searchable.includes(searchNeedle)) {
         return false;
@@ -591,8 +621,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="overflow-hidden">
-          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_120px_110px_96px] md:gap-3">
-            {['Resume', 'Role', 'Company', 'Updated', 'Status', 'Open'].map((label) => (
+          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:gap-3">
+            {['Resume', 'Role', 'Company', 'Location', 'Updated', 'Status', 'Open'].map((label) => (
               <span
                 key={label}
                 className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500"
@@ -617,30 +647,28 @@ export default function DashboardPage() {
                 const title = resume.title || resume.filename || 'Untitled resume';
                 const resolvedRole = resolveRole(resume);
                 const resolvedCompany = resolveCompany(resume);
+                const resolvedLocation = resolveLocation(resume);
+                const updatedParts = formatDateTimeParts(resume.updated_at || resume.created_at);
                 return (
                   <button
                     key={resume.resume_id}
                     type="button"
                     onClick={() => router.push(`/resumes/${resume.resume_id}`)}
-                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_120px_110px_96px] md:items-center"
+                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px_110px_96px] md:items-center"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-serif text-lg font-bold leading-tight">{title}</p>
-                      <p className="mt-1 text-[12px] text-gray-500">
-                        {resume.target_location ||
-                          t('dashboard.edited', {
-                            date: formatDate(resume.updated_at || resume.created_at),
-                          })}
-                      </p>
+                    </div>
+                    <div className="font-mono text-sm text-gray-700">{resolvedRole || 'N/A'}</div>
+                    <div className="font-mono text-sm text-gray-700">
+                      {resolvedCompany || 'N/A'}
                     </div>
                     <div className="font-mono text-sm text-gray-700">
-                      {resolvedRole || 'Unknown role'}
-                    </div>
-                    <div className="font-mono text-sm text-gray-700">
-                      {resolvedCompany || 'Unknown company'}
+                      {resolvedLocation || 'N/A'}
                     </div>
                     <div className="font-mono text-xs uppercase text-gray-500">
-                      {formatDate(resume.updated_at || resume.created_at)}
+                      <div>{updatedParts.date}</div>
+                      <div className="mt-1">{updatedParts.time}</div>
                     </div>
                     <div>
                       <span

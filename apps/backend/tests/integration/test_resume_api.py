@@ -739,6 +739,43 @@ class TestListResumes:
         item = resp.json()["data"][0]
         assert item["target_role"] == "Senior Backend Engineer"
 
+    @patch("app.routers.resumes.db")
+    async def test_list_uses_job_metadata_when_pack_company_missing(self, mock_db, client):
+        mock_db.list_resumes.return_value = [
+            {
+                "resume_id": "tailored-1",
+                "is_master": False,
+                "application_pack_id": "pack-123",
+                "created_at": "2026-01-02",
+                "updated_at": "2026-01-02",
+                "title": "Senior Backend Engineer",
+            }
+        ]
+        mock_db.list_application_packs.return_value = [
+            {
+                "pack_id": "pack-123",
+                "job_id": "job-123",
+                "company": None,
+                "role": None,
+                "location": None,
+            }
+        ]
+        mock_db.get_job.return_value = {
+            "job_id": "job-123",
+            "company": "Acme",
+            "role": "Senior Backend Engineer",
+            "location": "Mountain View, CA",
+        }
+
+        async with client:
+            resp = await client.get("/api/v1/resumes/list")
+
+        assert resp.status_code == 200
+        item = resp.json()["data"][0]
+        assert item["target_company"] == "Acme"
+        assert item["target_role"] == "Senior Backend Engineer"
+        assert item["target_location"] == "Mountain View, CA"
+
 
 class TestDeleteResume:
     """DELETE /api/v1/resumes/{resume_id}"""

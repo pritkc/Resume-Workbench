@@ -1201,6 +1201,7 @@ async def list_resumes(include_master: bool = Query(False)) -> ResumeListRespons
     application_packs = {
         pack["pack_id"]: pack for pack in db.list_application_packs()
     }
+    jobs_by_id: dict[str, dict[str, Any] | None] = {}
     if not include_master:
         resumes = [resume for resume in resumes if not resume.get("is_master", False)]
 
@@ -1208,8 +1209,21 @@ async def list_resumes(include_master: bool = Query(False)) -> ResumeListRespons
 
     summaries: list[ResumeSummary] = []
     for resume in resumes:
+        application_pack = application_packs.get(resume.get("application_pack_id"))
+        pack_job_id = (
+            application_pack.get("job_id")
+            if isinstance(application_pack, dict)
+            else None
+        )
+        job = None
+        if isinstance(pack_job_id, str) and pack_job_id.strip():
+            if pack_job_id not in jobs_by_id:
+                jobs_by_id[pack_job_id] = db.get_job(pack_job_id)
+            job = jobs_by_id.get(pack_job_id)
+
         target_role, target_company, target_location = _merge_target_metadata(
-            application_packs.get(resume.get("application_pack_id")),
+            application_pack,
+            job,
             title=resume.get("title"),
         )
         summaries.append(
