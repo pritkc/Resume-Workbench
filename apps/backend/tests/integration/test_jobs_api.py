@@ -36,8 +36,8 @@ class TestJobUpload:
         mock_db.create_job.assert_called_once_with(
             content="Senior Engineer at TechCorp",
             resume_id=None,
-            company=None,
-            role=None,
+            company="TechCorp",
+            role="Senior Engineer",
             location=None,
         )
 

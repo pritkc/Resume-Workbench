@@ -814,7 +814,6 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
               />
             </RenderCvRow>
           </RenderCvSection>
-
         </div>
       ) : null}
     </div>

@@ -6,6 +6,7 @@ import asyncio
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 from uuid import uuid4
 
@@ -478,6 +479,52 @@ class Database:
     ) -> dict[str, Any] | None:
         with self._session() as session:
             record = generation_run_repo.update_generation_run(session, generation_run_id, updates)
+            return _serialize_generation_run(record) if record else None
+
+    def list_generation_runs(
+        self,
+        *,
+        run_kind: str | Sequence[str] | None = None,
+        status: str | None = None,
+        application_pack_id: str | None = None,
+        source_resume_id: str | None = None,
+        tailored_resume_id: str | None = None,
+        job_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        with self._session() as session:
+            records = generation_run_repo.list_generation_runs(
+                session,
+                run_kind=run_kind,
+                status=status,
+                application_pack_id=application_pack_id,
+                source_resume_id=source_resume_id,
+                tailored_resume_id=tailored_resume_id,
+                job_id=job_id,
+                limit=limit,
+            )
+            return [_serialize_generation_run(record) for record in records]
+
+    def get_latest_generation_run(
+        self,
+        *,
+        run_kind: str | Sequence[str] | None = None,
+        status: str | None = None,
+        application_pack_id: str | None = None,
+        source_resume_id: str | None = None,
+        tailored_resume_id: str | None = None,
+        job_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        with self._session() as session:
+            record = generation_run_repo.get_latest_generation_run(
+                session,
+                run_kind=run_kind,
+                status=status,
+                application_pack_id=application_pack_id,
+                source_resume_id=source_resume_id,
+                tailored_resume_id=tailored_resume_id,
+                job_id=job_id,
+            )
             return _serialize_generation_run(record) if record else None
 
     def create_artifact(

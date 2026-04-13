@@ -214,11 +214,31 @@ export function DiffPreviewModal({
                 </span>
               </div>
               <div className="flex flex-wrap gap-2 flex-1">
-                <InlineStat label="LLM applied" value={changeBreakdown.llm_applied_changes} variant="success" />
-                <InlineStat label="Cleanup only" value={changeBreakdown.cleanup_only_changes} variant="warning" />
-                <InlineStat label="Rejected" value={changeBreakdown.llm_rejected_changes} variant="danger" />
-                <InlineStat label="Numeric risks" value={changeBreakdown.numeric_claim_changes} variant="warning" />
-                <InlineStat label="Skill changes" value={changeBreakdown.skill_changes} variant="info" />
+                <InlineStat
+                  label="LLM applied"
+                  value={changeBreakdown.llm_applied_changes}
+                  variant="success"
+                />
+                <InlineStat
+                  label="Cleanup only"
+                  value={changeBreakdown.cleanup_only_changes}
+                  variant="warning"
+                />
+                <InlineStat
+                  label="Rejected"
+                  value={changeBreakdown.llm_rejected_changes}
+                  variant="danger"
+                />
+                <InlineStat
+                  label="Numeric risks"
+                  value={changeBreakdown.numeric_claim_changes}
+                  variant="warning"
+                />
+                <InlineStat
+                  label="Skill changes"
+                  value={changeBreakdown.skill_changes}
+                  variant="info"
+                />
                 <InlineStat
                   label={`Location: ${changeBreakdown.location_source}`}
                   value={changeBreakdown.location_value ?? 'n/a'}

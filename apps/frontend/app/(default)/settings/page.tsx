@@ -605,9 +605,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <LlmStatusIcon className={`w-5 h-5 ${llmStatusIndicator.iconClassName}`} />
-                    <span className="font-mono text-sm font-bold">
-                      {llmStatusIndicator.label}
-                    </span>
+                    <span className="font-mono text-sm font-bold">{llmStatusIndicator.label}</span>
                   </div>
                 </div>
 

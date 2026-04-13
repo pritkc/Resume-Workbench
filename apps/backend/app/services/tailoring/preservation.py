@@ -9,6 +9,7 @@ from typing import Any
 
 from app.schemas import ResumeData, normalize_resume_data
 from app.services.additional_groups import restore_missing_additional_items
+from app.services.cover_letter import sanitize_job_location
 from app.services.parser import restore_dates_from_markdown
 from app.services.refiner import (
     fix_alignment_violations,
@@ -73,8 +74,7 @@ def _resolved_target_location(job_keywords: dict[str, Any]) -> str | None:
     location = job_keywords.get("location")
     if not isinstance(location, str):
         return None
-    cleaned = location.strip()
-    return cleaned or None
+    return sanitize_job_location(location)
 
 
 def restore_original_dates(

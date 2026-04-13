@@ -595,7 +595,8 @@
       "rateLimit": "Limite de requisições atingido. Por favor, aguarde um momento e tente novamente.",
       "failedToGenerate": "Falha ao gerar currículo. Verifique suas configurações e tente novamente.",
       "failedToPreview": "Falha ao pré-visualizar o currículo. Verifique suas configurações e tente novamente.",
-      "failedToConfirm": "Falha ao confirmar o currículo. Tente novamente."
+      "failedToConfirm": "Falha ao confirmar o currículo. Tente novamente.",
+      "cancelled": "Solicitação de personalização cancelada."
     }
   },
   "settings": {
@@ -810,7 +811,7 @@
     "copied": "Copiado!",
     "editor": {
       "placeholder": "Sua carta de apresentação aparecerá aqui após personalizar seu currículo com a geração de carta habilitada...",
-      "tip": "DICA: Uma boa carta de apresentação tem tipicamente 300-400 palavras. Edite conforme necessário para personalizar."
+      "tip": "DICA: Mantenha a carta entre 95 e 165 palavras para candidaturas concisas. Edite conforme necessário para personalizar."
     },
     "preview": {
       "defaultName": "Seu Nome",
@@ -830,7 +831,7 @@
     "copied": "Copiado!",
     "editor": {
       "placeholder": "Sua mensagem de contato frio aparecerá aqui após personalizar seu currículo com a geração de mensagem habilitada...",
-      "tip": "DICA: Mantenha mensagens de contato breves (100-150 palavras). Copie e cole no LinkedIn ou email."
+      "tip": "DICA: Mantenha mensagens de contato breves (50-95 palavras). Copie e cole no LinkedIn ou email."
     },
     "preview": {
       "channels": {

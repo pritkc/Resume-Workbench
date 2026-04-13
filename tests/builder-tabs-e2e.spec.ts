@@ -4,7 +4,30 @@ import { fulfillJson, frontendBaseUrl } from "./playwright-fixtures";
 const resumeId = "3ed603c4-82a1-43a9-a64d-4b22df2bd7b6";
 
 async function mockBuilderRoutes(page: Page) {
-  await page.route(/\/api\/v1\/resumes\?resume_id=.*$/, async (route) => {
+  await page.route(/\/api\/v1\/status(?:\?.*)?$/, async (route) => {
+    await fulfillJson(route, {
+      status: "ready",
+      llm_configured: true,
+      llm_healthy: true,
+      has_master_resume: true,
+      database_stats: {
+        total_resumes: 1,
+        total_jobs: 1,
+        total_improvements: 0,
+        has_master_resume: true,
+      },
+    });
+  });
+
+  await page.route(/\/api\/v1\/config\/generation-defaults(?:\?.*)?$/, async (route) => {
+    await fulfillJson(route, {
+      include_cover_letter: true,
+      include_outreach_message: true,
+      prompt_id: "keywords",
+    });
+  });
+
+  await page.route(/\/api\/v1\/resumes\?resume_id=[^&]+(?:&.*)?$/, async (route) => {
     await fulfillJson(route, {
       request_id: "req-builder-tabs",
       data: {
@@ -74,6 +97,31 @@ async function mockBuilderRoutes(page: Page) {
       pdf_artifact: null,
     });
   });
+
+  await page.route(
+    new RegExp(`/api/v1/resumes/${resumeId}/render-preview(?:\\?.*)?$`),
+    async (route) => {
+      await fulfillJson(route, {
+        resume_id: resumeId,
+        theme_settings: {
+          theme_id: "engineeringresumes",
+          page_size: "LETTER",
+          density_profile: "compact",
+          bold_keywords: false,
+          accent_color: "blue",
+          show_contact_icons: true,
+          margins_mm: { top: 10, bottom: 10, left: 10, right: 10 },
+          design: { theme: "engineeringresumes" },
+          theme_profiles: {},
+          locale: { language: "english" },
+          settings: { current_date: "today" },
+        },
+        artifacts: [],
+        preview_artifacts: [],
+        pdf_artifact: null,
+      });
+    }
+  );
 
   await page.route("**/api/v1/resumes/draft/normalize", async (route) => {
     await fulfillJson(route, {

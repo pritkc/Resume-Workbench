@@ -839,7 +839,11 @@ const ResumeBuilderContent = () => {
     setThemeSettings(newSettings);
     setLastSavedThemeSettings(newSettings);
     setYamlNeedsSync(true);
-  }, [improvedData?.data?.theme_settings, improvedData?.data?.bold_keywords, improvedThemeSettings]);
+  }, [
+    improvedData?.data?.theme_settings,
+    improvedData?.data?.bold_keywords,
+    improvedThemeSettings,
+  ]);
 
   // Warn user before leaving with unsaved changes
   useEffect(() => {

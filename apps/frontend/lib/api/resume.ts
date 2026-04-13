@@ -137,6 +137,59 @@ interface ImproveResumeConfirmRequest {
   theme_settings?: RenderThemeSettings | null;
 }
 
+export interface ApplicationQuestionAnswer {
+  question_id: string;
+  question: string;
+  answer: string;
+  confidence: 'high' | 'medium' | 'low';
+  warnings: string[];
+  is_user_edited: boolean;
+}
+
+export interface ApplicationQuestionsData {
+  application_pack_id?: string | null;
+  generation_run_id?: string | null;
+  run_kind?: string | null;
+  answers: ApplicationQuestionAnswer[];
+  warnings: string[];
+  generated_at?: string | null;
+  is_stale: boolean;
+  stale_reason?: string | null;
+}
+
+export interface ApplicationQuestionsResponse {
+  request_id: string;
+  data: ApplicationQuestionsData;
+}
+
+export interface ApplicationQuestionsFetchResponse {
+  request_id: string;
+  data: ApplicationQuestionsData | null;
+}
+
+export interface ApplicationQuestionInput {
+  question_id: string;
+  question: string;
+}
+
+export interface AnswerApplicationQuestionsRequest {
+  resume_id: string;
+  job_id: string;
+  application_pack_id?: string | null;
+  generation_run_id?: string | null;
+  questions: ApplicationQuestionInput[];
+  regenerate?: boolean;
+  target_question_ids?: string[];
+}
+
+export interface SaveApplicationQuestionsRequest {
+  resume_id: string;
+  job_id: string;
+  application_pack_id?: string | null;
+  generation_run_id?: string | null;
+  answers: ApplicationQuestionAnswer[];
+}
+
 export interface RawYamlSections {
   cv: string;
   design: string;
@@ -296,11 +349,12 @@ export interface ResumeListItem {
 
 async function postImprove(
   endpoint: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<ImprovedResult> {
   let response: Response;
   try {
-    response = await apiPost(endpoint, payload, 240_000);
+    response = await apiPost(endpoint, payload, 240_000, signal);
   } catch (networkError) {
     console.error(`Network error during ${endpoint}:`, networkError);
     throw networkError;
@@ -323,12 +377,18 @@ async function postImprove(
 /** Uploads job descriptions and returns a job_id */
 export async function uploadJobDescriptions(
   descriptions: string[],
-  resumeId: string
+  resumeId: string,
+  options: { signal?: AbortSignal } = {}
 ): Promise<string> {
-  const res = await apiPost('/jobs/upload', {
-    job_descriptions: descriptions,
-    resume_id: resumeId,
-  });
+  const res = await apiPost(
+    '/jobs/upload',
+    {
+      job_descriptions: descriptions,
+      resume_id: resumeId,
+    },
+    undefined,
+    options.signal
+  );
   if (!res.ok) throw new Error(`Upload failed with status ${res.status}`);
   const data = await res.json();
   return data.job_id[0];
@@ -338,13 +398,18 @@ export async function uploadJobDescriptions(
 export async function improveResume(
   resumeId: string,
   jobId: string,
-  promptId?: string
+  promptId?: string,
+  options: { signal?: AbortSignal } = {}
 ): Promise<ImprovedResult> {
-  return postImprove('/resumes/improve', {
-    resume_id: resumeId,
-    job_id: jobId,
-    prompt_id: promptId ?? null,
-  });
+  return postImprove(
+    '/resumes/improve',
+    {
+      resume_id: resumeId,
+      job_id: jobId,
+      prompt_id: promptId ?? null,
+    },
+    options.signal
+  );
 }
 
 /** Previews the resume improvement without saving */
@@ -356,18 +421,23 @@ export async function previewImproveResume(
     includeCoverLetter?: boolean;
     includeOutreachMessage?: boolean;
     themeSettings?: RenderThemeSettings | null;
+    signal?: AbortSignal;
   } = {}
 ): Promise<ImprovedResult> {
-  return postImprove('/application-packs/preview', {
-    resume_id: resumeId,
-    job_id: jobId,
-    prompt_id: options.promptId ?? null,
-    include_cover_letter: options.includeCoverLetter ?? null,
-    include_outreach_message: options.includeOutreachMessage ?? null,
-    theme_settings: options.themeSettings
-      ? serializeRenderThemeSettings(options.themeSettings)
-      : undefined,
-  });
+  return postImprove(
+    '/application-packs/preview',
+    {
+      resume_id: resumeId,
+      job_id: jobId,
+      prompt_id: options.promptId ?? null,
+      include_cover_letter: options.includeCoverLetter ?? null,
+      include_outreach_message: options.includeOutreachMessage ?? null,
+      theme_settings: options.themeSettings
+        ? serializeRenderThemeSettings(options.themeSettings)
+        : undefined,
+    },
+    options.signal
+  );
 }
 
 /** Confirms and saves a tailored resume */
@@ -638,6 +708,71 @@ export async function saveResumeDraft(
   });
   if (!res.ok) {
     await throwDraftRequestError(res, `Failed to save draft (status ${res.status})`);
+  }
+  return res.json();
+}
+
+export async function answerApplicationQuestions(
+  payload: AnswerApplicationQuestionsRequest,
+  options: { signal?: AbortSignal } = {}
+): Promise<ApplicationQuestionsResponse> {
+  const res = await apiPost(
+    '/application-packs/questions/answer',
+    {
+      ...payload,
+      application_pack_id: payload.application_pack_id ?? null,
+      generation_run_id: payload.generation_run_id ?? null,
+      regenerate: payload.regenerate ?? false,
+      target_question_ids: payload.target_question_ids ?? [],
+    },
+    240_000,
+    options.signal
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to answer questions (status ${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+export async function saveApplicationQuestionAnswers(
+  payload: SaveApplicationQuestionsRequest
+): Promise<ApplicationQuestionsResponse> {
+  const res = await apiPost('/application-packs/questions/save', {
+    ...payload,
+    application_pack_id: payload.application_pack_id ?? null,
+    generation_run_id: payload.generation_run_id ?? null,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to save question answers (status ${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+export async function fetchApplicationQuestionAnswers(params: {
+  resume_id?: string | null;
+  job_id?: string | null;
+  application_pack_id?: string | null;
+}): Promise<ApplicationQuestionsFetchResponse> {
+  const query = new URLSearchParams();
+  if (params.resume_id) {
+    query.set('resume_id', params.resume_id);
+  }
+  if (params.job_id) {
+    query.set('job_id', params.job_id);
+  }
+  if (params.application_pack_id) {
+    query.set('application_pack_id', params.application_pack_id);
+  }
+
+  const endpoint = query.toString()
+    ? `/application-packs/questions?${query.toString()}`
+    : '/application-packs/questions';
+  const res = await apiFetch(endpoint);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch question answers (status ${res.status}): ${text}`);
   }
   return res.json();
 }

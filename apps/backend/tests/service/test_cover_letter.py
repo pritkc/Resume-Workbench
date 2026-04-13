@@ -25,7 +25,7 @@ class TestJobTargetMetadata:
         assert metadata == {
             "role": "Business Analyst",
             "company": "West Shore Home",
-            "location": "Remote",
+            "location": None,
         }
 
     def test_splits_company_from_malformed_core_title(self):
@@ -53,7 +53,7 @@ class TestJobTargetMetadata:
 
         assert metadata["role"] == "Senior Backend Engineer"
         assert metadata["company"] == "TechCorp"
-        assert metadata["location"] == "Remote"
+        assert metadata["location"] is None
 
     def test_strips_employment_suffix_from_core_title(self):
         metadata = extract_job_target_metadata(
@@ -76,6 +76,61 @@ class TestJobTargetMetadata:
 
         assert metadata["role"] == "Agile Business Analyst"
         assert metadata["company"] == "West Shore Home"
+
+    def test_drops_url_and_boilerplate_noise_from_keywords(self):
+        metadata = extract_job_target_metadata(
+            "Senior Backend Engineer\nApply now.",
+            job_keywords={
+                "core_title": "range of benefits. Learn more",
+                "company_name": "https://www",
+                "location": "This role is based out of our Seattle office and follows a hybrid schedule.",
+            },
+        )
+
+        assert metadata["role"] == "Senior Backend Engineer"
+        assert metadata["company"] is None
+        assert metadata["location"] is None
+
+    def test_extracts_role_from_headline_only_job_description(self):
+        metadata = extract_job_target_metadata(
+            "Senior Backend Engineer\n\nResponsibilities include building APIs and improving test coverage.",
+            job_keywords={},
+        )
+
+        assert metadata["role"] == "Senior Backend Engineer"
+
+    def test_extracts_role_and_company_from_headline_with_at_separator(self):
+        metadata = extract_job_target_metadata(
+            "Senior Engineer at TechCorp\n\nResponsibilities include building APIs.",
+            job_keywords={},
+        )
+
+        assert metadata["role"] == "Senior Engineer"
+        assert metadata["company"] == "TechCorp"
+
+    def test_normalizes_location_to_city_state_abbreviation(self):
+        metadata = extract_job_target_metadata(
+            "Role details here.",
+            job_keywords={
+                "core_title": "Backend Engineer",
+                "company_name": "TechCorp",
+                "location": "on-site at san jose, ca",
+            },
+        )
+
+        assert metadata["location"] == "San Jose, CA"
+
+    def test_drops_location_without_state_abbreviation(self):
+        metadata = extract_job_target_metadata(
+            "Role details here.",
+            job_keywords={
+                "core_title": "Backend Engineer",
+                "company_name": "TechCorp",
+                "location": "on-site at san jose",
+            },
+        )
+
+        assert metadata["location"] is None
 
 
 class TestBuildJobTargetTitle:

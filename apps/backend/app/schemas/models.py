@@ -831,6 +831,189 @@ class ApplicationPackListResponse(BaseModel):
     data: list[ApplicationPackSummary]
 
 
+class ApplicationQuestionInput(BaseModel):
+    question_id: str
+    question: str
+
+    @field_validator("question_id", mode="before")
+    @classmethod
+    def _normalize_question_id(cls, value: Any) -> str:
+        text = _coerce_text(value)
+        if not text:
+            raise ValueError("question_id is required")
+        return text[:64]
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def _normalize_question(cls, value: Any) -> str:
+        text = " ".join(_coerce_text(value).split())
+        if not text:
+            raise ValueError("question is required")
+        if len(text) > 500:
+            raise ValueError("question must be 500 characters or fewer")
+        return text
+
+
+class ApplicationQuestionAnswer(BaseModel):
+    question_id: str
+    question: str
+    answer: str
+    confidence: Literal["high", "medium", "low"] = "medium"
+    warnings: list[str] = Field(default_factory=list)
+    is_user_edited: bool = False
+
+    @field_validator("question_id", mode="before")
+    @classmethod
+    def _normalize_answer_question_id(cls, value: Any) -> str:
+        text = _coerce_text(value)
+        if not text:
+            raise ValueError("question_id is required")
+        return text[:64]
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def _normalize_answer_question(cls, value: Any) -> str:
+        text = " ".join(_coerce_text(value).split())
+        if not text:
+            raise ValueError("question is required")
+        if len(text) > 500:
+            raise ValueError("question must be 500 characters or fewer")
+        return text
+
+    @field_validator("answer", mode="before")
+    @classmethod
+    def _normalize_answer_text(cls, value: Any) -> str:
+        text = " ".join(_coerce_text(value).split())
+        if not text:
+            raise ValueError("answer is required")
+        if len(text) > 2500:
+            raise ValueError("answer must be 2500 characters or fewer")
+        return text
+
+    @field_validator("warnings", mode="before")
+    @classmethod
+    def _normalize_warnings(cls, value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        warnings: list[str] = []
+        for item in value:
+            text = " ".join(_coerce_text(item).split())
+            if text:
+                warnings.append(text[:240])
+        return warnings
+
+
+class ApplicationQuestionsAnswerRequest(BaseModel):
+    resume_id: str
+    job_id: str
+    application_pack_id: str | None = None
+    generation_run_id: str | None = None
+    questions: list[ApplicationQuestionInput]
+    regenerate: bool = False
+    target_question_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("resume_id", "job_id", mode="before")
+    @classmethod
+    def _normalize_entity_ids(cls, value: Any) -> str:
+        text = _coerce_text(value)
+        if not text:
+            raise ValueError("field is required")
+        return text
+
+    @field_validator("application_pack_id", "generation_run_id", mode="before")
+    @classmethod
+    def _normalize_optional_ids(cls, value: Any) -> str | None:
+        return _coerce_optional_text(value)
+
+    @field_validator("target_question_ids", mode="before")
+    @classmethod
+    def _normalize_target_question_ids(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("target_question_ids must be a list")
+        ids: list[str] = []
+        seen: set[str] = set()
+        for entry in value:
+            question_id = _coerce_text(entry)[:64]
+            if not question_id:
+                continue
+            if question_id in seen:
+                continue
+            seen.add(question_id)
+            ids.append(question_id)
+        return ids
+
+    @model_validator(mode="after")
+    def _validate_questions_constraints(self) -> "ApplicationQuestionsAnswerRequest":
+        if not self.questions:
+            raise ValueError("questions must contain at least one entry")
+        if len(self.questions) > 15:
+            raise ValueError("questions must contain no more than 15 entries")
+        total_chars = sum(len(item.question) for item in self.questions)
+        if total_chars > 5000:
+            raise ValueError("questions exceed combined 5000 character limit")
+        if self.target_question_ids and not self.regenerate:
+            raise ValueError("target_question_ids requires regenerate=true")
+        return self
+
+
+class ApplicationQuestionsSaveRequest(BaseModel):
+    resume_id: str
+    job_id: str
+    application_pack_id: str | None = None
+    generation_run_id: str | None = None
+    answers: list[ApplicationQuestionAnswer]
+
+    @field_validator("resume_id", "job_id", mode="before")
+    @classmethod
+    def _normalize_save_ids(cls, value: Any) -> str:
+        text = _coerce_text(value)
+        if not text:
+            raise ValueError("field is required")
+        return text
+
+    @field_validator("application_pack_id", "generation_run_id", mode="before")
+    @classmethod
+    def _normalize_save_optional_ids(cls, value: Any) -> str | None:
+        return _coerce_optional_text(value)
+
+    @model_validator(mode="after")
+    def _validate_answers_constraints(self) -> "ApplicationQuestionsSaveRequest":
+        if not self.answers:
+            raise ValueError("answers must contain at least one entry")
+        if len(self.answers) > 15:
+            raise ValueError("answers must contain no more than 15 entries")
+        total_question_chars = sum(len(item.question) for item in self.answers)
+        total_answer_chars = sum(len(item.answer) for item in self.answers)
+        if total_question_chars > 5000:
+            raise ValueError("questions exceed combined 5000 character limit")
+        if total_answer_chars > 25000:
+            raise ValueError("answers exceed combined 25000 character limit")
+        return self
+
+
+class ApplicationQuestionsData(BaseModel):
+    application_pack_id: str | None = None
+    generation_run_id: str | None = None
+    run_kind: str | None = None
+    answers: list[ApplicationQuestionAnswer] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    generated_at: str | None = None
+    is_stale: bool = False
+    stale_reason: str | None = None
+
+
+class ApplicationQuestionsResponse(BaseModel):
+    request_id: str
+    data: ApplicationQuestionsData
+
+
+class ApplicationQuestionsFetchResponse(BaseModel):
+    request_id: str
+    data: ApplicationQuestionsData | None = None
+
+
 # Job Description Models
 class JobUploadRequest(BaseModel):
     """Request to upload job descriptions."""

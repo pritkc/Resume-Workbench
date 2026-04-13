@@ -595,7 +595,8 @@
       "rateLimit": "Rate limit reached. Please wait a moment and try again.",
       "failedToGenerate": "Failed to generate resume. Please check your settings and try again.",
       "failedToPreview": "Failed to preview resume. Please check your settings and try again.",
-      "failedToConfirm": "Failed to confirm resume. Please try again."
+      "failedToConfirm": "Failed to confirm resume. Please try again.",
+      "cancelled": "Tailoring request cancelled."
     }
   },
   "settings": {
@@ -810,7 +811,7 @@
     "copied": "Copied!",
     "editor": {
       "placeholder": "Your cover letter will appear here after tailoring your resume with cover letter generation enabled...",
-      "tip": "TIP: A good cover letter is typically 300-400 words. Edit as needed to personalize."
+      "tip": "TIP: Keep this around 95-165 words for concise applications. Edit as needed to personalize."
     },
     "preview": {
       "defaultName": "Your Name",
@@ -830,7 +831,7 @@
     "copied": "Copied!",
     "editor": {
       "placeholder": "Your cold outreach message will appear here after tailoring your resume with outreach message generation enabled...",
-      "tip": "TIP: Keep outreach messages brief (100-150 words). Copy and paste to LinkedIn or email."
+      "tip": "TIP: Keep outreach messages brief (50-95 words). Copy and paste to LinkedIn or email."
     },
     "preview": {
       "channels": {

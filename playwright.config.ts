@@ -71,7 +71,7 @@ export default defineConfig({
 
   webServer: {
     command:
-      'npm run build && npm run start -- --hostname 127.0.0.1 --port 3100',
+      'npm run build && rm -rf .next/standalone/apps/frontend/.next/static .next/standalone/apps/frontend/public && cp -R .next/static .next/standalone/apps/frontend/.next/static && cp -R public .next/standalone/apps/frontend/public && HOSTNAME=127.0.0.1 PORT=3100 node .next/standalone/apps/frontend/server.js',
     cwd: './apps/frontend',
     url: 'http://127.0.0.1:3100',
     reuseExistingServer: !process.env.CI,

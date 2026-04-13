@@ -10,7 +10,7 @@ from typing import Any
 from app.llm import complete_json
 from app.prompts import PROMPT_VERSIONS
 from app.prompts.templates import EXTRACT_JD_INTELLIGENCE_PROMPT, EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
-from app.services.cover_letter import extract_job_target_metadata
+from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
 from app.services.tailoring.models import JDIntelligence, TailoringJobAnalysis
@@ -188,8 +188,15 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
         result["core_title"] = target_metadata.get("role")
     if not result.get("company_name"):
         result["company_name"] = target_metadata.get("company")
-    if result.get("location") is None:
-        result["location"] = target_metadata.get("location")
+    extracted_location = (
+        sanitize_job_location(result.get("location"))
+        if isinstance(result.get("location"), str)
+        else None
+    )
+    if extracted_location:
+        result["location"] = extracted_location
+    else:
+        result["location"] = target_metadata.get("location") or ""
 
     return result
 

@@ -674,7 +674,7 @@ class TestListResumes:
                 "pack_id": "pack-123",
                 "company": "Acme",
                 "role": "Backend Engineer",
-                "location": "Remote",
+                "location": "Mountain View, CA",
             }
         ]
         async with client:
@@ -683,7 +683,61 @@ class TestListResumes:
         item = resp.json()["data"][0]
         assert item["target_company"] == "Acme"
         assert item["target_role"] == "Backend Engineer"
-        assert item["target_location"] == "Remote"
+        assert item["target_location"] == "Mountain View, CA"
+
+    @patch("app.routers.resumes.db")
+    async def test_list_sanitizes_polluted_target_metadata(self, mock_db, client):
+        mock_db.list_resumes.return_value = [
+            {
+                "resume_id": "tailored-1",
+                "is_master": False,
+                "application_pack_id": "pack-123",
+                "created_at": "2026-01-02",
+                "updated_at": "2026-01-02",
+                "title": None,
+            }
+        ]
+        mock_db.list_application_packs.return_value = [
+            {
+                "pack_id": "pack-123",
+                "company": "https://www",
+                "role": "range of benefits. Learn more",
+                "location": "This role is based out of our Seattle office and follows a hybrid schedule.",
+            }
+        ]
+        async with client:
+            resp = await client.get("/api/v1/resumes/list")
+        assert resp.status_code == 200
+        item = resp.json()["data"][0]
+        assert item["target_company"] is None
+        assert item["target_role"] is None
+        assert item["target_location"] is None
+
+    @patch("app.routers.resumes.db")
+    async def test_list_uses_title_fallback_for_role_when_pack_metadata_missing(self, mock_db, client):
+        mock_db.list_resumes.return_value = [
+            {
+                "resume_id": "tailored-1",
+                "is_master": False,
+                "application_pack_id": "pack-123",
+                "created_at": "2026-01-02",
+                "updated_at": "2026-01-02",
+                "title": "Senior Backend Engineer",
+            }
+        ]
+        mock_db.list_application_packs.return_value = [
+            {
+                "pack_id": "pack-123",
+                "company": None,
+                "role": None,
+                "location": None,
+            }
+        ]
+        async with client:
+            resp = await client.get("/api/v1/resumes/list")
+        assert resp.status_code == 200
+        item = resp.json()["data"][0]
+        assert item["target_role"] == "Senior Backend Engineer"
 
 
 class TestDeleteResume:

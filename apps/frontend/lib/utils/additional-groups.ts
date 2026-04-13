@@ -231,10 +231,7 @@ export function formatAdditionalGroupItems(items?: string[]): string {
   return Array.isArray(items) ? items.join('\n') : '';
 }
 
-export function getDefaultAdditionalGroupLabel(
-  label: string,
-  t?: Translator
-): string | undefined {
+export function getDefaultAdditionalGroupLabel(label: string, t?: Translator): string | undefined {
   if (!isDefaultLabel(label)) {
     return undefined;
   }
@@ -297,10 +294,13 @@ export function generateAdditionalGroupId(
   groups: Array<Pick<SkillGroup, 'label'>> = [],
   preferredLabel = 'Skills'
 ): string {
-  const existingLabels = new Set(
-    groups.map((g) => g.label.trim().toLowerCase())
-  );
-  const base = preferredLabel.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'skills';
+  const existingLabels = new Set(groups.map((g) => g.label.trim().toLowerCase()));
+  const base =
+    preferredLabel
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'skills';
   let candidate = base;
   let counter = 2;
   while (existingLabels.has(candidate.toLowerCase())) {

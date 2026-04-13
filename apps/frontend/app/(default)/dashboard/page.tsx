@@ -32,9 +32,41 @@ import { useTranslations } from '@/lib/i18n';
 type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed' | 'loading';
 type DateFilter = 'all' | '7d' | '30d' | '90d';
 type SortOption = 'updated' | 'created' | 'company' | 'role';
+const TITLE_SPLIT_RE = /^(.+?)\s*@\s*(.+)$/;
 
 function normalizeFilterValue(value?: string | null): string {
   return value?.trim() || '';
+}
+
+function deriveRoleCompanyFromTitle(
+  title?: string | null
+): { role: string; company: string } | null {
+  const normalizedTitle = normalizeFilterValue(title);
+  if (!normalizedTitle) {
+    return null;
+  }
+  const match = TITLE_SPLIT_RE.exec(normalizedTitle);
+  if (!match) {
+    return null;
+  }
+  const role = normalizeFilterValue(match[1]);
+  const company = normalizeFilterValue(match[2]);
+  if (!role || !company) {
+    return null;
+  }
+  return { role, company };
+}
+
+function resolveRole(resume: ResumeListItem): string {
+  const role = normalizeFilterValue(resume.target_role);
+  if (role) return role;
+  return deriveRoleCompanyFromTitle(resume.title)?.role || '';
+}
+
+function resolveCompany(resume: ResumeListItem): string {
+  const company = normalizeFilterValue(resume.target_company);
+  if (company) return company;
+  return deriveRoleCompanyFromTitle(resume.title)?.company || '';
 }
 
 function statusBadgeClass(status: ResumeListItem['processing_status'] | ProcessingStatus): string {
@@ -241,11 +273,7 @@ export default function DashboardPage() {
   const resumeCompanies = useMemo(
     () =>
       Array.from(
-        new Set(
-          tailoredResumes
-            .map((resume) => normalizeFilterValue(resume.target_company))
-            .filter(Boolean)
-        )
+        new Set(tailoredResumes.map((resume) => resolveCompany(resume)).filter(Boolean))
       ).sort((left, right) => left.localeCompare(right)),
     [tailoredResumes]
   );
@@ -253,9 +281,7 @@ export default function DashboardPage() {
   const resumeRoles = useMemo(
     () =>
       Array.from(
-        new Set(
-          tailoredResumes.map((resume) => normalizeFilterValue(resume.target_role)).filter(Boolean)
-        )
+        new Set(tailoredResumes.map((resume) => resolveRole(resume)).filter(Boolean))
       ).sort((left, right) => left.localeCompare(right)),
     [tailoredResumes]
   );
@@ -269,8 +295,8 @@ export default function DashboardPage() {
 
     const filtered = tailoredResumes.filter((resume) => {
       const title = normalizeFilterValue(resume.title || resume.filename || 'Untitled resume');
-      const role = normalizeFilterValue(resume.target_role);
-      const company = normalizeFilterValue(resume.target_company);
+      const role = resolveRole(resume);
+      const company = resolveCompany(resume);
       const searchable = `${title} ${role} ${company}`.toLowerCase();
 
       if (searchNeedle && !searchable.includes(searchNeedle)) {
@@ -295,15 +321,11 @@ export default function DashboardPage() {
 
     filtered.sort((left, right) => {
       if (sortBy === 'company') {
-        return normalizeFilterValue(left.target_company).localeCompare(
-          normalizeFilterValue(right.target_company)
-        );
+        return resolveCompany(left).localeCompare(resolveCompany(right));
       }
 
       if (sortBy === 'role') {
-        return normalizeFilterValue(left.target_role).localeCompare(
-          normalizeFilterValue(right.target_role)
-        );
+        return resolveRole(left).localeCompare(resolveRole(right));
       }
 
       const leftDate = new Date(
@@ -406,7 +428,11 @@ export default function DashboardPage() {
         <section className="border border-black bg-white px-4 py-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="flex items-center gap-3 text-left transition-colors hover:text-blue-700"
+                onClick={() => router.push(`/resumes/${masterResumeId}`)}
+              >
                 <div className="flex h-12 w-12 items-center justify-center border border-black bg-blue-700 text-white">
                   <FileText className="h-5 w-5" />
                 </div>
@@ -418,7 +444,7 @@ export default function DashboardPage() {
                     Focused editing workspace
                   </h1>
                 </div>
-              </div>
+              </button>
               <div
                 className={`flex items-center gap-2 font-mono text-xs uppercase ${masterStatus.color}`}
               >
@@ -589,6 +615,8 @@ export default function DashboardPage() {
             <div className="divide-y divide-black/10">
               {filteredResumes.map((resume) => {
                 const title = resume.title || resume.filename || 'Untitled resume';
+                const resolvedRole = resolveRole(resume);
+                const resolvedCompany = resolveCompany(resume);
                 return (
                   <button
                     key={resume.resume_id}
@@ -606,10 +634,10 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="font-mono text-sm text-gray-700">
-                      {resume.target_role || 'Unknown role'}
+                      {resolvedRole || 'Unknown role'}
                     </div>
                     <div className="font-mono text-sm text-gray-700">
-                      {resume.target_company || 'Unknown company'}
+                      {resolvedCompany || 'Unknown company'}
                     </div>
                     <div className="font-mono text-xs uppercase text-gray-500">
                       {formatDate(resume.updated_at || resume.created_at)}

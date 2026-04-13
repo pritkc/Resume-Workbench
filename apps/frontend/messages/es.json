@@ -595,7 +595,8 @@
       "rateLimit": "Se alcanzó el límite de tasa. Espera un momento e inténtalo de nuevo.",
       "failedToGenerate": "No se pudo generar el currículum. Revisa tu configuración e inténtalo de nuevo.",
       "failedToPreview": "No se pudo previsualizar el currículum. Revisa tu configuración e inténtalo de nuevo.",
-      "failedToConfirm": "No se pudo confirmar el currículum. Inténtalo de nuevo."
+      "failedToConfirm": "No se pudo confirmar el currículum. Inténtalo de nuevo.",
+      "cancelled": "Solicitud de personalización cancelada."
     }
   },
   "settings": {
@@ -809,7 +810,7 @@
     "copyToClipboard": "Copiar al Portapapeles",
     "editor": {
       "placeholder": "Tu carta de presentación aparecerá aquí después de adaptar tu currículum con la generación de carta activada...",
-      "tip": "CONSEJO: Una buena carta suele tener 300-400 palabras. Edita para personalizar."
+      "tip": "CONSEJO: Mantén la carta entre 95 y 165 palabras para aplicaciones concisas. Edita para personalizar."
     },
     "preview": {
       "defaultName": "Tu nombre",
@@ -830,7 +831,7 @@
     "copied": "¡Copiado!",
     "editor": {
       "placeholder": "Tu mensaje de contacto en frío aparecerá aquí después de adaptar tu currículum con la generación de mensajes activada...",
-      "tip": "CONSEJO: Mantén el mensaje breve (100-150 palabras). Copia y pega en LinkedIn o email."
+      "tip": "CONSEJO: Mantén el mensaje breve (50-95 palabras). Copia y pega en LinkedIn o email."
     },
     "preview": {
       "channels": {

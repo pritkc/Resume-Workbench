@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import logging
+import re
 import unicodedata
 from collections.abc import Awaitable
 from pathlib import Path
@@ -77,8 +78,15 @@ from app.services.cover_letter import (
     extract_job_target_metadata,
     generate_cover_letter,
     generate_outreach_message,
+    sanitize_job_location,
 )
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
+
+_URL_LIKE_RE = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
+_METADATA_NOISE_RE = re.compile(
+    r"\b(?:learn more|click here|apply now|job description|benefits|careers?)\b",
+    re.IGNORECASE,
+)
 
 
 def _get_default_prompt_id() -> str:
@@ -341,14 +349,41 @@ def _resolve_request_theme_settings(
     return _stored_or_default_theme_settings(resume)
 
 
+def _sanitize_target_metadata_value(value: Any, *, field: str) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.strip().split()).strip(" -,:;|")
+    if not cleaned:
+        return None
+    if _URL_LIKE_RE.search(cleaned):
+        return None
+    if _METADATA_NOISE_RE.search(cleaned):
+        return None
+    if field in {"role", "company"} and len(cleaned.split()) > 12:
+        return None
+    if field == "location":
+        return sanitize_job_location(cleaned)
+    max_len = 90 if field == "location" else 80
+    return cleaned[:max_len].rstrip(" ,")
+
+
+def _compose_target_title(role: str | None, company: str | None) -> str | None:
+    if role and company:
+        return f"{role} @ {company}"[:80]
+    if role:
+        return role[:80]
+    return None
+
+
 def _merge_target_metadata(
     *sources: dict[str, Any] | None,
     job_description: str = "",
     job_keywords: dict[str, Any] | None = None,
     title: str | None = None,
 ) -> tuple[str | None, str | None, str | None]:
+    normalized_job_description = job_description if isinstance(job_description, str) else ""
     metadata_from_keywords = extract_job_target_metadata(
-        job_description,
+        normalized_job_description,
         title=title,
         job_keywords=job_keywords,
     )
@@ -356,13 +391,42 @@ def _merge_target_metadata(
     role = None
     company = None
     location = None
+    title_candidates: list[str] = []
+
+    if title:
+        title_candidates.append(title)
+
+    for source in sources:
+        if isinstance(source, dict):
+            source_title = source.get("title")
+            if isinstance(source_title, str) and source_title.strip():
+                title_candidates.append(source_title)
 
     for source in [*sources, metadata_from_keywords]:
         if not source:
             continue
-        role = role or source.get("role")
-        company = company or source.get("company")
-        location = location or source.get("location")
+        role = role or _sanitize_target_metadata_value(source.get("role"), field="role")
+        company = company or _sanitize_target_metadata_value(source.get("company"), field="company")
+        location = location or _sanitize_target_metadata_value(
+            source.get("location"), field="location"
+        )
+
+    if not role or not company:
+        for candidate in title_candidates:
+            parsed = extract_job_target_metadata("", title=candidate)
+            role = role or _sanitize_target_metadata_value(parsed.get("role"), field="role")
+            company = company or _sanitize_target_metadata_value(
+                parsed.get("company"), field="company"
+            )
+            if role and company:
+                break
+
+    if not role:
+        for candidate in title_candidates:
+            role_candidate = candidate.split("@", maxsplit=1)[0]
+            role = _sanitize_target_metadata_value(role_candidate, field="role")
+            if role:
+                break
 
     return role, company, location
 
@@ -373,22 +437,29 @@ def _backfill_job_target_metadata(
     job: dict[str, Any],
     job_keywords: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    job_content = job.get("content")
+    normalized_job_content = job_content if isinstance(job_content, str) else ""
     inferred = extract_job_target_metadata(
-        job.get("content", ""),
+        normalized_job_content,
         job_keywords=job_keywords,
     )
-    updates = {
-        key: value
-        for key, value in inferred.items()
-        if value and not job.get(key)
-    }
+    updates: dict[str, Any] = {}
+    for key, value in inferred.items():
+        if not value:
+            continue
+        current = _sanitize_target_metadata_value(
+            job.get(key),
+            field="location" if key == "location" else key,
+        )
+        if not current:
+            updates[key] = value
     if not updates:
         return job
 
     try:
         updated_job = db.update_job(job_id, updates)
-        if updated_job:
-            return updated_job
+        if isinstance(updated_job, dict):
+            return {**job, **updates, **updated_job}
     except Exception as exc:
         logger.warning("Failed to backfill target metadata for job %s: %s", job_id, exc)
 
@@ -1335,7 +1406,9 @@ async def _improve_preview_flow(
         job,
         job_description=job["content"],
         job_keywords=job_keywords,
+        title=generated_title,
     )
+    generated_title = generated_title or _compose_target_title(target_role, target_company)
     llm_summary = db.summarize_llm_calls(trace_id=request_id)
 
     _set_stage(stage_state, "create_application_pack")
@@ -1616,7 +1689,9 @@ async def improve_resume_confirm_endpoint(
             job,
             job_description=job["content"],
             job_keywords=job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None,
+            title=title,
         )
+        title = title or _compose_target_title(target_role, target_company)
 
         stage = "create_resume"
         tailored_resume = db.create_resume(

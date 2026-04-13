@@ -7,6 +7,7 @@ PROMPT_VERSIONS = {
     "extract_keywords": "v2.0",
     "cover_letter": "v2.0",
     "outreach": "v2.0",
+    "application_questions_generate": "v1.0",
     "enrichment_analyze": "v1.1",
     "enrichment_enhance": "v1.1",
     "enrichment_regenerate_item": "v1.1",
@@ -81,7 +82,7 @@ Output JSON matching this schema:
     "product_context": "what the team builds — infer from the description",
     "scale_signals": ["any mentions of scale: user counts, transaction volumes, data volume, global reach"]
   }},
-  "location": "location or remote arrangement or null",
+  "location": "strict location in `City, ST` format (e.g., `Mountain View, CA`) or empty string when not explicitly present",
   "technical_requirements": {{
     "primary_stack": ["hard-required technologies in the order the JD emphasizes"],
     "secondary_stack": ["preferred or nice-to-have technologies"],
@@ -111,6 +112,7 @@ Output JSON matching this schema:
 
 Rules:
 - role.title: strip company name, location, employment type, "apply now"-style noise
+- location: return only `City, ST` (US state abbreviation). Do not return `Remote`, `Hybrid`, `On-site`, regions, or long phrases. If unavailable, return empty string.
 - company.product_context: infer from team/division description what they build or maintain
 - responsibility_themes: distill into themes a resume writer can target, not raw JD bullet copies. Examples: "API architecture & governance", "cloud-native microservices", "frontend accessibility & performance"
 - ats_keywords: include every technical and domain term. Include common abbreviation variants (e.g., "CI/CD" and "Continuous Integration/Continuous Deployment")
@@ -340,6 +342,49 @@ FACTS:
 Return the final message only, not a draft or plan
 """
 
+APPLICATION_QUESTIONS_PROMPT = """Write personalized answers for job-application custom questions using only the provided resume/JD context.
+
+STYLE:
+- Fixed default style: professional, concise, confident
+- Directly answer each question in plain text
+- Keep each answer compact (typically 2-5 sentences) unless the question requires more detail
+
+GROUNDING RULES:
+- Use only facts supported by candidate profile, tailored resume context, and job context
+- Do not invent employers, dates, certifications, credentials, metrics, or legal claims
+- If context is weak, provide the best truthful answer and include a short warning
+
+FORMAT:
+- Return valid JSON only with this exact shape:
+{{
+  "answers": [
+    {{
+      "question_id": "q_0",
+      "answer": "string",
+      "confidence": "high|medium|low",
+      "warnings": ["optional warning"]
+    }}
+  ]
+}}
+- Return one answer object for every input question_id
+- Do not include markdown or extra keys
+
+JOB TARGET (JSON):
+{job_target}
+
+JOB DESCRIPTION EXCERPT:
+{job_description}
+
+CANDIDATE PROFILE (JSON):
+{resume_profile}
+
+TAILORED RESUME CONTEXT (JSON):
+{tailored_resume_context}
+
+QUESTIONS (JSON):
+{questions}
+"""
+
 # Alias for backward compatibility
 RESUME_SCHEMA = RESUME_SCHEMA_EXAMPLE
 
@@ -356,6 +401,10 @@ OUTREACH_SYSTEM_PROMPT = (
     "You write short professional outreach notes that sound personally composed, not generated. "
     "Output one final message in plain text only. "
     "No planning steps, no alternatives, no placeholders, no markdown."
+)
+APPLICATION_QUESTIONS_SYSTEM_PROMPT = (
+    "You answer job-application custom questions using only supplied context. "
+    "Output JSON only. No markdown."
 )
 ENRICHMENT_ANALYZE_SYSTEM_PROMPT = "You are a professional resume analyst. Output only valid JSON."
 ENRICHMENT_ENHANCE_SYSTEM_PROMPT = "You are a professional resume writer. Output only valid JSON."

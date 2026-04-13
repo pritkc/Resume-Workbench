@@ -28,10 +28,10 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
 
   await installArtifactMocks(page);
 
-  await page.route("**/api/v1/status", async (route) => {
+  await page.route(/\/api\/v1\/status(?:\?.*)?$/, async (route) => {
     await fulfillJson(route, statusPayload());
   });
-  await page.route("**/api/v1/config/prompts", async (route) => {
+  await page.route(/\/api\/v1\/config\/prompts\/?(?:\?.*)?$/, async (route) => {
     await fulfillJson(route, {
       default_prompt_id: "keywords",
       prompt_options: [
@@ -48,7 +48,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
       ],
     });
   });
-  await page.route("**/api/v1/config/generation-defaults", async (route) => {
+  await page.route(/\/api\/v1\/config\/generation-defaults\/?(?:\?.*)?$/, async (route) => {
     if (route.request().method() === "PUT") {
       generationDefaultsUpdates.push(
         route.request().postDataJSON() as Record<string, unknown>,
@@ -63,26 +63,23 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
       prompt_id: "keywords",
     });
   });
-  await page.route(
-    "**/api/v1/resumes/list?include_master=true",
-    async (route) => {
-      await fulfillJson(route, {
-        data: [
-          {
-            resume_id: masterResumeId,
-            filename: "master.pdf",
-            is_master: true,
-            parent_id: null,
-            processing_status: "ready",
-            created_at: "2026-04-01T00:00:00Z",
-            updated_at: "2026-04-01T00:00:00Z",
-            title: "Master Resume",
-          },
-        ],
-      });
-    },
-  );
-  await page.route(/\/api\/v1\/resumes\?resume_id=.*/, async (route) => {
+  await page.route(/\/api\/v1\/resumes\/list\?include_master=true(?:&.*)?$/, async (route) => {
+    await fulfillJson(route, {
+      data: [
+        {
+          resume_id: masterResumeId,
+          filename: "master.pdf",
+          is_master: true,
+          parent_id: null,
+          processing_status: "ready",
+          created_at: "2026-04-01T00:00:00Z",
+          updated_at: "2026-04-01T00:00:00Z",
+          title: "Master Resume",
+        },
+      ],
+    });
+  });
+  await page.route(/\/api\/v1\/resumes\?resume_id=[^&]+(?:&.*)?$/, async (route) => {
     const url = new URL(route.request().url());
     const resumeId = url.searchParams.get("resume_id");
     if (resumeId === tailoredResumeId) {
@@ -107,12 +104,33 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
     );
     await fulfillJson(route, confirmedResult);
   });
-  await page.route(
-    /\/api\/v1\/resumes\/tailored-123\/job-description$/,
-    async (route) => {
-      await fulfillJson(route, jobDescriptionResponse);
-    },
-  );
+  await page.route(/\/api\/v1\/resumes\/tailored-123\/job-description(?:\?.*)?$/, async (route) => {
+    await fulfillJson(route, jobDescriptionResponse);
+  });
+  await page.route(/\/api\/v1\/application-packs\/questions(?:\?.*)?$/, async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await fulfillJson(route, { request_id: "req-questions-fetch", data: null });
+      return;
+    }
+    if (method === "POST") {
+      await fulfillJson(route, {
+        request_id: "req-questions",
+        data: {
+          application_pack_id: "pack-123",
+          generation_run_id: "run-q-123",
+          run_kind: "application_pack_questions",
+          answers: [],
+          warnings: [],
+          generated_at: "2026-04-05T12:00:00Z",
+          is_stale: false,
+          stale_reason: null,
+        },
+      });
+      return;
+    }
+    await route.fallback();
+  });
   await page.route(
     /\/api\/v1\/resumes\/tailored-123\/render-preview(\?.*)?$/,
     async (route) => {

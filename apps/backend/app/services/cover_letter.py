@@ -26,11 +26,145 @@ _TITLE_ROLE_COMPANY_RE = re.compile(
     r"^(?P<role>.+?)\s*(?:@|\bat\b)\s*(?P<company>.+)$",
     re.IGNORECASE,
 )
+_ROLE_ONLY_LINE_RE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9/&,+\-\s]{2,79}$",
+)
+_URL_LIKE_RE = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
+_METADATA_NOISE_RE = re.compile(
+    r"\b(?:learn more|click here|apply now|job description|benefits|careers?)\b",
+    re.IGNORECASE,
+)
+_ROLE_KEYWORD_RE = re.compile(
+    r"\b(?:engineer|developer|analyst|scientist|manager|architect|specialist|consultant|administrator|lead|intern)\b",  # noqa: E501
+    re.IGNORECASE,
+)
+_US_STATE_CODES = {
+    "AL",
+    "AK",
+    "AZ",
+    "AR",
+    "CA",
+    "CO",
+    "CT",
+    "DE",
+    "FL",
+    "GA",
+    "HI",
+    "ID",
+    "IL",
+    "IN",
+    "IA",
+    "KS",
+    "KY",
+    "LA",
+    "ME",
+    "MD",
+    "MA",
+    "MI",
+    "MN",
+    "MS",
+    "MO",
+    "MT",
+    "NE",
+    "NV",
+    "NH",
+    "NJ",
+    "NM",
+    "NY",
+    "NC",
+    "ND",
+    "OH",
+    "OK",
+    "OR",
+    "PA",
+    "RI",
+    "SC",
+    "SD",
+    "TN",
+    "TX",
+    "UT",
+    "VT",
+    "VA",
+    "WA",
+    "WV",
+    "WI",
+    "WY",
+    "DC",
+}
+_US_STATE_NAME_TO_CODE = {
+    "alabama": "AL",
+    "alaska": "AK",
+    "arizona": "AZ",
+    "arkansas": "AR",
+    "california": "CA",
+    "colorado": "CO",
+    "connecticut": "CT",
+    "delaware": "DE",
+    "florida": "FL",
+    "georgia": "GA",
+    "hawaii": "HI",
+    "idaho": "ID",
+    "illinois": "IL",
+    "indiana": "IN",
+    "iowa": "IA",
+    "kansas": "KS",
+    "kentucky": "KY",
+    "louisiana": "LA",
+    "maine": "ME",
+    "maryland": "MD",
+    "massachusetts": "MA",
+    "michigan": "MI",
+    "minnesota": "MN",
+    "mississippi": "MS",
+    "missouri": "MO",
+    "montana": "MT",
+    "nebraska": "NE",
+    "nevada": "NV",
+    "new hampshire": "NH",
+    "new jersey": "NJ",
+    "new mexico": "NM",
+    "new york": "NY",
+    "north carolina": "NC",
+    "north dakota": "ND",
+    "ohio": "OH",
+    "oklahoma": "OK",
+    "oregon": "OR",
+    "pennsylvania": "PA",
+    "rhode island": "RI",
+    "south carolina": "SC",
+    "south dakota": "SD",
+    "tennessee": "TN",
+    "texas": "TX",
+    "utah": "UT",
+    "vermont": "VT",
+    "virginia": "VA",
+    "washington": "WA",
+    "west virginia": "WV",
+    "wisconsin": "WI",
+    "wyoming": "WY",
+    "district of columbia": "DC",
+}
+_STATE_NAME_ALTERNATION = "|".join(
+    sorted(
+        (re.escape(name) for name in _US_STATE_NAME_TO_CODE),
+        key=len,
+        reverse=True,
+    )
+)
+_CITY_STATE_ABBR_RE = re.compile(
+    r"\b(?P<city>[A-Za-z][A-Za-z .'\-]{0,58}?),\s*(?P<state>[A-Za-z]{2})\b"
+)
+_CITY_STATE_NAME_RE = re.compile(
+    rf"\b(?P<city>[A-Za-z][A-Za-z .'\-]{{0,58}}?),\s*(?P<state_name>{_STATE_NAME_ALTERNATION})\b",  # noqa: E501
+    re.IGNORECASE,
+)
 _LOCATION_PATTERNS = (
     re.compile(r"\blocation\s*[:\-]\s*(?P<location>[^\n|•]+)", re.IGNORECASE),
-    re.compile(r"\b(?P<location>remote(?:\s*\([^)]+\))?)\b", re.IGNORECASE),
-    re.compile(r"\b(?P<location>hybrid(?:\s+in\s+[^\n|•]+)?)\b", re.IGNORECASE),
-    re.compile(r"\b(?P<location>on-?site(?:\s+in\s+[^\n|•]+)?)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:on-?site|onsite|hybrid|remote)\s+(?:at|in|from)\s+(?P<location>[^\n|•]+)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:based|located)\s+in\s+(?P<location>[^\n|•]+)", re.IGNORECASE),
 )
 _TITLE_TRAILING_QUALIFIER_RE = re.compile(
     r"""
@@ -75,12 +209,14 @@ MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2200
 _COVER_LETTER_RETRY_HINT = (
     "Return one complete cover letter in plain text only. Stay between 95 and 165 words, "
     "use 3 tight paragraphs (4 only if needed), human direct tone, end with a complete closing sentence. "
-    "No placeholders, markdown, draft notes, signature blocks, or em dashes."
+    "No placeholders, markdown, draft notes, signature blocks, or em dashes. "
+    "Return the final answer immediately."
 )
 _OUTREACH_RETRY_HINT = (
     "Return one complete outreach message in plain text only. Stay between 50 and 95 words, "
     "3-4 short sentences, specific opening, one low-friction ask at the end. "
-    "No placeholders, template openers, or signature block. Do not stop mid-sentence."
+    "No placeholders, template openers, or signature block. Do not stop mid-sentence. "
+    "Return the final answer immediately."
 )
 
 
@@ -90,6 +226,75 @@ def _clean_metadata_value(value: str | None) -> str | None:
     cleaned = " ".join(value.strip().split())
     cleaned = cleaned.strip(" -,:;|")
     return cleaned[:120] if cleaned else None
+
+
+def _sanitize_metadata_value(value: str | None, *, field: str) -> str | None:
+    cleaned = _clean_metadata_value(value)
+    if not cleaned:
+        return None
+    if _URL_LIKE_RE.search(cleaned):
+        return None
+    if _METADATA_NOISE_RE.search(cleaned):
+        return None
+    if field in {"role", "company"} and len(cleaned.split()) > 12:
+        return None
+    if field == "location":
+        return sanitize_job_location(cleaned)
+    max_len = 90 if field == "location" else 80
+    return cleaned[:max_len].rstrip(" ,")
+
+
+def _normalize_city_name(value: str | None) -> str | None:
+    cleaned = _clean_metadata_value(value)
+    if not cleaned:
+        return None
+    cleaned = re.sub(r"^location\s*[:\-]\s*", "", cleaned, flags=re.IGNORECASE)
+    qualifier_match = re.search(
+        r"(?:on-?site|onsite|hybrid|remote|based|located|this role|role)[^,]*\b(?:at|in|from)\s+(?P<city>.+)$",  # noqa: E501
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    if qualifier_match:
+        cleaned = qualifier_match.group("city")
+    cleaned = re.sub(r"^(?:at|in|from)\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.strip(" ,")
+    cleaned = " ".join(cleaned.split())
+    if not cleaned or len(cleaned.split()) > 5:
+        return None
+    if any(char.isdigit() for char in cleaned):
+        return None
+    if not re.fullmatch(r"[A-Za-z .'\-]+", cleaned):
+        return None
+    lowered = cleaned.lower()
+    if lowered in {"remote", "hybrid", "onsite", "on-site"}:
+        return None
+    return cleaned.title()
+
+
+def sanitize_job_location(value: str | None) -> str | None:
+    """Normalize location to strict City, ST format; otherwise return None."""
+
+    cleaned = _clean_metadata_value(value)
+    if not cleaned:
+        return None
+    if _URL_LIKE_RE.search(cleaned) or _METADATA_NOISE_RE.search(cleaned):
+        return None
+
+    match = _CITY_STATE_ABBR_RE.search(cleaned)
+    if match:
+        city = _normalize_city_name(match.group("city"))
+        state = match.group("state").upper()
+        if city and state in _US_STATE_CODES:
+            return f"{city}, {state}"
+
+    match = _CITY_STATE_NAME_RE.search(cleaned)
+    if match:
+        city = _normalize_city_name(match.group("city"))
+        state = _US_STATE_NAME_TO_CODE.get(match.group("state_name").strip().lower())
+        if city and state:
+            return f"{city}, {state}"
+
+    return None
 
 
 def _extract_role_company_from_title(title: str | None) -> tuple[str | None, str | None]:
@@ -102,8 +307,8 @@ def _extract_role_company_from_title(title: str | None) -> tuple[str | None, str
         return None, None
 
     return (
-        _clean_metadata_value(match.group("role")),
-        _clean_metadata_value(match.group("company")),
+        _sanitize_metadata_value(match.group("role"), field="role"),
+        _sanitize_metadata_value(match.group("company"), field="company"),
     )
 
 
@@ -111,10 +316,10 @@ def _extract_location_from_job_description(job_description: str) -> str | None:
     for pattern in _LOCATION_PATTERNS:
         match = pattern.search(job_description)
         if match:
-            location = _clean_metadata_value(match.group("location"))
+            location = sanitize_job_location(match.group("location"))
             if location:
                 return location
-    return None
+    return sanitize_job_location(job_description)
 
 
 def _extract_title_from_job_description(job_description: str) -> str | None:
@@ -126,6 +331,33 @@ def _extract_title_from_job_description(job_description: str) -> str | None:
             return f"{role} @ {company}"[:80]
         if role:
             return role[:80]
+
+    for raw_line in job_description.splitlines():
+        candidate = _clean_metadata_value(raw_line)
+        if not candidate:
+            continue
+        # Treat only short headline-like lines as title candidates.
+        if len(candidate.split()) > 12 or any(char in candidate for char in ".!?;"):
+            continue
+        role, company = _extract_role_company_from_title(candidate)
+        if role and company:
+            return f"{role} @ {company}"[:80]
+        break
+
+    return None
+
+
+def _extract_role_only_from_job_description(job_description: str) -> str | None:
+    for raw_line in job_description.splitlines():
+        candidate = _sanitize_metadata_value(raw_line, field="role")
+        if not candidate:
+            continue
+        if candidate.endswith(":") or "." in candidate:
+            continue
+        if not _ROLE_ONLY_LINE_RE.match(candidate):
+            continue
+        if _ROLE_KEYWORD_RE.search(candidate):
+            return candidate
     return None
 
 
@@ -185,11 +417,20 @@ def extract_job_target_metadata(
 ) -> dict[str, str | None]:
     """Infer structured target-job metadata without a schema migration."""
 
-    role_title = _get_keyword_metadata_value(job_keywords, "core_title", "role", "title")
+    role_title = _sanitize_metadata_value(
+        _get_keyword_metadata_value(job_keywords, "core_title", "role", "title"),
+        field="role",
+    )
     title_role, title_company = _extract_role_company_from_title(role_title)
-    company = _get_keyword_metadata_value(job_keywords, "company_name", "company")
+    company = _sanitize_metadata_value(
+        _get_keyword_metadata_value(job_keywords, "company_name", "company"),
+        field="company",
+    )
     company = company or title_company
-    location = _get_keyword_metadata_value(job_keywords, "location")
+    location = _sanitize_metadata_value(
+        _get_keyword_metadata_value(job_keywords, "location"),
+        field="location",
+    )
     role = _normalize_role_title(title_role or role_title, company=company, location=location)
 
     if title:
@@ -203,10 +444,16 @@ def extract_job_target_metadata(
         role = role or extracted_role
         company = company or extracted_company
 
+    if not role:
+        role = _extract_role_only_from_job_description(job_description)
+
     return {
-        "role": _clean_metadata_value(role),
-        "company": _clean_metadata_value(company),
-        "location": location or _extract_location_from_job_description(job_description),
+        "role": _sanitize_metadata_value(role, field="role"),
+        "company": _sanitize_metadata_value(company, field="company"),
+        "location": _sanitize_metadata_value(
+            location or _extract_location_from_job_description(job_description),
+            field="location",
+        ),
     }
 
 

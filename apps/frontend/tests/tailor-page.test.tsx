@@ -29,6 +29,10 @@ vi.mock('@/components/common/resume_previewer_context', () => ({
   }),
 }));
 
+vi.mock('@/components/application/additional-questions-panel', () => ({
+  AdditionalQuestionsPanel: () => <div>additional-questions-panel</div>,
+}));
+
 vi.mock('@/lib/api/resume', () => ({
   uploadJobDescriptions: (...args: unknown[]) => uploadJobDescriptions(...args),
   previewImproveResume: (...args: unknown[]) => previewImproveResume(...args),

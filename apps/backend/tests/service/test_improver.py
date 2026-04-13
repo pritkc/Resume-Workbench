@@ -56,7 +56,7 @@ class TestExtractJobKeywords:
         assert result["experience_years"] == 5
         assert result["core_title"] == "Backend Engineer"
         assert result["company_name"] == "TechCorp"
-        assert result["location"] == "Remote"
+        assert result["location"] == ""
         mock_llm.assert_called_once()
 
     @patch("app.services.tailoring.analysis.complete_json", new_callable=AsyncMock)
@@ -288,7 +288,7 @@ class TestImproveResume:
         assert custom_meta["sectionType"] == "text"
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
-    async def test_applies_job_location_to_personal_info(
+    async def test_ignores_non_city_state_job_location_and_keeps_master_location(
         self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume, summary="Remote-ready summary")
@@ -300,7 +300,7 @@ class TestImproveResume:
             original_resume_data=sample_resume,
         )
 
-        assert result["personalInfo"]["location"] == "Remote"
+        assert result["personalInfo"]["location"] == sample_resume["personalInfo"]["location"]
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
     async def test_compact_bullet_rewrite_applied_correctly(
@@ -357,9 +357,9 @@ class TestImproveResume:
         assert result.resume_data["workExperience"][0]["description"][0] == (
             "Built and maintained FastAPI services for high-volume API traffic"
         )
-        assert result.resume_data["personalInfo"]["location"] == "Remote"
+        assert result.resume_data["personalInfo"]["location"] == sample_resume["personalInfo"]["location"]
         assert result.stage_breakdown.llm_applied_changes >= 1
-        assert result.stage_breakdown.location_source == "jd"
+        assert result.stage_breakdown.location_source == "master"
         assert any(change.path == "summary" for change in result.change_manifest)
 
     @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)

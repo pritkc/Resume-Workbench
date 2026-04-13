@@ -11,7 +11,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.schemas import TailoringStageBreakdown
+from app.schemas import ApplicationQuestionAnswer, TailoringStageBreakdown
 from app.services.additional_groups import normalize_additional_groups
 
 
@@ -563,3 +563,252 @@ async def test_list_application_packs_supports_company_role_and_date_filters(cli
     data = response.json()["data"]
     assert data[0]["company"] == "Acme"
     assert data[0]["role"] == "Backend Engineer"
+
+
+@pytest.mark.asyncio
+async def test_answer_application_questions_generates_and_persists(sample_resume: dict, client):
+    generated_answers = [
+        ApplicationQuestionAnswer(
+            question_id="q_0",
+            question="Why this role?",
+            answer="My API and platform background aligns with this role.",
+            confidence="high",
+            warnings=[],
+            is_user_edited=False,
+        ),
+        ApplicationQuestionAnswer(
+            question_id="q_1",
+            question="Describe your teamwork style.",
+            answer="I collaborate closely across product and engineering teams.",
+            confidence="medium",
+            warnings=[],
+            is_user_edited=False,
+        ),
+    ]
+
+    with (
+        patch("app.routers.application_packs.db") as mock_db,
+        patch(
+            "app.routers.application_packs.generate_application_question_answers",
+            new=AsyncMock(return_value=(generated_answers, [])),
+        ) as mock_generate,
+    ):
+        mock_db.get_resume.return_value = {
+            "resume_id": "res-123",
+            "parent_id": None,
+            "application_pack_id": "pack-123",
+            "processed_data": copy.deepcopy(sample_resume),
+            "updated_at": "2026-04-05T12:00:00Z",
+        }
+        mock_db.get_job.return_value = {
+            "job_id": "job-123",
+            "content": "Senior Backend Engineer at Acme",
+            "role": "Senior Backend Engineer",
+            "company": "Acme",
+            "location": "Mountain View, CA",
+            "job_keywords": {"keywords": ["FastAPI"]},
+        }
+        mock_db.get_application_pack.return_value = {"pack_id": "pack-123"}
+        mock_db.get_latest_generation_run.return_value = None
+        mock_db.create_generation_run.return_value = {"generation_run_id": "run-q-123"}
+        mock_db.update_generation_run.return_value = {"generation_run_id": "run-q-123"}
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "run-q-123",
+            "run_kind": "application_pack_questions",
+            "created_at": "2026-04-05T12:05:00Z",
+            "result_payload": {"answers": generated_answers},
+            "warnings": [],
+        }
+
+        async with client:
+            response = await client.post(
+                "/api/v1/application-packs/questions/answer",
+                json={
+                    "resume_id": "res-123",
+                    "job_id": "job-123",
+                    "questions": [
+                        {"question_id": "q_0", "question": "Why this role?"},
+                        {"question_id": "q_1", "question": "Describe your teamwork style."},
+                    ],
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["generation_run_id"] == "run-q-123"
+    assert len(payload["answers"]) == 2
+    assert payload["is_stale"] is False
+    mock_generate.assert_awaited_once()
+    assert mock_db.create_generation_run.call_args.kwargs["run_kind"] == "application_pack_questions"
+
+
+@pytest.mark.asyncio
+async def test_answer_application_questions_partial_regeneration_merges_existing_answers(
+    sample_resume: dict,
+    client,
+):
+    with (
+        patch("app.routers.application_packs.db") as mock_db,
+        patch(
+            "app.routers.application_packs.generate_application_question_answers",
+            new=AsyncMock(
+                return_value=(
+                    [
+                        ApplicationQuestionAnswer(
+                            question_id="q_1",
+                            question="Describe a challenge.",
+                            answer="I improved reliability by hardening API retry logic.",
+                            confidence="high",
+                            warnings=[],
+                            is_user_edited=False,
+                        )
+                    ],
+                    [],
+                )
+            ),
+        ),
+    ):
+        mock_db.get_resume.return_value = {
+            "resume_id": "res-123",
+            "parent_id": None,
+            "application_pack_id": "pack-123",
+            "processed_data": copy.deepcopy(sample_resume),
+            "updated_at": "2026-04-05T12:00:00Z",
+        }
+        mock_db.get_job.return_value = {
+            "job_id": "job-123",
+            "content": "Senior Backend Engineer at Acme",
+            "role": "Senior Backend Engineer",
+            "company": "Acme",
+            "location": "Mountain View, CA",
+            "job_keywords": {"keywords": ["FastAPI"]},
+        }
+        mock_db.get_application_pack.return_value = {"pack_id": "pack-123"}
+        mock_db.get_latest_generation_run.return_value = {
+            "generation_run_id": "run-prev-1",
+            "result_payload": {
+                "answers": [
+                    {
+                        "question_id": "q_0",
+                        "question": "Why this role?",
+                        "answer": "I align well with the role's API scope.",
+                        "confidence": "medium",
+                        "warnings": [],
+                        "is_user_edited": True,
+                    }
+                ]
+            },
+        }
+        mock_db.create_generation_run.return_value = {"generation_run_id": "run-q-456"}
+        mock_db.update_generation_run.return_value = {"generation_run_id": "run-q-456"}
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "run-q-456",
+            "run_kind": "application_pack_questions",
+            "created_at": "2026-04-05T12:10:00Z",
+            "result_payload": {"answers": []},
+            "warnings": [],
+        }
+
+        async with client:
+            response = await client.post(
+                "/api/v1/application-packs/questions/answer",
+                json={
+                    "resume_id": "res-123",
+                    "job_id": "job-123",
+                    "regenerate": True,
+                    "target_question_ids": ["q_1"],
+                    "questions": [
+                        {"question_id": "q_0", "question": "Why this role?"},
+                        {"question_id": "q_1", "question": "Describe a challenge."},
+                    ],
+                },
+            )
+
+    assert response.status_code == 200
+    answers = response.json()["data"]["answers"]
+    assert [item["question_id"] for item in answers] == ["q_0", "q_1"]
+    assert answers[0]["is_user_edited"] is True
+    assert answers[1]["answer"].startswith("I improved reliability")
+
+
+@pytest.mark.asyncio
+async def test_save_application_question_answers_creates_manual_run(client):
+    with patch("app.routers.application_packs.db") as mock_db:
+        mock_db.get_resume.return_value = {
+            "resume_id": "res-123",
+            "parent_id": None,
+            "application_pack_id": "pack-123",
+            "processed_data": {"personalInfo": {"name": "Jane"}, "skills": {"groups": []}},
+            "updated_at": "2026-04-05T12:00:00Z",
+        }
+        mock_db.get_job.return_value = {"job_id": "job-123", "content": "JD"}
+        mock_db.get_application_pack.return_value = {"pack_id": "pack-123"}
+        mock_db.create_generation_run.return_value = {
+            "generation_run_id": "run-manual-1",
+            "created_at": "2026-04-05T12:10:00Z",
+            "run_kind": "application_pack_questions_manual",
+        }
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "run-manual-1",
+            "created_at": "2026-04-05T12:10:00Z",
+            "run_kind": "application_pack_questions_manual",
+            "warnings": [],
+            "result_payload": {
+                "answers": [
+                    {
+                        "question_id": "q_0",
+                        "question": "Why this role?",
+                        "answer": "Edited answer",
+                        "confidence": "high",
+                        "warnings": [],
+                        "is_user_edited": True,
+                    }
+                ]
+            },
+        }
+
+        async with client:
+            response = await client.post(
+                "/api/v1/application-packs/questions/save",
+                json={
+                    "resume_id": "res-123",
+                    "job_id": "job-123",
+                    "application_pack_id": "pack-123",
+                    "answers": [
+                        {
+                            "question_id": "q_0",
+                            "question": "Why this role?",
+                            "answer": "Edited answer",
+                            "confidence": "high",
+                            "warnings": [],
+                            "is_user_edited": True,
+                        }
+                    ],
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["run_kind"] == "application_pack_questions_manual"
+    assert payload["answers"][0]["is_user_edited"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_application_question_answers_returns_null_when_absent(client):
+    with patch("app.routers.application_packs.db") as mock_db:
+        mock_db.get_resume.return_value = {
+            "resume_id": "res-123",
+            "parent_id": None,
+            "application_pack_id": "pack-123",
+            "updated_at": "2026-04-05T12:00:00Z",
+        }
+        mock_db.get_latest_generation_run.return_value = None
+
+        async with client:
+            response = await client.get(
+                "/api/v1/application-packs/questions",
+                params={"resume_id": "res-123", "job_id": "job-123"},
+            )
+
+    assert response.status_code == 200
+    assert response.json()["data"] is None

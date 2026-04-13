@@ -15,16 +15,13 @@ test("settings saves config, tests connection, and updates prompt defaults", asy
   const testedConfigs: Array<Record<string, unknown>> = [];
   const promptUpdates: Array<Record<string, unknown>> = [];
 
-  await page.route("**/api/v1/status", async (route) => {
+  await page.route(/\/api\/v1\/status(?:\?.*)?$/, async (route) => {
     await fulfillJson(route, statusPayload());
   });
-  await page.route(
-    "**/api/v1/resumes/list?include_master=true",
-    async (route) => {
-      await fulfillJson(route, { data: [] });
-    },
-  );
-  await page.route("**/api/v1/config/llm-api-key", async (route) => {
+  await page.route(/\/api\/v1\/resumes\/list\?include_master=true(?:&.*)?$/, async (route) => {
+    await fulfillJson(route, { data: [] });
+  });
+  await page.route(/\/api\/v1\/config\/llm-api-key\/?(?:\?.*)?$/, async (route) => {
     if (route.request().method() === "PUT") {
       const payload = route.request().postDataJSON() as Record<string, unknown>;
       savedConfigs.push(payload);
@@ -44,7 +41,7 @@ test("settings saves config, tests connection, and updates prompt defaults", asy
       api_base: null,
     });
   });
-  await page.route("**/api/v1/config/llm-test", async (route) => {
+  await page.route(/\/api\/v1\/config\/llm-test\/?(?:\?.*)?$/, async (route) => {
     const payload = route.request().postDataJSON() as Record<string, unknown>;
     testedConfigs.push(payload);
     await fulfillJson(route, {
@@ -56,7 +53,7 @@ test("settings saves config, tests connection, and updates prompt defaults", asy
       model_output: "pong",
     });
   });
-  await page.route("**/api/v1/config/prompts", async (route) => {
+  await page.route(/\/api\/v1\/config\/prompts\/?(?:\?.*)?$/, async (route) => {
     if (route.request().method() === "PUT") {
       const payload = route.request().postDataJSON() as Record<string, unknown>;
       promptUpdates.push(payload);
@@ -94,7 +91,7 @@ test("settings saves config, tests connection, and updates prompt defaults", asy
       ],
     });
   });
-  await page.route("**/api/v1/config/language", async (route) => {
+  await page.route(/\/api\/v1\/config\/language\/?(?:\?.*)?$/, async (route) => {
     await fulfillJson(route, {
       content_language: "en",
       ui_language: "en",
@@ -115,7 +112,9 @@ test("settings saves config, tests connection, and updates prompt defaults", asy
 
   const modelInput = llmSection.locator("#model");
   const apiKeyInput = llmSection.locator("#apiKey");
-  await expect(modelInput).toHaveValue("gpt-5-nano-2025-08-07");
+  await expect(modelInput).toHaveValue("gpt-5-nano-2025-08-07", {
+    timeout: 15_000,
+  });
   await modelInput.fill("gpt-5-mini-custom");
   await apiKeyInput.fill("sk-test-123");
   await expect(modelInput).toHaveValue("gpt-5-mini-custom");

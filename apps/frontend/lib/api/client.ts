@@ -58,12 +58,24 @@ export async function apiFetch(
 
   // Matches the backend's 240s hard limit (resumes.py wait_for timeout)
   const timeout = timeoutMs ?? 240_000;
+  const externalSignal = options?.signal;
   const controller = new AbortController();
+  const abortFromExternal = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', abortFromExternal, { once: true });
+    }
+  }
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
+    if (externalSignal) {
+      externalSignal.removeEventListener('abort', abortFromExternal);
+    }
     clearTimeout(timer);
   }
 }
@@ -71,13 +83,19 @@ export async function apiFetch(
 /**
  * POST request with JSON body.
  */
-export async function apiPost<T>(endpoint: string, body: T, timeoutMs?: number): Promise<Response> {
+export async function apiPost<T>(
+  endpoint: string,
+  body: T,
+  timeoutMs?: number,
+  signal?: AbortSignal
+): Promise<Response> {
   return apiFetch(
     endpoint,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     },
     timeoutMs
   );

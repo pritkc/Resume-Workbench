@@ -14,10 +14,7 @@ import {
   previewImproveResume,
   confirmImproveResume,
 } from '@/lib/api/resume';
-import {
-  normalizeRenderThemeSettings,
-  type RenderThemeSettings,
-} from '@/lib/types/render-theme';
+import { normalizeRenderThemeSettings, type RenderThemeSettings } from '@/lib/types/render-theme';
 import {
   fetchGenerationDefaults,
   fetchPromptConfig,
@@ -30,6 +27,7 @@ import { Loader2, ArrowLeft, AlertTriangle, Settings } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 
 const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 
@@ -74,6 +72,17 @@ function storeGenerationDefaults(defaults: StoredGenerationDefaults) {
   window.localStorage.setItem(GENERATION_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+type GenerateStage = 'idle' | 'uploading' | 'tailoring';
+type AdditionalQuestionContext = {
+  jobId: string;
+  applicationPackId: string | null;
+  generationRunId: string | null;
+};
+
 export default function TailorPage() {
   const { t } = useTranslations();
   const [jobDescription, setJobDescription] = useState('');
@@ -97,6 +106,11 @@ export default function TailorPage() {
   const [showMissingDiffDialog, setShowMissingDiffDialog] = useState(false);
   const [missingDiffResult, setMissingDiffResult] = useState<ImprovedResult | null>(null);
   const [missingDiffError, setMissingDiffError] = useState<string | null>(null);
+  const [additionalQuestionContext, setAdditionalQuestionContext] =
+    useState<AdditionalQuestionContext | null>(null);
+  const [generateStage, setGenerateStage] = useState<GenerateStage>('idle');
+  const [isGenerationInFlight, setIsGenerationInFlight] = useState(false);
+  const generationAbortRef = useRef<AbortController | null>(null);
 
   // Elapsed timer for long operations
   const [elapsed, setElapsed] = useState(0);
@@ -117,6 +131,7 @@ export default function TailorPage() {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      generationAbortRef.current?.abort();
     };
   }, []);
 
@@ -285,14 +300,24 @@ export default function TailorPage() {
     try {
       // 1. Upload Job Description
       // The API expects an array of strings
-      const jobId = await uploadJobDescriptions([description], resumeId);
+      setGenerateStage('uploading');
+      const jobId = await uploadJobDescriptions([description], resumeId, {
+        signal: generationAbortRef.current?.signal,
+      });
       incrementJobs(); // Update cached counter
 
       // 2. Preview Resume
+      setGenerateStage('tailoring');
       const result = await previewImproveResume(resumeId, jobId, {
         promptId: selectedPromptId,
         includeCoverLetter,
         includeOutreachMessage,
+        signal: generationAbortRef.current?.signal,
+      });
+      setAdditionalQuestionContext({
+        jobId: result.data.job_id,
+        applicationPackId: result.data.application_pack_id ?? null,
+        generationRunId: result.data.generation_run_id ?? null,
       });
 
       if (!result?.data?.diff_summary || !result?.data?.detailed_changes) {
@@ -312,6 +337,10 @@ export default function TailorPage() {
       setPendingResult(result);
       setShowDiffModal(true);
     } catch (err) {
+      if (isAbortError(err)) {
+        setError(t('tailor.errors.cancelled'));
+        return;
+      }
       console.error(err);
       // Check for common error patterns
       const errorMessage = err instanceof Error ? err.message : '';
@@ -350,8 +379,11 @@ export default function TailorPage() {
     storeGenerationDefaults(nextDefaults);
 
     setIsLoading(true);
+    setIsGenerationInFlight(true);
     setError(null);
+    setGenerateStage('uploading');
     startTimer();
+    generationAbortRef.current = new AbortController();
     try {
       void updateGenerationDefaults(nextDefaults).catch((defaultsError) => {
         console.error('Failed to persist generation defaults', defaultsError);
@@ -359,7 +391,10 @@ export default function TailorPage() {
       await runGenerate(resumeId, trimmedDescription);
     } finally {
       setIsLoading(false);
+      setIsGenerationInFlight(false);
+      setGenerateStage('idle');
       stopTimer();
+      generationAbortRef.current = null;
     }
   };
 
@@ -437,15 +472,39 @@ export default function TailorPage() {
     }
     const resumeId = masterResumeId;
     setIsLoading(true);
+    setIsGenerationInFlight(true);
     setError(null);
+    setGenerateStage('uploading');
     startTimer();
+    generationAbortRef.current = new AbortController();
     try {
       await runGenerate(resumeId, trimmedDescription);
     } finally {
       setIsLoading(false);
+      setIsGenerationInFlight(false);
+      setGenerateStage('idle');
       stopTimer();
+      generationAbortRef.current = null;
     }
   };
+
+  const handleCancelGeneration = () => {
+    if (!isGenerationInFlight) return;
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = null;
+    setIsGenerationInFlight(false);
+    setIsLoading(false);
+    setGenerateStage('idle');
+    stopTimer();
+    setError(t('tailor.errors.cancelled'));
+  };
+
+  const progressLabel = (() => {
+    if (!isGenerationInFlight) return null;
+    if (generateStage === 'uploading') return 'Uploading job description...';
+    if (elapsed >= 20) return 'Rendering preview and diff...';
+    return 'Generating tailored resume...';
+  })();
 
   return (
     <div
@@ -610,8 +669,30 @@ export default function TailorPage() {
                 t('tailor.generateTailored')
               )}
             </Button>
+            {isGenerationInFlight && (
+              <div className="flex items-center justify-between gap-3 border border-black bg-[#F8F7F1] px-3 py-2">
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
+                  {progressLabel}
+                </p>
+                <Button size="xs" variant="outline" onClick={handleCancelGeneration}>
+                  {t('common.cancel')}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
+      </div>
+
+      <div className="mx-auto mt-4 w-full max-w-6xl">
+        <AdditionalQuestionsPanel
+          title="Additional Questions"
+          resumeId={masterResumeId}
+          jobId={additionalQuestionContext?.jobId ?? null}
+          applicationPackId={additionalQuestionContext?.applicationPackId ?? null}
+          generationRunId={additionalQuestionContext?.generationRunId ?? null}
+          disabled={!additionalQuestionContext}
+          disabledReason="Generate a tailored preview first, then paste custom application questions here."
+        />
       </div>
 
       {/* Diff preview modal */}
