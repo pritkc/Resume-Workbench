@@ -706,6 +706,7 @@ export default function TailorPage() {
           diffSummary={pendingResult?.data?.diff_summary}
           detailedChanges={pendingResult?.data?.detailed_changes}
           changeBreakdown={pendingResult?.data?.change_breakdown}
+          changeManifest={pendingResult?.data?.change_manifest}
           artifacts={pendingResult?.data?.artifacts}
           errorMessage={diffConfirmError ?? undefined}
         />

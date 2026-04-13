@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import type {
   TailoringStageBreakdown,
@@ -54,6 +54,15 @@ const changeBreakdown: TailoringStageBreakdown = {
   location_value: 'Remote',
 };
 
+const changeManifest = [
+  {
+    path: 'summary',
+    action: 'replace',
+    value: 'new summary',
+    reason: 'Updated summary',
+  },
+];
+
 describe('DiffPreviewModal', () => {
   it('renders fallback dialog when diff data is missing', () => {
     const onClose = vi.fn();
@@ -65,7 +74,7 @@ describe('DiffPreviewModal', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the high-risk warning banner when dangerous changes are present', () => {
+  it('shows verification guidance when new skill items are introduced', () => {
     render(
       <DiffPreviewModal
         isOpen
@@ -77,8 +86,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('tailor.diffModal.warningTitle', { exact: false })).toBeInTheDocument();
-    expect(screen.getByText('tailor.diffModal.warningMessage')).toBeInTheDocument();
+    expect(screen.getByText('Verify 1 newly added skill item.')).toBeInTheDocument();
   });
 
   it('toggles section visibility on header click', () => {
@@ -94,7 +102,7 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.getByText('new summary')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /tailor\.diffModal\.summaryChanges/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Summary/i }));
     expect(screen.queryByText('new summary')).not.toBeInTheDocument();
   });
 
@@ -108,11 +116,79 @@ describe('DiffPreviewModal', () => {
         diffSummary={diffSummary}
         detailedChanges={detailedChanges}
         changeBreakdown={changeBreakdown}
+        changeManifest={changeManifest}
       />
     );
 
-    expect(screen.getByText('tailor.diffModal.changeAttribution')).toBeInTheDocument();
-    expect(screen.getByText('Remote')).toBeInTheDocument();
+    expect(screen.getByText('Change Attribution')).toBeInTheDocument();
+    expect(
+      screen.getByText('Pipeline: 2 AI-applied, 1 cleanup-only, 0 rejected.')
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('AI').length).toBeGreaterThan(0);
+  });
+
+  it('attributes title changes to AI when manifest has same entry paths', () => {
+    const titleOnlyChanges: ResumeFieldDiff[] = [
+      {
+        field_path: 'workExperience[0].position',
+        field_type: 'experience_title',
+        change_type: 'modified',
+        original_value: 'Software Engineer',
+        new_value: 'Senior Software Engineer',
+        confidence: 'medium',
+      },
+    ];
+
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        detailedChanges={titleOnlyChanges}
+        changeManifest={[
+          {
+            path: 'workExperience[0].description[0]',
+            action: 'replace',
+            original: 'Built APIs',
+            value: 'Built scalable APIs',
+            reason: 'Tailored bullet',
+          },
+        ]}
+      />
+    );
+
+    const context = screen.getByText('Experience 1 title').closest('div');
+    expect(context).not.toBeNull();
+    expect(within(context as HTMLElement).getByText('AI')).toBeInTheDocument();
+  });
+
+  it('shows project diffs when project path uses alias form', () => {
+    const projectAliasDiff: ResumeFieldDiff[] = [
+      {
+        field_path: 'projects[0].description[1]',
+        field_type: 'description',
+        change_type: 'modified',
+        original_value: 'Built dashboard',
+        new_value: 'Built analytics dashboard',
+        confidence: 'medium',
+      },
+    ];
+
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        detailedChanges={projectAliasDiff}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /Project 1/i })).toBeInTheDocument();
+    expect(screen.getByText('Project 1 bullet 2')).toBeInTheDocument();
   });
 
   it('fires confirm and reject handlers', () => {
