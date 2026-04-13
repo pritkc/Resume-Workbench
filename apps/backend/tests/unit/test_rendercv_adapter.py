@@ -121,6 +121,57 @@ def test_rendercv_adapter_limits_auto_bold_keywords_to_experience_and_project_bu
     assert "bold_keywords" not in payload.get("settings", {})
 
 
+def test_rendercv_adapter_emits_repo_and_live_links_after_project_name(
+    sample_resume_copy: dict,
+) -> None:
+    sample_resume_copy["personalProjects"][0].update(
+        {
+            "name": "OpenAPI Generator",
+            "github": "github.com/acme/openapi-generator",
+            "website": "https://openapi.acme.dev",
+        }
+    )
+
+    payload = resume_to_rendercv_payload(
+        sample_resume_copy,
+        RenderThemeSettings(theme_id="classic"),
+    )
+    project_name = payload["cv"]["sections"]["projects"][0]["name"]
+
+    assert project_name.startswith("OpenAPI Generator | ")
+    assert "\\[[repo](https://github.com/acme/openapi-generator)\\]" in project_name
+    assert "\\[[live](https://openapi.acme.dev)\\]" in project_name
+
+
+def test_rendercv_round_trip_parses_repo_and_live_links_from_project_name() -> None:
+    sections = {
+        "cv": (
+            "cv:\n"
+            "  name: Jane Doe\n"
+            "  sections:\n"
+            "    projects:\n"
+            "      - name: OpenAPI Generator | \\[[repo](https://github.com/acme/openapi)\\] \\[[live](https://openapi.acme.dev)\\]\n"
+            "        date: Mar 2021 - Present\n"
+            "        summary: API tooling\n"
+            "        highlights:\n"
+            "          - Built a developer CLI.\n"
+        ),
+        "design": "design:\n  theme: classic\n",
+        "locale": "locale:\n  language: english\n",
+        "settings": "settings:\n  current_date: today\n",
+    }
+
+    parsed_resume, _ = parse_rendercv_yaml_sections(
+        sections,
+        base_theme_settings=RenderThemeSettings(theme_id="classic"),
+    )
+
+    project = parsed_resume["personalProjects"][0]
+    assert project["name"] == "OpenAPI Generator"
+    assert project["github"] == "https://github.com/acme/openapi"
+    assert project["website"] == "https://openapi.acme.dev"
+
+
 def test_rendercv_yaml_sections_preserve_custom_skill_group_labels(sample_resume: dict) -> None:
     sections = {
         "cv": (

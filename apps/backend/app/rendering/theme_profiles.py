@@ -82,6 +82,7 @@ _ACCENT_COLORS: dict[AccentColor, str] = {
     "orange": "rgb(249, 115, 22)",
     "red": "rgb(220, 38, 38)",
 }
+_FIXED_LINK_COLOR = "rgb(0, 79, 144)"
 
 _DENSITY_MAP: dict[DensityProfile, dict[str, str]] = {
     "compact": {
@@ -236,6 +237,15 @@ def _normalize_color(value: Any) -> str | None:
     if not isinstance(value, str) or not value:
         return None
     return "".join(value.lower().split())
+
+
+def _enforce_fixed_link_color(design: dict[str, Any]) -> dict[str, Any]:
+    colors = design.get("colors")
+    if not isinstance(colors, dict):
+        colors = {}
+        design["colors"] = colors
+    colors["links"] = _FIXED_LINK_COLOR
+    return design
 
 
 @lru_cache(maxsize=1)
@@ -431,6 +441,7 @@ def _resolve_theme_profile_state(
     header = design.setdefault("header", {})
     header_connections = header.setdefault("connections", {})
     header_connections["show_icons"] = show_contact_icons
+    _enforce_fixed_link_color(design)
 
     return {
         "page_size": page_size,
@@ -489,7 +500,7 @@ def _build_sparse_design_from_profile(
         design = _deep_merge(design, active_profile.design)
 
     design["theme"] = theme_id
-    return design
+    return _enforce_fixed_link_color(design)
 
 
 @dataclass(frozen=True)
@@ -753,7 +764,8 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
         resolved = _resolve_theme_profile_state(
             settings.theme_id, settings.theme_profiles.get(settings.theme_id)
         )
-        return _strip_unknown_template_keys(deepcopy(resolved["design"]))
+        resolved_design = _enforce_fixed_link_color(deepcopy(resolved["design"]))
+        return _strip_unknown_template_keys(resolved_design)
 
     density = _LEGACY_DENSITY_MAP[settings.density_profile]
     accent = _ACCENT_COLORS[settings.accent_color]
@@ -801,6 +813,7 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
     if settings.design:
         merged = _deep_merge(merged, settings.design)
     merged["theme"] = settings.theme_id
+    _enforce_fixed_link_color(merged)
     return _strip_unknown_template_keys(merged)
 
 

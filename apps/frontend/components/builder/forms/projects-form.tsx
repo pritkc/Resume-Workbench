@@ -187,25 +187,25 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                 <div className="space-y-1.5">
                   <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                     <Github className="mr-1 inline h-3 w-3" />
-                    GitHub <span className="text-gray-400">({t('common.optional')})</span>
+                    Repo Link <span className="text-gray-400">({t('common.optional')})</span>
                   </Label>
                   <Input
                     value={item.github || ''}
                     onChange={(e) => handleFieldChange(item.id, 'github', e.target.value)}
-                    placeholder={t('builder.forms.projects.placeholders.github')}
+                    placeholder="github.com/org/repo"
                     className="rounded-none border-black bg-white"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                     <Globe className="mr-1 inline h-3 w-3" />
-                    {t('builder.forms.projects.fields.website')}{' '}
+                    Live Link{' '}
                     <span className="text-gray-400">({t('common.optional')})</span>
                   </Label>
                   <Input
                     value={item.website || ''}
                     onChange={(e) => handleFieldChange(item.id, 'website', e.target.value)}
-                    placeholder={t('builder.forms.projects.placeholders.website')}
+                    placeholder="your-project.com"
                     className="rounded-none border-black bg-white"
                   />
                 </div>

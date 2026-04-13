@@ -28,7 +28,8 @@ from app.rendering.theme_profiles import (
 
 _LINK_PREFIX_RE = re.compile(r"^(https?://)?(www\.)?", re.IGNORECASE)
 _NON_DIGIT_RE = re.compile(r"\D+")
-_MARKDOWN_LINK_RE = re.compile(r"^\[(?P<label>.+?)\]\((?P<url>[^)]+)\)$")
+_MARKDOWN_LINK_RE = re.compile(r"^\[(?P<label>(?:\\.|[^\]])+)\]\((?P<url>[^)]+)\)$")
+_MARKDOWN_LINK_INLINE_RE = re.compile(r"(?<!\\)\[(?P<label>(?:\\.|[^\]])+)\]\((?P<url>[^)]+)\)")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _FA_CLASS_TOKEN_RE = re.compile(r"\s+")
 _BOLD_BOUNDARY_CLASS = r"A-Za-z0-9"
@@ -42,6 +43,8 @@ _KNOWN_SECTION_KEYS = {
     "certifications",
     "awards",
 }
+_PROJECT_REPO_LABELS = {"repo", "repository", "github", "source", "code"}
+_PROJECT_LIVE_LABELS = {"live", "demo", "site", "website", "web"}
 
 _DEDICATED_SOCIAL_NETWORKS = {
     "linkedin": "LinkedIn",
@@ -451,9 +454,15 @@ def _project_entries(
     project_rows: list[dict[str, Any]] = []
     for item in entries:
         name = _clean_text(item.get("name")) or "Project"
-        website = _clean_text(item.get("website"))
+        github = _ensure_absolute_url(_clean_text(item.get("github")))
+        website = _ensure_absolute_url(_clean_text(item.get("website")))
+        link_tokens: list[str] = []
+        if github:
+            link_tokens.append(f"\\[[repo]({github})\\]")
         if website:
-            name = f"[{name}]({website if website.startswith('http') else f'https://{website}'})"
+            link_tokens.append(f"\\[[live]({website})\\]")
+        if link_tokens:
+            name = f"{name} | {' '.join(link_tokens)}"
         project_rows.append(
             {
                 "name": name,
@@ -695,6 +704,63 @@ def _parse_markdown_link(value: str | None) -> tuple[str | None, str | None]:
     if not match:
         return cleaned, None
     return match.group("label").strip(), match.group("url").strip()
+
+
+def _parse_project_name_and_links(value: Any) -> tuple[str | None, str | None, str | None]:
+    cleaned = _clean_text(value if isinstance(value, str) else None)
+    if not cleaned:
+        return None, None, None
+
+    inline_links = list(_MARKDOWN_LINK_INLINE_RE.finditer(cleaned))
+    if not inline_links:
+        return cleaned, None, None
+
+    github: str | None = None
+    website: str | None = None
+    name_value = cleaned
+
+    for link in inline_links:
+        raw_label = _clean_text(link.group("label")) or ""
+        raw_url = _ensure_absolute_url(_clean_text(link.group("url")))
+        if not raw_url:
+            continue
+
+        normalized_label = _NON_ALNUM_RE.sub("", raw_label.casefold())
+        is_repo = (
+            normalized_label in _PROJECT_REPO_LABELS
+            or "github.com" in raw_url.casefold()
+        )
+        is_live = normalized_label in _PROJECT_LIVE_LABELS
+
+        if is_repo and not github:
+            github = raw_url
+        elif is_live and not website:
+            website = raw_url
+        elif not website:
+            website = raw_url
+        elif not github:
+            github = raw_url
+
+        name_value = name_value.replace(link.group(0), " ")
+
+    # Remove escaped bracket wrappers left behind when names include
+    # plain-text brackets around markdown links (e.g. \[[repo](...)\]).
+    name_value = re.sub(r"\\\[\s*\\\]", " ", name_value)
+    name_value = re.sub(r"\s*[|•·\-]\s*$", "", name_value).strip()
+    name_value = re.sub(r"\s{2,}", " ", name_value)
+    if not name_value:
+        first = inline_links[0]
+        fallback_label = _clean_text(first.group("label"))
+        normalized_fallback_label = _NON_ALNUM_RE.sub("", (fallback_label or "").casefold())
+        if fallback_label and normalized_fallback_label not in (
+            _PROJECT_REPO_LABELS | _PROJECT_LIVE_LABELS
+        ):
+            name_value = fallback_label
+
+    if not name_value:
+        name_value = "Project"
+
+    return name_value, github, website
 
 
 def _stringify_description(summary: str | None, highlights: list[str]) -> str | None:
@@ -959,7 +1025,13 @@ def rendercv_cv_to_resume_data(
     for index, item in enumerate(sections.get("projects") or [], start=1):
         if not isinstance(item, dict):
             continue
-        name, website = _parse_markdown_link(item.get("name"))
+        name, github, website = _parse_project_name_and_links(item.get("name"))
+        if not website:
+            legacy_name, legacy_website = _parse_markdown_link(item.get("name"))
+            if legacy_name:
+                name = legacy_name
+            if legacy_website:
+                website = _ensure_absolute_url(legacy_website)
         projects.append(
             {
                 "id": index,
@@ -968,6 +1040,7 @@ def rendercv_cv_to_resume_data(
                 "role": _clean_text(item.get("summary")) or "",
                 "date": _clean_text(item.get("date")) or "",
                 "years": _clean_text(item.get("date")) or "",
+                "github": github,
                 "website": website,
                 "highlights": _text_list(item.get("highlights")),
                 "description": _text_list(item.get("highlights")),

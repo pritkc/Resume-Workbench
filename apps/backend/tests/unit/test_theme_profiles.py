@@ -61,6 +61,7 @@ def test_build_design_keeps_legacy_flat_payload_behavior() -> None:
             "accent_color": "green",
             "show_contact_icons": True,
             "margins_mm": {"top": 10, "bottom": 10, "left": 10, "right": 10},
+            "design": {"colors": {"links": "rgb(255, 0, 0)"}},
         },
         uses_theme_profiles=False,
     )
@@ -70,4 +71,25 @@ def test_build_design_keeps_legacy_flat_payload_behavior() -> None:
     assert design["theme"] == "classic"
     assert design["page"]["size"] == "a4"
     assert design["colors"]["name"] == "rgb(21, 128, 61)"
+    assert design["colors"]["links"] == "rgb(0, 79, 144)"
     assert design["header"]["connections"]["show_icons"] is True
+
+
+def test_build_design_keeps_fixed_link_color_for_theme_profile_overrides() -> None:
+    settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {
+                "classic": {
+                    "accent_color": "red",
+                    "design": {"colors": {"links": "rgb(0, 0, 0)"}},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    design = build_design(settings)
+
+    assert design["colors"]["name"] == "rgb(220, 38, 38)"
+    assert design["colors"]["links"] == "rgb(0, 79, 144)"
