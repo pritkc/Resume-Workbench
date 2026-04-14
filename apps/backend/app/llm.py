@@ -275,6 +275,8 @@ def _preview_text(text: str | None) -> str | None:
 def _health_cache_key(config: "LLMConfig") -> str:
     return "|".join(
         [
+            config.ai_route,
+            config.route_provider_filter or "",
             config.provider,
             config.model,
             config.api_base or "",
