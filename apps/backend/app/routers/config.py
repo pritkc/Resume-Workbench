@@ -2,14 +2,31 @@
 
 import json
 from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
-from app.llm import check_llm_health, LLMConfig, resolve_api_key
+from app.llm import (
+    AI_ROUTE_CLIPROXY,
+    AI_ROUTE_DIRECT,
+    check_llm_health,
+    CLIPROXY_PROVIDER_FILTERS,
+    LLM_HEALTH_CHECK_PROMPT,
+    LLMConfig,
+    normalize_ai_route,
+    normalize_cliproxy_api_base,
+    resolve_api_key,
+)
 from app.schemas import (
     LLMConfigRequest,
     LLMConfigResponse,
+    CLIProxyConfigResponse,
+    CLIProxyModelsRequest,
+    CLIProxyModelsResponse,
+    CLIProxyModelOption,
+    CLIProxyQuickProfile,
     FeatureConfigRequest,
     FeatureConfigResponse,
     GenerationDefaultsRequest,
@@ -18,6 +35,8 @@ from app.schemas import (
     LanguageConfigResponse,
     PromptConfigRequest,
     PromptConfigResponse,
+    PromptCatalogEntry,
+    PromptCatalogResponse,
     PromptOption,
     ApiKeyProviderStatus,
     ApiKeyStatusResponse,
@@ -26,6 +45,28 @@ from app.schemas import (
     ResetDatabaseRequest,
 )
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
+from app.prompts.enrichment import (
+    ANALYZE_RESUME_PROMPT,
+    ENHANCE_DESCRIPTION_PROMPT,
+    REGENERATE_ADDITIONAL_GROUP_PROMPT,
+    REGENERATE_ITEM_PROMPT,
+)
+from app.prompts.templates import (
+    APPLICATION_QUESTIONS_PROMPT,
+    APPLICATION_QUESTIONS_SYSTEM_PROMPT,
+    COMBINED_MESSAGES_SYSTEM_PROMPT,
+    COVER_LETTER_OUTREACH_PROMPT,
+    ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
+    ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
+    ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
+    EXTRACT_JD_INTELLIGENCE_PROMPT,
+    EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT,
+    IMPROVE_RESUME_PROMPT,
+    PARSE_RESUME_PROMPT,
+    PARSE_SYSTEM_PROMPT,
+    PROMPT_VERSIONS,
+    TAILORING_SYSTEM_PROMPT,
+)
 from app.config import (
     get_api_keys_from_config,
     save_api_keys_to_config,
@@ -36,6 +77,98 @@ from app.config_cache import invalidate_config_cache
 from app.database import db
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
+CLIPROXY_DEFAULT_BASE_URL = "http://127.0.0.1:8317/v1"
+CLIPROXY_DEFAULT_DASHBOARD_PATH = "/management.html"
+
+
+def _normalize_provider_filter(value: str | None) -> str:
+    if value and value in CLIPROXY_PROVIDER_FILTERS:
+        return value
+    return "mixed"
+
+
+def _mask_or_empty(value: str | None) -> str:
+    return _mask_api_key(value or "")
+
+
+def _normalize_cliproxy(stored: dict) -> dict:
+    cliproxy = stored.get("cliproxy", {})
+    if not isinstance(cliproxy, dict):
+        cliproxy = {}
+
+    quick_profiles: list[dict] = []
+    raw_profiles = cliproxy.get("quick_profiles")
+    if isinstance(raw_profiles, list):
+        for row in raw_profiles:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or "").strip()
+            model_alias = str(row.get("model_alias") or "").strip()
+            if not name or not model_alias:
+                continue
+            quick_profiles.append(
+                {
+                    "name": name,
+                    "provider_filter": _normalize_provider_filter(
+                        str(row.get("provider_filter") or "mixed").strip().lower()
+                    ),
+                    "model_alias": model_alias,
+                    "base_url": str(row.get("base_url") or "").strip() or None,
+                }
+            )
+
+    base_url = str(cliproxy.get("base_url") or "").strip()
+    dashboard_url = str(cliproxy.get("dashboard_url") or "").strip()
+    if not dashboard_url:
+        normalized_base = normalize_cliproxy_api_base(base_url or CLIPROXY_DEFAULT_BASE_URL)
+        dashboard_url = normalized_base.removesuffix("/v1") + CLIPROXY_DEFAULT_DASHBOARD_PATH
+
+    return {
+        "base_url": normalize_cliproxy_api_base(base_url or CLIPROXY_DEFAULT_BASE_URL),
+        "client_api_key": str(cliproxy.get("client_api_key") or "").strip(),
+        "provider_filter": _normalize_provider_filter(
+            str(cliproxy.get("provider_filter") or "mixed").strip().lower()
+        ),
+        "model_alias": str(cliproxy.get("model_alias") or "").strip(),
+        "dashboard_url": dashboard_url,
+        "quick_profiles": quick_profiles,
+    }
+
+
+def _build_llm_config_response(stored: dict) -> LLMConfigResponse:
+    provider = stored.get("provider", settings.llm_provider)
+    ai_route = normalize_ai_route(stored.get("ai_route"))
+    cliproxy = _normalize_cliproxy(stored)
+
+    return LLMConfigResponse(
+        provider=provider,
+        model=stored.get("model", settings.llm_model),
+        api_key=_mask_api_key(resolve_api_key(stored, provider)),
+        api_base=stored.get("api_base", settings.llm_api_base),
+        ai_route=ai_route,
+        cliproxy=CLIProxyConfigResponse(
+            base_url=cliproxy["base_url"],
+            client_api_key=_mask_or_empty(cliproxy.get("client_api_key")),
+            provider_filter=cliproxy["provider_filter"],
+            model_alias=cliproxy["model_alias"],
+            dashboard_url=cliproxy["dashboard_url"],
+            quick_profiles=[CLIProxyQuickProfile(**row) for row in cliproxy["quick_profiles"]],
+        ),
+        cliproxy_route_enabled=settings.enable_cliproxy_route,
+    )
+
+
+def _cliproxy_model_provider(model_id: str) -> str:
+    name = model_id.strip().lower()
+    if not name:
+        return "mixed"
+    if "claude" in name:
+        return "claude"
+    if "gemini" in name:
+        return "gemini"
+    if "codex" in name or name.startswith("gpt-"):
+        return "codex"
+    return "mixed"
 
 
 def _get_config_path() -> Path:
@@ -73,6 +206,83 @@ def _get_prompt_options() -> list[PromptOption]:
     return [PromptOption(**option) for option in IMPROVE_PROMPT_OPTIONS]
 
 
+def _get_prompt_catalog() -> list[PromptCatalogEntry]:
+    """Return read-only catalog of all prompt templates shared with the LLM."""
+    return [
+        PromptCatalogEntry(
+            id="llm_health_check",
+            operation="health_check",
+            version="v1",
+            system_prompt=None,
+            user_prompt=LLM_HEALTH_CHECK_PROMPT,
+            notes="Connection smoke test prompt used by /config/llm-test and status checks.",
+        ),
+        PromptCatalogEntry(
+            id="resume_parse_json",
+            operation="resume_parse",
+            version=PROMPT_VERSIONS.get("parse_resume"),
+            system_prompt=PARSE_SYSTEM_PROMPT,
+            user_prompt=PARSE_RESUME_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="job_extract_keywords",
+            operation="job_intelligence_extract",
+            version=PROMPT_VERSIONS.get("extract_keywords"),
+            system_prompt=EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT,
+            user_prompt=EXTRACT_JD_INTELLIGENCE_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="resume_generate_full",
+            operation="resume_tailoring",
+            version=PROMPT_VERSIONS.get("tailoring_user"),
+            system_prompt=TAILORING_SYSTEM_PROMPT,
+            user_prompt=IMPROVE_RESUME_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="cover_letter_outreach_generate",
+            operation="messages_generate",
+            version=PROMPT_VERSIONS.get("cover_letter_outreach"),
+            system_prompt=COMBINED_MESSAGES_SYSTEM_PROMPT,
+            user_prompt=COVER_LETTER_OUTREACH_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="application_questions_generate",
+            operation="application_questions_generate",
+            version=PROMPT_VERSIONS.get("application_questions_generate"),
+            system_prompt=APPLICATION_QUESTIONS_SYSTEM_PROMPT,
+            user_prompt=APPLICATION_QUESTIONS_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="enrichment_analyze",
+            operation="enrichment_analyze",
+            version=PROMPT_VERSIONS.get("enrichment_analyze"),
+            system_prompt=ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
+            user_prompt=ANALYZE_RESUME_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="enrichment_enhance",
+            operation="enrichment_enhance",
+            version=PROMPT_VERSIONS.get("enrichment_enhance"),
+            system_prompt=ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
+            user_prompt=ENHANCE_DESCRIPTION_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="enrichment_regenerate_item",
+            operation="enrichment_regenerate_item",
+            version=PROMPT_VERSIONS.get("enrichment_regenerate_item"),
+            system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
+            user_prompt=REGENERATE_ITEM_PROMPT,
+        ),
+        PromptCatalogEntry(
+            id="enrichment_regenerate_group",
+            operation="enrichment_regenerate_group",
+            version=PROMPT_VERSIONS.get("enrichment_regenerate_group"),
+            system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
+            user_prompt=REGENERATE_ADDITIONAL_GROUP_PROMPT,
+        ),
+    ]
+
+
 def _resolve_prompt_id(value: str | None, option_ids: set[str]) -> str:
     if value in option_ids:
         return value
@@ -101,15 +311,7 @@ def _normalize_generation_defaults(stored: dict) -> GenerationDefaultsResponse:
 @router.get("/llm-api-key", response_model=LLMConfigResponse)
 async def get_llm_config_endpoint() -> LLMConfigResponse:
     """Get current LLM configuration (API key masked)."""
-    stored = _load_config()
-
-    provider = stored.get("provider", settings.llm_provider)
-    return LLMConfigResponse(
-        provider=provider,
-        model=stored.get("model", settings.llm_model),
-        api_key=_mask_api_key(resolve_api_key(stored, provider)),
-        api_base=stored.get("api_base", settings.llm_api_base),
-    )
+    return _build_llm_config_response(_load_config())
 
 
 @router.put("/llm-api-key", response_model=LLMConfigResponse)
@@ -136,25 +338,41 @@ async def update_llm_config(
         stored["api_key"] = request.api_key
     if request.api_base is not None:
         stored["api_base"] = request.api_base
+    if request.ai_route is not None:
+        if request.ai_route == AI_ROUTE_CLIPROXY and not settings.enable_cliproxy_route:
+            raise HTTPException(
+                status_code=400,
+                detail="CLIProxy route is disabled by server configuration.",
+            )
+        stored["ai_route"] = request.ai_route
+
+    if request.cliproxy is not None:
+        cliproxy = stored.get("cliproxy", {})
+        if not isinstance(cliproxy, dict):
+            cliproxy = {}
+
+        if request.cliproxy.base_url is not None:
+            cliproxy["base_url"] = request.cliproxy.base_url
+        if request.cliproxy.client_api_key is not None:
+            cliproxy["client_api_key"] = request.cliproxy.client_api_key
+        if request.cliproxy.provider_filter is not None:
+            cliproxy["provider_filter"] = request.cliproxy.provider_filter
+        if request.cliproxy.model_alias is not None:
+            cliproxy["model_alias"] = request.cliproxy.model_alias
+        if request.cliproxy.dashboard_url is not None:
+            cliproxy["dashboard_url"] = request.cliproxy.dashboard_url
+        if request.cliproxy.quick_profiles is not None:
+            cliproxy["quick_profiles"] = [
+                profile.model_dump(exclude_none=True)
+                for profile in request.cliproxy.quick_profiles
+            ]
+
+        stored["cliproxy"] = cliproxy
 
     # Build normalized config for response
-    resolved_provider = stored.get("provider", settings.llm_provider)
-    test_config = LLMConfig(
-        provider=resolved_provider,
-        model=stored.get("model", settings.llm_model),
-        api_key=resolve_api_key(stored, resolved_provider),
-        api_base=stored.get("api_base", settings.llm_api_base),
-    )
-
     # Save config regardless of health check outcome (see docstring).
     _save_config(stored)
-
-    return LLMConfigResponse(
-        provider=test_config.provider,
-        model=test_config.model,
-        api_key=_mask_api_key(test_config.api_key),
-        api_base=test_config.api_base,
-    )
+    return _build_llm_config_response(stored)
 
 
 @router.post("/llm-test")
@@ -166,30 +384,79 @@ async def test_llm_connection(request: LLMConfigRequest | None = None) -> dict:
     """
     stored = _load_config()
 
-    # Build config: use request values if provided, otherwise fall back to stored/default
-    test_provider = (
-        request.provider
-        if request and request.provider
-        else stored.get("provider", settings.llm_provider)
+    ai_route = normalize_ai_route(
+        request.ai_route if request and request.ai_route is not None else stored.get("ai_route")
     )
-    config = LLMConfig(
-        provider=test_provider,
-        model=(
-            request.model
-            if request and request.model
-            else stored.get("model", settings.llm_model)
-        ),
-        api_key=(
-            request.api_key
-            if request and request.api_key
-            else resolve_api_key(stored, test_provider)
-        ),
-        api_base=(
-            request.api_base
-            if request and request.api_base is not None
-            else stored.get("api_base", settings.llm_api_base)
-        ),
-    )
+
+    if ai_route == AI_ROUTE_CLIPROXY:
+        if not settings.enable_cliproxy_route:
+            raise HTTPException(
+                status_code=400,
+                detail="CLIProxy route is disabled by server configuration.",
+            )
+
+        stored_cliproxy = _normalize_cliproxy(stored)
+        request_cliproxy = request.cliproxy if request else None
+        base_url = (
+            request_cliproxy.base_url
+            if request_cliproxy and request_cliproxy.base_url is not None
+            else stored_cliproxy["base_url"]
+        )
+        model_alias = (
+            request_cliproxy.model_alias
+            if request_cliproxy and request_cliproxy.model_alias is not None
+            else stored_cliproxy["model_alias"]
+        )
+        api_key = (
+            request_cliproxy.client_api_key
+            if request_cliproxy and request_cliproxy.client_api_key is not None
+            else stored_cliproxy["client_api_key"]
+        )
+        if request and request.model:
+            model_alias = request.model
+        if request and request.api_key:
+            api_key = request.api_key
+        if request and request.api_base is not None:
+            base_url = request.api_base
+
+        config = LLMConfig(
+            provider="openai",
+            model=(model_alias or settings.llm_model),
+            api_key=api_key or "",
+            api_base=normalize_cliproxy_api_base(base_url),
+            ai_route=AI_ROUTE_CLIPROXY,
+            route_provider_filter=(
+                request_cliproxy.provider_filter
+                if request_cliproxy and request_cliproxy.provider_filter
+                else stored_cliproxy["provider_filter"]
+            ),
+        )
+    else:
+        # Build config: use request values if provided, otherwise fall back to stored/default
+        test_provider = (
+            request.provider
+            if request and request.provider
+            else stored.get("provider", settings.llm_provider)
+        )
+        config = LLMConfig(
+            provider=test_provider,
+            model=(
+                request.model
+                if request and request.model
+                else stored.get("model", settings.llm_model)
+            ),
+            api_key=(
+                request.api_key
+                if request and request.api_key
+                else resolve_api_key(stored, test_provider)
+            ),
+            api_base=(
+                request.api_base
+                if request and request.api_base is not None
+                else stored.get("api_base", settings.llm_api_base)
+            ),
+            ai_route=AI_ROUTE_DIRECT,
+        )
 
     test_prompt = "Hi"
     return await check_llm_health(
@@ -198,6 +465,101 @@ async def test_llm_connection(request: LLMConfigRequest | None = None) -> dict:
         test_prompt=test_prompt,
         use_cache=False,
         source="config_test",
+    )
+
+
+@router.post("/cliproxy-models", response_model=CLIProxyModelsResponse)
+async def discover_cliproxy_models(
+    request: CLIProxyModelsRequest | None = None,
+) -> CLIProxyModelsResponse:
+    """Discover available model aliases from a CLIProxyAPI instance."""
+    if not settings.enable_cliproxy_route:
+        raise HTTPException(
+            status_code=400,
+            detail="CLIProxy route is disabled by server configuration.",
+        )
+
+    stored = _load_config()
+    stored_cliproxy = _normalize_cliproxy(stored)
+    provider_filter = _normalize_provider_filter(
+        request.provider_filter if request and request.provider_filter else stored_cliproxy["provider_filter"]
+    )
+    base_url = normalize_cliproxy_api_base(
+        request.base_url if request and request.base_url is not None else stored_cliproxy["base_url"]
+    )
+    api_key = (
+        request.client_api_key
+        if request and request.client_api_key is not None
+        else stored_cliproxy["client_api_key"]
+    )
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="CLIProxy client API key is required to fetch models.",
+        )
+
+    models_url = base_url.rstrip("/") + "/models"
+    req = urllib_request.Request(
+        models_url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+
+    try:
+        with urllib_request.urlopen(req, timeout=20) as resp:
+            payload = resp.read().decode("utf-8")
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore").strip()
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"CLIProxy model discovery failed ({exc.code}). "
+                f"{detail or 'Check base URL and API key.'}"
+            ),
+        ) from exc
+    except urllib_error.URLError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"CLIProxy model discovery failed: {exc.reason}",
+        ) from exc
+
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="CLIProxy model discovery returned invalid JSON.",
+        ) from exc
+
+    rows = decoded.get("data", []) if isinstance(decoded, dict) else []
+    by_model_id: dict[str, str | None] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        model_id = str(row.get("id") or "").strip()
+        if not model_id:
+            continue
+        raw_owner = row.get("owned_by")
+        owned_by = str(raw_owner).strip() if raw_owner is not None else None
+        if owned_by == "":
+            owned_by = None
+        by_model_id[model_id] = owned_by
+
+    options: list[CLIProxyModelOption] = []
+    for model_id, owned_by in sorted(by_model_id.items(), key=lambda t: t[0].lower()):
+        provider = _cliproxy_model_provider(model_id)
+        if provider_filter != "mixed" and provider != provider_filter:
+            continue
+        options.append(
+            CLIProxyModelOption(id=model_id, provider=provider, owned_by=owned_by)
+        )
+
+    return CLIProxyModelsResponse(
+        models=options,
+        provider_filter=provider_filter,
     )
 
 
@@ -374,6 +736,12 @@ async def update_prompt_config(
         default_prompt_id=default_prompt_id,
         prompt_options=options,
     )
+
+
+@router.get("/prompts/catalog", response_model=PromptCatalogResponse)
+async def get_prompt_catalog() -> PromptCatalogResponse:
+    """Return read-only catalog of prompt templates currently used by LLM operations."""
+    return PromptCatalogResponse(prompts=_get_prompt_catalog())
 
 
 # Supported API key providers

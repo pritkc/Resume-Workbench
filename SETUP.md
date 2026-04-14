@@ -17,6 +17,7 @@ Welcome! This guide will walk you through setting up Resume Matcher on your loca
 - [Configuring Your AI Provider](#configuring-your-ai-provider)
   - [Option A: Cloud Providers](#option-a-cloud-providers)
   - [Option B: Local AI with Ollama](#option-b-local-ai-with-ollama-free)
+  - [Option C: CLIProxyAPI Route](#option-c-cliproxyapi-route-fast-switching-across-codexclaudegemini)
 - [Docker Deployment](#docker-deployment)
 - [Accessing the Application](#accessing-the-application)
 - [Common Commands Reference](#common-commands-reference)
@@ -269,6 +270,269 @@ ollama serve
 
 Ollama typically starts automatically after installation.
 
+### Option C: CLIProxyAPI Route (Fast switching across Codex/Claude/Gemini)
+
+Use this when you want one local OpenAI-compatible endpoint and fast alias-based switching.
+
+This path is meant for **subscription quota** (ChatGPT/Codex, Claude Code, Gemini CLI, Qwen, iFlow, Antigravity, Kimi, Amp, etc.) via [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) and the bundled [Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center). You log in through **OAuth / auth flows** or the Management UI so usage counts against **your plans**, not ad-hoc **API keys from provider developer consoles**. We do **not** optimize `config.template.yaml` for those dashboard API keys; you can still add them from upstream `config.example.yaml` if you ever need a relay or OpenRouter.
+
+Resume Matcher only needs your **local proxy** `api-keys` value and never your ChatGPT/Claude/Google console secrets.
+
+**Upstream references (refresh locally with `./scripts/sync-upstream-references.sh`):**
+
+| Resource | Location / URL |
+|----------|----------------|
+| Example server config | `reference/CLIProxyAPI/config.example.yaml` |
+| User guides | [help.router-for.me](https://help.router-for.me/) |
+| Management API | [Management API docs](https://help.router-for.me/management/api) |
+| Management UI | Served at `/management.html` on the proxy port (also bundled in server ≥ 6.0.19; UI project recommends server ≥ 6.8.0) |
+
+#### Quick Clarification
+
+- `api-keys` in `infra/cliproxyapi/config.yaml` is your **local proxy** Bearer token for `/v1/...`.
+- Resume Matcher uses that exact value as **CLIProxy Client API Key**.
+- It is **not** an OpenAI / Anthropic / Google API key.
+- Do **not** use `remote-management.secret-key` as `CLIPROXY_API_KEY`; you will get `401` on `/v1/models`.
+- **Management Key** on `/management.html` is `remote-management.secret-key` (plaintext you chose before the server hashes it).
+
+#### YAML pitfalls (container stuck in `Restarting`)
+
+CLIProxyAPI expects `claude-api-key`, `gemini-api-key`, and `codex-api-key` to be **YAML lists** (each entry starts with `-`). If you comment out only the `- api-key:` line but leave `models:` underneath, YAML becomes a **map** and the server exits with errors like `cannot unmarshal !!map into []config.ClaudeKey`.
+
+**For subscription-first setups, omit `claude-api-key`, `gemini-api-key`, and `codex-api-key`** (our `infra/cliproxyapi/config.template.yaml` does that). Add those blocks only if you deliberately use **vendor dashboard API keys**; copy the **list** shape from `reference/CLIProxyAPI/config.example.yaml`.
+
+The template turns on **quota-exceeded** fallbacks, **usage statistics** (for the Management UI), and leaves **optional** blocks commented (`oauth-model-alias`, Amp, streaming keep-alives, Gemini CLI internal routes, and so on) so you can opt in without pulling paid API keys.
+
+#### Exact End-to-End Steps (OAuth first)
+
+Run these from the repo root unless noted.
+
+#### 1) Initialize local CLIProxy files
+
+```bash
+make cliproxy-init
+```
+
+This creates `infra/cliproxyapi/config.yaml` from `config.template.yaml` if it does not exist.
+
+#### 2) Configure `infra/cliproxyapi/config.yaml`
+
+Start from the template and set:
+
+- `remote-management.secret-key` — **Management Key** for `/management.html` (pick a strong local secret).
+- `api-keys` — first entry must match what you will use as **CLIProxy Client API Key** in Resume Matcher.
+
+Recommended shape (see `infra/cliproxyapi/config.template.yaml` for the full commented option set; `host: ""` binds all interfaces for Docker):
+
+```yaml
+host: ""
+port: 8317
+
+remote-management:
+  allow-remote: true
+  secret-key: "resume-mgmt-local-only"
+  disable-control-panel: false
+  panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+
+auth-dir: "~/.cli-proxy-api"
+
+api-keys:
+  - "resume-local-client-key"
+
+usage-statistics-enabled: true
+
+quota-exceeded:
+  switch-project: true
+  switch-preview-model: true
+  antigravity-credits: true
+
+disable-cooling: true
+
+routing:
+  strategy: "fill-first"
+```
+
+Notes:
+
+- `host: ""` is the default documented in upstream `config.example.yaml` (all interfaces). `host: "0.0.0.0"` is also fine for IPv4 Docker port publishing.
+- `remote-management.allow-remote: true` is required when the browser on your Mac loads `http://127.0.0.1:8317/...` while the process runs inside Docker.
+- `quota-exceeded` matches upstream defaults and helps when a subscription tier hits limits (project switch, preview models, Antigravity credit retry).
+- Set `routing.strategy` to `round-robin` when you add **multiple OAuth accounts** for the same provider and want load spreading.
+- Optional: uncomment sections in `config.template.yaml` (`oauth-model-alias`, `streaming`, `enable-gemini-cli-endpoint`, `ampcode`, `logging-to-file`, …) per [CLIProxyAPI README](https://github.com/router-for-me/CLIProxyAPI) and `config.example.yaml`. Use model names your sessions actually expose — confirm under **Management UI → Auth Files** or **System → `/v1/models`**.
+
+#### 3) Start CLIProxy
+
+```bash
+make cliproxy-down
+make cliproxy-up
+```
+
+Confirm the container is **Up**, not **Restarting**:
+
+```bash
+docker ps -a --filter name=cli-proxy-api
+```
+
+If it restarts, inspect logs (usually a config parse error):
+
+```bash
+make cliproxy-logs
+```
+
+#### 4) Verify proxy
+
+```bash
+export CLIPROXY_API_KEY="resume-local-client-key"
+make cliproxy-health
+```
+
+Expected:
+
+- `http://127.0.0.1:8317/healthz` returns `{"status":"ok"}`.
+- With `CLIPROXY_API_KEY` set, `/v1/models` returns JSON (may be sparse until you complete OAuth).
+
+`/v1/models` before any OAuth may be empty or minimal; that is normal until at least one provider session exists.
+
+#### 5) Open CLIProxy management UI
+
+Open:
+
+- <http://127.0.0.1:8317/management.html>
+
+Connect using the **Management Key** (`remote-management.secret-key`). The UI talks to the [Management API](https://help.router-for.me/management/api); it does not proxy inference traffic.
+
+If the page does not load:
+
+```bash
+docker ps -a --filter name=cli-proxy-api
+make cliproxy-logs
+```
+
+Field mapping:
+
+- **Management Key** = `remote-management.secret-key` in `infra/cliproxyapi/config.yaml`.
+- **CLIProxy Client API Key** in Resume Matcher = first value under `api-keys`.
+- After first start, CLIProxy may rewrite `secret-key` to a hash in the file. Keep using the **original plaintext** you set until you rotate it.
+
+If Management login fails:
+
+- **`403` remote management disabled** — set `remote-management.allow-remote: true` (required for Docker + host browser).
+- **`401` invalid management key** — key you typed does not match `secret-key`.
+- **Unknown hash in config** (`$2a$...`) — rotate to a new plaintext `secret-key`, then `make cliproxy-down && make cliproxy-up`.
+
+Validation:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8317/v0/management/config \
+  -H "Authorization: Bearer resume-mgmt-local-only"
+```
+
+Expected: `200`.
+
+#### 6) Provider login (OAuth / subscription quota)
+
+Enable **only** the providers you use. Everything below is **subscription / CLI auth**, not developer-console API keys.
+
+**Preferred: Management UI**
+
+1. Open **OAuth** in the sidebar (device / browser flows depend on server version).
+2. Run the flows you need; skip the rest.
+3. Use **Auth Files** to confirm JSON landed under `infra/cliproxyapi/auths` (mounted into the container).
+
+The Management Center README covers remote access and errors ([troubleshooting](https://github.com/router-for-me/Cli-Proxy-API-Management-Center#troubleshooting)).
+
+**CLI inside the container** (parity with UI; handy with `-no-browser` so you paste URLs yourself). Replace or delete lines you do not need:
+
+| Provider (upstream) | Typical CLI flag |
+|---------------------|------------------|
+| Google / Gemini CLI | `-login` |
+| OpenAI Codex (ChatGPT) | `-codex-login` or `-codex-device-login` (device code flow) |
+| Claude Code | `-claude-login` |
+| Qwen Code | `-qwen-login` |
+| iFlow | `-iflow-login` or `-iflow-cookie` |
+| Antigravity | `-antigravity-login` |
+| Kimi | `-kimi-login` |
+
+Example:
+
+```bash
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -codex-login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -claude-login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -qwen-login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -iflow-login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -antigravity-login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -kimi-login -no-browser
+```
+
+Flags are defined in `reference/CLIProxyAPI/cmd/server/main.go` after `./scripts/sync-upstream-references.sh`.
+
+**Other capabilities** (still without vendor dashboard keys): streaming and tools work through the normal `/v1` surface; multimodal and multi-account behavior follow upstream. **Amp** routing is optional via an `ampcode:` block in `config.yaml` (see `config.template.yaml` comment and upstream `config.example.yaml`). **OpenRouter / openai-compatibility** needs relay API keys — add only if you leave pure subscription mode.
+
+#### 6b) Trying multiple models
+
+1. After OAuth, open **System** in the Management UI and fetch **`/v1/models`** (grouped view), or run `make cliproxy-health` with `CLIPROXY_API_KEY` set.
+2. In Resume Matcher **Settings**, click **Refresh Aliases** and pick models exposed by your sessions.
+3. To add **short aliases** or extra client-visible names for OAuth-backed models, edit `oauth-model-alias` in `config.yaml` (see upstream `config.example.yaml` and comments in `config.template.yaml`), then restart the container.
+
+#### 7) Start Resume Matcher services
+
+In `apps/backend/.env`, ensure:
+
+```env
+ENABLE_CLIPROXY_ROUTE=true
+```
+
+Then run:
+
+```bash
+# Terminal 1
+docker compose up -d postgres
+
+# Terminal 2
+cd apps/backend
+uv sync
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8000
+
+# Terminal 3
+cd apps/frontend
+npm install
+npm run dev
+```
+
+#### 8) Configure Resume Matcher -> Settings
+
+Open <http://localhost:3000/settings> and set:
+- `AI Route = CLIProxyAPI`
+- `CLIProxy Base URL = http://127.0.0.1:8317/v1`
+- `CLIProxy Client API Key = resume-local-client-key`
+
+Then:
+1. Click `Refresh Aliases`
+2. Test with provider filter `codex`
+3. Test with provider filter `gemini`
+4. Optionally test `claude` if enabled in your account
+5. Click `Save`
+
+If `Test Connection` fails for some models in this OAuth proxy setup, validate with:
+- `make cliproxy-health`
+- direct `/v1/chat/completions` call to `http://127.0.0.1:8317/v1`
+- one real generation run from Dashboard
+
+#### 9) Validate prompt catalog and one real run
+
+In Settings -> Prompt Settings:
+- Confirm `LLM Prompt Catalog` is visible and expandable
+
+Optional API check:
+
+```bash
+curl -s http://127.0.0.1:8000/api/v1/config/prompts/catalog
+```
+
+Then run one full generation from Dashboard to confirm end-to-end behavior.
+
 ---
 
 ## Docker Deployment
@@ -306,6 +570,7 @@ PORT=4000 docker compose up -d
 | `LLM_MODEL` | — | Model to use (configured via Settings UI) |
 | `LLM_API_KEY` | — | API key (recommended: configure via Settings UI) |
 | `LLM_API_BASE` | — | Custom API endpoint (for Ollama or proxies) |
+| `ENABLE_CLIPROXY_ROUTE` | `true` | Enables CLIProxyAPI route in Settings and backend config endpoints |
 
 > **Note:** Changes to `LOG_LEVEL` and `LOG_LLM` require a container restart to take effect.
 
@@ -519,6 +784,52 @@ CORS_ORIGINS=["http://localhost:3001", "http://127.0.0.1:3001"]
 1. Check Ollama is running: `ollama list`
 2. Start Ollama if needed: `ollama serve`
 3. Make sure the model is downloaded: `ollama pull gemma3:4b`
+
+### CLIProxy `management.html` not loading
+
+If `http://127.0.0.1:8317/management.html` is not opening, usually the CLIProxy process is not listening yet or the container is crash-looping.
+
+1. Check container state (must be **Up**, not **Restarting**):
+
+```bash
+docker ps -a --filter name=cli-proxy-api
+```
+
+2. If **Restarting**, read logs — often a **bad `config.yaml`** (YAML shape or parse error):
+
+```bash
+docker logs cli-proxy-api --tail 80
+```
+
+Common fix: remove invalid `claude-api-key` / `gemini-api-key` / `codex-api-key` blocks, or rewrite them as proper YAML **lists** (see Option C and `reference/CLIProxyAPI/config.example.yaml`). Replace `config.yaml` from `infra/cliproxyapi/config.template.yaml` if needed, then `make cliproxy-down && make cliproxy-up`.
+
+3. Start or restart a healthy container:
+
+```bash
+make cliproxy-up
+```
+
+4. Validate health:
+
+```bash
+export CLIPROXY_API_KEY="resume-local-client-key"
+make cliproxy-health
+```
+
+5. Confirm `infra/cliproxyapi/config.yaml` has:
+- `host: ""` or `host: "0.0.0.0"` so the host can reach port `8317` from Docker
+- `remote-management.allow-remote: true` if you open the Management UI from the host browser
+- `api-keys` matching **CLIProxy Client API Key** in Resume Matcher (not `remote-management.secret-key`)
+
+6. **401 / cannot connect** to Management API from a non-localhost URL: enable `allow-remote` and use the plaintext management key (see [Management Center troubleshooting](https://github.com/router-for-me/Cli-Proxy-API-Management-Center#troubleshooting)).
+
+7. After the server stays up, add OAuth sessions via **Management UI → OAuth** (recommended) or CLI login:
+
+```bash
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -codex-login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -claude-login -no-browser
+docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -login -no-browser
+```
 
 ---
 

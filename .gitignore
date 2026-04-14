@@ -90,3 +90,9 @@ yarn-error.log*
 # part of the root repository history.
 reference/*
 !reference/README.md
+# CLIProxyAPI local runtime files
+infra/cliproxyapi/config.yaml
+infra/cliproxyapi/auths/*
+!infra/cliproxyapi/auths/.gitkeep
+infra/cliproxyapi/logs/*
+!infra/cliproxyapi/logs/.gitkeep

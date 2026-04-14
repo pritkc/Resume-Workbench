@@ -2,12 +2,33 @@ import { apiFetch } from './client';
 
 // Supported LLM providers
 export type LLMProvider = 'openai' | 'anthropic' | 'openrouter' | 'gemini' | 'deepseek' | 'ollama';
+export type AIRoute = 'direct_api' | 'cliproxyapi';
+export type CLIProxyProviderFilter = 'codex' | 'claude' | 'gemini' | 'mixed';
+
+export interface CLIProxyQuickProfile {
+  name: string;
+  provider_filter: CLIProxyProviderFilter;
+  model_alias: string;
+  base_url: string | null;
+}
+
+export interface CLIProxyConfig {
+  base_url: string | null;
+  client_api_key: string;
+  provider_filter: CLIProxyProviderFilter;
+  model_alias: string;
+  dashboard_url: string | null;
+  quick_profiles: CLIProxyQuickProfile[];
+}
 
 export interface LLMConfig {
   provider: LLMProvider;
   model: string;
   api_key: string;
   api_base: string | null;
+  ai_route: AIRoute;
+  cliproxy: CLIProxyConfig;
+  cliproxy_route_enabled: boolean;
 }
 
 export interface LLMConfigUpdate {
@@ -15,6 +36,8 @@ export interface LLMConfigUpdate {
   model?: string;
   api_key?: string;
   api_base?: string | null;
+  ai_route?: AIRoute;
+  cliproxy?: Partial<CLIProxyConfig>;
 }
 
 export interface DatabaseStats {
@@ -47,6 +70,18 @@ export interface LLMHealthCheck {
   test_prompt?: string;
   model_output?: string;
   error_detail?: string;
+}
+
+export interface CLIProxyModelOption {
+  id: string;
+  provider: CLIProxyProviderFilter;
+  /** OpenAI-style `/v1/models` field when CLIProxy provides it (source / parent). */
+  owned_by?: string | null;
+}
+
+export interface CLIProxyModelsResponse {
+  models: CLIProxyModelOption[];
+  provider_filter: CLIProxyProviderFilter;
 }
 
 // Fetch full LLM configuration
@@ -106,6 +141,24 @@ export async function testLlmConnection(config?: LLMConfigUpdate): Promise<LLMHe
 
   if (!res.ok) {
     throw new Error(`Failed to test LLM connection (status ${res.status}).`);
+  }
+
+  return res.json();
+}
+
+export async function fetchCLIProxyModels(
+  payload?: Partial<Pick<CLIProxyConfig, 'base_url' | 'client_api_key' | 'provider_filter'>>
+): Promise<CLIProxyModelsResponse> {
+  const res = await apiFetch('/config/cliproxy-models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to fetch CLIProxy models (status ${res.status}).`);
   }
 
   return res.json();
@@ -235,6 +288,20 @@ export interface PromptConfigUpdate {
   default_prompt_id?: string;
 }
 
+export interface PromptCatalogEntry {
+  id: string;
+  operation: string;
+  version?: string | null;
+  read_only: boolean;
+  system_prompt?: string | null;
+  user_prompt?: string | null;
+  notes?: string | null;
+}
+
+export interface PromptCatalogResponse {
+  prompts: PromptCatalogEntry[];
+}
+
 export interface GenerationDefaults {
   include_cover_letter: boolean;
   include_outreach_message: boolean;
@@ -270,6 +337,17 @@ export async function updatePromptConfig(update: PromptConfigUpdate): Promise<Pr
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || `Failed to update prompt config (status ${res.status}).`);
+  }
+
+  return res.json();
+}
+
+// Fetch read-only LLM prompt catalog
+export async function fetchPromptCatalog(): Promise<PromptCatalogResponse> {
+  const res = await apiFetch('/config/prompts/catalog', { credentials: 'include' });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load prompt catalog (status ${res.status}).`);
   }
 
   return res.json();

@@ -1,0 +1,131 @@
+# Subscription / OAuth-first template (local manual use, provider dashboard API keys optional)
+# Aligned with `reference/CLIProxyAPI/config.example.yaml` — sync: ./scripts/sync-upstream-references.sh
+# Guides: https://help.router-for.me/
+#
+# This file is tuned for Claude Code / Codex / Gemini CLI / Qwen / iFlow / Antigravity / Kimi-style
+# subscription sessions (OAuth or auth files), not for pasting paid API keys from vendor consoles.
+# You can still add `claude-api-key`, `gemini-api-key`, `codex-api-key`, `openai-compatibility`, etc.
+# later by copying list-shaped blocks from the upstream `config.example.yaml` if you need them.
+#
+# YAML pitfall (crash loop): `claude-api-key` / `gemini-api-key` / `codex-api-key` MUST be YAML lists
+# (`- api-key: ...`). Never leave a bare `models:` map under the key without a list item.
+
+# Bind all interfaces (IPv4 + IPv6). Use "127.0.0.1" only to lock the proxy to localhost.
+host: ""
+port: 8317
+
+# TLS — set enable: true only if you terminate TLS in CLIProxy itself (most local Docker setups use plain HTTP).
+# tls:
+#   enable: false
+#   cert: ""
+#   key: ""
+
+remote-management:
+  allow-remote: true
+  # Same defaults as SETUP.md Option C (not the same value as api-keys / CLIPROXY_API_KEY).
+  secret-key: "resume-mgmt-local-only"
+  disable-control-panel: false
+  panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+  # disable-auto-update-panel: false
+
+auth-dir: "~/.cli-proxy-api"
+
+api-keys:
+  - "resume-local-client-key"
+
+debug: false
+
+# Local profiling only; keep disabled unless you need it.
+pprof:
+  enable: false
+  addr: "127.0.0.1:8316"
+
+commercial-mode: false
+
+# Set true if you want the Management UI Logs tab (requires file logging + mounted logs dir).
+logging-to-file: false
+logs-max-total-size-mb: 100
+error-logs-max-files: 10
+
+# Enables Usage charts / stats in Management UI (slight overhead; fine for local dev).
+usage-statistics-enabled: true
+
+proxy-url: ""
+force-model-prefix: false
+passthrough-headers: false
+
+request-retry: 3
+max-retry-credentials: 0
+max-retry-interval: 30
+
+# Helps subscription sessions recover from quota / rate limits (upstream defaults).
+quota-exceeded:
+  switch-project: true
+  switch-preview-model: true
+  antigravity-credits: true
+
+disable-cooling: true
+
+# When you add multiple OAuth accounts for the same provider, try "round-robin" to balance.
+routing:
+  strategy: "fill-first"
+
+# Core auth token refresh pool (optional override; omit to use server default).
+# auth-auto-refresh-workers: 16
+
+# Set true if clients use /v1/ws with Bearer auth.
+ws-auth: false
+
+# Gemini CLI internal routes — enable only if you need /v1internal:* (see upstream docs).
+enable-gemini-cli-endpoint: false
+
+nonstream-keepalive-interval: 0
+
+# Uncomment to reduce idle timeouts on long SSE streams.
+# streaming:
+#   keepalive-seconds: 15
+#   bootstrap-retries: 1
+
+# --- OAuth model aliases (optional): short client-visible names per channel.
+# Does NOT apply to `*-api-key` or `openai-compatibility` entries (upstream rule).
+# Uncomment and fix `name:` values using Management UI → Auth Files or System → /v1/models.
+# oauth-model-alias:
+#   claude:
+#     - name: "claude-sonnet-4-5-20250929"
+#       alias: "claude-sonnet"
+#   codex:
+#     - name: "gpt-5"
+#       alias: "gpt5"
+#   gemini-cli:
+#     - name: "gemini-2.5-pro"
+#       alias: "gemini-pro"
+#   vertex:
+#     - name: "gemini-2.5-pro"
+#       alias: "vertex-pro"
+#   aistudio:
+#     - name: "gemini-2.5-pro"
+#       alias: "aistudio-pro"
+#   antigravity:
+#     - name: "gemini-3-pro-high"
+#       alias: "gemini-3-pro-preview"
+#   qwen:
+#     - name: "qwen3-coder-plus"
+#       alias: "qwen-plus"
+#   iflow:
+#     - name: "glm-4.7"
+#       alias: "glm-god"
+#   kimi:
+#     - name: "kimi-k2.5"
+#       alias: "k2.5"
+
+# --- OAuth excluded models (optional): hide models from listing per channel (wildcards supported).
+# See `oauth-excluded-models` in reference/CLIProxyAPI/config.example.yaml.
+
+# --- Amp CLI / IDE extensions (optional subscription path). Full block: upstream `config.example.yaml` → `ampcode:`.
+# ampcode:
+#   upstream-url: "https://ampcode.com"
+#   restrict-management-to-localhost: false
+#   force-model-mappings: false
+
+# --- OpenRouter / other OpenAI-compatible relays (optional; requires provider API keys — skip if subscription-only).
+# openai-compatibility: []

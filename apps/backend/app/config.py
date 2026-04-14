@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     llm_health_cache_ttl_seconds: int = 300
     llm_cost_input_per_million_tokens: float | None = None
     llm_cost_output_per_million_tokens: float | None = None
+    enable_cliproxy_route: bool = True
 
     @field_validator("llm_provider", mode="before")
     @classmethod

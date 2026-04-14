@@ -37,10 +37,18 @@ export {
   updateLlmConfig,
   updateLlmApiKey,
   testLlmConnection,
+  fetchCLIProxyModels,
   fetchSystemStatus,
   PROVIDER_INFO,
   fetchPromptConfig,
+  fetchPromptCatalog,
   updatePromptConfig,
+  type AIRoute,
+  type CLIProxyProviderFilter,
+  type CLIProxyQuickProfile,
+  type CLIProxyConfig,
+  type CLIProxyModelOption,
+  type CLIProxyModelsResponse,
   type LLMProvider,
   type LLMConfig,
   type LLMConfigUpdate,
@@ -50,6 +58,8 @@ export {
   type PromptOption,
   type PromptConfig,
   type PromptConfigUpdate,
+  type PromptCatalogEntry,
+  type PromptCatalogResponse,
 } from './config';
 
 // LLM observability

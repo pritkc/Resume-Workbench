@@ -1285,6 +1285,37 @@ class ImproveResumeConfirmRequest(BaseModel):
 
 
 # Config Models
+class CLIProxyQuickProfile(BaseModel):
+    """Saved quick-switch profile for CLIProxy route."""
+
+    name: str
+    provider_filter: Literal["codex", "claude", "gemini", "mixed"] = "mixed"
+    model_alias: str
+    base_url: str | None = None
+
+
+class CLIProxyConfigRequest(BaseModel):
+    """Request payload for CLIProxy route settings."""
+
+    base_url: str | None = None
+    client_api_key: str | None = None
+    provider_filter: Literal["codex", "claude", "gemini", "mixed"] | None = None
+    model_alias: str | None = None
+    dashboard_url: str | None = None
+    quick_profiles: list[CLIProxyQuickProfile] | None = None
+
+
+class CLIProxyConfigResponse(BaseModel):
+    """Response payload for CLIProxy route settings."""
+
+    base_url: str | None = None
+    client_api_key: str = ""
+    provider_filter: Literal["codex", "claude", "gemini", "mixed"] = "mixed"
+    model_alias: str = ""
+    dashboard_url: str | None = None
+    quick_profiles: list[CLIProxyQuickProfile] = Field(default_factory=list)
+
+
 class LLMConfigRequest(BaseModel):
     """Request to update LLM configuration."""
 
@@ -1292,6 +1323,8 @@ class LLMConfigRequest(BaseModel):
     model: str | None = None
     api_key: str | None = None
     api_base: str | None = None
+    ai_route: Literal["direct_api", "cliproxyapi"] | None = None
+    cliproxy: CLIProxyConfigRequest | None = None
 
 
 class LLMConfigResponse(BaseModel):
@@ -1301,6 +1334,32 @@ class LLMConfigResponse(BaseModel):
     model: str
     api_key: str  # Masked
     api_base: str | None = None
+    ai_route: Literal["direct_api", "cliproxyapi"] = "direct_api"
+    cliproxy: CLIProxyConfigResponse = Field(default_factory=CLIProxyConfigResponse)
+    cliproxy_route_enabled: bool = False
+
+
+class CLIProxyModelsRequest(BaseModel):
+    """Request payload for discovering models from CLIProxyAPI."""
+
+    base_url: str | None = None
+    client_api_key: str | None = None
+    provider_filter: Literal["codex", "claude", "gemini", "mixed"] | None = None
+
+
+class CLIProxyModelOption(BaseModel):
+    """Discovered model alias from CLIProxyAPI."""
+
+    id: str
+    provider: Literal["codex", "claude", "gemini", "mixed"] = "mixed"
+    owned_by: str | None = None
+
+
+class CLIProxyModelsResponse(BaseModel):
+    """Discovered model list response from CLIProxyAPI."""
+
+    models: list[CLIProxyModelOption] = Field(default_factory=list)
+    provider_filter: Literal["codex", "claude", "gemini", "mixed"] = "mixed"
 
 
 class FeatureConfigRequest(BaseModel):
@@ -1367,6 +1426,24 @@ class PromptConfigResponse(BaseModel):
 
     default_prompt_id: str
     prompt_options: list[PromptOption]
+
+
+class PromptCatalogEntry(BaseModel):
+    """Read-only catalog entry for an LLM prompt template."""
+
+    id: str
+    operation: str
+    version: str | None = None
+    read_only: bool = True
+    system_prompt: str | None = None
+    user_prompt: str | None = None
+    notes: str | None = None
+
+
+class PromptCatalogResponse(BaseModel):
+    """Response containing all configured prompt templates used by LLM operations."""
+
+    prompts: list[PromptCatalogEntry] = Field(default_factory=list)
 
 
 # API Key Management Models

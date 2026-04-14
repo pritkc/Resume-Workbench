@@ -58,6 +58,10 @@ _BUILTIN_PRICING: tuple[dict[str, Any], ...] = (
 
 _LLM_HEALTH_CACHE_LOCK = asyncio.Lock()
 _LLM_HEALTH_CACHE: dict[str, Any] | None = None
+AI_ROUTE_DIRECT = "direct_api"
+AI_ROUTE_CLIPROXY = "cliproxyapi"
+CLIPROXY_PROVIDER_FILTERS = {"codex", "claude", "gemini", "mixed"}
+DEFAULT_CLIPROXY_BASE_URL = "http://127.0.0.1:8317/v1"
 
 
 class LLMConfig(BaseModel):
@@ -67,6 +71,8 @@ class LLMConfig(BaseModel):
     model: str
     api_key: str
     api_base: str | None = None
+    ai_route: str = AI_ROUTE_DIRECT
+    route_provider_filter: str | None = None
 
 
 def _normalize_api_base(provider: str, api_base: str | None) -> str | None:
@@ -344,6 +350,13 @@ def get_cached_llm_health(
     return cached_result
 
 
+def is_llm_configured(config: LLMConfig | None = None) -> bool:
+    """Return whether the active LLM route has required credentials."""
+    if config is None:
+        config = get_llm_config()
+    return bool(config.api_key) or config.provider == "ollama"
+
+
 def get_llm_health_snapshot(
     config: LLMConfig | None = None,
     *,
@@ -353,7 +366,7 @@ def get_llm_health_snapshot(
     if config is None:
         config = get_llm_config()
 
-    llm_configured = bool(config.api_key) or config.provider == "ollama"
+    llm_configured = is_llm_configured(config)
     cached_result = get_cached_llm_health(config, source=source)
     snapshot: dict[str, Any] = {
         "provider": config.provider,
@@ -676,6 +689,36 @@ _PROVIDER_KEY_MAP: dict[str, str] = {
 }
 
 
+def normalize_ai_route(value: Any) -> str:
+    """Normalize persisted AI route value."""
+    if isinstance(value, str) and value.strip().lower() == AI_ROUTE_CLIPROXY:
+        return AI_ROUTE_CLIPROXY
+    return AI_ROUTE_DIRECT
+
+
+def _normalize_cliproxy_provider_filter(value: Any) -> str:
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if cleaned in CLIPROXY_PROVIDER_FILTERS:
+            return cleaned
+    return "mixed"
+
+
+def _normalize_cliproxy_api_base(api_base: str | None) -> str:
+    base = (api_base or "").strip()
+    if not base:
+        base = DEFAULT_CLIPROXY_BASE_URL
+    base = base.rstrip("/")
+    if not base.endswith("/v1"):
+        base = f"{base}/v1"
+    return base
+
+
+def normalize_cliproxy_api_base(api_base: str | None) -> str:
+    """Public wrapper for CLIProxy base URL normalization."""
+    return _normalize_cliproxy_api_base(api_base)
+
+
 def resolve_api_key(stored: dict, provider: str) -> str:
     """Resolve the effective API key from stored config.
 
@@ -702,6 +745,31 @@ def get_llm_config() -> LLMConfig:
     Priority for api_key: top-level api_key > api_keys[provider] > env/settings
     """
     stored = _load_stored_config()
+    ai_route = normalize_ai_route(stored.get("ai_route"))
+    if ai_route == AI_ROUTE_CLIPROXY and settings.enable_cliproxy_route:
+        cliproxy = stored.get("cliproxy", {})
+        if not isinstance(cliproxy, dict):
+            cliproxy = {}
+        provider_filter = _normalize_cliproxy_provider_filter(cliproxy.get("provider_filter"))
+        model_alias = str(
+            cliproxy.get("model_alias")
+            or stored.get("model")
+            or settings.llm_model
+        ).strip()
+        api_key = str(cliproxy.get("client_api_key") or "").strip()
+        api_base = _normalize_cliproxy_api_base(
+            str(cliproxy.get("base_url") or settings.llm_api_base or "").strip() or None
+        )
+
+        return LLMConfig(
+            provider="openai",
+            model=model_alias,
+            api_key=api_key,
+            api_base=api_base,
+            ai_route=AI_ROUTE_CLIPROXY,
+            route_provider_filter=provider_filter,
+        )
+
     provider = stored.get("provider", settings.llm_provider)
     api_key = resolve_api_key(stored, provider)
 
@@ -710,6 +778,7 @@ def get_llm_config() -> LLMConfig:
         model=stored.get("model", settings.llm_model),
         api_key=api_key,
         api_base=stored.get("api_base", settings.llm_api_base),
+        ai_route=AI_ROUTE_DIRECT,
     )
 
 
@@ -719,7 +788,20 @@ def get_model_name(config: LLMConfig) -> str:
     For most providers, adds the provider prefix if not already present.
     For OpenRouter, always adds 'openrouter/' prefix since OpenRouter models
     use nested prefixes like 'openrouter/anthropic/claude-3.5-sonnet'.
+
+    CLIProxyAPI (and similar OpenAI-compatible proxies) expose arbitrary model
+    ids (e.g. ``gemini-3-pro-low``, ``claude-sonnet-4-5``). LiteLLM cannot infer
+    a provider from those bare strings and raises BadRequestError; force the
+    OpenAI-compatible virtual provider so requests use ``api_base`` + chat completions.
     """
+    if config.ai_route == AI_ROUTE_CLIPROXY:
+        raw = (config.model or "").strip()
+        if not raw:
+            return raw
+        if raw.lower().startswith("openai/"):
+            return raw
+        return f"openai/{raw}"
+
     provider_prefixes = {
         "openai": "",  # OpenAI models don't need prefix
         "anthropic": "anthropic/",
@@ -766,7 +848,10 @@ def _config_fingerprint(config: LLMConfig) -> str:
     The raw key is never stored in the fingerprint string.
     """
     key_hash = hash(config.api_key) if config.api_key else 0
-    return f"{config.provider}|{config.model}|{key_hash}|{config.api_base}"
+    return (
+        f"{config.ai_route}|{config.provider}|{config.model}|{key_hash}|"
+        f"{config.api_base}|{config.route_provider_filter}"
+    )
 
 
 def _build_router(config: LLMConfig) -> Router:

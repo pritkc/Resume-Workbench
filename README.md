@@ -71,6 +71,14 @@ uv run uvicorn app.main:app --reload --port 8000
 - Frontend rewrites `/api/*` to this backend by default
 - Requires `DATABASE_URL` in `apps/backend/.env`; for local development, start Postgres with `docker compose up -d postgres` and run `uv run alembic upgrade head`
 
+## Setup Docs
+
+Primary setup instructions now live in [SETUP.md](SETUP.md).
+
+For subscription/OAuth-based CLIProxy flow (no paid provider API keys in Resume Matcher), use:
+- `Configuring Your AI Provider → Option C: CLIProxyAPI Route` in [SETUP.md](SETUP.md)
+- execution log and validated commands in [docs/plans/phase-3.6.3-installation-walkthrough.md](docs/plans/phase-3.6.3-installation-walkthrough.md)
+
 ## Recommended Workflow After Major Changes
 
 For most day-to-day work:

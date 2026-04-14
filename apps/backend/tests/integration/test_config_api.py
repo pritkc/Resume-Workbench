@@ -1,6 +1,6 @@
 """Integration tests for configuration endpoints."""
 
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -30,6 +30,8 @@ class TestLlmConfig:
         assert resp.status_code == 200
         data = resp.json()
         assert data["provider"] == "openai"
+        assert data["ai_route"] == "direct_api"
+        assert "cliproxy" in data
         # API key should be masked
         assert "****" in data["api_key"] or "*" in data["api_key"]
 
@@ -45,6 +47,36 @@ class TestLlmConfig:
         assert resp.status_code == 200
         data = resp.json()
         assert data["provider"] == "anthropic"
+
+    @patch("app.routers.config._save_config")
+    @patch("app.routers.config._load_config")
+    async def test_put_llm_config_cliproxy_route(self, mock_load, mock_save, client):
+        mock_load.return_value = {}
+        async with client:
+            resp = await client.put(
+                "/api/v1/config/llm-api-key",
+                json={
+                    "ai_route": "cliproxyapi",
+                    "cliproxy": {
+                        "base_url": "http://127.0.0.1:8317/v1",
+                        "client_api_key": "proxy-key-123",
+                        "provider_filter": "codex",
+                        "model_alias": "codex-jd-fast",
+                        "quick_profiles": [
+                            {
+                                "name": "Codex Fast",
+                                "provider_filter": "codex",
+                                "model_alias": "codex-jd-fast",
+                                "base_url": "http://127.0.0.1:8317/v1",
+                            }
+                        ],
+                    },
+                },
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ai_route"] == "cliproxyapi"
+        assert data["cliproxy"]["model_alias"] == "codex-jd-fast"
 
 
 class TestLlmTest:
@@ -78,6 +110,74 @@ class TestLlmTest:
             resp = await client.post("/api/v1/config/llm-test")
         assert resp.status_code == 200
         assert resp.json()["healthy"] is False
+
+    @patch("app.routers.config.check_llm_health", new_callable=AsyncMock)
+    @patch("app.routers.config._load_config")
+    async def test_connection_test_cliproxy_route(self, mock_load, mock_health, client):
+        mock_load.return_value = {
+            "ai_route": "cliproxyapi",
+            "cliproxy": {
+                "base_url": "http://127.0.0.1:8317/v1",
+                "client_api_key": "proxy-test-key",
+                "model_alias": "codex-jd-fast",
+                "provider_filter": "codex",
+            },
+        }
+        mock_health.return_value = {
+            "healthy": True,
+            "provider": "openai",
+            "model": "codex-jd-fast",
+        }
+        async with client:
+            resp = await client.post("/api/v1/config/llm-test")
+        assert resp.status_code == 200
+        assert resp.json()["healthy"] is True
+        called_config = mock_health.call_args.args[0]
+        assert called_config.provider == "openai"
+        assert called_config.model == "codex-jd-fast"
+
+
+class TestCLIProxyModels:
+    """POST /api/v1/config/cliproxy-models"""
+
+    @patch("app.routers.config._load_config")
+    @patch("app.routers.config.urllib_request.urlopen")
+    async def test_discover_models_success(self, mock_urlopen, mock_load, client):
+        mock_load.return_value = {
+            "cliproxy": {
+                "base_url": "http://127.0.0.1:8317/v1",
+                "client_api_key": "proxy-key",
+                "provider_filter": "mixed",
+            }
+        }
+        mocked_resp = MagicMock()
+        mocked_resp.read.return_value = (
+            b'{"data":['
+            b'{"id":"codex-jd-fast","owned_by":"openai"},'
+            b'{"id":"claude-jd-fast","owned_by":"anthropic"},'
+            b'{"id":"gemini-jd-fast"}'
+            b"]}"
+        )
+        mock_urlopen.return_value.__enter__.return_value = mocked_resp
+
+        async with client:
+            resp = await client.post(
+                "/api/v1/config/cliproxy-models",
+                json={"provider_filter": "codex"},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["provider_filter"] == "codex"
+        assert len(data["models"]) == 1
+        assert data["models"][0]["id"] == "codex-jd-fast"
+        assert data["models"][0]["owned_by"] == "openai"
+
+    @patch("app.routers.config._load_config")
+    async def test_discover_models_missing_key(self, mock_load, client):
+        mock_load.return_value = {"cliproxy": {"base_url": "http://127.0.0.1:8317/v1"}}
+        async with client:
+            resp = await client.post("/api/v1/config/cliproxy-models", json={})
+        assert resp.status_code == 400
 
 
 class TestFeatureConfig:
@@ -173,6 +273,31 @@ class TestLanguageConfig:
                 "ui_language": "invalid_lang",
             })
         assert resp.status_code == 400
+
+
+class TestPromptCatalog:
+    """GET /api/v1/config/prompts/catalog"""
+
+    async def test_get_prompt_catalog(self, client):
+        async with client:
+            resp = await client.get("/api/v1/config/prompts/catalog")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "prompts" in data
+        assert isinstance(data["prompts"], list)
+        ids = {row["id"] for row in data["prompts"]}
+        assert {
+            "llm_health_check",
+            "resume_parse_json",
+            "job_extract_keywords",
+            "resume_generate_full",
+            "cover_letter_outreach_generate",
+            "application_questions_generate",
+            "enrichment_analyze",
+            "enrichment_enhance",
+            "enrichment_regenerate_item",
+            "enrichment_regenerate_group",
+        }.issubset(ids)
 
 
 class TestResetDatabase:
