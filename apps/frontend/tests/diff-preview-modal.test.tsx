@@ -212,4 +212,45 @@ describe('DiffPreviewModal', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onReject).toHaveBeenCalledTimes(1);
   });
+
+  it('renders pipeline timing entries when provided', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        detailedChanges={detailedChanges}
+        pipelineTiming={{
+          started_at: '2026-04-14T20:10:00.000Z',
+          ended_at: '2026-04-14T20:11:30.000Z',
+          total_duration_ms: 90_000,
+          entries: [
+            {
+              host_event: 'frontend',
+              sub_event: 'total_flow',
+              started_at: '2026-04-14T20:10:00.000Z',
+              ended_at: '2026-04-14T20:11:30.000Z',
+              duration_ms: 90_000,
+              metadata: null,
+            },
+            {
+              host_event: 'llm',
+              sub_event: 'resume_generate_full',
+              started_at: '2026-04-14T20:10:10.000Z',
+              ended_at: '2026-04-14T20:10:40.000Z',
+              duration_ms: 30_000,
+              metadata: null,
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByText('Pipeline Timing')).toBeInTheDocument();
+    expect(screen.getByText('frontend / total_flow')).toBeInTheDocument();
+    expect(screen.getByText('llm / resume_generate_full')).toBeInTheDocument();
+    expect(screen.getAllByText('1.50m').length).toBeGreaterThanOrEqual(1);
+  });
 });

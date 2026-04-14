@@ -114,6 +114,26 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
         mock_db.get_application_pack.return_value = None
         mock_db.update_job.return_value = {"job_id": "job-123"}
         mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.list_llm_calls.return_value = []
+        mock_db.summarize_llm_calls.return_value = {
+            "trace_id": "trace-123",
+            "request_scope": "resumes.improve_preview",
+            "total_calls": 0,
+            "successful_calls": 0,
+            "failed_calls": 0,
+            "latency_total_ms": 0,
+            "latency_avg_ms": 0.0,
+            "llm_wall_clock_ms": 0,
+            "first_call_at": None,
+            "last_call_at": None,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "usage_backed_calls": 0,
+            "estimated_calls": 0,
+            "operations": [],
+        }
         mock_db.create_application_pack.return_value = {"pack_id": "pack-123"}
         mock_db.create_generation_run.return_value = {"generation_run_id": "run-123"}
         mock_db.update_generation_run.return_value = {"generation_run_id": "run-123"}
@@ -131,6 +151,8 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     assert data["generation_run_id"] == "run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-preview-1"
     assert data["change_breakdown"]["llm_applied_changes"] == 0
+    assert data["pipeline_timing"]["total_duration_ms"] >= 0
+    assert len(data["pipeline_timing"]["entries"]) > 0
     technical_group = next(
         group
         for group in data["resume_preview"]["additional"]["groups"]
@@ -143,6 +165,7 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
         "cover_letter": "Cover letter",
         "outreach_message": "Outreach",
     }
+    assert "pipeline_timing" in update_run_payload["result_payload"]
 
 
 @pytest.mark.asyncio

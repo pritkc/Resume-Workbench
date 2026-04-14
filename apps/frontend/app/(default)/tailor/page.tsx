@@ -18,9 +18,11 @@ import {
   fetchGenerationDefaults,
   fetchPromptConfig,
   updateGenerationDefaults,
+  type GenerationDefaults,
   type PromptOption,
 } from '@/lib/api/config';
 import { Dropdown } from '@/components/ui/dropdown';
+import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { useStatusCache } from '@/lib/context/status-cache';
 import { Loader2, ArrowLeft, AlertTriangle, Settings } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
@@ -32,6 +34,7 @@ const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 
 type StoredGenerationDefaults = {
   prompt_id: string;
+  include_auxiliary_package: boolean;
 };
 
 function readStoredGenerationDefaults(): StoredGenerationDefaults | null {
@@ -52,6 +55,10 @@ function readStoredGenerationDefaults(): StoredGenerationDefaults | null {
 
     return {
       prompt_id: parsed.prompt_id,
+      include_auxiliary_package:
+        typeof parsed.include_auxiliary_package === 'boolean'
+          ? parsed.include_auxiliary_package
+          : true,
     };
   } catch {
     window.localStorage.removeItem(GENERATION_DEFAULTS_STORAGE_KEY);
@@ -67,6 +74,20 @@ function storeGenerationDefaults(defaults: StoredGenerationDefaults) {
   window.localStorage.setItem(GENERATION_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
 }
 
+function resolveAuxiliaryPackagePreference(
+  defaults: GenerationDefaults | StoredGenerationDefaults | null
+): boolean {
+  if (!defaults) {
+    return true;
+  }
+
+  if ('include_auxiliary_package' in defaults) {
+    return defaults.include_auxiliary_package;
+  }
+
+  return Boolean(defaults.include_cover_letter || defaults.include_outreach_message);
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
@@ -78,6 +99,93 @@ type AdditionalQuestionContext = {
   generationRunId: string | null;
 };
 
+type FrontendTimingSnapshot = {
+  flowStartedAt: string;
+  flowEndedAt: string;
+  totalDurationMs: number;
+  uploadStartedAt: string;
+  uploadEndedAt: string;
+  uploadDurationMs: number;
+  previewRequestStartedAt: string;
+  previewRequestEndedAt: string;
+  previewRequestDurationMs: number;
+};
+
+function appendFrontendPipelineTiming(
+  result: ImprovedResult,
+  snapshot: FrontendTimingSnapshot
+): ImprovedResult {
+  const existing = result.data.pipeline_timing;
+  const frontendEntries = [
+    {
+      host_event: 'frontend',
+      sub_event: 'upload_job_description',
+      started_at: snapshot.uploadStartedAt,
+      ended_at: snapshot.uploadEndedAt,
+      duration_ms: Math.max(0, snapshot.uploadDurationMs),
+      metadata: null,
+    },
+    {
+      host_event: 'frontend',
+      sub_event: 'preview_request',
+      started_at: snapshot.previewRequestStartedAt,
+      ended_at: snapshot.previewRequestEndedAt,
+      duration_ms: Math.max(0, snapshot.previewRequestDurationMs),
+      metadata: null,
+    },
+    {
+      host_event: 'frontend',
+      sub_event: 'total_flow',
+      started_at: snapshot.flowStartedAt,
+      ended_at: snapshot.flowEndedAt,
+      duration_ms: Math.max(0, snapshot.totalDurationMs),
+      metadata: null,
+    },
+  ];
+
+  const mergedEntries = [...(existing?.entries ?? []), ...frontendEntries].sort(
+    (a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)
+  );
+
+  const starts = mergedEntries
+    .map((entry) => Date.parse(entry.started_at))
+    .filter((value) => Number.isFinite(value));
+  const ends = mergedEntries
+    .map((entry) => Date.parse(entry.ended_at))
+    .filter((value) => Number.isFinite(value));
+
+  const startedAtMs =
+    starts.length > 0
+      ? Math.min(...starts)
+      : Date.parse(existing?.started_at ?? snapshot.flowStartedAt);
+  const endedAtMs =
+    ends.length > 0 ? Math.max(...ends) : Date.parse(existing?.ended_at ?? snapshot.flowEndedAt);
+
+  const startedAtIso = Number.isFinite(startedAtMs)
+    ? new Date(startedAtMs).toISOString()
+    : snapshot.flowStartedAt;
+  const endedAtIso = Number.isFinite(endedAtMs)
+    ? new Date(endedAtMs).toISOString()
+    : snapshot.flowEndedAt;
+  const totalDurationMs =
+    Number.isFinite(startedAtMs) && Number.isFinite(endedAtMs) && endedAtMs >= startedAtMs
+      ? Math.round(endedAtMs - startedAtMs)
+      : Math.max(snapshot.totalDurationMs, existing?.total_duration_ms ?? 0);
+
+  return {
+    ...result,
+    data: {
+      ...result.data,
+      pipeline_timing: {
+        started_at: startedAtIso,
+        ended_at: endedAtIso,
+        total_duration_ms: totalDurationMs,
+        entries: mergedEntries,
+      },
+    },
+  };
+}
+
 export default function TailorPage() {
   const { t } = useTranslations();
   const [jobDescription, setJobDescription] = useState('');
@@ -86,6 +194,7 @@ export default function TailorPage() {
   const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('keywords');
+  const [includeAuxiliaryPackage, setIncludeAuxiliaryPackage] = useState(true);
   const [promptLoading, setPromptLoading] = useState(false);
   const hasUserSelectedPrompt = useRef(false);
   const missingDiffConfirmInFlight = useRef(false);
@@ -156,6 +265,7 @@ export default function TailorPage() {
 
     if (localDefaults && !hasUserSelectedPrompt.current) {
       setSelectedPromptId(localDefaults.prompt_id);
+      setIncludeAuxiliaryPackage(localDefaults.include_auxiliary_package);
     }
 
     const loadPromptConfig = async () => {
@@ -170,7 +280,13 @@ export default function TailorPage() {
           const resolvedDefaults = generationDefaults ?? localDefaults;
 
           if (resolvedDefaults) {
-            storeGenerationDefaults({ prompt_id: resolvedDefaults.prompt_id });
+            const resolvedIncludeAuxiliaryPackage =
+              resolveAuxiliaryPackagePreference(resolvedDefaults);
+            storeGenerationDefaults({
+              prompt_id: resolvedDefaults.prompt_id,
+              include_auxiliary_package: resolvedIncludeAuxiliaryPackage,
+            });
+            setIncludeAuxiliaryPackage(resolvedIncludeAuxiliaryPackage);
           }
 
           if (!hasUserSelectedPrompt.current) {
@@ -246,8 +362,8 @@ export default function TailorPage() {
         })) ?? [],
       application_pack_id: result.data.application_pack_id ?? null,
       generation_run_id: result.data.generation_run_id ?? null,
-      include_cover_letter: true,
-      include_outreach_message: true,
+      include_cover_letter: includeAuxiliaryPackage,
+      include_outreach_message: includeAuxiliaryPackage,
       ...(theme_settings !== undefined ? { theme_settings } : {}),
     };
   };
@@ -284,35 +400,65 @@ export default function TailorPage() {
 
   const runGenerate = async (resumeId: string, description: string) => {
     try {
+      const flowStartedAt = new Date().toISOString();
+      const flowStartMs = performance.now();
+      let uploadStartedAt = flowStartedAt;
+      let uploadEndedAt = flowStartedAt;
+      let uploadDurationMs = 0;
+      let previewRequestStartedAt = flowStartedAt;
+      let previewRequestEndedAt = flowStartedAt;
+      let previewRequestDurationMs = 0;
+
       // 1. Upload Job Description
       // The API expects an array of strings
       setGenerateStage('uploading');
+      const uploadStartMs = performance.now();
+      uploadStartedAt = new Date().toISOString();
       const jobId = await uploadJobDescriptions([description], resumeId, {
         signal: generationAbortRef.current?.signal,
       });
+      uploadEndedAt = new Date().toISOString();
+      uploadDurationMs = Math.round(performance.now() - uploadStartMs);
       incrementJobs(); // Update cached counter
 
       // 2. Preview Resume
       setGenerateStage('tailoring');
+      const previewStartMs = performance.now();
+      previewRequestStartedAt = new Date().toISOString();
       const result = await previewImproveResume(resumeId, jobId, {
         promptId: selectedPromptId,
-        includeCoverLetter: true,
-        includeOutreachMessage: true,
+        includeCoverLetter: includeAuxiliaryPackage,
+        includeOutreachMessage: includeAuxiliaryPackage,
         signal: generationAbortRef.current?.signal,
       });
+      previewRequestEndedAt = new Date().toISOString();
+      previewRequestDurationMs = Math.round(performance.now() - previewStartMs);
+      const flowEndedAt = new Date().toISOString();
+      const totalDurationMs = Math.round(performance.now() - flowStartMs);
+      const resultWithTiming = appendFrontendPipelineTiming(result, {
+        flowStartedAt,
+        flowEndedAt,
+        totalDurationMs,
+        uploadStartedAt,
+        uploadEndedAt,
+        uploadDurationMs,
+        previewRequestStartedAt,
+        previewRequestEndedAt,
+        previewRequestDurationMs,
+      });
       setAdditionalQuestionContext({
-        jobId: result.data.job_id,
-        applicationPackId: result.data.application_pack_id ?? null,
-        generationRunId: result.data.generation_run_id ?? null,
+        jobId: resultWithTiming.data.job_id,
+        applicationPackId: resultWithTiming.data.application_pack_id ?? null,
+        generationRunId: resultWithTiming.data.generation_run_id ?? null,
       });
 
-      if (!result?.data?.diff_summary || !result?.data?.detailed_changes) {
+      if (!resultWithTiming?.data?.diff_summary || !resultWithTiming?.data?.detailed_changes) {
         console.warn('Diff data missing for tailor preview; requesting user confirmation.');
         setDiffConfirmError(null);
         setPendingResult(null);
         setShowDiffModal(false);
         setMissingDiffError(null);
-        setMissingDiffResult(result);
+        setMissingDiffResult(resultWithTiming);
         setShowMissingDiffDialog(true);
         return;
       }
@@ -320,7 +466,7 @@ export default function TailorPage() {
       // 3. Show diff preview modal
       setDiffConfirmError(null);
       setMissingDiffError(null);
-      setPendingResult(result);
+      setPendingResult(resultWithTiming);
       setShowDiffModal(true);
     } catch (err) {
       if (isAbortError(err)) {
@@ -359,8 +505,14 @@ export default function TailorPage() {
     const resumeId = masterResumeId;
     const nextDefaults: StoredGenerationDefaults = {
       prompt_id: selectedPromptId,
+      include_auxiliary_package: includeAuxiliaryPackage,
     };
     storeGenerationDefaults(nextDefaults);
+    const generationDefaultsUpdate = {
+      prompt_id: selectedPromptId,
+      include_cover_letter: includeAuxiliaryPackage,
+      include_outreach_message: includeAuxiliaryPackage,
+    };
 
     setIsLoading(true);
     setIsGenerationInFlight(true);
@@ -369,7 +521,7 @@ export default function TailorPage() {
     startTimer();
     generationAbortRef.current = new AbortController();
     try {
-      void updateGenerationDefaults(nextDefaults).catch((defaultsError) => {
+      void updateGenerationDefaults(generationDefaultsUpdate).catch((defaultsError) => {
         console.error('Failed to persist generation defaults', defaultsError);
       });
       await runGenerate(resumeId, trimmedDescription);
@@ -603,11 +755,14 @@ export default function TailorPage() {
               />
             </div>
 
-            <div className="space-y-2 border border-black bg-white p-3">
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
-                Cover letter + LinkedIn message are generated together.
-              </p>
-            </div>
+            <ToggleSwitch
+              checked={includeAuxiliaryPackage}
+              onCheckedChange={setIncludeAuxiliaryPackage}
+              label="CL + message package"
+              description="Use one shared LLM request to generate both the cover letter and outreach message."
+              disabled={isLoading || promptLoading}
+              density="compact"
+            />
 
             {error && (
               <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
@@ -678,6 +833,7 @@ export default function TailorPage() {
           detailedChanges={pendingResult?.data?.detailed_changes}
           changeBreakdown={pendingResult?.data?.change_breakdown}
           changeManifest={pendingResult?.data?.change_manifest}
+          pipelineTiming={pendingResult?.data?.pipeline_timing}
           artifacts={pendingResult?.data?.artifacts}
           errorMessage={diffConfirmError ?? undefined}
         />

@@ -1099,6 +1099,26 @@ class TailoringStageBreakdown(BaseModel):
     location_value: str | None = None
 
 
+class PipelineTimingEntry(BaseModel):
+    """Timed event entry for preview/confirm pipelines."""
+
+    host_event: str
+    sub_event: str | None = None
+    started_at: str
+    ended_at: str
+    duration_ms: int = Field(default=0, ge=0)
+    metadata: dict[str, Any] | None = None
+
+
+class PipelineTimingSummary(BaseModel):
+    """End-to-end timing summary with host/sub-event granularity."""
+
+    started_at: str
+    ended_at: str
+    total_duration_ms: int = Field(default=0, ge=0)
+    entries: list[PipelineTimingEntry] = Field(default_factory=list)
+
+
 class ArtifactSummary(BaseModel):
     """Stored artifact returned to the frontend."""
 
@@ -1261,6 +1281,7 @@ class ImproveResumeData(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     refinement_attempted: bool = False
     refinement_successful: bool = False
+    pipeline_timing: PipelineTimingSummary | None = None
 
 
 class ImproveResumeResponse(BaseModel):
@@ -1579,6 +1600,8 @@ class LLMOperationSummary(BaseModel):
     calls: int
     successes: int
     failures: int
+    latency_total_ms: int = 0
+    latency_avg_ms: float = 0.0
     input_tokens: int
     output_tokens: int
     total_tokens: int
@@ -1593,6 +1616,11 @@ class LLMCallSummary(BaseModel):
     total_calls: int
     successful_calls: int
     failed_calls: int
+    latency_total_ms: int = 0
+    latency_avg_ms: float = 0.0
+    llm_wall_clock_ms: int = 0
+    first_call_at: str | None = None
+    last_call_at: str | None = None
     input_tokens: int
     output_tokens: int
     total_tokens: int

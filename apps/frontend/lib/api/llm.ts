@@ -44,6 +44,8 @@ export interface LLMOperationSummary {
   calls: number;
   successes: number;
   failures: number;
+  latency_total_ms?: number;
+  latency_avg_ms?: number;
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
@@ -56,6 +58,11 @@ export interface LLMCallSummary {
   total_calls: number;
   successful_calls: number;
   failed_calls: number;
+  latency_total_ms?: number;
+  latency_avg_ms?: number;
+  llm_wall_clock_ms?: number;
+  first_call_at?: string | null;
+  last_call_at?: string | null;
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;

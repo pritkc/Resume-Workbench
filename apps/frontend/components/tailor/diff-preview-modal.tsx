@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTranslations } from '@/lib/i18n';
 import type {
+  PipelineTimingSummary,
   ResumeChange,
   ResumeDiffSummary,
   ResumeFieldDiff,
@@ -24,6 +25,7 @@ interface DiffPreviewModalProps {
   detailedChanges?: ResumeFieldDiff[];
   changeBreakdown?: TailoringStageBreakdown;
   changeManifest?: ResumeChange[];
+  pipelineTiming?: PipelineTimingSummary | null;
   artifacts?: ArtifactSummary[];
   errorMessage?: string;
 }
@@ -406,6 +408,23 @@ function buildOrderedSections(displayChanges: DisplayChange[]): OrderedSection[]
   return sections;
 }
 
+function formatDuration(durationMs: number): string {
+  if (durationMs >= 60_000) {
+    return `${(durationMs / 60_000).toFixed(2)}m`;
+  }
+  if (durationMs >= 1_000) {
+    return `${(durationMs / 1_000).toFixed(2)}s`;
+  }
+  return `${durationMs}ms`;
+}
+
+function formatTimingLabel(hostEvent: string, subEvent?: string | null): string {
+  if (!subEvent) {
+    return hostEvent;
+  }
+  return `${hostEvent} / ${subEvent}`;
+}
+
 export function DiffPreviewModal({
   isOpen,
   isConfirming = false,
@@ -416,6 +435,7 @@ export function DiffPreviewModal({
   detailedChanges,
   changeBreakdown,
   changeManifest,
+  pipelineTiming,
   artifacts,
   errorMessage,
 }: DiffPreviewModalProps) {
@@ -449,6 +469,13 @@ export function DiffPreviewModal({
   );
 
   const orderedSections = useMemo(() => buildOrderedSections(displayChanges), [displayChanges]);
+  const timingEntries = useMemo(
+    () =>
+      (pipelineTiming?.entries ?? [])
+        .slice()
+        .sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)),
+    [pipelineTiming]
+  );
 
   useEffect(() => {
     if (orderedSections.length === 0) {
@@ -604,6 +631,42 @@ export function DiffPreviewModal({
             </p>
           )}
         </div>
+
+        {pipelineTiming && timingEntries.length > 0 && (
+          <div className="mt-2 border-2 border-black bg-white px-3 py-2">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="w-2 h-2 bg-[#0F766E]"></div>
+                <span className="font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
+                  Pipeline Timing
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 flex-1">
+                <InlineStat
+                  label="Total"
+                  value={formatDuration(pipelineTiming.total_duration_ms)}
+                  variant="info"
+                />
+                <InlineStat label="Events" value={timingEntries.length} variant="info" />
+              </div>
+            </div>
+            <div className="mt-2 max-h-44 overflow-y-auto border border-black/10">
+              {timingEntries.map((entry, index) => (
+                <div
+                  key={`${entry.host_event}-${entry.sub_event ?? 'none'}-${index}`}
+                  className="flex items-center justify-between gap-3 border-b border-black/10 px-2 py-1 last:border-b-0"
+                >
+                  <span className="font-mono text-[11px] text-gray-700">
+                    {formatTimingLabel(entry.host_event, entry.sub_event)}
+                  </span>
+                  <span className="font-mono text-[11px] font-bold text-[#0F766E]">
+                    {formatDuration(entry.duration_ms)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {stats.verify > 0 && (
           <div className="mt-2 border border-[#F97316] bg-[#FFF7ED] px-3 py-2">

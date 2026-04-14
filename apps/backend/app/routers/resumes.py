@@ -2,11 +2,13 @@
 
 import asyncio
 import copy
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
 import logging
 import re
+import time
 import unicodedata
 from pathlib import Path
 from typing import Any, NoReturn
@@ -48,6 +50,7 @@ from app.schemas import (
     ImproveResumeData,
     RawResume,
     RawYamlSections,
+    PipelineTimingSummary,
     RefinementStats,
     RenderResumeRequest,
     ResumeData,
@@ -118,6 +121,26 @@ def _resolve_prompt_id(request_prompt_id: str | None) -> str:
         return generation_default_prompt
 
     return _get_default_prompt_id()
+
+
+def _resolve_auxiliary_include_flags(
+    *,
+    include_cover_letter: bool | None,
+    include_outreach_message: bool | None,
+) -> tuple[bool, bool]:
+    defaults = _get_generation_defaults_config()
+
+    def _resolve_flag(key: str, requested_value: bool | None) -> bool:
+        if requested_value is not None:
+            return requested_value
+        if key in defaults:
+            return bool(defaults.get(key))
+        return True
+
+    return (
+        _resolve_flag("include_cover_letter", include_cover_letter),
+        _resolve_flag("include_outreach_message", include_outreach_message),
+    )
 
 
 def _hash_job_content(content: str) -> str:
@@ -706,6 +729,168 @@ def _set_stage(stage_state: dict[str, str] | None, stage: str) -> None:
         stage_state["stage"] = stage
 
 
+class _PipelineTimer:
+    """Collect host/sub-event timing entries for a pipeline execution."""
+
+    def __init__(self) -> None:
+        self._start_perf = time.perf_counter()
+        self._start_at = datetime.now(timezone.utc)
+        self._entries: list[dict[str, Any]] = []
+
+    @contextmanager
+    def track(
+        self,
+        host_event: str,
+        sub_event: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ):
+        start_perf = time.perf_counter()
+        start_at = datetime.now(timezone.utc)
+        try:
+            yield
+        finally:
+            end_at = datetime.now(timezone.utc)
+            duration_ms = max(0, int((time.perf_counter() - start_perf) * 1000))
+            self._entries.append(
+                {
+                    "host_event": host_event,
+                    "sub_event": sub_event,
+                    "started_at": start_at.isoformat(),
+                    "ended_at": end_at.isoformat(),
+                    "duration_ms": duration_ms,
+                    "metadata": metadata,
+                }
+            )
+
+    def add_entry(
+        self,
+        *,
+        host_event: str,
+        sub_event: str | None,
+        started_at: datetime,
+        ended_at: datetime,
+        duration_ms: int,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self._entries.append(
+            {
+                "host_event": host_event,
+                "sub_event": sub_event,
+                "started_at": started_at.isoformat(),
+                "ended_at": ended_at.isoformat(),
+                "duration_ms": max(0, duration_ms),
+                "metadata": metadata,
+            }
+        )
+
+    def to_summary(self) -> PipelineTimingSummary:
+        end_at = datetime.now(timezone.utc)
+        total_duration_ms = max(0, int((time.perf_counter() - self._start_perf) * 1000))
+        entries = sorted(
+            self._entries,
+            key=lambda item: item.get("started_at") or "",
+        )
+        grouped_wall_clock_ms: dict[str, int] = {}
+        llm_operations: list[dict[str, Any]] = []
+        for entry in entries:
+            host_event = str(entry.get("host_event") or "")
+            duration_ms = max(0, int(entry.get("duration_ms") or 0))
+            if host_event and host_event != "llm":
+                grouped_wall_clock_ms[host_event] = (
+                    grouped_wall_clock_ms.get(host_event, 0) + duration_ms
+                )
+                continue
+            if host_event == "llm":
+                metadata = entry.get("metadata")
+                metadata_dict = metadata if isinstance(metadata, dict) else {}
+                llm_operations.append(
+                    {
+                        "operation": str(entry.get("sub_event") or "unknown_operation"),
+                        "total_latency_ms": duration_ms,
+                        "call_count": int(metadata_dict.get("call_count") or 0),
+                        "successes": int(metadata_dict.get("successes") or 0),
+                        "failures": int(metadata_dict.get("failures") or 0),
+                    }
+                )
+        llm_operations.sort(key=lambda item: item["total_latency_ms"], reverse=True)
+        return PipelineTimingSummary(
+            started_at=self._start_at.isoformat(),
+            ended_at=end_at.isoformat(),
+            total_duration_ms=total_duration_ms,
+            entries=entries,
+            grouped_wall_clock_ms=grouped_wall_clock_ms,
+            llm_operations=llm_operations,
+        )
+
+
+def _parse_iso_to_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _append_llm_timing_entries(
+    timer: _PipelineTimer,
+    *,
+    trace_id: str,
+) -> None:
+    calls = db.list_llm_calls(trace_id=trace_id, limit=500)
+    if not calls:
+        return
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for call in calls:
+        operation = call.get("operation")
+        if not isinstance(operation, str) or not operation.strip():
+            operation = "unknown_operation"
+
+        group = grouped.setdefault(
+            operation,
+            {
+                "operation": operation,
+                "latency_ms": 0,
+                "call_count": 0,
+                "successes": 0,
+                "failures": 0,
+                "started_at": None,
+                "ended_at": None,
+            },
+        )
+        group["latency_ms"] += int(call.get("latency_ms") or 0)
+        group["call_count"] += 1
+        if call.get("success") is True:
+            group["successes"] += 1
+        elif call.get("success") is False:
+            group["failures"] += 1
+
+        created_at = _parse_iso_to_datetime(call.get("created_at"))
+        completed_at = _parse_iso_to_datetime(call.get("completed_at")) or created_at
+        if created_at and (group["started_at"] is None or created_at < group["started_at"]):
+            group["started_at"] = created_at
+        if completed_at and (group["ended_at"] is None or completed_at > group["ended_at"]):
+            group["ended_at"] = completed_at
+
+    for op in sorted(grouped.values(), key=lambda item: item["latency_ms"], reverse=True):
+        now = datetime.now(timezone.utc)
+        started_at = op["started_at"] or now
+        ended_at = op["ended_at"] or started_at
+        timer.add_entry(
+            host_event="llm",
+            sub_event=op["operation"],
+            started_at=started_at,
+            ended_at=ended_at,
+            duration_ms=int(op["latency_ms"]),
+            metadata={
+                "call_count": op["call_count"],
+                "successes": op["successes"],
+                "failures": op["failures"],
+            },
+        )
+
+
 async def _generate_tailored_resume_data(
     *,
     resume: dict[str, Any],
@@ -807,6 +992,9 @@ async def _generate_auxiliary_messages(
     job_content: str,
     job_keywords: dict[str, Any] | None,
     language: str,
+    *,
+    include_cover_letter: bool,
+    include_outreach_message: bool,
 ) -> tuple[str | None, str | None, str | None, list[str]]:
     """Generate auxiliary content and derive a stable resume title locally.
 
@@ -817,15 +1005,24 @@ async def _generate_auxiliary_messages(
     title = build_job_target_title(job_content, job_keywords=job_keywords)
     warnings: list[str] = []
 
+    if not include_cover_letter and not include_outreach_message:
+        return None, None, title, warnings
+
     try:
-        cover_letter, outreach_message = await generate_cover_letter_and_outreach(
-            improved_data,
-            job_content,
-            language,
+        generated_cover_letter, generated_outreach_message = (
+            await generate_cover_letter_and_outreach(
+                improved_data,
+                job_content,
+                language,
+            )
         )
+        if include_cover_letter:
+            cover_letter = generated_cover_letter
+        if include_outreach_message:
+            outreach_message = generated_outreach_message
     except Exception as exc:
         logger.warning("Combined message generation failed: %s", exc, exc_info=exc)
-        warnings.append("Combined message generation failed")
+        warnings.append("Cover letter + outreach package generation failed")
 
     return cover_letter, outreach_message, title, warnings
 
@@ -916,6 +1113,8 @@ async def _resolve_confirm_auxiliary_messages(
     job_content: str,
     job_keywords: dict[str, Any] | None,
     language: str,
+    include_cover_letter: bool,
+    include_outreach_message: bool,
 ) -> tuple[str | None, str | None, str | None, list[str]]:
     """Reuse reviewed preview auxiliary outputs before regenerating anything."""
 
@@ -926,8 +1125,15 @@ async def _resolve_confirm_auxiliary_messages(
     )
     cover_letter = preview_auxiliary.get("cover_letter")
     outreach_message = preview_auxiliary.get("outreach_message")
+    if not include_cover_letter:
+        cover_letter = None
+    if not include_outreach_message:
+        outreach_message = None
 
-    if cover_letter and outreach_message:
+    missing_cover_letter = include_cover_letter and not cover_letter
+    missing_outreach_message = include_outreach_message and not outreach_message
+
+    if not missing_cover_letter and not missing_outreach_message:
         return cover_letter, outreach_message, title, []
 
     generated_cover_letter, generated_outreach, generated_title, warnings = (
@@ -936,6 +1142,8 @@ async def _resolve_confirm_auxiliary_messages(
             job_content,
             job_keywords,
             language,
+            include_cover_letter=missing_cover_letter,
+            include_outreach_message=missing_outreach_message,
         )
     )
     return (
@@ -1251,6 +1459,10 @@ async def improve_resume_preview_endpoint(
 
     language = get_content_language()
     prompt_id = _resolve_prompt_id(request.prompt_id)
+    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
+        include_cover_letter=request.include_cover_letter,
+        include_outreach_message=request.include_outreach_message,
+    )
     request_id = str(uuid4())
 
     stage_state = {"stage": "load_job_keywords"}
@@ -1303,37 +1515,55 @@ async def _improve_preview_flow(
     stage_state: dict[str, str] | None = None,
 ) -> ImproveResumeResponse:
     """Inner flow for improve/preview, extracted so it can be wrapped in wait_for."""
+    timer = _PipelineTimer()
+    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
+        include_cover_letter=request.include_cover_letter,
+        include_outreach_message=request.include_outreach_message,
+    )
     job_keywords = job.get("job_keywords")
     job_keywords_hash = job.get("job_keywords_hash")
     content_hash = _hash_job_content(job["content"])
     if not job_keywords or job_keywords_hash != content_hash:
-        _set_stage(stage_state, "load_job_keywords")
-        job_keywords = await extract_job_keywords(job["content"])
-        _set_stage(stage_state, "persist_job_keywords")
-        try:
-            updated_job = db.update_job(
-                request.job_id,
-                {"job_keywords": job_keywords, "job_keywords_hash": content_hash},
-            )
-            if not updated_job:
-                logger.warning(
-                    "Failed to persist job keywords for job %s.",
+        with timer.track("job_keywords", "extract"):
+            _set_stage(stage_state, "load_job_keywords")
+            job_keywords = await extract_job_keywords(job["content"])
+        with timer.track("job_keywords", "persist"):
+            _set_stage(stage_state, "persist_job_keywords")
+            try:
+                updated_job = db.update_job(
                     request.job_id,
+                    {"job_keywords": job_keywords, "job_keywords_hash": content_hash},
                 )
-        except Exception as e:
-            logger.warning(
-                "Failed to persist job keywords for job %s: %s",
-                request.job_id,
-                e,
-            )
-    tailoring_result = await _generate_tailored_resume_data(
-        resume=resume,
-        job=job,
-        job_keywords=job_keywords,
-        language=language,
-        prompt_id=prompt_id,
-        stage_state=stage_state,
-    )
+                if not updated_job:
+                    logger.warning(
+                        "Failed to persist job keywords for job %s.",
+                        request.job_id,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist job keywords for job %s: %s",
+                    request.job_id,
+                    e,
+                )
+    else:
+        now = datetime.now(timezone.utc)
+        timer.add_entry(
+            host_event="job_keywords",
+            sub_event="reuse_cached",
+            started_at=now,
+            ended_at=now,
+            duration_ms=0,
+            metadata={"cache_hit": True},
+        )
+    with timer.track("tailoring", "generate_full_resume"):
+        tailoring_result = await _generate_tailored_resume_data(
+            resume=resume,
+            job=job,
+            job_keywords=job_keywords,
+            language=language,
+            prompt_id=prompt_id,
+            stage_state=stage_state,
+        )
     improved_data = tailoring_result.resume_data
     response_warnings = list(tailoring_result.warnings)
 
@@ -1341,128 +1571,144 @@ async def _improve_preview_flow(
     refinement_attempted = False
     refinement_successful = False
 
-    improved_data = _canonicalize_improved_resume_data(improved_data)
-    improved_text = json.dumps(improved_data, indent=2)
-    preview_hash = _hash_improved_data(improved_data)
+    with timer.track("postprocess", "canonicalize_resume"):
+        improved_data = _canonicalize_improved_resume_data(improved_data)
+        improved_text = json.dumps(improved_data, indent=2)
+        preview_hash = _hash_improved_data(improved_data)
     preview_hashes = job.get("preview_hashes")
     if not isinstance(preview_hashes, dict):
         preview_hashes = {}
     preview_hashes[prompt_id] = preview_hash
     # NOTE: preview_hashes updates are last-write-wins; concurrent previews can race.
-    _set_stage(stage_state, "persist_preview_hash")
-    try:
-        updated_job = db.update_job(
-            request.job_id,
-            {
-                "preview_hash": preview_hash,
-                "preview_prompt_id": prompt_id,
-                "preview_hashes": preview_hashes,
-            },
-        )
-        if not updated_job:
-            logger.warning(
-                "Failed to persist preview hash for job %s.", request.job_id
+    with timer.track("job_preview_hash", "persist"):
+        _set_stage(stage_state, "persist_preview_hash")
+        try:
+            updated_job = db.update_job(
+                request.job_id,
+                {
+                    "preview_hash": preview_hash,
+                    "preview_prompt_id": prompt_id,
+                    "preview_hashes": preview_hashes,
+                },
             )
-    except Exception as e:
-        logger.warning(
-            "Failed to persist preview hash for job %s: %s", request.job_id, e
+            if not updated_job:
+                logger.warning(
+                    "Failed to persist preview hash for job %s.", request.job_id
+                )
+        except Exception as e:
+            logger.warning(
+                "Failed to persist preview hash for job %s: %s", request.job_id, e
+            )
+    with timer.track("diff", "calculate"):
+        _set_stage(stage_state, "calculate_diff")
+        diff_summary, detailed_changes, diff_error = _calculate_diff_from_resume(
+            resume,
+            improved_data,
         )
-    _set_stage(stage_state, "calculate_diff")
-    diff_summary, detailed_changes, diff_error = _calculate_diff_from_resume(
-        resume,
-        improved_data,
-    )
     if diff_error:
         response_warnings.append(f"Could not calculate changes: {diff_error}")
-    improvements = generate_improvements(job_keywords)
+    with timer.track("improvements", "build_suggestions"):
+        improvements = generate_improvements(job_keywords)
 
-    _set_stage(stage_state, "generate_auxiliary_messages")
-    (
-        cover_letter,
-        outreach_message,
-        generated_title,
-        aux_warnings,
-    ) = await _generate_auxiliary_messages(
-        improved_data,
-        job["content"],
-        job_keywords,
-        language,
-    )
+    with timer.track("auxiliary_messages", "generate_cover_letter_outreach"):
+        _set_stage(stage_state, "generate_auxiliary_messages")
+        (
+            cover_letter,
+            outreach_message,
+            generated_title,
+            aux_warnings,
+        ) = await _generate_auxiliary_messages(
+            improved_data,
+            job["content"],
+            job_keywords,
+            language,
+            include_cover_letter=include_cover_letter,
+            include_outreach_message=include_outreach_message,
+        )
     response_warnings.extend(aux_warnings)
-    job = _backfill_job_target_metadata(
-        job_id=request.job_id,
-        job=job,
-        job_keywords=job_keywords,
-    )
-    target_role, target_company, target_location = _merge_target_metadata(
-        job,
-        job_description=job["content"],
-        job_keywords=job_keywords,
-        title=generated_title,
-    )
-    generated_title = generated_title or _compose_target_title(target_role, target_company)
-    llm_summary = db.summarize_llm_calls(trace_id=request_id)
+    with timer.track("target_metadata", "merge"):
+        job = _backfill_job_target_metadata(
+            job_id=request.job_id,
+            job=job,
+            job_keywords=job_keywords,
+        )
+        target_role, target_company, target_location = _merge_target_metadata(
+            job,
+            job_description=job["content"],
+            job_keywords=job_keywords,
+            title=generated_title,
+        )
+        generated_title = generated_title or _compose_target_title(target_role, target_company)
+    with timer.track("llm_trace", "summarize_calls"):
+        llm_summary = db.summarize_llm_calls(trace_id=request_id)
+    with timer.track("llm_trace", "aggregate_operation_timing"):
+        _append_llm_timing_entries(timer, trace_id=request_id)
 
-    _set_stage(stage_state, "create_application_pack")
-    application_pack = db.create_application_pack(
-        base_resume_id=request.resume_id,
-        job_id=request.job_id,
-        status="preview_ready",
-        company=target_company,
-        role=target_role,
-        location=target_location,
-        theme_settings=theme_settings.to_storage_dict(),
-    )
-    preview_run = db.create_generation_run(
-        run_kind="application_pack_preview",
-        status="completed",
-        source_resume_id=request.resume_id,
-        job_id=request.job_id,
-        application_pack_id=application_pack["pack_id"],
-        prompt_id=prompt_id,
-        request_payload={"prompt_id": prompt_id, "llm_trace_id": request_id},
-        result_payload={
-            "llm_summary": llm_summary,
-            "preview_hash": preview_hash,
-            "diff_summary": diff_summary.model_dump() if diff_summary else None,
-            "change_manifest": [change.model_dump() for change in tailoring_result.change_manifest],
-            "declared_changes": [change.model_dump() for change in tailoring_result.declared_changes],
-            "rejected_declared_changes": [
-                change.model_dump() for change in tailoring_result.rejected_declared_changes
-            ],
-            "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
-            "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
-            "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
-            "final_resume_data": improved_data,
-            "auxiliary": {
-                "title": generated_title,
-                "cover_letter": cover_letter,
-                "outreach_message": outreach_message,
+    with timer.track("application_pack", "create"):
+        _set_stage(stage_state, "create_application_pack")
+        application_pack = db.create_application_pack(
+            base_resume_id=request.resume_id,
+            job_id=request.job_id,
+            status="preview_ready",
+            company=target_company,
+            role=target_role,
+            location=target_location,
+            theme_settings=theme_settings.to_storage_dict(),
+        )
+    with timer.track("generation_run", "create_preview_run"):
+        preview_run = db.create_generation_run(
+            run_kind="application_pack_preview",
+            status="completed",
+            source_resume_id=request.resume_id,
+            job_id=request.job_id,
+            application_pack_id=application_pack["pack_id"],
+            prompt_id=prompt_id,
+            request_payload={"prompt_id": prompt_id, "llm_trace_id": request_id},
+            result_payload={
+                "llm_summary": llm_summary,
+                "preview_hash": preview_hash,
+                "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                "change_manifest": [change.model_dump() for change in tailoring_result.change_manifest],
+                "declared_changes": [change.model_dump() for change in tailoring_result.declared_changes],
+                "rejected_declared_changes": [
+                    change.model_dump() for change in tailoring_result.rejected_declared_changes
+                ],
+                "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
+                "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
+                "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
+                "final_resume_data": improved_data,
+                "auxiliary": {
+                    "title": generated_title,
+                    "cover_letter": cover_letter,
+                    "outreach_message": outreach_message,
+                },
             },
-        },
-        warnings=response_warnings,
-    )
+            warnings=response_warnings,
+        )
     artifacts: list[dict[str, Any]] = []
     try:
-        _set_stage(stage_state, "render_preview_artifacts")
-        bundle = render_resume_bundle(
-            improved_data,
-            theme_settings,
-            identifier=resume.get("title") or request.resume_id,
-        )
-        artifacts = store_rendercv_bundle(
-            bundle,
-            resume_id=request.resume_id,
-            application_pack_id=application_pack["pack_id"],
-            generation_run_id=preview_run["generation_run_id"],
-        )
+        with timer.track("rendercv", "render_and_store_preview_artifacts"):
+            _set_stage(stage_state, "render_preview_artifacts")
+            bundle = render_resume_bundle(
+                improved_data,
+                theme_settings,
+                identifier=resume.get("title") or request.resume_id,
+            )
+            artifacts = store_rendercv_bundle(
+                bundle,
+                resume_id=request.resume_id,
+                application_pack_id=application_pack["pack_id"],
+                generation_run_id=preview_run["generation_run_id"],
+            )
     except RenderCVRenderError as e:
         response_warnings.append(f"RenderCV preview failed: {str(e)}")
 
-    db.update_application_pack(
-        application_pack["pack_id"],
-        {"generation_run_id": preview_run["generation_run_id"]},
-    )
+    with timer.track("application_pack", "link_generation_run"):
+        db.update_application_pack(
+            application_pack["pack_id"],
+            {"generation_run_id": preview_run["generation_run_id"]},
+        )
+    pipeline_timing = timer.to_summary()
     _set_stage(stage_state, "update_generation_run")
     db.update_generation_run(
         preview_run["generation_run_id"],
@@ -1487,6 +1733,7 @@ async def _improve_preview_flow(
                     "cover_letter": cover_letter,
                     "outreach_message": outreach_message,
                 },
+                "pipeline_timing": pipeline_timing.model_dump(),
             },
         },
     )
@@ -1522,6 +1769,7 @@ async def _improve_preview_flow(
             warnings=response_warnings,
             refinement_attempted=refinement_attempted,
             refinement_successful=refinement_successful,
+            pipeline_timing=pipeline_timing,
         ),
     )
 
@@ -1544,6 +1792,10 @@ async def improve_resume_confirm_endpoint(
         request_theme_settings=request.theme_settings,
         resume=resume,
         application_pack_id=request.application_pack_id,
+    )
+    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
+        include_cover_letter=request.include_cover_letter,
+        include_outreach_message=request.include_outreach_message,
     )
     request_id = str(uuid4())
 
@@ -1663,6 +1915,8 @@ async def improve_resume_confirm_endpoint(
                     else None
                 ),
                 language=language,
+                include_cover_letter=include_cover_letter,
+                include_outreach_message=include_outreach_message,
             )
             llm_summary = db.summarize_llm_calls(trace_id=request_id)
         response_warnings.extend(aux_warnings)
@@ -1868,6 +2122,10 @@ async def improve_resume_endpoint(
     stage_state = {"stage": "load_job_keywords"}
     detail = "Failed to improve resume. Please try again."
     request_id = str(uuid4())
+    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
+        include_cover_letter=request.include_cover_letter,
+        include_outreach_message=request.include_outreach_message,
+    )
 
     try:
         _set_stage(stage_state, "load_job_keywords")
@@ -1936,6 +2194,8 @@ async def improve_resume_endpoint(
                 job["content"],
                 job_keywords,
                 language,
+                include_cover_letter=include_cover_letter,
+                include_outreach_message=include_outreach_message,
             )
         response_warnings.extend(aux_warnings)
         job = _backfill_job_target_metadata(
@@ -2497,7 +2757,7 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
     # Get language setting
     language = get_content_language()
 
-    # Generate both messages in one merged request.
+    # Generate the shared auxiliary package once and return the requested field.
     try:
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,
@@ -2576,7 +2836,7 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     # Get language setting
     language = get_content_language()
 
-    # Generate both messages in one merged request.
+    # Generate the shared auxiliary package once and return the requested field.
     try:
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,

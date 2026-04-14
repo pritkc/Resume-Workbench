@@ -96,6 +96,30 @@ export interface TailoringStageBreakdown {
   location_value?: string | null;
 }
 
+export interface PipelineTimingEntry {
+  host_event: string;
+  sub_event?: string | null;
+  started_at: string;
+  ended_at: string;
+  duration_ms: number;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface PipelineTimingSummary {
+  started_at: string;
+  ended_at: string;
+  total_duration_ms: number;
+  entries: PipelineTimingEntry[];
+  grouped_wall_clock_ms?: Record<string, number>;
+  llm_operations?: Array<{
+    operation: string;
+    total_latency_ms: number;
+    call_count: number;
+    successes: number;
+    failures: number;
+  }>;
+}
+
 export interface ResumePreview {
   personalInfo: PersonalInfo;
   summary?: string;
@@ -131,6 +155,7 @@ export interface Data {
   detailed_changes?: ResumeFieldDiff[];
   change_manifest?: ResumeChange[];
   change_breakdown?: TailoringStageBreakdown;
+  pipeline_timing?: PipelineTimingSummary | null;
   bold_keywords?: string[];
 }
 

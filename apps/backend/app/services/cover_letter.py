@@ -1,18 +1,17 @@
 """Cover letter, outreach message, and job target metadata helpers."""
 
+import asyncio
 import json
 import re
 from typing import Any
 
-from app.llm import complete_json
+from app.llm import complete
 from app.prompts import (
     COMBINED_MESSAGES_SYSTEM_PROMPT,
     PROMPT_VERSIONS,
     get_language_name,
 )
-from app.prompts.templates import (
-    COVER_LETTER_OUTREACH_PROMPT,
-)
+from app.prompts.templates import COVER_LETTER_OUTREACH_PROMPT
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -203,10 +202,17 @@ _TITLE_TRAILING_QUALIFIER_RE = re.compile(
 )
 
 MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2200
+COMBINED_MESSAGE_TIMEOUT_SECONDS = 150
+COMBINED_MESSAGE_MAX_TOKENS = 2600
+_COMBINED_COVER_START = "<<COVER_LETTER>>"
+_COMBINED_COVER_END = "<<END_COVER_LETTER>>"
+_COMBINED_OUTREACH_START = "<<OUTREACH_MESSAGE>>"
+_COMBINED_OUTREACH_END = "<<END_OUTREACH_MESSAGE>>"
 
 _COMBINED_MESSAGES_RETRY_HINT = (
-    "Return a complete JSON object with both keys: cover_letter and outreach_message. "
-    "Each value must be a complete plain-text message, not truncated."
+    "Return both messages with the exact wrapper tags: "
+    "<<COVER_LETTER>>, <<END_COVER_LETTER>>, <<OUTREACH_MESSAGE>>, "
+    "and <<END_OUTREACH_MESSAGE>>. Include no extra commentary."
 )
 
 
@@ -494,6 +500,131 @@ def _coerce_message_text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _strip_fenced_wrapper(content: str) -> str:
+    stripped = content.strip()
+    if stripped.startswith("```") and stripped.endswith("```"):
+        lines = stripped.splitlines()
+        if len(lines) >= 2:
+            return "\n".join(lines[1:-1]).strip()
+    return stripped
+
+
+def _extract_tagged_block(
+    content: str,
+    *,
+    start_tag: str,
+    end_tag: str,
+    next_start_tag: str | None = None,
+) -> str:
+    pattern = re.compile(
+        re.escape(start_tag) + r"\s*(.*?)\s*" + re.escape(end_tag),
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(content)
+    if match:
+        return match.group(1).strip()
+
+    start_match = re.search(re.escape(start_tag), content, re.IGNORECASE)
+    if not start_match:
+        return ""
+
+    tail = content[start_match.end() :]
+    if next_start_tag:
+        next_match = re.search(re.escape(next_start_tag), tail, re.IGNORECASE)
+        if next_match:
+            tail = tail[: next_match.start()]
+    else:
+        end_match = re.search(re.escape(end_tag), tail, re.IGNORECASE)
+        if end_match:
+            tail = tail[: end_match.start()]
+
+    return tail.strip()
+
+
+def _parse_combined_message_json_fallback(content: str) -> tuple[str, str]:
+    stripped = content.strip()
+    start_idx = stripped.find("{")
+    end_idx = stripped.rfind("}")
+    if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        return "", ""
+
+    try:
+        parsed = json.loads(stripped[start_idx : end_idx + 1])
+    except json.JSONDecodeError:
+        return "", ""
+
+    return (
+        _coerce_message_text(parsed.get("cover_letter")),
+        _coerce_message_text(parsed.get("outreach_message")),
+    )
+
+
+def _parse_combined_message_heading_fallback(content: str) -> tuple[str, str]:
+    cover_match = re.search(
+        r"(?is)\bcover\s*letter\s*[:\-]\s*(.*?)\s*(?=\boutreach(?:\s*message)?\s*[:\-]|$)",
+        content,
+    )
+    outreach_match = re.search(
+        r"(?is)\boutreach(?:\s*message)?\s*[:\-]\s*(.*)$",
+        content,
+    )
+    return (
+        cover_match.group(1).strip() if cover_match else "",
+        outreach_match.group(1).strip() if outreach_match else "",
+    )
+
+
+def parse_combined_message_response(content: str) -> tuple[str, str]:
+    """Parse the merged auxiliary response without relying on strict JSON."""
+
+    normalized = _strip_fenced_wrapper(content)
+    cover_letter = _extract_tagged_block(
+        normalized,
+        start_tag=_COMBINED_COVER_START,
+        end_tag=_COMBINED_COVER_END,
+        next_start_tag=_COMBINED_OUTREACH_START,
+    )
+    outreach_message = _extract_tagged_block(
+        normalized,
+        start_tag=_COMBINED_OUTREACH_START,
+        end_tag=_COMBINED_OUTREACH_END,
+    )
+    if cover_letter and outreach_message:
+        return cover_letter, outreach_message
+
+    json_cover_letter, json_outreach_message = _parse_combined_message_json_fallback(
+        normalized
+    )
+    cover_letter = cover_letter or json_cover_letter
+    outreach_message = outreach_message or json_outreach_message
+    if cover_letter and outreach_message:
+        return cover_letter, outreach_message
+
+    heading_cover_letter, heading_outreach_message = _parse_combined_message_heading_fallback(
+        normalized
+    )
+    cover_letter = cover_letter or heading_cover_letter
+    outreach_message = outreach_message or heading_outreach_message
+    if cover_letter and outreach_message:
+        return cover_letter, outreach_message
+
+    raise ValueError("Combined message generation returned incomplete content")
+
+
+def _build_message_metadata(
+    *,
+    job_description: str,
+    prompt_inputs: dict[str, str],
+    prompt_version: str,
+) -> dict[str, Any]:
+    return {
+        "job_description_chars": len(job_description),
+        "prompt_job_description_chars": len(prompt_inputs["job_description"]),
+        "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
+        "prompt_version": prompt_version,
+    }
+
+
 async def generate_cover_letter_and_outreach(
     resume_data: dict[str, Any],
     job_description: str,
@@ -508,27 +639,24 @@ async def generate_cover_letter_and_outreach(
         resume_profile=prompt_inputs["resume_profile"],
         output_language=output_language,
     )
-
-    result = await complete_json(
-        prompt=prompt,
-        system_prompt=COMBINED_MESSAGES_SYSTEM_PROMPT,
-        max_tokens=3072,
-        retries=3,
-        retry_hint=_COMBINED_MESSAGES_RETRY_HINT,
-        operation="cover_letter_outreach_generate",
-        metadata={
-            "job_description_chars": len(job_description),
-            "prompt_job_description_chars": len(prompt_inputs["job_description"]),
-            "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
-            "prompt_version": PROMPT_VERSIONS.get("cover_letter_outreach", "unknown"),
-        },
+    content = await asyncio.wait_for(
+        complete(
+            prompt=prompt,
+            system_prompt=COMBINED_MESSAGES_SYSTEM_PROMPT,
+            max_tokens=COMBINED_MESSAGE_MAX_TOKENS,
+            retries=2,
+            retry_hint=_COMBINED_MESSAGES_RETRY_HINT,
+            retry_max_tokens=3200,
+            operation="cover_letter_outreach_generate",
+            metadata=_build_message_metadata(
+                job_description=job_description,
+                prompt_inputs=prompt_inputs,
+                prompt_version=PROMPT_VERSIONS.get("cover_letter_outreach", "unknown"),
+            ),
+        ),
+        timeout=COMBINED_MESSAGE_TIMEOUT_SECONDS,
     )
-
-    cover_letter = _coerce_message_text(result.get("cover_letter"))
-    outreach_message = _coerce_message_text(result.get("outreach_message"))
-    if not cover_letter or not outreach_message:
-        raise ValueError("Combined message generation returned missing fields")
-    return cover_letter, outreach_message
+    return parse_combined_message_response(content)
 
 
 async def generate_cover_letter(
@@ -536,8 +664,8 @@ async def generate_cover_letter(
     job_description: str,
     language: str = "en",
 ) -> str:
-    """Backward-compatible helper that now relies on the merged generator."""
-    cover_letter, _outreach = await generate_cover_letter_and_outreach(
+    """Generate the cover-letter field via the shared auxiliary package call."""
+    cover_letter, _outreach_message = await generate_cover_letter_and_outreach(
         resume_data,
         job_description,
         language,
@@ -550,7 +678,7 @@ async def generate_outreach_message(
     job_description: str,
     language: str = "en",
 ) -> str:
-    """Backward-compatible helper that now relies on the merged generator."""
+    """Generate the outreach field via the shared auxiliary package call."""
     _cover_letter, outreach_message = await generate_cover_letter_and_outreach(
         resume_data,
         job_description,

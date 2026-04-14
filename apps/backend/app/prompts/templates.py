@@ -352,13 +352,15 @@ COVER_LETTER_OUTREACH_PROMPT = """Generate both outputs in one pass using the sa
 
 IMPORTANT:
 - Write both outputs in {output_language}
-- Output JSON only with this exact shape:
-{{
-  "cover_letter": "string",
-  "outreach_message": "string"
-}}
-- Do NOT use em dash ("—") anywhere in either string
-- Do not add extra keys or markdown
+- Return plain text only using this exact wrapper format:
+<<COVER_LETTER>>
+[cover letter body]
+<<END_COVER_LETTER>>
+<<OUTREACH_MESSAGE>>
+[outreach message body]
+<<END_OUTREACH_MESSAGE>>
+- Do NOT use markdown, JSON, or any extra commentary outside those wrappers
+- Do NOT use em dash ("—") anywhere in either message
 
 JOB TARGET (JSON):
 {job_target}
@@ -453,8 +455,8 @@ OUTREACH_SYSTEM_PROMPT = (
 )
 COMBINED_MESSAGES_SYSTEM_PROMPT = (
     "You write concise, professional cover letters and outreach messages grounded only in provided context. "
-    "Output valid JSON only with keys cover_letter and outreach_message. "
-    "No markdown, no placeholders, no extra keys."
+    "Output plain text only using the exact wrapper tags for the cover letter and outreach message. "
+    "No markdown, no placeholders, no extra commentary."
 )
 APPLICATION_QUESTIONS_SYSTEM_PROMPT = (
     "You answer job-application custom questions using only supplied context. "
