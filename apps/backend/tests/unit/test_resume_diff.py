@@ -332,6 +332,89 @@ def test_project_title_pairs_by_id_when_order_changes() -> None:
     assert title_changes[0].new_value == "Node.js Job Aggregator"
 
 
+def test_project_entry_summary_change_detected() -> None:
+    original = {
+        "personalProjects": [
+            {"id": 1, "name": "App", "summary": "Stack: Python", "description": []},
+        ]
+    }
+    improved = {
+        "personalProjects": [
+            {"id": 1, "name": "App", "summary": "Stack: Python, Rust", "description": []},
+        ]
+    }
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    summary_changes = [
+        c
+        for c in changes
+        if c.field_path == "personalProjects[0].summary" and c.field_type == "project"
+    ]
+    assert len(summary_changes) == 1
+    assert summary_changes[0].change_type == "modified"
+    assert summary_changes[0].original_value == "Stack: Python"
+    assert summary_changes[0].new_value == "Stack: Python, Rust"
+
+
+def test_project_entry_summary_tech_stacks_alias() -> None:
+    original = {
+        "personalProjects": [
+            {"id": 1, "name": "App", "tech_stacks": "Go", "description": []},
+        ]
+    }
+    improved = {
+        "personalProjects": [
+            {"id": 1, "name": "App", "summary": "Go, gRPC", "description": []},
+        ]
+    }
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    summary_changes = [
+        c
+        for c in changes
+        if c.field_path == "personalProjects[0].summary" and c.field_type == "project"
+    ]
+    assert len(summary_changes) == 1
+    assert summary_changes[0].change_type == "modified"
+
+
+def test_work_experience_entry_summary_change_detected() -> None:
+    original = {
+        "workExperience": [
+            {
+                "position": "Dev",
+                "company": "Co",
+                "years": "2020",
+                "summary": "Focus: APIs",
+                "description": [],
+            }
+        ]
+    }
+    improved = {
+        "workExperience": [
+            {
+                "position": "Dev",
+                "company": "Co",
+                "years": "2020",
+                "summary": "Focus: APIs and data",
+                "description": [],
+            }
+        ]
+    }
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    summary_changes = [
+        c
+        for c in changes
+        if c.field_path == "workExperience[0].summary" and c.field_type == "experience"
+    ]
+    assert len(summary_changes) == 1
+    assert summary_changes[0].change_type == "modified"
+
+
 def test_unchanged_titles_produce_no_title_diff() -> None:
     original = {
         "workExperience": [

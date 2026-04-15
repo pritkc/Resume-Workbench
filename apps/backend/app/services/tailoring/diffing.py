@@ -477,6 +477,64 @@ def calculate_resume_diff(
                 )
             )
 
+    # Per-job summary one-liner (stripped from _append_entry_changes via ignore_keys).
+    for j in range(len(improved_experiences)):
+        impr = improved_experiences[j]
+        orig = _find_original_entry_for_improved_index(
+            original_experiences, improved_experiences, j
+        )
+        if not isinstance(orig, dict) or not isinstance(impr, dict):
+            continue
+        orig_s = _clean_text(orig.get("summary"))
+        improved_s = _clean_text(impr.get("summary"))
+        if orig_s == improved_s:
+            continue
+        if orig_s and not improved_s:
+            change_type = "removed"
+        elif improved_s and not orig_s:
+            change_type = "added"
+        else:
+            change_type = "modified"
+        changes.append(
+            ResumeFieldDiff(
+                field_path=f"workExperience[{j}].summary",
+                field_type="experience",
+                change_type=change_type,
+                original_value=orig_s or None,
+                new_value=improved_s or None,
+                confidence="medium",
+            )
+        )
+
+    # Project summary / tech_stacks one-liner (matches change_manifest + LLM alias).
+    for j in range(len(improved_projects)):
+        impr = improved_projects[j]
+        orig = _find_original_entry_for_improved_index(
+            original_projects, improved_projects, j
+        )
+        if not isinstance(orig, dict) or not isinstance(impr, dict):
+            continue
+        orig_s = _clean_text(orig.get("summary") or orig.get("tech_stacks"))
+        improved_s = _clean_text(impr.get("summary") or impr.get("tech_stacks"))
+        if orig_s == improved_s:
+            continue
+        if orig_s and not improved_s:
+            change_type = "removed"
+        elif improved_s and not orig_s:
+            change_type = "added"
+        else:
+            change_type = "modified"
+        changes.append(
+            ResumeFieldDiff(
+                field_path=f"personalProjects[{j}].summary",
+                field_type="project",
+                change_type=change_type,
+                original_value=orig_s or None,
+                new_value=improved_s or None,
+                confidence="medium",
+            )
+        )
+
     max_experience_len = max(len(original_experiences), len(improved_experiences))
     confidences = DiffConfidence(added="medium", removed="low", modified="medium")
     for idx in range(max_experience_len):
