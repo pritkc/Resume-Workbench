@@ -222,6 +222,6 @@ describe('TailorPage', () => {
       })
     );
     expect(setImprovedData).toHaveBeenCalledWith(confirmedResult);
-    expect(push).toHaveBeenCalledWith('/resumes/tailored-123');
+    expect(push).toHaveBeenCalledWith('/builder?id=tailored-123');
   });
 });

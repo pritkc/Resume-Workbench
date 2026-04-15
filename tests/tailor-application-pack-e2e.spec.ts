@@ -168,7 +168,9 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   await expect(page.getByAltText("preview.png").first()).toBeVisible();
 
   await page.getByRole("button", { name: /confirm & save/i }).click();
-  await expect(page).toHaveURL(new RegExp(`/resumes/${tailoredResumeId}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/builder\\?id=${tailoredResumeId}$`),
+  );
   await expect(page.getByText("RenderCV Preview")).toBeVisible();
   await expect(page.getByAltText("preview.png")).toBeVisible();
 

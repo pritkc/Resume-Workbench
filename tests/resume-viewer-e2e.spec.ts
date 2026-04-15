@@ -13,8 +13,8 @@ import {
   themeSettings,
 } from "./playwright-fixtures";
 
-test.describe("resume viewer journey", () => {
-  test("loads preview and navigates between viewer, builder, and dashboard", async ({
+test.describe("resume URL redirect and builder journey", () => {
+  test("redirects /resumes/[id] to builder and navigates from dashboard", async ({
     page,
   }) => {
     const browserProblems = await collectBrowserProblems(page);
@@ -88,6 +88,9 @@ test.describe("resume viewer journey", () => {
 
     await page.goto(`${frontendBaseUrl}/resumes/${masterResumeId}`);
     await page.waitForLoadState("networkidle");
+    await expect(page).toHaveURL(
+      new RegExp(`/builder\\?id=${masterResumeId}$`),
+    );
     await expect(page.getByText("RenderCV Preview")).toBeVisible();
     await expect(page.getByAltText("preview.png").first()).toBeVisible({
       timeout: 20_000,
@@ -98,9 +101,6 @@ test.describe("resume viewer journey", () => {
     await expect(page.getByText(/master resume/i)).toBeVisible();
 
     await page.getByText(/master resume/i).first().click();
-    await expect(page).toHaveURL(new RegExp(`/resumes/${masterResumeId}$`));
-
-    await page.getByRole("button", { name: /edit resume/i }).click();
     await expect(page).toHaveURL(new RegExp(`/builder\\?id=${masterResumeId}$`));
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("switch", { name: "Raw YAML" })).toBeVisible();

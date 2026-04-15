@@ -455,7 +455,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 className="flex items-center gap-3 text-left transition-colors hover:text-blue-700"
-                onClick={() => router.push(`/resumes/${masterResumeId}`)}
+                onClick={() => router.push(`/builder?id=${masterResumeId}`)}
               >
                 <div className="flex h-12 w-12 items-center justify-center border border-black bg-blue-700 text-white">
                   <FileText className="h-5 w-5" />
@@ -650,7 +650,7 @@ export default function DashboardPage() {
                 return (
                   <Link
                     key={resume.resume_id}
-                    href={`/resumes/${resume.resume_id}`}
+                    href={`/builder?id=${resume.resume_id}`}
                     className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px] md:items-center"
                   >
                     <div className="min-w-0">
