@@ -185,7 +185,15 @@
       "resume": "CURRÍCULO",
       "coverLetter": "CARTA DE APRESENTAÇÃO",
       "outreach": "MENSAGEM DE CONTATO",
-      "jdMatch": "ANÁLISE DE VAGA"
+      "jdMatch": "ANÁLISE DE VAGA",
+      "additionalQuestions": "PERGUNTAS EXTRAS"
+    },
+    "additionalQuestions": {
+      "disabledReason": "É necessário o contexto da vaga. Abra um currículo personalizado (ou conclua a personalização na página Tailor) para ativar esta aba."
+    },
+    "generateClMessage": {
+      "toolbarLabel": "Gerar carta + mensagem",
+      "buttonAria": "Gerar carta de apresentação e mensagem de contato"
     },
     "footer": {
       "moduleLabel": "Módulo de Criação de Currículo",

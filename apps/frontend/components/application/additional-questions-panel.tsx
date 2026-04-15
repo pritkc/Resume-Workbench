@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -70,6 +70,12 @@ export function AdditionalQuestionsPanel({
     generationRunId ?? null
   );
 
+  /** Avoid depending on questionsText in loadExistingAnswers — that would refetch on every keystroke. */
+  const questionsTextRef = useRef(questionsText);
+  useEffect(() => {
+    questionsTextRef.current = questionsText;
+  }, [questionsText]);
+
   useEffect(() => {
     setLocalPackId(applicationPackId ?? null);
   }, [applicationPackId]);
@@ -105,7 +111,7 @@ export function AdditionalQuestionsPanel({
       setWarnings(response.data.warnings);
       setIsStale(response.data.is_stale);
       setStaleReason(response.data.stale_reason ?? null);
-      if (!questionsText.trim()) {
+      if (!questionsTextRef.current.trim()) {
         setQuestionsText(buildTextFromAnswers(response.data.answers));
       }
       if (response.data.application_pack_id) {
@@ -120,7 +126,7 @@ export function AdditionalQuestionsPanel({
     } finally {
       setGenerationState('idle');
     }
-  }, [canFetchExisting, disabled, jobId, localPackId, onDataChange, questionsText, resumeId]);
+  }, [canFetchExisting, disabled, jobId, localPackId, onDataChange, resumeId]);
 
   useEffect(() => {
     void loadExistingAnswers();

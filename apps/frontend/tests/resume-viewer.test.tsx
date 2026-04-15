@@ -4,7 +4,6 @@ import ResumeViewerPage from '@/app/(default)/resumes/[id]/page';
 
 const push = vi.fn();
 const fetchResume = vi.fn();
-const fetchJobDescription = vi.fn();
 const downloadResumePdf = vi.fn();
 const getResumePdfUrl = vi.fn();
 const deleteResume = vi.fn();
@@ -23,7 +22,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/api/resume', () => ({
   fetchResume: (...args: unknown[]) => fetchResume(...args),
-  fetchJobDescription: (...args: unknown[]) => fetchJobDescription(...args),
   downloadResumePdf: (...args: unknown[]) => downloadResumePdf(...args),
   getResumePdfUrl: (...args: unknown[]) => getResumePdfUrl(...args),
   deleteResume: (...args: unknown[]) => deleteResume(...args),
@@ -64,15 +62,10 @@ vi.mock('@/components/rendercv/render-preview-panel', () => ({
   RenderPreviewPanel: () => <div>render-preview-panel</div>,
 }));
 
-vi.mock('@/components/application/additional-questions-panel', () => ({
-  AdditionalQuestionsPanel: () => <div>additional-questions-panel</div>,
-}));
-
 describe('ResumeViewerPage', () => {
   beforeEach(() => {
     push.mockReset();
     fetchResume.mockReset();
-    fetchJobDescription.mockReset();
     downloadResumePdf.mockReset();
     getResumePdfUrl.mockReset();
     deleteResume.mockReset();
@@ -84,10 +77,6 @@ describe('ResumeViewerPage', () => {
     openUrlInNewTab.mockReset();
     buildResumePdfFilename.mockReset();
     buildResumePdfFilename.mockReturnValue('jane_doe_Q7K2MW.pdf');
-    fetchJobDescription.mockResolvedValue({
-      job_id: 'job-123',
-      content: 'Senior Backend Engineer role',
-    });
 
     fetchResume.mockResolvedValue({
       resume_id: 'resume-123',

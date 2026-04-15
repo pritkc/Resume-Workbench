@@ -185,7 +185,15 @@
       "resume": "CURRÍCULUM",
       "coverLetter": "CARTA",
       "outreach": "MENSAJE",
-      "jdMatch": "COINCIDENCIA JD"
+      "jdMatch": "COINCIDENCIA JD",
+      "additionalQuestions": "PREGUNTAS ADICIONALES"
+    },
+    "additionalQuestions": {
+      "disabledReason": "Se requiere contexto del puesto. Abre un currículum adaptado (o termina de adaptarlo en la página Tailor) para activar esta pestaña."
+    },
+    "generateClMessage": {
+      "toolbarLabel": "Generar carta + mensaje",
+      "buttonAria": "Generar carta de presentación y mensaje de contacto"
     },
     "footer": {
       "moduleLabel": "Módulo del constructor",

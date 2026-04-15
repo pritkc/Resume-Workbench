@@ -185,7 +185,15 @@
       "resume": "履歴書",
       "coverLetter": "カバーレター",
       "outreach": "連絡メール",
-      "jdMatch": "JD一致"
+      "jdMatch": "JD一致",
+      "additionalQuestions": "追加の質問"
+    },
+    "additionalQuestions": {
+      "disabledReason": "求人コンテキストが必要です。仕上げた職務向け履歴書を開くか、Tailor ページで調整を完了してください。"
+    },
+    "generateClMessage": {
+      "toolbarLabel": "CL・メッセージを生成",
+      "buttonAria": "カバーレターとアウトリーチ文を生成"
     },
     "footer": {
       "moduleLabel": "履歴書ビルダーモジュール",

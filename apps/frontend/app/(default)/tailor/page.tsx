@@ -26,7 +26,6 @@ import { Loader2, ArrowLeft, AlertTriangle, Settings } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 
 const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 
@@ -72,11 +71,6 @@ function isAbortError(error: unknown): boolean {
 }
 
 type GenerateStage = 'idle' | 'uploading' | 'tailoring';
-type AdditionalQuestionContext = {
-  jobId: string;
-  applicationPackId: string | null;
-  generationRunId: string | null;
-};
 
 type FrontendTimingSnapshot = {
   flowStartedAt: string;
@@ -186,8 +180,6 @@ export default function TailorPage() {
   const [showMissingDiffDialog, setShowMissingDiffDialog] = useState(false);
   const [missingDiffResult, setMissingDiffResult] = useState<ImprovedResult | null>(null);
   const [missingDiffError, setMissingDiffError] = useState<string | null>(null);
-  const [additionalQuestionContext, setAdditionalQuestionContext] =
-    useState<AdditionalQuestionContext | null>(null);
   const [generateStage, setGenerateStage] = useState<GenerateStage>('idle');
   const [isGenerationInFlight, setIsGenerationInFlight] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
@@ -416,11 +408,6 @@ export default function TailorPage() {
         previewRequestStartedAt,
         previewRequestEndedAt,
         previewRequestDurationMs,
-      });
-      setAdditionalQuestionContext({
-        jobId: resultWithTiming.data.job_id,
-        applicationPackId: resultWithTiming.data.application_pack_id ?? null,
-        generationRunId: resultWithTiming.data.generation_run_id ?? null,
       });
 
       if (!resultWithTiming?.data?.diff_summary || !resultWithTiming?.data?.detailed_changes) {
@@ -763,18 +750,6 @@ export default function TailorPage() {
             )}
           </div>
         </div>
-      </div>
-
-      <div className="mx-auto mt-4 w-full max-w-6xl">
-        <AdditionalQuestionsPanel
-          title="Additional Questions"
-          resumeId={masterResumeId}
-          jobId={additionalQuestionContext?.jobId ?? null}
-          applicationPackId={additionalQuestionContext?.applicationPackId ?? null}
-          generationRunId={additionalQuestionContext?.generationRunId ?? null}
-          disabled={!additionalQuestionContext}
-          disabledReason="Generate a tailored preview first, then paste custom application questions here."
-        />
       </div>
 
       {/* Diff preview modal */}

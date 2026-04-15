@@ -7,7 +7,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ResumeData } from '@/components/dashboard/resume-component';
 import {
   fetchResume,
-  fetchJobDescription,
   downloadResumePdf,
   getResumePdfUrl,
   deleteResume,
@@ -26,7 +25,6 @@ import {
   normalizeRenderThemeSettings,
   type RenderThemeSettings,
 } from '@/lib/types/render-theme';
-import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 
 type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed';
 
@@ -55,8 +53,6 @@ export default function ResumeViewerPage() {
   const [themeSettings, setThemeSettings] = useState<RenderThemeSettings>(
     DEFAULT_RENDER_THEME_SETTINGS
   );
-  const [applicationPackId, setApplicationPackId] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
   const tRef = useRef(t);
   tRef.current = t;
 
@@ -79,20 +75,7 @@ export default function ResumeViewerPage() {
         // Capture title for editable display (always set to clear stale state)
         setResumeTitle(data.title ?? null);
         setResumeCode(data.resume_code ?? null);
-        setApplicationPackId(data.application_pack_id ?? null);
         setThemeSettings(normalizeRenderThemeSettings(data.theme_settings));
-
-        if (data.parent_id || data.application_pack_id) {
-          try {
-            const job = await fetchJobDescription(resumeId);
-            setJobId(job.job_id);
-          } catch (jobError) {
-            console.warn('Could not resolve job context for additional questions:', jobError);
-            setJobId(null);
-          }
-        } else {
-          setJobId(null);
-        }
 
         // Prioritize processed_resume if available (structured JSON)
         if (data.processed_resume) {
@@ -397,19 +380,6 @@ export default function ResumeViewerPage() {
               <p className="mt-2 font-mono text-sm uppercase">{themeSettings.page_size}</p>
             </div>
           </div>
-
-          {!isMasterResume && (
-            <div className="mb-4 no-print">
-              <AdditionalQuestionsPanel
-                title="Additional Questions"
-                resumeId={resumeId}
-                jobId={jobId}
-                applicationPackId={applicationPackId}
-                disabled={!jobId}
-                disabledReason="Job context is required before generating custom question answers."
-              />
-            </div>
-          )}
 
           <div className="resume-print border-2 border-black bg-[#E5E5E0] shadow-[8px_8px_0px_0px_#000000]">
             <RenderPreviewPanel resumeId={resumeId} settings={themeSettings} />

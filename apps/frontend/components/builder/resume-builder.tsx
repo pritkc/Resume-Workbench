@@ -56,6 +56,7 @@ import {
   type ResumeDraftResponse,
 } from '@/lib/api/resume';
 import { JDComparisonView } from './jd-comparison-view';
+import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 import { RegenerateWizard } from './regenerate-wizard';
 import { useRegenerateWizard } from '@/hooks/use-regenerate-wizard';
 import { useTranslations } from '@/lib/i18n';
@@ -88,7 +89,7 @@ import {
 } from '@/lib/utils/rendercv-fields';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
 
-type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match';
+type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match' | 'additional-questions';
 type EditorSection = 'cv' | 'design' | 'locale' | 'settings';
 type EditorMode = 'visual' | 'raw';
 type PaneMode = 'editor' | 'split' | 'preview';
@@ -700,6 +701,9 @@ const ResumeBuilderContent = () => {
 
   // JD comparison state
   const [jobDescription, setJobDescription] = useState<string | null>(null);
+  /** Job + pack context for application question answers (tailored resumes). */
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [applicationPackId, setApplicationPackId] = useState<string | null>(null);
 
   // AI Regenerate wizard
   const regenerateWizard = useRegenerateWizard({
@@ -869,6 +873,7 @@ const ResumeBuilderContent = () => {
           const data = await fetchResume(resumeId);
           // Track if this is a tailored resume (has parent_id)
           setIsTailoredResume(Boolean(data.parent_id));
+          setApplicationPackId(data.application_pack_id ?? null);
           // Store resume title for downloads
           setResumeTitle(data.title ?? null);
           setResumeCode(data.resume_code ?? null);
@@ -935,6 +940,10 @@ const ResumeBuilderContent = () => {
 
       // Priority 2: Improved Data from Context (Tailor Flow)
       if (improvedPreview) {
+        if (improvedData?.data) {
+          setApplicationPackId(improvedData.data.application_pack_id ?? null);
+          setJobId(improvedData.data.job_id ?? null);
+        }
         const nextResumeData = normalizeResumeSkills(improvedPreview);
         setResumeData(nextResumeData);
         setLastSavedData(nextResumeData);
@@ -995,6 +1004,7 @@ const ResumeBuilderContent = () => {
   }, [
     buildDraftSnapshot,
     improvedCoverLetter,
+    improvedData?.data,
     improvedOutreach,
     improvedPreview,
     improvedThemeSettings,
@@ -1012,17 +1022,20 @@ const ResumeBuilderContent = () => {
           const data = await fetchJobDescription(resumeId);
           if (!cancelled) {
             setJobDescription(data.content);
+            setJobId(data.job_id);
           }
         } catch (err) {
           // JD might not be available for older resumes
           if (!cancelled) {
             console.warn('Could not fetch job description:', err);
             setJobDescription(null);
+            setJobId(null);
           }
         }
       } else {
         // Clear job description when switching to non-tailored resume
         setJobDescription(null);
+        setJobId(null);
       }
     };
 
@@ -1501,6 +1514,12 @@ const ResumeBuilderContent = () => {
   const mobilePaneMode: Exclude<PaneMode, 'split'> = paneMode === 'preview' ? 'preview' : 'editor';
   const showEditorPane = isDesktop ? paneMode !== 'preview' : mobilePaneMode === 'editor';
   const showPreviewPane = isDesktop ? paneMode !== 'editor' : mobilePaneMode === 'preview';
+  const showAdditionalQuestionsInEditor =
+    activeTab === 'additional-questions' &&
+    (isDesktop ? paneMode !== 'preview' : mobilePaneMode === 'editor');
+  const showAdditionalQuestionsInPreview =
+    activeTab === 'additional-questions' &&
+    (isDesktop ? paneMode === 'preview' : mobilePaneMode === 'preview');
   const editorPaneWidth =
     isDesktop && paneMode === 'split'
       ? `${paneRatio}%`
@@ -1556,6 +1575,12 @@ const ResumeBuilderContent = () => {
       label: t('builder.previewTabs.jdMatch'),
       shortLabel: t('builder.previewTabs.jdMatch'),
       disabled: !jobDescription,
+    },
+    {
+      id: 'additional-questions',
+      label: t('builder.previewTabs.additionalQuestions'),
+      shortLabel: t('builder.previewTabs.additionalQuestions'),
+      disabled: !jobId,
     },
   ] satisfies Array<{
     id: TabId;
@@ -1737,6 +1762,29 @@ const ResumeBuilderContent = () => {
                     <Download className="h-3.5 w-3.5" />
                     {isDownloading ? t('common.generating') : t('common.download')}
                   </Button>
+                  {isTailoredResume && resumeId && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={handleGenerateAuxiliaryPackage}
+                      disabled={isGeneratingAuxiliaryPackage}
+                      aria-label={t('builder.generateClMessage.buttonAria')}
+                      title={t('builder.generateClMessage.buttonAria')}
+                      className="gap-1.5"
+                    >
+                      {isGeneratingAuxiliaryPackage ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          {t('common.generating')}
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5" />
+                          {t('builder.generateClMessage.toolbarLabel')}
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </>
               )}
 
@@ -2003,6 +2051,18 @@ const ResumeBuilderContent = () => {
                       </div>
                     </div>
                   )}
+
+                  {showAdditionalQuestionsInEditor && (
+                    <AdditionalQuestionsPanel
+                      title={t('builder.previewTabs.additionalQuestions')}
+                      resumeId={resumeId}
+                      jobId={jobId}
+                      applicationPackId={applicationPackId}
+                      generationRunId={null}
+                      disabled={!jobId}
+                      disabledReason={t('builder.additionalQuestions.disabledReason')}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -2077,6 +2137,20 @@ const ResumeBuilderContent = () => {
 
                 {activeTab === 'jd-match' && jobDescription && (
                   <JDComparisonView jobDescription={jobDescription} resumeData={resumeData} />
+                )}
+
+                {showAdditionalQuestionsInPreview && (
+                  <div className="p-3 md:p-4">
+                    <AdditionalQuestionsPanel
+                      title={t('builder.previewTabs.additionalQuestions')}
+                      resumeId={resumeId}
+                      jobId={jobId}
+                      applicationPackId={applicationPackId}
+                      generationRunId={null}
+                      disabled={!jobId}
+                      disabledReason={t('builder.additionalQuestions.disabledReason')}
+                    />
+                  </div>
                 )}
               </div>
             </div>

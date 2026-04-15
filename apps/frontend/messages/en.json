@@ -185,7 +185,15 @@
       "resume": "RESUME",
       "coverLetter": "COVER LETTER",
       "outreach": "OUTREACH MAIL",
-      "jdMatch": "JD MATCH"
+      "jdMatch": "JD MATCH",
+      "additionalQuestions": "ADDITIONAL QUESTIONS"
+    },
+    "additionalQuestions": {
+      "disabledReason": "Job context is required. Open a tailored resume (or finish tailoring from the Tailor page) to enable this tab."
+    },
+    "generateClMessage": {
+      "toolbarLabel": "Generate CL + Message",
+      "buttonAria": "Generate cover letter and outreach message"
     },
     "footer": {
       "moduleLabel": "Resume Builder Module",

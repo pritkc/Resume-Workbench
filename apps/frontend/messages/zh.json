@@ -185,7 +185,15 @@
       "resume": "简历",
       "coverLetter": "求职信",
       "outreach": "联系邮件",
-      "jdMatch": "JD 匹配"
+      "jdMatch": "JD 匹配",
+      "additionalQuestions": "附加问题"
+    },
+    "additionalQuestions": {
+      "disabledReason": "需要职位上下文。请打开已针对职位调整的简历，或在 Tailor 页面完成调整后再使用此标签。"
+    },
+    "generateClMessage": {
+      "toolbarLabel": "生成求职信与消息",
+      "buttonAria": "生成求职信与 outreach 消息"
     },
     "footer": {
       "moduleLabel": "简历编辑模块",
