@@ -60,6 +60,8 @@ export {
   type PromptConfigUpdate,
   type PromptCatalogEntry,
   type PromptCatalogResponse,
+  type PromptCatalogSection,
+  type PromptCatalogPolicy,
 } from './config';
 
 // LLM observability

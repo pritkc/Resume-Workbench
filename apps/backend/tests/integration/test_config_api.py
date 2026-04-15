@@ -299,6 +299,14 @@ class TestPromptCatalog:
             "enrichment_regenerate_group",
         }.issubset(ids)
 
+        tailoring = next(row for row in data["prompts"] if row["id"] == "resume_generate_full")
+        assert tailoring.get("sections")
+        assert len(tailoring["sections"]) == 2
+        assert {s["id"] for s in tailoring["sections"]} == {
+            "tailoring_system_message",
+            "tailoring_user_message",
+        }
+
 
 class TestResetDatabase:
     """POST /api/v1/config/reset"""

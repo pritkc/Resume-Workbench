@@ -721,6 +721,34 @@
       "description": "选择用于简历定制的默认提示词。",
       "defaultLabel": "默认定制提示词"
     },
+    "promptCatalog": {
+      "pageTitle": "LLM 提示词目录",
+      "metaDescription": "只读查看发送给 LLM 的全部提示模板。简历定制会分组展示：思路、写作标准、ATS 规则、各强度模式与运行时注入字段。",
+      "backToSettings": "返回设置",
+      "settingsCardTitle": "LLM 提示词目录",
+      "settingsCardBody": "在同一页面查看所有系统与用户提示。结构化分区展示简历定制如何拆分「思路 / 标准 / 模式 / 占位符」，便于后续按字段编辑。",
+      "openCatalog": "打开提示词目录",
+      "loading": "正在加载目录…",
+      "loadError": "无法加载提示词目录。",
+      "empty": "未返回任何提示。",
+      "promptCount": "{count} 条提示",
+      "structuredSections": "结构化分解",
+      "rawTemplates": "原始模板（合并）",
+      "systemPrompt": "系统提示",
+      "userPrompt": "用户提示",
+      "policyLabels": {
+        "system": "系统",
+        "user_editable_future": "模板",
+        "user_choice": "用户模式",
+        "runtime_injected": "运行时"
+      },
+      "policyTitle": {
+        "system": "随应用发布；当前版本不可由用户编辑。",
+        "user_editable_future": "未来可支持按用户或管理员编辑。",
+        "user_choice": "由用户选择（例如定制强度）。",
+        "runtime_injected": "每次请求时由职位数据与会话状态填充。"
+      }
+    },
     "footer": {
       "status": {
         "checking": "检查中...",

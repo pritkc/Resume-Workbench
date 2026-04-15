@@ -721,6 +721,34 @@
       "description": "履歴書カスタマイズで使う既定のプロンプトを選択します。",
       "defaultLabel": "既定のカスタマイズプロンプト"
     },
+    "promptCatalog": {
+      "pageTitle": "LLM プロンプトカタログ",
+      "metaDescription": "LLM に送るすべてのプロンプトテンプレートを閲覧専用で表示します。履歴書向け調整ではアプローチ、文体基準、ATS、モード別バンドル、実行時フィールドを分けて表示します。",
+      "backToSettings": "設定に戻る",
+      "settingsCardTitle": "LLM プロンプトカタログ",
+      "settingsCardBody": "システム／ユーザープロンプトを一覧できます。構造化セクションで、調整時にどの部分が固定・ユーザー選択・実行時注入かを把握しやすくします。",
+      "openCatalog": "プロンプトカタログを開く",
+      "loading": "カタログを読み込み中…",
+      "loadError": "プロンプトカタログを読み込めませんでした。",
+      "empty": "プロンプトがありません。",
+      "promptCount": "プロンプト {count} 件",
+      "structuredSections": "構造化ビュー",
+      "rawTemplates": "生テンプレート（結合）",
+      "systemPrompt": "システムプロンプト",
+      "userPrompt": "ユーザープロンプト",
+      "policyLabels": {
+        "system": "システム",
+        "user_editable_future": "テンプレート",
+        "user_choice": "ユーザーモード",
+        "runtime_injected": "実行時"
+      },
+      "policyTitle": {
+        "system": "アプリ同梱。このリリースではユーザー編集不可。",
+        "user_editable_future": "将来、ユーザー／管理者向け編集の候補。",
+        "user_choice": "ユーザーが選択（例: 調整の強さ）。",
+        "runtime_injected": "求人データとセッション状態からリクエストごとに埋め込み。"
+      }
+    },
     "footer": {
       "status": {
         "checking": "確認中...",

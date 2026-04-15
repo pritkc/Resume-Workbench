@@ -721,6 +721,34 @@
       "description": "Elige el prompt predeterminado para personalizar el currículum.",
       "defaultLabel": "Prompt de personalización predeterminado"
     },
+    "promptCatalog": {
+      "pageTitle": "Catálogo de prompts del LLM",
+      "metaDescription": "Vista de solo lectura de todas las plantillas de prompt enviadas al LLM. La personalización del CV agrupa enfoque, estándares de redacción, reglas ATS, modos por intensidad y campos en tiempo de ejecución.",
+      "backToSettings": "Volver a ajustes",
+      "settingsCardTitle": "Catálogo de prompts del LLM",
+      "settingsCardBody": "Inspecciona todos los prompts de sistema y de usuario en un solo lugar. Las secciones muestran cómo se aíslan el enfoque, los estándares, los modos y los marcadores de tiempo de ejecución.",
+      "openCatalog": "Abrir catálogo de prompts",
+      "loading": "Cargando catálogo…",
+      "loadError": "No se pudo cargar el catálogo de prompts.",
+      "empty": "No se devolvieron prompts.",
+      "promptCount": "{count} prompts",
+      "structuredSections": "Desglose estructurado",
+      "rawTemplates": "Plantillas en bruto (combinadas)",
+      "systemPrompt": "Prompt de sistema",
+      "userPrompt": "Prompt de usuario",
+      "policyLabels": {
+        "system": "Sistema",
+        "user_editable_future": "Plantilla",
+        "user_choice": "Modo de usuario",
+        "runtime_injected": "Tiempo de ejecución"
+      },
+      "policyTitle": {
+        "system": "Incluido en la aplicación; no editable por el usuario en esta versión.",
+        "user_editable_future": "Candidato a edición por usuario o administrador en el futuro.",
+        "user_choice": "Elegido por el usuario (por ejemplo intensidad de personalización).",
+        "runtime_injected": "Rellenado con datos del puesto y el estado de la sesión en cada solicitud."
+      }
+    },
     "footer": {
       "status": {
         "checking": "Comprobando...",

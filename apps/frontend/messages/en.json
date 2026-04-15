@@ -721,6 +721,34 @@
       "description": "Choose the default prompt used for resume tailoring.",
       "defaultLabel": "Default tailoring prompt"
     },
+    "promptCatalog": {
+      "pageTitle": "LLM Prompt Catalog",
+      "metaDescription": "Read-only view of every prompt template sent to the LLM. Resume tailoring groups approach, writing standards, ATS rules, per-mode bundles, and runtime fields so you can see what is fixed, user-selected, or injected per request.",
+      "backToSettings": "Back to settings",
+      "settingsCardTitle": "LLM Prompt Catalog",
+      "settingsCardBody": "Inspect all system and user prompts in one place. Structured sections show how resume tailoring isolates approach, writing standards, intensity modes, and runtime placeholders—useful before we add per-field editing.",
+      "openCatalog": "Open prompt catalog",
+      "loading": "Loading catalog…",
+      "loadError": "Could not load the prompt catalog.",
+      "empty": "No prompts returned.",
+      "promptCount": "{count} prompts",
+      "structuredSections": "Structured breakdown",
+      "rawTemplates": "Raw templates (combined)",
+      "systemPrompt": "System prompt",
+      "userPrompt": "User prompt",
+      "policyLabels": {
+        "system": "System",
+        "user_editable_future": "Template",
+        "user_choice": "User mode",
+        "runtime_injected": "Runtime"
+      },
+      "policyTitle": {
+        "system": "Shipped with the app; not user-editable in this release.",
+        "user_editable_future": "Candidate for per-user or admin editing in a future release.",
+        "user_choice": "Chosen by the user (for example tailoring intensity).",
+        "runtime_injected": "Filled from job data and session state at request time."
+      }
+    },
     "footer": {
       "status": {
         "checking": "Checking...",

@@ -371,6 +371,21 @@ export interface PromptConfigUpdate {
   default_prompt_id?: string;
 }
 
+export type PromptCatalogPolicy =
+  | 'system'
+  | 'user_editable_future'
+  | 'user_choice'
+  | 'runtime_injected';
+
+export interface PromptCatalogSection {
+  id: string;
+  label: string;
+  note?: string | null;
+  policy?: PromptCatalogPolicy | null;
+  content?: string | null;
+  children: PromptCatalogSection[];
+}
+
 export interface PromptCatalogEntry {
   id: string;
   operation: string;
@@ -379,6 +394,7 @@ export interface PromptCatalogEntry {
   system_prompt?: string | null;
   user_prompt?: string | null;
   notes?: string | null;
+  sections?: PromptCatalogSection[] | null;
 }
 
 export interface PromptCatalogResponse {

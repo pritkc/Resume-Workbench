@@ -721,6 +721,34 @@
       "description": "Escolha o prompt padrão usado para personalização de currículo.",
       "defaultLabel": "Prompt padrão de personalização"
     },
+    "promptCatalog": {
+      "pageTitle": "Catálogo de prompts do LLM",
+      "metaDescription": "Visualização somente leitura de todos os templates de prompt enviados ao LLM. A personalização do currículo agrupa abordagem, padrões de escrita, regras ATS, modos por intensidade e campos em tempo de execução.",
+      "backToSettings": "Voltar às configurações",
+      "settingsCardTitle": "Catálogo de prompts do LLM",
+      "settingsCardBody": "Veja todos os prompts de sistema e de usuário em um só lugar. Seções estruturadas mostram o que é fixo, escolhido pelo usuário ou injetado em tempo de execução.",
+      "openCatalog": "Abrir catálogo de prompts",
+      "loading": "Carregando catálogo…",
+      "loadError": "Não foi possível carregar o catálogo de prompts.",
+      "empty": "Nenhum prompt retornado.",
+      "promptCount": "{count} prompts",
+      "structuredSections": "Detalhamento estruturado",
+      "rawTemplates": "Templates brutos (combinados)",
+      "systemPrompt": "Prompt de sistema",
+      "userPrompt": "Prompt do usuário",
+      "policyLabels": {
+        "system": "Sistema",
+        "user_editable_future": "Template",
+        "user_choice": "Modo do usuário",
+        "runtime_injected": "Tempo de execução"
+      },
+      "policyTitle": {
+        "system": "Enviado com o app; não editável pelo usuário nesta versão.",
+        "user_editable_future": "Candidato a edição por usuário ou administrador no futuro.",
+        "user_choice": "Escolhido pelo usuário (por exemplo intensidade da personalização).",
+        "runtime_injected": "Preenchido com dados da vaga e estado da sessão a cada solicitação."
+      }
+    },
     "footer": {
       "status": {
         "checking": "Verificando...",

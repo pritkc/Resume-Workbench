@@ -9,7 +9,6 @@ import {
   testLlmConnection,
   fetchCLIProxyModels,
   fetchPromptConfig,
-  fetchPromptCatalog,
   updatePromptConfig,
   clearAllApiKeys,
   resetDatabase,
@@ -22,7 +21,6 @@ import {
   type LLMProvider,
   type LLMHealthCheck,
   type PromptOption,
-  type PromptCatalogEntry,
 } from '@/lib/api/config';
 import { API_URL } from '@/lib/api/client';
 import { getVersionString } from '@/lib/config/version';
@@ -152,7 +150,6 @@ export default function SettingsPage() {
   const [promptConfigLoading, setPromptConfigLoading] = useState(false);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const [defaultPromptId, setDefaultPromptId] = useState('keywords');
-  const [promptCatalog, setPromptCatalog] = useState<PromptCatalogEntry[]>([]);
 
   // Danger Zone state
   const [showClearApiKeysDialog, setShowClearApiKeysDialog] = useState(false);
@@ -299,10 +296,9 @@ export default function SettingsPage() {
 
     async function loadConfig() {
       try {
-        const [llmConfig, promptConfig, promptCatalogResponse] = await Promise.all([
+        const [llmConfig, promptConfig] = await Promise.all([
           fetchLlmConfig().catch(() => null),
           fetchPromptConfig().catch(() => null),
-          fetchPromptCatalog().catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -350,9 +346,6 @@ export default function SettingsPage() {
         if (promptConfig) {
           setPromptOptions(promptConfig.prompt_options || []);
           setDefaultPromptId(promptConfig.default_prompt_id || 'keywords');
-        }
-        if (promptCatalogResponse) {
-          setPromptCatalog(promptCatalogResponse.prompts || []);
         }
 
         setStatus('idle');
@@ -1495,72 +1488,23 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className={sectionCardClass}>
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-gray-700">
-                  LLM Prompt Catalog
-                </h3>
-                <span className="font-mono text-[10px] uppercase text-gray-500">
-                  {promptCatalog.length} prompts
-                </span>
-              </div>
-              <p className="mt-2 text-[13px] text-gray-600">
-                Read-only visibility for all prompt templates currently sent to LLM providers.
-              </p>
-
-              <div className="mt-3 space-y-2">
-                {promptCatalog.length === 0 ? (
-                  <p className="font-mono text-[11px] text-gray-500">
-                    Prompt catalog unavailable right now.
+            <div className={`${sectionCardClass} py-3`}>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="max-w-2xl">
+                  <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
+                    {t('settings.promptCatalog.settingsCardTitle')}
                   </p>
-                ) : (
-                  promptCatalog.map((entry) => (
-                    <details key={entry.id} className="border border-black/15 bg-white px-3 py-2">
-                      <summary className="cursor-pointer list-none">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-gray-900">
-                            {entry.id}
-                          </span>
-                          <span className="font-mono text-[10px] uppercase text-gray-500">
-                            {entry.operation}
-                          </span>
-                          {entry.version && (
-                            <span className="font-mono text-[10px] uppercase text-gray-500">
-                              {entry.version}
-                            </span>
-                          )}
-                          <span className="font-mono text-[10px] uppercase text-gray-500">
-                            {entry.read_only ? 'Read-only' : 'Editable'}
-                          </span>
-                        </div>
-                      </summary>
+                  <p className="mt-1 text-[13px] text-gray-700">
+                    {t('settings.promptCatalog.settingsCardBody')}
+                  </p>
+                </div>
 
-                      <div className="mt-3 space-y-3">
-                        {entry.notes && <p className="text-[12px] text-gray-600">{entry.notes}</p>}
-                        {entry.system_prompt && (
-                          <div>
-                            <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">
-                              System Prompt
-                            </p>
-                            <pre className="mt-1 whitespace-pre-wrap border border-black/20 bg-[#FAFAF7] p-2 text-[11px] text-gray-800">
-                              {entry.system_prompt}
-                            </pre>
-                          </div>
-                        )}
-                        {entry.user_prompt && (
-                          <div>
-                            <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">
-                              User Prompt
-                            </p>
-                            <pre className="mt-1 whitespace-pre-wrap border border-black/20 bg-[#FAFAF7] p-2 text-[11px] text-gray-800">
-                              {entry.user_prompt}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    </details>
-                  ))
-                )}
+                <Link href="/settings/prompt-catalog">
+                  <Button variant="outline" size="xs" className="gap-1.5">
+                    <FileText className="w-4 h-4" />
+                    {t('settings.promptCatalog.openCatalog')}
+                  </Button>
+                </Link>
               </div>
             </div>
           </section>

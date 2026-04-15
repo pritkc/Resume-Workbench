@@ -1449,6 +1449,20 @@ class PromptConfigResponse(BaseModel):
     prompt_options: list[PromptOption]
 
 
+PromptCatalogPolicy = Literal["system", "user_editable_future", "user_choice", "runtime_injected"]
+
+
+class PromptCatalogSection(BaseModel):
+    """Hierarchical slice of a prompt for catalog UI (read-only; editing is future work)."""
+
+    id: str
+    label: str
+    note: str | None = None
+    policy: PromptCatalogPolicy | None = None
+    content: str | None = None
+    children: list[PromptCatalogSection] = Field(default_factory=list)
+
+
 class PromptCatalogEntry(BaseModel):
     """Read-only catalog entry for an LLM prompt template."""
 
@@ -1459,6 +1473,7 @@ class PromptCatalogEntry(BaseModel):
     system_prompt: str | None = None
     user_prompt: str | None = None
     notes: str | None = None
+    sections: list[PromptCatalogSection] | None = None
 
 
 class PromptCatalogResponse(BaseModel):

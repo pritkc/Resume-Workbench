@@ -45,6 +45,7 @@ from app.schemas import (
     ResetDatabaseRequest,
 )
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
+from app.prompts.catalog_sections import build_resume_tailoring_catalog_sections
 from app.prompts.enrichment import (
     ANALYZE_RESUME_PROMPT,
     ENHANCE_DESCRIPTION_PROMPT,
@@ -237,6 +238,7 @@ def _get_prompt_catalog() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("tailoring_user"),
             system_prompt=TAILORING_SYSTEM_PROMPT,
             user_prompt=IMPROVE_RESUME_PROMPT,
+            sections=build_resume_tailoring_catalog_sections(),
         ),
         PromptCatalogEntry(
             id="cover_letter_outreach_generate",
