@@ -217,4 +217,15 @@ async def extract_job_keywords(job_description: str) -> dict[str, Any]:
 
     # Merge: raw takes precedence; legacy only fills gaps not present in raw
     merged = {**legacy, **raw}
+
+    # Raw may include nested role/company objects but also empty flat keys that
+    # overwrote legacy strings — re-apply non-empty legacy scalars for consumers
+    # that read core_title / company_name / location directly.
+    intelligence_merged = build_jd_intelligence(merged)
+    reflat = intelligence_merged.to_legacy_keywords()
+    for key in ("core_title", "company_name", "location"):
+        current = merged.get(key)
+        if current in (None, "") and reflat.get(key):
+            merged[key] = reflat[key]
+
     return merged

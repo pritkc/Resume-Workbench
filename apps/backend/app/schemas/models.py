@@ -1531,6 +1531,14 @@ class GenerateContentResponse(BaseModel):
     message: str
 
 
+class GenerateAuxiliaryPackageResponse(BaseModel):
+    """Response for merged cover-letter + outreach generation."""
+
+    cover_letter: str
+    outreach_message: str
+    message: str
+
+
 # Health/Status Models
 class HealthResponse(BaseModel):
     """Health check response."""
@@ -1642,6 +1650,71 @@ class LLMCallSummaryResponse(BaseModel):
 
     request_id: str
     data: LLMCallSummary
+
+
+class GenerationRunTimingRecord(BaseModel):
+    """Flattened timing/usage metrics for one generation run."""
+
+    generation_run_id: str
+    run_kind: str
+    status: str
+    prompt_id: str | None = None
+    application_pack_id: str | None = None
+    original_resume_id: str | None = None
+    tailored_resume_id: str | None = None
+    job_id: str | None = None
+    created_at: str | None = None
+    completed_at: str | None = None
+    total_duration_ms: int | None = None
+    total_events: int = 0
+    llm_total_calls: int | None = None
+    llm_latency_total_ms: int | None = None
+    llm_total_tokens: int | None = None
+    llm_estimated_cost_usd: float | None = None
+
+
+class GenerationRunTimingListResponse(BaseModel):
+    """List response for generation run timing rows."""
+
+    request_id: str
+    data: list[GenerationRunTimingRecord]
+
+
+class GenerationRunProcessTiming(BaseModel):
+    """Aggregated process duration for a generation run."""
+
+    process_key: str
+    host_event: str
+    sub_event: str | None = None
+    duration_ms: int
+
+
+class GenerationRunTimingDetailRecord(BaseModel):
+    """Detailed timing record grouped under one generation run."""
+
+    generation_run_id: str
+    run_kind: str
+    status: str
+    prompt_id: str | None = None
+    application_pack_id: str | None = None
+    original_resume_id: str | None = None
+    tailored_resume_id: str | None = None
+    job_id: str | None = None
+    created_at: str | None = None
+    completed_at: str | None = None
+    total_duration_ms: int | None = None
+    llm_total_calls: int | None = None
+    llm_latency_total_ms: int | None = None
+    llm_total_tokens: int | None = None
+    llm_estimated_cost_usd: float | None = None
+    process_timings: list[GenerationRunProcessTiming] = Field(default_factory=list)
+
+
+class GenerationRunTimingDetailListResponse(BaseModel):
+    """List response for detailed generation run timing rows."""
+
+    request_id: str
+    data: list[GenerationRunTimingDetailRecord]
 
 
 # Diff-Based Improvement Models

@@ -134,3 +134,110 @@ class TestSummarizeLLMCalls:
             trace_id="trace-123",
             request_scope=None,
         )
+
+
+class TestListGenerationRunTiming:
+    """GET /api/v1/llm/runs/timing"""
+
+    @patch("app.routers.llm.db")
+    async def test_list_generation_run_timing_returns_tabular_rows(self, mock_db, client):
+        mock_db.list_generation_runs.return_value = [
+            {
+                "generation_run_id": "run-123",
+                "run_kind": "application_pack_preview",
+                "status": "completed",
+                "prompt_id": "keywords",
+                "application_pack_id": "pack-123",
+                "original_resume_id": "res-master",
+                "tailored_resume_id": None,
+                "job_id": "job-123",
+                "created_at": "2026-04-14T20:00:00Z",
+                "completed_at": "2026-04-14T20:00:40Z",
+                "result_payload": {
+                    "pipeline_timing": {
+                        "total_duration_ms": 40_790,
+                        "entries": [
+                            {"host_event": "frontend", "duration_ms": 40_790},
+                            {"host_event": "llm", "duration_ms": 12_060},
+                        ],
+                    },
+                    "llm_summary": {
+                        "total_calls": 2,
+                        "latency_total_ms": 27_410,
+                        "total_tokens": 2_100,
+                        "estimated_cost_usd": 0.0123,
+                    },
+                },
+            }
+        ]
+
+        async with client:
+            response = await client.get(
+                "/api/v1/llm/runs/timing",
+                params={"run_kind": "application_pack_preview", "status": "completed", "limit": "20"},
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["request_id"]
+        row = payload["data"][0]
+        assert row["generation_run_id"] == "run-123"
+        assert row["total_duration_ms"] == 40_790
+        assert row["total_events"] == 2
+        assert row["llm_total_calls"] == 2
+        assert row["llm_latency_total_ms"] == 27_410
+        assert row["llm_total_tokens"] == 2_100
+        assert row["llm_estimated_cost_usd"] == 0.0123
+        mock_db.list_generation_runs.assert_called_once_with(
+            run_kind="application_pack_preview",
+            status="completed",
+            limit=20,
+        )
+
+
+class TestListGenerationRunTimingDetailed:
+    """GET /api/v1/llm/runs/timing-detailed"""
+
+    @patch("app.routers.llm.db")
+    async def test_list_generation_run_timing_detailed_groups_processes(self, mock_db, client):
+        mock_db.list_generation_runs.return_value = [
+            {
+                "generation_run_id": "run-123",
+                "run_kind": "application_pack_preview",
+                "status": "completed",
+                "result_payload": {
+                    "pipeline_timing": {
+                        "entries": [
+                            {"host_event": "llm", "sub_event": "resume_generate_full", "duration_ms": 12_000},
+                            {"host_event": "llm", "sub_event": "resume_generate_full", "duration_ms": 1_000},
+                            {"host_event": "rendercv", "sub_event": "render_and_store_preview_artifacts", "duration_ms": 900},
+                        ]
+                    },
+                    "llm_summary": {"total_calls": 2, "total_tokens": 1500},
+                },
+            }
+        ]
+
+        async with client:
+            response = await client.get(
+                "/api/v1/llm/runs/timing-detailed",
+                params={"run_kind": "application_pack_preview", "limit": "10"},
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["request_id"]
+        row = payload["data"][0]
+        assert row["generation_run_id"] == "run-123"
+        assert row["total_duration_ms"] == 13_900
+        assert row["llm_total_calls"] == 2
+        assert row["llm_total_tokens"] == 1500
+        assert row["process_timings"][0]["process_key"] == "llm / resume_generate_full"
+        assert row["process_timings"][0]["duration_ms"] == 13_000
+        assert row["process_timings"][1]["process_key"] == "rendercv / render_and_store_preview_artifacts"
+        assert row["process_timings"][1]["duration_ms"] == 900
+        mock_db.list_generation_runs.assert_called_once_with(
+            run_kind="application_pack_preview",
+            status=None,
+            limit=10,
+        )

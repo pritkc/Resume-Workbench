@@ -74,7 +74,7 @@ describe('DiffPreviewModal', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('shows verification guidance when new skill items are introduced', () => {
+  it('groups skill changes into compact summaries', () => {
     render(
       <DiffPreviewModal
         isOpen
@@ -86,7 +86,8 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('Verify 1 newly added skill item.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Skills/i })).toBeInTheDocument();
+    expect(screen.getByText('+ Added (1): Go')).toBeInTheDocument();
   });
 
   it('toggles section visibility on header click', () => {
@@ -101,12 +102,12 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('new summary')).toBeInTheDocument();
+    expect(screen.getByText('new')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Summary/i }));
     expect(screen.queryByText('new summary')).not.toBeInTheDocument();
   });
 
-  it('renders change attribution when breakdown is provided', () => {
+  it('keeps attribution metadata compact and toggleable', () => {
     render(
       <DiffPreviewModal
         isOpen
@@ -120,10 +121,14 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('Change Attribution')).toBeInTheDocument();
+    expect(screen.queryByText('Change Attribution')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Pipeline: 2 AI-applied, 1 cleanup-only, 0 rejected.')
-    ).toBeInTheDocument();
+      screen.queryByText('Pipeline: 2 AI-applied, 1 cleanup-only, 0 rejected.')
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.getByText('Needs verification')).toBeInTheDocument();
     expect(screen.getAllByText('AI').length).toBeGreaterThan(0);
   });
 
@@ -213,7 +218,7 @@ describe('DiffPreviewModal', () => {
     expect(onReject).toHaveBeenCalledTimes(1);
   });
 
-  it('renders pipeline timing entries when provided', () => {
+  it('does not render pipeline timing panel in review modal', () => {
     render(
       <DiffPreviewModal
         isOpen
@@ -248,9 +253,83 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('Pipeline Timing')).toBeInTheDocument();
-    expect(screen.getByText('frontend / total_flow')).toBeInTheDocument();
-    expect(screen.getByText('llm / resume_generate_full')).toBeInTheDocument();
-    expect(screen.getAllByText('1.50m').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Pipeline Timing')).not.toBeInTheDocument();
+    expect(screen.queryByText('frontend / total_flow')).not.toBeInTheDocument();
+  });
+
+  it('suppresses cleanup comparison when cleanup count is zero', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        detailedChanges={[
+          {
+            field_path: 'summary',
+            field_type: 'summary',
+            change_type: 'modified',
+            original_value: 'old summary',
+            new_value: 'new cleaned summary',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'summary',
+            action: 'replace',
+            value: 'new summary',
+            reason: 'Updated summary',
+          },
+        ]}
+        changeBreakdown={{ ...changeBreakdown, cleanup_only_changes: 0 }}
+      />
+    );
+
+    expect(screen.queryByText('System cleanup on the same item')).not.toBeInTheDocument();
+  });
+
+  it('shows system cleanup only when a manifest path exactly matches the diff row', () => {
+    const ragSnippet = '1.2M member RAG system';
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        detailedChanges={[
+          {
+            field_path: 'workExperience[0].description[0]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Before bullet zero',
+            new_value: 'Final bullet zero',
+            confidence: 'medium',
+          },
+          {
+            field_path: 'workExperience[0].description[1]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Before bullet one',
+            new_value: 'Final bullet one',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'workExperience[0].description[0]',
+            action: 'replace',
+            value: `Partnered with engineering ${ragSnippet} tail`,
+            reason: 'Tailored',
+          },
+        ]}
+        changeBreakdown={{ ...changeBreakdown, cleanup_only_changes: 1 }}
+      />
+    );
+
+    expect(screen.queryAllByText('System cleanup on the same item')).toHaveLength(1);
+    expect(screen.getByText(new RegExp(ragSnippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
   });
 });

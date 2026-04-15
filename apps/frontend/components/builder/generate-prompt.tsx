@@ -15,6 +15,8 @@ export interface GeneratePromptProps {
   onGenerate: () => void;
   /** Whether this is a tailored resume (has job context) */
   isTailoredResume: boolean;
+  /** Optional override for the generate button label */
+  buttonLabel?: string;
   /** Additional class names */
   className?: string;
 }
@@ -24,6 +26,7 @@ export function GeneratePrompt({
   isGenerating,
   onGenerate,
   isTailoredResume,
+  buttonLabel,
   className,
 }: GeneratePromptProps) {
   const { t } = useTranslations();
@@ -84,7 +87,7 @@ export function GeneratePrompt({
         ) : (
           <>
             <Sparkles className="w-4 h-4" />
-            {t('builder.generatePrompt.generateButton', { title })}
+            {buttonLabel || t('builder.generatePrompt.generateButton', { title })}
           </>
         )}
       </Button>

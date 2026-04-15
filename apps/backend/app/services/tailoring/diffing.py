@@ -219,6 +219,33 @@ def _extract_description_list(entry: Any) -> list[str]:
     return _normalize_string_list(entry.get("highlights", []), "entry.highlights")
 
 
+def _find_original_entry_for_improved_index(
+    original_items: list[dict[str, Any]],
+    improved_items: list[dict[str, Any]],
+    improved_index: int,
+) -> dict[str, Any] | None:
+    """Map ``improved_items[improved_index]`` back to the same logical row in ``original_items``.
+
+    Uses ``id`` when both resumes use stable entry ids (typical for structured resumes). If the
+    improved row has an id that does not exist in the original list, returns ``None`` (treat as a
+    new row). If entries have no ids, falls back to positional alignment at ``improved_index``.
+    """
+    if improved_index < 0 or improved_index >= len(improved_items):
+        return None
+    impr = improved_items[improved_index]
+    if not isinstance(impr, dict):
+        return None
+    iid = impr.get("id")
+    if iid is not None:
+        for orig in original_items:
+            if isinstance(orig, dict) and orig.get("id") == iid:
+                return orig
+        return None
+    if improved_index < len(original_items) and isinstance(original_items[improved_index], dict):
+        return original_items[improved_index]
+    return None
+
+
 def _append_list_changes(
     changes: list[ResumeFieldDiff],
     field_path: str,
@@ -227,15 +254,20 @@ def _append_list_changes(
     improved_items: list[str],
     confidences: DiffConfidence,
 ) -> None:
+    """Emit one diff per list item with indexed paths (e.g. description[2]).
+
+    Matches ``build_change_manifest`` path shape so UI attribution and bullet
+    labels align with the change manifest.
+    """
     matcher = SequenceMatcher(a=original_items, b=improved_items, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
             continue
         if tag == "delete":
-            for item in original_items[i1:i2]:
+            for offset, item in enumerate(original_items[i1:i2], start=i1):
                 changes.append(
                     ResumeFieldDiff(
-                        field_path=field_path,
+                        field_path=f"{field_path}[{offset}]",
                         field_type=field_type,
                         change_type="removed",
                         original_value=item,
@@ -243,10 +275,10 @@ def _append_list_changes(
                     )
                 )
         elif tag == "insert":
-            for item in improved_items[j1:j2]:
+            for offset, item in enumerate(improved_items[j1:j2], start=j1):
                 changes.append(
                     ResumeFieldDiff(
-                        field_path=field_path,
+                        field_path=f"{field_path}[{offset}]",
                         field_type=field_type,
                         change_type="added",
                         new_value=item,
@@ -267,7 +299,7 @@ def _append_list_changes(
                 if original_value is not None and new_value is not None:
                     changes.append(
                         ResumeFieldDiff(
-                            field_path=field_path,
+                            field_path=f"{field_path}[{i1 + offset}]",
                             field_type=field_type,
                             change_type="modified",
                             original_value=original_value,
@@ -278,7 +310,7 @@ def _append_list_changes(
                 elif new_value is not None:
                     changes.append(
                         ResumeFieldDiff(
-                            field_path=field_path,
+                            field_path=f"{field_path}[{j1 + offset}]",
                             field_type=field_type,
                             change_type="added",
                             new_value=new_value,
@@ -288,7 +320,7 @@ def _append_list_changes(
                 elif original_value is not None:
                     changes.append(
                         ResumeFieldDiff(
-                            field_path=field_path,
+                            field_path=f"{field_path}[{i1 + offset}]",
                             field_type=field_type,
                             change_type="removed",
                             original_value=original_value,
@@ -398,8 +430,13 @@ def calculate_resume_diff(
     original_experiences = original.get("workExperience", [])
     improved_experiences = improved.get("workExperience", [])
 
-    # Detect experience title/position changes specifically before generic entry diff
-    for idx, (orig, impr) in enumerate(zip(original_experiences, improved_experiences)):
+    # Detect experience title/position changes (pair by entry id when present so reordering
+    # does not compare unrelated jobs).
+    for j in range(len(improved_experiences)):
+        impr = improved_experiences[j]
+        orig = _find_original_entry_for_improved_index(
+            original_experiences, improved_experiences, j
+        )
         if not isinstance(orig, dict) or not isinstance(impr, dict):
             continue
         orig_pos = _first_text(orig, "position", "title")
@@ -407,7 +444,7 @@ def calculate_resume_diff(
         if orig_pos and improved_pos and orig_pos != improved_pos:
             changes.append(
                 ResumeFieldDiff(
-                    field_path=f"workExperience[{idx}].position",
+                    field_path=f"workExperience[{j}].position",
                     field_type="experience_title",
                     change_type="modified",
                     original_value=orig_pos,
@@ -416,10 +453,14 @@ def calculate_resume_diff(
                 )
             )
 
-    # Detect project name changes specifically before generic entry diff
+    # Detect project name changes (pair by entry id when present).
     original_projects = original.get("personalProjects", [])
     improved_projects = improved.get("personalProjects", [])
-    for idx, (orig, impr) in enumerate(zip(original_projects, improved_projects)):
+    for j in range(len(improved_projects)):
+        impr = improved_projects[j]
+        orig = _find_original_entry_for_improved_index(
+            original_projects, improved_projects, j
+        )
         if not isinstance(orig, dict) or not isinstance(impr, dict):
             continue
         orig_name = _clean_text(orig.get("name"))
@@ -427,7 +468,7 @@ def calculate_resume_diff(
         if orig_name and improved_name and orig_name != improved_name:
             changes.append(
                 ResumeFieldDiff(
-                    field_path=f"personalProjects[{idx}].name",
+                    field_path=f"personalProjects[{j}].name",
                     field_type="project_title",
                     change_type="modified",
                     original_value=orig_name,
@@ -439,17 +480,46 @@ def calculate_resume_diff(
     max_experience_len = max(len(original_experiences), len(improved_experiences))
     confidences = DiffConfidence(added="medium", removed="low", modified="medium")
     for idx in range(max_experience_len):
-        original_entry = (
-            original_experiences[idx] if idx < len(original_experiences) else None
-        )
         improved_entry = (
             improved_experiences[idx] if idx < len(improved_experiences) else None
         )
+        if improved_entry is not None:
+            original_entry = _find_original_entry_for_improved_index(
+                original_experiences, improved_experiences, idx
+            )
+        else:
+            original_entry = (
+                original_experiences[idx] if idx < len(original_experiences) else None
+            )
         if not original_entry and not improved_entry:
             continue
         _append_list_changes(
             changes,
             field_path=f"workExperience[{idx}].description",
+            field_type="description",
+            original_items=_extract_description_list(original_entry),
+            improved_items=_extract_description_list(improved_entry),
+            confidences=confidences,
+        )
+
+    max_project_len = max(len(original_projects), len(improved_projects))
+    for idx in range(max_project_len):
+        improved_entry = (
+            improved_projects[idx] if idx < len(improved_projects) else None
+        )
+        if improved_entry is not None:
+            original_entry = _find_original_entry_for_improved_index(
+                original_projects, improved_projects, idx
+            )
+        else:
+            original_entry = (
+                original_projects[idx] if idx < len(original_projects) else None
+            )
+        if not original_entry and not improved_entry:
+            continue
+        _append_list_changes(
+            changes,
+            field_path=f"personalProjects[{idx}].description",
             field_type="description",
             original_items=_extract_description_list(original_entry),
             improved_items=_extract_description_list(improved_entry),

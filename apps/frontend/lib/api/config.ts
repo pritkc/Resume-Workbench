@@ -84,6 +84,51 @@ export interface CLIProxyModelsResponse {
   provider_filter: CLIProxyProviderFilter;
 }
 
+export interface GenerationRunTimingRow {
+  generation_run_id: string;
+  run_kind: string;
+  status: string;
+  prompt_id: string | null;
+  application_pack_id: string | null;
+  original_resume_id: string | null;
+  tailored_resume_id: string | null;
+  job_id: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+  total_duration_ms: number | null;
+  total_events: number;
+  llm_total_calls: number | null;
+  llm_latency_total_ms: number | null;
+  llm_total_tokens: number | null;
+  llm_estimated_cost_usd: number | null;
+}
+
+export interface GenerationRunProcessTiming {
+  process_key: string;
+  host_event: string;
+  sub_event: string | null;
+  duration_ms: number;
+}
+
+export interface GenerationRunTimingDetailRow {
+  generation_run_id: string;
+  run_kind: string;
+  status: string;
+  prompt_id: string | null;
+  application_pack_id: string | null;
+  original_resume_id: string | null;
+  tailored_resume_id: string | null;
+  job_id: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+  total_duration_ms: number | null;
+  llm_total_calls: number | null;
+  llm_latency_total_ms: number | null;
+  llm_total_tokens: number | null;
+  llm_estimated_cost_usd: number | null;
+  process_timings: GenerationRunProcessTiming[];
+}
+
 // Fetch full LLM configuration
 export async function fetchLlmConfig(): Promise<LLMConfig> {
   const res = await apiFetch('/config/llm-api-key', { credentials: 'include' });
@@ -173,6 +218,44 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
   }
 
   return res.json();
+}
+
+export async function fetchGenerationRunTimingLogs(options?: {
+  runKind?: string;
+  status?: string;
+  limit?: number;
+}): Promise<GenerationRunTimingRow[]> {
+  const params = new URLSearchParams();
+  if (options?.runKind) params.set('run_kind', options.runKind);
+  if (options?.status) params.set('status', options.status);
+  params.set('limit', String(options?.limit ?? 100));
+
+  const res = await apiFetch(`/llm/runs/timing?${params.toString()}`, { credentials: 'include' });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch run timing logs (status ${res.status}).`);
+  }
+  const payload = await res.json();
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+export async function fetchGenerationRunTimingDetails(options?: {
+  runKind?: string;
+  status?: string;
+  limit?: number;
+}): Promise<GenerationRunTimingDetailRow[]> {
+  const params = new URLSearchParams();
+  if (options?.runKind) params.set('run_kind', options.runKind);
+  if (options?.status) params.set('status', options.status);
+  params.set('limit', String(options?.limit ?? 50));
+
+  const res = await apiFetch(`/llm/runs/timing-detailed?${params.toString()}`, {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch run timing details (status ${res.status}).`);
+  }
+  const payload = await res.json();
+  return Array.isArray(payload?.data) ? payload.data : [];
 }
 
 // Provider display names and default models

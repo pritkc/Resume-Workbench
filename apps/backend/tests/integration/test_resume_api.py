@@ -785,6 +785,50 @@ class TestListResumes:
         assert item["target_role"] == "Senior Backend Engineer"
         assert item["target_location"] == "Mountain View, CA"
 
+    @patch("app.routers.resumes.db")
+    async def test_list_uses_job_keywords_when_job_columns_empty(self, mock_db, client):
+        """Dashboard merge must use JD + job_keywords like preview/confirm, not only DB columns."""
+        mock_db.list_resumes.return_value = [
+            {
+                "resume_id": "tailored-1",
+                "is_master": False,
+                "application_pack_id": "pack-123",
+                "created_at": "2026-01-02",
+                "updated_at": "2026-01-02",
+                "title": None,
+            }
+        ]
+        mock_db.list_application_packs.return_value = [
+            {
+                "pack_id": "pack-123",
+                "job_id": "job-123",
+                "company": None,
+                "role": None,
+                "location": None,
+            }
+        ]
+        mock_db.get_job.return_value = {
+            "job_id": "job-123",
+            "content": "We are hiring a Backend Engineer at Acme Corp in Mountain View, CA.",
+            "company": None,
+            "role": None,
+            "location": None,
+            "job_keywords": {
+                "core_title": "Backend Engineer",
+                "company_name": "Acme Corp",
+                "location": "Mountain View, CA",
+            },
+        }
+
+        async with client:
+            resp = await client.get("/api/v1/resumes/list")
+
+        assert resp.status_code == 200
+        item = resp.json()["data"][0]
+        assert item["target_company"] == "Acme Corp"
+        assert item["target_role"] == "Backend Engineer"
+        assert item["target_location"] == "Mountain View, CA"
+
 
 class TestDeleteResume:
     """DELETE /api/v1/resumes/{resume_id}"""
@@ -845,6 +889,38 @@ class TestUpdateOutreachMessage:
         async with client:
             resp = await client.patch("/api/v1/resumes/res-123/outreach-message", json={"content": "Hi, I saw your posting..."})
         assert resp.status_code == 200
+
+
+class TestGenerateAuxiliaryPackage:
+    """POST /api/v1/resumes/{resume_id}/generate-auxiliary-package"""
+
+    @patch("app.routers.resumes.generate_cover_letter_and_outreach", new_callable=AsyncMock)
+    @patch("app.routers.resumes.db")
+    async def test_generate_auxiliary_package_overwrites_both_fields(
+        self, mock_db, mock_generate_auxiliary, client, mock_resume_record
+    ):
+        tailored_resume = {**mock_resume_record, "parent_id": "master-1", "is_master": False}
+        mock_db.get_resume.return_value = tailored_resume
+        mock_db.get_improvement_by_tailored_resume.return_value = {"job_id": "job-123"}
+        mock_db.get_job.return_value = {"job_id": "job-123", "content": "Senior Backend Engineer"}
+        mock_generate_auxiliary.return_value = ("Tailored CL", "Tailored Outreach")
+        mock_db.update_resume.return_value = {
+            **tailored_resume,
+            "cover_letter": "Tailored CL",
+            "outreach_message": "Tailored Outreach",
+        }
+
+        async with client:
+            resp = await client.post("/api/v1/resumes/res-123/generate-auxiliary-package")
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["cover_letter"] == "Tailored CL"
+        assert payload["outreach_message"] == "Tailored Outreach"
+        mock_db.update_resume.assert_called_once_with(
+            "res-123",
+            {"cover_letter": "Tailored CL", "outreach_message": "Tailored Outreach"},
+        )
 
 
 class TestRetryProcessing:

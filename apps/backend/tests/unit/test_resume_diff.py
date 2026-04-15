@@ -57,6 +57,7 @@ def test_description_modified_count_is_strict() -> None:
         c for c in changes if c.field_type == "description" and c.change_type == "modified"
     ]
     assert len(description_changes) == 1
+    assert description_changes[0].field_path == "workExperience[0].description[1]"
     assert summary.descriptions_modified == 1
 
 
@@ -306,6 +307,29 @@ def test_project_title_change_detected() -> None:
     assert title_changes[0].new_value == "My App — Production-Grade Platform"
     assert title_changes[0].field_path == "personalProjects[0].name"
     assert not any(c.field_type == "project" for c in changes)
+
+
+def test_project_title_pairs_by_id_when_order_changes() -> None:
+    original = {
+        "personalProjects": [
+            {"id": 101, "name": "MOLE Docs | OSS", "description": []},
+            {"id": 102, "name": "First2Fetch | Jobs", "description": []},
+        ]
+    }
+    improved = {
+        "personalProjects": [
+            {"id": 102, "name": "Node.js Job Aggregator", "description": []},
+            {"id": 101, "name": "MOLE Docs | OSS", "description": []},
+        ]
+    }
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    title_changes = [c for c in changes if c.field_type == "project_title"]
+    assert len(title_changes) == 1
+    assert title_changes[0].field_path == "personalProjects[0].name"
+    assert title_changes[0].original_value == "First2Fetch | Jobs"
+    assert title_changes[0].new_value == "Node.js Job Aggregator"
 
 
 def test_unchanged_titles_produce_no_title_diff() -> None:

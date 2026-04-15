@@ -40,8 +40,8 @@ interface ParsedChangePath {
 }
 
 interface CleanupNote {
-  aiValue: string;
-  finalValue: string;
+  oldFragment: string;
+  newFragment: string;
 }
 
 interface DisplayChange {
@@ -75,8 +75,24 @@ function canonicalizePath(path: string): string {
     .replace(/(?:\[\])+$/, '');
 }
 
-function normalizeText(value: string): string {
-  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+/** Normalize known path aliases so diff rows and manifest paths compare equal. */
+function normalizeComparablePath(path: string): string {
+  let p = path.trim();
+  if (p.startsWith('experience[')) {
+    p = `workExperience${p.slice('experience'.length)}`;
+  }
+  if (p.startsWith('projects[')) {
+    p = `personalProjects${p.slice('projects'.length)}`;
+  }
+  return p;
+}
+
+function pathsMatchForManifest(diffPath: string, manifestPath: string): boolean {
+  return normalizeComparablePath(diffPath) === normalizeComparablePath(manifestPath);
+}
+
+function normalizeTextForCompare(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
 }
 
 function extractFirstIndex(path: string, patterns: RegExp[]): number | undefined {
@@ -246,7 +262,8 @@ function extractManifestValue(candidate: ResumeChange, fieldPath: string): strin
 
 function buildDisplayChanges(
   detailedChanges: ResumeFieldDiff[],
-  changeManifest: ResumeChange[] | undefined
+  changeManifest: ResumeChange[] | undefined,
+  includeSystemCleanupNotes: boolean
 ): DisplayChange[] {
   const manifestCandidates: ManifestCandidate[] = (changeManifest ?? []).map((change) => ({
     raw: change,
@@ -260,13 +277,24 @@ function buildDisplayChanges(
     const parsed = parseChangePath(change);
     const canonicalDiffPath = canonicalizePath(change.field_path);
 
-    let bestCandidate: ManifestCandidate | undefined;
-    let bestScore = 0;
+    let exactCandidate: ManifestCandidate | undefined;
     for (const candidate of manifestCandidates) {
-      const score = matchScore(canonicalDiffPath, candidate.canonicalPath);
-      if (score > bestScore) {
-        bestScore = score;
-        bestCandidate = candidate;
+      if (pathsMatchForManifest(change.field_path, candidate.raw.path)) {
+        exactCandidate = candidate;
+        break;
+      }
+    }
+
+    let bestCandidate: ManifestCandidate | undefined = exactCandidate;
+    let bestScore = exactCandidate ? 4 : 0;
+
+    if (!exactCandidate) {
+      for (const candidate of manifestCandidates) {
+        const score = matchScore(canonicalDiffPath, candidate.canonicalPath);
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = candidate;
+        }
       }
     }
 
@@ -277,18 +305,27 @@ function buildDisplayChanges(
         : 'system'
       : 'ai';
 
+    // "System cleanup" compares the manifest row for *this* path to the final text.
+    // Fuzzy path matching used to collapse every bullet to the same canonical path,
+    // reusing one manifest entry (wrong "old" text on every row).
     let cleanupNote: CleanupNote | undefined;
-    if (bestCandidate && change.new_value) {
-      const aiValue = extractManifestValue(bestCandidate.raw, change.field_path);
+    if (includeSystemCleanupNotes && exactCandidate && change.new_value) {
+      const aiValue = extractManifestValue(exactCandidate.raw, change.field_path);
+      const finalText = change.new_value;
       if (
         aiValue &&
-        aiValue.trim().length > 0 &&
-        normalizeText(aiValue) !== normalizeText(change.new_value)
+        normalizeTextForCompare(aiValue) !== normalizeTextForCompare(finalText)
       ) {
-        cleanupNote = {
-          aiValue,
-          finalValue: change.new_value,
-        };
+        const focusedDiff = extractFocusedWordChange(aiValue, finalText);
+        if (
+          focusedDiff &&
+          (focusedDiff.oldFragment.length > 0 || focusedDiff.newFragment.length > 0)
+        ) {
+          cleanupNote = {
+            oldFragment: focusedDiff.oldFragment,
+            newFragment: focusedDiff.newFragment,
+          };
+        }
       }
     }
 
@@ -408,21 +445,89 @@ function buildOrderedSections(displayChanges: DisplayChange[]): OrderedSection[]
   return sections;
 }
 
-function formatDuration(durationMs: number): string {
-  if (durationMs >= 60_000) {
-    return `${(durationMs / 60_000).toFixed(2)}m`;
+/** Trim a shared prefix/suffix inside two strings (character-level). */
+function refineCharacterFocus(before: string, after: string): { oldFragment: string; newFragment: string } {
+  let i = 0;
+  const minLen = Math.min(before.length, after.length);
+  while (i < minLen && before[i] === after[i]) {
+    i += 1;
   }
-  if (durationMs >= 1_000) {
-    return `${(durationMs / 1_000).toFixed(2)}s`;
+  let j = 0;
+  while (
+    j < before.length - i &&
+    j < after.length - i &&
+    before[before.length - 1 - j] === after[after.length - 1 - j]
+  ) {
+    j += 1;
   }
-  return `${durationMs}ms`;
+  return {
+    oldFragment: before.slice(i, before.length - j).trim(),
+    newFragment: after.slice(i, after.length - j).trim(),
+  };
 }
 
-function formatTimingLabel(hostEvent: string, subEvent?: string | null): string {
-  if (!subEvent) {
-    return hostEvent;
+function extractFocusedWordChange(
+  beforeValue: string,
+  afterValue: string
+): { oldFragment: string; newFragment: string } | null {
+  const beforeTokens = beforeValue.trim().split(/\s+/).filter(Boolean);
+  const afterTokens = afterValue.trim().split(/\s+/).filter(Boolean);
+
+  if (beforeTokens.length === 0 && afterTokens.length === 0) {
+    return null;
   }
-  return `${hostEvent} / ${subEvent}`;
+
+  let prefix = 0;
+  while (
+    prefix < beforeTokens.length &&
+    prefix < afterTokens.length &&
+    beforeTokens[prefix] === afterTokens[prefix]
+  ) {
+    prefix += 1;
+  }
+
+  let suffix = 0;
+  while (
+    suffix < beforeTokens.length - prefix &&
+    suffix < afterTokens.length - prefix &&
+    beforeTokens[beforeTokens.length - 1 - suffix] === afterTokens[afterTokens.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+
+  let beforeFragment = beforeTokens
+    .slice(prefix, Math.max(prefix, beforeTokens.length - suffix))
+    .join(' ');
+  let afterFragment = afterTokens
+    .slice(prefix, Math.max(prefix, afterTokens.length - suffix))
+    .join(' ');
+
+  if (
+    beforeFragment.length > 48 &&
+    afterFragment.length > 48 &&
+    (beforeFragment !== beforeValue.trim() || afterFragment !== afterValue.trim())
+  ) {
+    const refined = refineCharacterFocus(beforeFragment, afterFragment);
+    if (refined.oldFragment || refined.newFragment) {
+      beforeFragment = refined.oldFragment || '(removed)';
+      afterFragment = refined.newFragment || '(added)';
+    }
+  }
+
+  return {
+    oldFragment: beforeFragment || '(removed)',
+    newFragment: afterFragment || '(added)',
+  };
+}
+
+function displayValuesForModifiedField(original: string | null | undefined, next: string | null | undefined) {
+  const o = original ?? '';
+  const n = next ?? '';
+  const focused = extractFocusedWordChange(o, n);
+  if (!focused) {
+    return { before: o || '(empty)', after: n || '(empty)' };
+  }
+  return { before: focused.oldFragment, after: focused.newFragment };
 }
 
 export function DiffPreviewModal({
@@ -431,16 +536,15 @@ export function DiffPreviewModal({
   onClose,
   onReject,
   onConfirm,
-  diffSummary,
   detailedChanges,
   changeBreakdown,
   changeManifest,
-  pipelineTiming,
   artifacts,
   errorMessage,
 }: DiffPreviewModalProps) {
   const { t } = useTranslations();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [showMetaDetails, setShowMetaDetails] = useState(false);
 
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -464,18 +568,18 @@ export function DiffPreviewModal({
   }, [isConfirming]);
 
   const displayChanges = useMemo(
-    () => (detailedChanges ? buildDisplayChanges(detailedChanges, changeManifest) : []),
-    [detailedChanges, changeManifest]
+    () =>
+      detailedChanges
+        ? buildDisplayChanges(
+            detailedChanges,
+            changeManifest,
+            (changeBreakdown?.cleanup_only_changes ?? 0) > 0
+          )
+        : [],
+    [changeBreakdown?.cleanup_only_changes, detailedChanges, changeManifest]
   );
 
   const orderedSections = useMemo(() => buildOrderedSections(displayChanges), [displayChanges]);
-  const timingEntries = useMemo(
-    () =>
-      (pipelineTiming?.entries ?? [])
-        .slice()
-        .sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)),
-    [pipelineTiming]
-  );
 
   useEffect(() => {
     if (orderedSections.length === 0) {
@@ -547,8 +651,6 @@ export function DiffPreviewModal({
     system: displayChanges.filter((item) => item.source === 'system').length,
   };
 
-  const hasManifest = Boolean(changeManifest && changeManifest.length > 0);
-
   const toggleSection = (sectionKey: string) => {
     const next = new Set(expandedSections);
     if (next.has(sectionKey)) {
@@ -577,107 +679,32 @@ export function DiffPreviewModal({
         </DialogHeader>
 
         <div className="mt-3 border-2 border-black bg-white px-3 py-2">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-2 h-2 bg-[#1D4ED8]"></div>
-              <span className="font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
-                Change Summary
-              </span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              <InlineStat label="Total" value={stats.total} variant="info" />
+              <InlineStat label="AI" value={stats.ai} variant="success" />
+              <InlineStat label="System" value={stats.system} variant="warning" />
             </div>
-            <div className="flex flex-wrap gap-2 flex-1">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => setShowMetaDetails((value) => !value)}
+            >
+              {showMetaDetails ? 'Hide details' : 'Show details'}
+            </Button>
+          </div>
+          {showMetaDetails && (
+            <div className="mt-2 flex flex-wrap gap-2">
               <InlineStat label="Summary" value={stats.summaryChanged} variant="info" />
               <InlineStat label="Experience" value={stats.experienceChanged} variant="info" />
               <InlineStat label="Projects" value={stats.projectChanged} variant="info" />
               <InlineStat label="Education" value={stats.educationChanged} variant="info" />
               <InlineStat label="Skills +" value={stats.skillsAdded} variant="success" />
               <InlineStat label="Skills -" value={stats.skillsRemoved} variant="danger" />
+              <InlineStat label="Needs verification" value={stats.verify} variant="warning" />
             </div>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <InlineStat label="Total" value={stats.total} variant="info" />
-            <InlineStat label="Needs verification" value={stats.verify} variant="warning" />
-          </div>
-          {typeof diffSummary?.total_changes === 'number' &&
-            diffSummary.total_changes !== stats.total && (
-              <p className="mt-2 font-mono text-[11px] text-gray-500">
-                Showing itemized diff count ({stats.total}) because aggregate summary did not match.
-              </p>
-            )}
-        </div>
-
-        <div className="mt-2 border-2 border-black bg-white px-3 py-2">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-2 h-2 bg-[#15803D]"></div>
-              <span className="font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
-                Change Attribution
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2 flex-1">
-              <InlineStat label="AI" value={stats.ai} variant="success" />
-              <InlineStat label="System" value={stats.system} variant="warning" />
-            </div>
-          </div>
-          <p className="mt-2 font-mono text-[11px] text-gray-500">
-            {hasManifest
-              ? 'Attribution uses manifest path matching plus same-entry title inference.'
-              : 'Manifest not available for this run; attribution defaults to AI.'}
-          </p>
-          {changeBreakdown && (
-            <p className="mt-1 font-mono text-[11px] text-gray-500">
-              Pipeline: {changeBreakdown.llm_applied_changes} AI-applied,{' '}
-              {changeBreakdown.cleanup_only_changes} cleanup-only,{' '}
-              {changeBreakdown.llm_rejected_changes} rejected.
-            </p>
           )}
         </div>
-
-        {pipelineTiming && timingEntries.length > 0 && (
-          <div className="mt-2 border-2 border-black bg-white px-3 py-2">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="w-2 h-2 bg-[#0F766E]"></div>
-                <span className="font-mono text-xs font-bold uppercase tracking-wider text-gray-600">
-                  Pipeline Timing
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2 flex-1">
-                <InlineStat
-                  label="Total"
-                  value={formatDuration(pipelineTiming.total_duration_ms)}
-                  variant="info"
-                />
-                <InlineStat label="Events" value={timingEntries.length} variant="info" />
-              </div>
-            </div>
-            <div className="mt-2 max-h-44 overflow-y-auto border border-black/10">
-              {timingEntries.map((entry, index) => (
-                <div
-                  key={`${entry.host_event}-${entry.sub_event ?? 'none'}-${index}`}
-                  className="flex items-center justify-between gap-3 border-b border-black/10 px-2 py-1 last:border-b-0"
-                >
-                  <span className="font-mono text-[11px] text-gray-700">
-                    {formatTimingLabel(entry.host_event, entry.sub_event)}
-                  </span>
-                  <span className="font-mono text-[11px] font-bold text-[#0F766E]">
-                    {formatDuration(entry.duration_ms)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {stats.verify > 0 && (
-          <div className="mt-2 border border-[#F97316] bg-[#FFF7ED] px-3 py-2">
-            <p className="font-mono text-xs font-bold text-[#C2410C]">
-              Verify {stats.verify} newly added skill item{stats.verify === 1 ? '' : 's'}.
-            </p>
-            <p className="font-mono text-xs text-[#C2410C] mt-1">
-              These were not present in the base resume skills list.
-            </p>
-          </div>
-        )}
 
         {errorMessage && (
           <div className="mt-4 border-2 border-red-600 bg-red-50 p-3 font-mono text-xs text-red-700">
@@ -698,9 +725,13 @@ export function DiffPreviewModal({
               isExpanded={expandedSections.has(section.key)}
               onToggle={() => toggleSection(section.key)}
             >
-              {section.items.map((item, index) => (
-                <ChangeItem key={`${section.key}-${index}`} item={item} />
-              ))}
+              {section.key === 'skills' ? (
+                <SkillsGroupedView items={section.items} />
+              ) : (
+                section.items.map((item, index) => (
+                  <ChangeItem key={`${section.key}-${index}`} item={item} />
+                ))
+              )}
             </ChangeSection>
           ))}
         </div>
@@ -830,28 +861,101 @@ function ChangeItem({ item }: { item: DisplayChange }) {
         <DiffValueBox label="Before" value={change.original_value} tone="removed" />
       )}
 
-      {change.change_type === 'modified' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <DiffValueBox label="Before" value={change.original_value} tone="removed" />
-          <DiffValueBox label="After" value={change.new_value} tone="added" />
-        </div>
-      )}
+      {change.change_type === 'modified' && (() => {
+        const { before, after } = displayValuesForModifiedField(
+          change.original_value,
+          change.new_value
+        );
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <DiffValueBox label="Before" value={before} tone="removed" />
+            <DiffValueBox label="After" value={after} tone="added" />
+          </div>
+        );
+      })()}
 
       {item.cleanupNote && (
         <div className="border border-[#92400E] bg-[#FFFBEB] p-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#92400E] mb-1">
             System cleanup on the same item
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <DiffValueBox label="AI draft" value={item.cleanupNote.aiValue} tone="added" />
-            <DiffValueBox
-              label="After system cleanup"
-              value={item.cleanupNote.finalValue}
-              tone="system"
-            />
-          </div>
+          <p className="font-mono text-xs text-[#78350F] whitespace-pre-wrap break-words">
+            <span className="font-bold">old</span>: {item.cleanupNote.oldFragment}
+            {' -> '}
+            <span className="font-bold">new</span>: {item.cleanupNote.newFragment}
+          </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function SkillsGroupedView({ items }: { items: DisplayChange[] }) {
+  const grouped = useMemo(() => {
+    const buckets = new Map<
+      string,
+      {
+        added: Set<string>;
+        removed: Set<string>;
+        modified: Set<string>;
+      }
+    >();
+
+    for (const item of items) {
+      const groupLabel = item.contextLabel.replace(/^Skills group:\s*/, '') || 'Skills';
+      if (!buckets.has(groupLabel)) {
+        buckets.set(groupLabel, { added: new Set(), removed: new Set(), modified: new Set() });
+      }
+      const bucket = buckets.get(groupLabel);
+      if (!bucket) continue;
+
+      if (item.change.change_type === 'added' && item.change.new_value) {
+        bucket.added.add(item.change.new_value);
+      } else if (item.change.change_type === 'removed' && item.change.original_value) {
+        bucket.removed.add(item.change.original_value);
+      } else if (item.change.change_type === 'modified') {
+        const { before, after } = displayValuesForModifiedField(
+          item.change.original_value,
+          item.change.new_value
+        );
+        bucket.modified.add(`${before} -> ${after}`);
+      }
+    }
+
+    return Array.from(buckets.entries()).map(([group, value]) => ({
+      group,
+      added: Array.from(value.added),
+      removed: Array.from(value.removed),
+      modified: Array.from(value.modified),
+    }));
+  }, [items]);
+
+  return (
+    <div className="space-y-3">
+      {grouped.map((entry) => (
+        <div key={entry.group} className="border border-black/20 p-3 bg-white">
+          <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-700">
+            {entry.group}
+          </p>
+          <div className="mt-2 space-y-1">
+            {entry.added.length > 0 && (
+              <p className="font-mono text-xs text-[#14532D]">
+                + Added ({entry.added.length}): {entry.added.join(', ')}
+              </p>
+            )}
+            {entry.removed.length > 0 && (
+              <p className="font-mono text-xs text-[#7F1D1D]">
+                - Removed ({entry.removed.length}): {entry.removed.join(', ')}
+              </p>
+            )}
+            {entry.modified.length > 0 && (
+              <p className="font-mono text-xs text-[#1D4ED8]">
+                ~ Updated ({entry.modified.length}): {entry.modified.join(' | ')}
+              </p>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

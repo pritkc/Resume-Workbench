@@ -45,8 +45,7 @@ import {
   fetchResume,
   updateCoverLetter,
   updateOutreachMessage,
-  generateCoverLetter,
-  generateOutreachMessage,
+  generateAuxiliaryPackage,
   fetchJobDescription,
   normalizeResumeDraft,
   saveResumeDraft,
@@ -697,11 +696,7 @@ const ResumeBuilderContent = () => {
 
   // On-demand generation state
   const [isTailoredResume, setIsTailoredResume] = useState(false);
-  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
-  const [isGeneratingOutreach, setIsGeneratingOutreach] = useState(false);
-  const [showRegenerateDialog, setShowRegenerateDialog] = useState<
-    'cover-letter' | 'outreach' | null
-  >(null);
+  const [isGeneratingAuxiliaryPackage, setIsGeneratingAuxiliaryPackage] = useState(false);
 
   // JD comparison state
   const [jobDescription, setJobDescription] = useState<string | null>(null);
@@ -1485,63 +1480,22 @@ const ResumeBuilderContent = () => {
     }
   };
 
-  // On-demand generation handlers
-  const doGenerateCoverLetter = async () => {
+  // On-demand merged CL + message generation handler
+  const handleGenerateAuxiliaryPackage = async () => {
     if (!resumeId) return;
-    setIsGeneratingCoverLetter(true);
-    setShowRegenerateDialog(null);
+    setIsGeneratingAuxiliaryPackage(true);
     try {
-      const content = await generateCoverLetter(resumeId);
-      setCoverLetter(content);
+      const payload = await generateAuxiliaryPackage(resumeId);
+      setCoverLetter(payload.cover_letter);
+      setOutreachMessage(payload.outreach_message);
+      showNotification('CL + message package generated successfully', 'success');
     } catch (error) {
-      console.error('Failed to generate cover letter:', error);
+      console.error('Failed to generate CL + message package:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      showNotification(
-        t('builder.alerts.coverLetterGenerateFailed', { error: errorMessage }),
-        'danger'
-      );
+      showNotification(`Failed to generate CL + message package: ${errorMessage}`, 'danger');
     } finally {
-      setIsGeneratingCoverLetter(false);
+      setIsGeneratingAuxiliaryPackage(false);
     }
-  };
-
-  const handleGenerateCoverLetter = () => {
-    if (!resumeId) return;
-    // If content exists, show confirmation dialog
-    if (coverLetter) {
-      setShowRegenerateDialog('cover-letter');
-      return;
-    }
-    doGenerateCoverLetter();
-  };
-
-  const doGenerateOutreach = async () => {
-    if (!resumeId) return;
-    setIsGeneratingOutreach(true);
-    setShowRegenerateDialog(null);
-    try {
-      const content = await generateOutreachMessage(resumeId);
-      setOutreachMessage(content);
-    } catch (error) {
-      console.error('Failed to generate outreach message:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      showNotification(
-        t('builder.alerts.outreachGenerateFailed', { error: errorMessage }),
-        'danger'
-      );
-    } finally {
-      setIsGeneratingOutreach(false);
-    }
-  };
-
-  const handleGenerateOutreach = () => {
-    if (!resumeId) return;
-    // If content exists, show confirmation dialog
-    if (outreachMessage) {
-      setShowRegenerateDialog('outreach');
-      return;
-    }
-    doGenerateOutreach();
   };
 
   const mobilePaneMode: Exclude<PaneMode, 'split'> = paneMode === 'preview' ? 'preview' : 'editor';
@@ -1789,18 +1743,24 @@ const ResumeBuilderContent = () => {
               {activeTab === 'cover-letter' && coverLetter && (
                 <>
                   <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={handleGenerateCoverLetter}
-                    disabled={isGeneratingCoverLetter}
-                    aria-label={t('coverLetter.regenerate')}
-                    title={t('coverLetter.regenerate')}
-                    className={toolbarIconButtonClass}
+                    variant="outline"
+                    size="xs"
+                    onClick={handleGenerateAuxiliaryPackage}
+                    disabled={isGeneratingAuxiliaryPackage}
+                    aria-label="Generate CL + Message"
+                    title="Generate CL + Message"
+                    className="gap-1.5"
                   >
-                    {isGeneratingCoverLetter ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {isGeneratingAuxiliaryPackage ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        {t('common.generating')}
+                      </>
                     ) : (
-                      <Sparkles className="h-3.5 w-3.5" />
+                      <>
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Generate CL + Message
+                      </>
                     )}
                   </Button>
                   <Button
@@ -1818,18 +1778,24 @@ const ResumeBuilderContent = () => {
               {activeTab === 'outreach' && outreachMessage && (
                 <>
                   <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={handleGenerateOutreach}
-                    disabled={isGeneratingOutreach}
-                    aria-label={t('outreach.regenerate')}
-                    title={t('outreach.regenerate')}
-                    className={toolbarIconButtonClass}
+                    variant="outline"
+                    size="xs"
+                    onClick={handleGenerateAuxiliaryPackage}
+                    disabled={isGeneratingAuxiliaryPackage}
+                    aria-label="Generate CL + Message"
+                    title="Generate CL + Message"
+                    className="gap-1.5"
                   >
-                    {isGeneratingOutreach ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {isGeneratingAuxiliaryPackage ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        {t('common.generating')}
+                      </>
                     ) : (
-                      <Sparkles className="h-3.5 w-3.5" />
+                      <>
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Generate CL + Message
+                      </>
                     )}
                   </Button>
                   <Button
@@ -1967,9 +1933,10 @@ const ResumeBuilderContent = () => {
                     ) : (
                       <GeneratePrompt
                         type="cover-letter"
-                        isGenerating={isGeneratingCoverLetter}
-                        onGenerate={handleGenerateCoverLetter}
+                        isGenerating={isGeneratingAuxiliaryPackage}
+                        onGenerate={handleGenerateAuxiliaryPackage}
                         isTailoredResume={isTailoredResume}
+                        buttonLabel="Generate CL + Message"
                       />
                     ))}
 
@@ -1984,9 +1951,10 @@ const ResumeBuilderContent = () => {
                     ) : (
                       <GeneratePrompt
                         type="outreach"
-                        isGenerating={isGeneratingOutreach}
-                        onGenerate={handleGenerateOutreach}
+                        isGenerating={isGeneratingAuxiliaryPackage}
+                        onGenerate={handleGenerateAuxiliaryPackage}
                         isTailoredResume={isTailoredResume}
+                        buttonLabel="Generate CL + Message"
                       />
                     ))}
 
@@ -2085,9 +2053,10 @@ const ResumeBuilderContent = () => {
                   ) : (
                     <GeneratePrompt
                       type="cover-letter"
-                      isGenerating={isGeneratingCoverLetter}
-                      onGenerate={handleGenerateCoverLetter}
+                      isGenerating={isGeneratingAuxiliaryPackage}
+                      onGenerate={handleGenerateAuxiliaryPackage}
                       isTailoredResume={isTailoredResume}
+                      buttonLabel="Generate CL + Message"
                     />
                   ))}
 
@@ -2099,9 +2068,10 @@ const ResumeBuilderContent = () => {
                   ) : (
                     <GeneratePrompt
                       type="outreach"
-                      isGenerating={isGeneratingOutreach}
-                      onGenerate={handleGenerateOutreach}
+                      isGenerating={isGeneratingAuxiliaryPackage}
+                      onGenerate={handleGenerateAuxiliaryPackage}
                       isTailoredResume={isTailoredResume}
+                      buttonLabel="Generate CL + Message"
                     />
                   ))}
 
@@ -2134,30 +2104,6 @@ const ResumeBuilderContent = () => {
           </div>
         </div>
       </div>
-
-      {/* Regenerate Confirmation Dialog */}
-      <ConfirmDialog
-        open={showRegenerateDialog !== null}
-        onOpenChange={(open) => !open && setShowRegenerateDialog(null)}
-        title={t('builder.regenerateDialog.title', {
-          title:
-            showRegenerateDialog === 'cover-letter' ? t('coverLetter.title') : t('outreach.title'),
-        })}
-        description={t('builder.regenerateDialog.description', {
-          title:
-            showRegenerateDialog === 'cover-letter' ? t('coverLetter.title') : t('outreach.title'),
-        })}
-        confirmLabel={
-          showRegenerateDialog === 'cover-letter'
-            ? t('coverLetter.regenerate')
-            : t('outreach.regenerate')
-        }
-        cancelLabel={t('common.cancel')}
-        variant="warning"
-        onConfirm={
-          showRegenerateDialog === 'cover-letter' ? doGenerateCoverLetter : doGenerateOutreach
-        }
-      />
 
       {/* Notification Dialog (replaces native alert()) */}
       <ConfirmDialog

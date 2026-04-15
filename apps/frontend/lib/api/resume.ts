@@ -138,6 +138,12 @@ interface ImproveResumeConfirmRequest {
   theme_settings?: RenderThemeSettings | null;
 }
 
+interface GenerateAuxiliaryPackageResponse {
+  cover_letter: string;
+  outreach_message: string;
+  message: string;
+}
+
 export interface ApplicationQuestionAnswer {
   question_id: string;
   question: string;
@@ -623,6 +629,21 @@ export async function generateOutreachMessage(resumeId: string): Promise<string>
   }
   const data = await res.json();
   return data.content;
+}
+
+/** Generates both cover letter and outreach message in one merged request */
+export async function generateAuxiliaryPackage(
+  resumeId: string
+): Promise<GenerateAuxiliaryPackageResponse> {
+  const res = await apiPost(
+    `/resumes/${encodeURIComponent(resumeId)}/generate-auxiliary-package`,
+    {}
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to generate CL + message package (status ${res.status}): ${text}`);
+  }
+  return res.json();
 }
 
 /** Retries AI processing for a failed resume */

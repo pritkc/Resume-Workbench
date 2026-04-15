@@ -18,11 +18,9 @@ import {
   fetchGenerationDefaults,
   fetchPromptConfig,
   updateGenerationDefaults,
-  type GenerationDefaults,
   type PromptOption,
 } from '@/lib/api/config';
 import { Dropdown } from '@/components/ui/dropdown';
-import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import { useStatusCache } from '@/lib/context/status-cache';
 import { Loader2, ArrowLeft, AlertTriangle, Settings } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
@@ -34,7 +32,6 @@ const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 
 type StoredGenerationDefaults = {
   prompt_id: string;
-  include_auxiliary_package: boolean;
 };
 
 function readStoredGenerationDefaults(): StoredGenerationDefaults | null {
@@ -55,10 +52,6 @@ function readStoredGenerationDefaults(): StoredGenerationDefaults | null {
 
     return {
       prompt_id: parsed.prompt_id,
-      include_auxiliary_package:
-        typeof parsed.include_auxiliary_package === 'boolean'
-          ? parsed.include_auxiliary_package
-          : true,
     };
   } catch {
     window.localStorage.removeItem(GENERATION_DEFAULTS_STORAGE_KEY);
@@ -72,20 +65,6 @@ function storeGenerationDefaults(defaults: StoredGenerationDefaults) {
   }
 
   window.localStorage.setItem(GENERATION_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
-}
-
-function resolveAuxiliaryPackagePreference(
-  defaults: GenerationDefaults | StoredGenerationDefaults | null
-): boolean {
-  if (!defaults) {
-    return true;
-  }
-
-  if ('include_auxiliary_package' in defaults) {
-    return defaults.include_auxiliary_package;
-  }
-
-  return Boolean(defaults.include_cover_letter || defaults.include_outreach_message);
 }
 
 function isAbortError(error: unknown): boolean {
@@ -194,7 +173,6 @@ export default function TailorPage() {
   const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('keywords');
-  const [includeAuxiliaryPackage, setIncludeAuxiliaryPackage] = useState(true);
   const [promptLoading, setPromptLoading] = useState(false);
   const hasUserSelectedPrompt = useRef(false);
   const missingDiffConfirmInFlight = useRef(false);
@@ -265,7 +243,6 @@ export default function TailorPage() {
 
     if (localDefaults && !hasUserSelectedPrompt.current) {
       setSelectedPromptId(localDefaults.prompt_id);
-      setIncludeAuxiliaryPackage(localDefaults.include_auxiliary_package);
     }
 
     const loadPromptConfig = async () => {
@@ -280,13 +257,7 @@ export default function TailorPage() {
           const resolvedDefaults = generationDefaults ?? localDefaults;
 
           if (resolvedDefaults) {
-            const resolvedIncludeAuxiliaryPackage =
-              resolveAuxiliaryPackagePreference(resolvedDefaults);
-            storeGenerationDefaults({
-              prompt_id: resolvedDefaults.prompt_id,
-              include_auxiliary_package: resolvedIncludeAuxiliaryPackage,
-            });
-            setIncludeAuxiliaryPackage(resolvedIncludeAuxiliaryPackage);
+            storeGenerationDefaults({ prompt_id: resolvedDefaults.prompt_id });
           }
 
           if (!hasUserSelectedPrompt.current) {
@@ -362,8 +333,8 @@ export default function TailorPage() {
         })) ?? [],
       application_pack_id: result.data.application_pack_id ?? null,
       generation_run_id: result.data.generation_run_id ?? null,
-      include_cover_letter: includeAuxiliaryPackage,
-      include_outreach_message: includeAuxiliaryPackage,
+      include_cover_letter: false,
+      include_outreach_message: false,
       ...(theme_settings !== undefined ? { theme_settings } : {}),
     };
   };
@@ -427,8 +398,8 @@ export default function TailorPage() {
       previewRequestStartedAt = new Date().toISOString();
       const result = await previewImproveResume(resumeId, jobId, {
         promptId: selectedPromptId,
-        includeCoverLetter: includeAuxiliaryPackage,
-        includeOutreachMessage: includeAuxiliaryPackage,
+        includeCoverLetter: false,
+        includeOutreachMessage: false,
         signal: generationAbortRef.current?.signal,
       });
       previewRequestEndedAt = new Date().toISOString();
@@ -505,14 +476,8 @@ export default function TailorPage() {
     const resumeId = masterResumeId;
     const nextDefaults: StoredGenerationDefaults = {
       prompt_id: selectedPromptId,
-      include_auxiliary_package: includeAuxiliaryPackage,
     };
     storeGenerationDefaults(nextDefaults);
-    const generationDefaultsUpdate = {
-      prompt_id: selectedPromptId,
-      include_cover_letter: includeAuxiliaryPackage,
-      include_outreach_message: includeAuxiliaryPackage,
-    };
 
     setIsLoading(true);
     setIsGenerationInFlight(true);
@@ -521,7 +486,7 @@ export default function TailorPage() {
     startTimer();
     generationAbortRef.current = new AbortController();
     try {
-      void updateGenerationDefaults(generationDefaultsUpdate).catch((defaultsError) => {
+      void updateGenerationDefaults(nextDefaults).catch((defaultsError) => {
         console.error('Failed to persist generation defaults', defaultsError);
       });
       await runGenerate(resumeId, trimmedDescription);
@@ -754,15 +719,6 @@ export default function TailorPage() {
                 density="compact"
               />
             </div>
-
-            <ToggleSwitch
-              checked={includeAuxiliaryPackage}
-              onCheckedChange={setIncludeAuxiliaryPackage}
-              label="CL + message package"
-              description="Use one shared LLM request to generate both the cover letter and outreach message."
-              disabled={isLoading || promptLoading}
-              density="compact"
-            />
 
             {error && (
               <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">

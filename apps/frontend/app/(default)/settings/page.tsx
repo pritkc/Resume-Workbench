@@ -437,19 +437,18 @@ export default function SettingsPage() {
 
   const cliproxyModelOptions = useMemo(
     () =>
-      cliproxyModelsFiltered.map((row) => ({
-        id: row.id,
-        label: row.id,
-        description: [
-          row.owned_by?.trim() || null,
+      cliproxyModelsFiltered.map((row) => {
+        const providerLabel =
           row.provider === 'mixed'
             ? 'Other / unclassified'
-            : CLIPROXY_PROVIDER_LABELS[row.provider as CLIProxyProviderFilter] ??
-              row.provider,
-        ]
-          .filter(Boolean)
-          .join(' · '),
-      })),
+            : (CLIPROXY_PROVIDER_LABELS[row.provider as CLIProxyProviderFilter] ?? row.provider);
+
+        return {
+          id: row.id,
+          label: row.id,
+          description: [row.owned_by?.trim() || null, providerLabel].filter(Boolean).join(' · '),
+        };
+      }),
     [cliproxyModelsFiltered]
   );
 
@@ -1012,6 +1011,28 @@ export default function SettingsPage() {
                 </Link>
               </div>
             </div>
+
+            <div className={`${sectionCardClass} py-3`}>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="max-w-2xl">
+                  <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
+                    Run Timing Analyzer
+                  </p>
+                  <p className="mt-1 text-[13px] text-gray-700">
+                    Open a dedicated page grouped by dashboard resume rows. Each resume shows
+                    company/role/location plus nested run and process timings with `N/A` fallback
+                    for historical runs without timing data.
+                  </p>
+                </div>
+
+                <Link href="/run-timing">
+                  <Button variant="outline" size="xs" className="gap-1.5">
+                    <Clock className="w-4 h-4" />
+                    Open Run Timing Analyzer
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </section>
 
           {/* LLM Configuration */}
@@ -1212,8 +1233,8 @@ export default function SettingsPage() {
                     {hasStoredCLIProxyApiKey && !cliproxyApiKey && (
                       <p className="mt-1 font-mono text-[11px] text-gray-500">
                         Key is stored on the server (masked in API responses). Enter a new value
-                        only to replace it, then Save. Show/hide applies to what you type; after save
-                        the API never returns the full key.
+                        only to replace it, then Save. Show/hide applies to what you type; after
+                        save the API never returns the full key.
                       </p>
                     )}
                   </div>

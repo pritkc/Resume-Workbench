@@ -75,6 +75,7 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     _group_items(improved, "Technical Skills").append("BogusSkill")
     service_output = copy.deepcopy(improved)
     _group_items(service_output, "Technical Skills").remove("BogusSkill")
+    generate_auxiliary = AsyncMock(return_value=("Cover letter", "Outreach"))
 
     with (
         patch("app.routers.resumes.db") as mock_db,
@@ -88,9 +89,10 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
         ),
         patch(
-            "app.routers.resumes._generate_auxiliary_messages",
-            new=AsyncMock(return_value=("Cover letter", "Outreach", "Tailored Title", [])),
+            "app.routers.resumes.generate_cover_letter_and_outreach",
+            new=generate_auxiliary,
         ),
+        patch("app.routers.resumes.build_job_target_title", return_value="Tailored Title"),
         patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
         patch(
             "app.routers.resumes.store_rendercv_bundle",
@@ -162,9 +164,10 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     update_run_payload = mock_db.update_generation_run.call_args.args[1]
     assert update_run_payload["result_payload"]["auxiliary"] == {
         "title": "Tailored Title",
-        "cover_letter": "Cover letter",
-        "outreach_message": "Outreach",
+        "cover_letter": None,
+        "outreach_message": None,
     }
+    generate_auxiliary.assert_not_awaited()
     assert "pipeline_timing" in update_run_payload["result_payload"]
 
 
@@ -174,9 +177,6 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
 ):
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Tailored summary"
-    auxiliary_messages = AsyncMock(
-        return_value=("Cover letter", None, "Tailored Title", [])
-    )
 
     with (
         patch("app.routers.resumes.db") as mock_db,
@@ -203,7 +203,7 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
         ),
-        patch("app.routers.resumes._generate_auxiliary_messages", new=auxiliary_messages),
+        patch("app.routers.resumes.build_job_target_title", return_value="Tailored Title"),
         patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
         patch("app.routers.resumes.store_rendercv_bundle", return_value=[]),
     ):
@@ -234,7 +234,6 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
 
     assert response.status_code == 200
     assert mock_db.create_generation_run.call_args.kwargs["prompt_id"] == "full"
-    assert auxiliary_messages.await_args.args[3:] == ("en",)
 
 
 @pytest.mark.asyncio
@@ -253,10 +252,7 @@ async def test_preview_uses_primary_full_generation(
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
         ),
-        patch(
-            "app.routers.resumes._generate_auxiliary_messages",
-            new=AsyncMock(return_value=("Cover letter", "Outreach", "Tailored Title", [])),
-        ),
+        patch("app.routers.resumes.build_job_target_title", return_value="Tailored Title"),
         patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
         patch(
             "app.routers.resumes.store_rendercv_bundle",
@@ -315,9 +311,6 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         "pack_id": "pack-123",
         "theme_settings": None,
     }
-    auxiliary_messages = AsyncMock(
-        return_value=("Cover letter", "Outreach", "Tailored Title", [])
-    )
 
     def update_job(_job_id: str, updates: dict):
         job_record.update(updates)
@@ -337,7 +330,7 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
             "app.routers.resumes.generate_improvements",
             return_value=[{"suggestion": "Focus on FastAPI", "lineNumber": 1}],
         ),
-        patch("app.routers.resumes._generate_auxiliary_messages", new=auxiliary_messages),
+        patch("app.routers.resumes.build_job_target_title", return_value="Tailored Title"),
         patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
         patch(
             "app.routers.resumes.store_rendercv_bundle",
@@ -425,17 +418,18 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
     assert confirm_data["resume_id"] == "tailored-123"
     assert confirm_data["application_pack_id"] == "pack-123"
     assert confirm_data["generation_run_id"] == "confirm-run-123"
-    auxiliary_messages.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume: dict, client):
-    auxiliary_messages = AsyncMock(
-        return_value=("Cover letter", "Outreach", "Tailored Title", [])
-    )
+    generate_auxiliary = AsyncMock(return_value=("Cover letter", "Outreach"))
     with (
         patch("app.routers.resumes.db") as mock_db,
-        patch("app.routers.resumes._generate_auxiliary_messages", new=auxiliary_messages),
+        patch("app.routers.resumes.build_job_target_title", return_value="Tailored Title"),
+        patch(
+            "app.routers.resumes.generate_cover_letter_and_outreach",
+            new=generate_auxiliary,
+        ),
         patch("app.routers.resumes.render_resume_bundle", return_value=SimpleNamespace()),
         patch(
             "app.routers.resumes.store_rendercv_bundle",
@@ -501,12 +495,12 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
     assert data["application_pack_id"] == "pack-123"
     assert data["generation_run_id"] == "confirm-run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-final-1"
-    auxiliary_messages.assert_not_awaited()
+    generate_auxiliary.assert_not_awaited()
     update_run_payload = mock_db.update_generation_run.call_args.args[1]
     assert update_run_payload["result_payload"]["auxiliary"] == {
         "title": "Tailored Title",
-        "cover_letter": "Cover letter",
-        "outreach_message": "Outreach",
+        "cover_letter": None,
+        "outreach_message": None,
     }
 
 

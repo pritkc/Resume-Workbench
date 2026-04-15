@@ -43,6 +43,7 @@ from app.services.tailoring.change_manifest import (
 
 logger = logging.getLogger(__name__)
 from app.schemas import (
+    GenerateAuxiliaryPackageResponse,
     GenerateContentResponse,
     ImproveResumeConfirmRequest,
     ImproveResumeRequest,
@@ -936,7 +937,11 @@ def _calculate_diff_from_resume(
     from app.services.improver import calculate_resume_diff
 
     try:
-        summary, changes = calculate_resume_diff(original_data, improved_data)
+        # Compare the same normalized shape as improved_data (preview/confirm
+        # canonicalization). Otherwise optional defaults, field aliases, and
+        # trimming differences look like real edits in the diff UI.
+        canonical_original = _canonicalize_improved_resume_data(original_data)
+        summary, changes = calculate_resume_diff(canonical_original, improved_data)
         return summary, changes, None
     except Exception as e:
         logger.warning("Skipping resume diff due to calculation failure: %s", e)
@@ -1413,9 +1418,19 @@ async def list_resumes(include_master: bool = Query(False)) -> ResumeListRespons
                 jobs_by_id[pack_job_id] = db.get_job(pack_job_id)
             job = jobs_by_id.get(pack_job_id)
 
+        job_description = ""
+        job_keywords = None
+        if isinstance(job, dict):
+            content = job.get("content")
+            job_description = content if isinstance(content, str) else ""
+            raw_keywords = job.get("job_keywords")
+            job_keywords = raw_keywords if isinstance(raw_keywords, dict) else None
+
         target_role, target_company, target_location = _merge_target_metadata(
             application_pack,
             job,
+            job_description=job_description,
+            job_keywords=job_keywords,
             title=resume.get("title"),
         )
         summaries.append(
@@ -1459,10 +1474,6 @@ async def improve_resume_preview_endpoint(
 
     language = get_content_language()
     prompt_id = _resolve_prompt_id(request.prompt_id)
-    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
-        include_cover_letter=request.include_cover_letter,
-        include_outreach_message=request.include_outreach_message,
-    )
     request_id = str(uuid4())
 
     stage_state = {"stage": "load_job_keywords"}
@@ -1516,10 +1527,6 @@ async def _improve_preview_flow(
 ) -> ImproveResumeResponse:
     """Inner flow for improve/preview, extracted so it can be wrapped in wait_for."""
     timer = _PipelineTimer()
-    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
-        include_cover_letter=request.include_cover_letter,
-        include_outreach_message=request.include_outreach_message,
-    )
     job_keywords = job.get("job_keywords")
     job_keywords_hash = job.get("job_keywords_hash")
     content_hash = _hash_job_content(job["content"])
@@ -1610,22 +1617,13 @@ async def _improve_preview_flow(
     with timer.track("improvements", "build_suggestions"):
         improvements = generate_improvements(job_keywords)
 
-    with timer.track("auxiliary_messages", "generate_cover_letter_outreach"):
-        _set_stage(stage_state, "generate_auxiliary_messages")
-        (
-            cover_letter,
-            outreach_message,
-            generated_title,
-            aux_warnings,
-        ) = await _generate_auxiliary_messages(
-            improved_data,
-            job["content"],
-            job_keywords,
-            language,
-            include_cover_letter=include_cover_letter,
-            include_outreach_message=include_outreach_message,
-        )
-    response_warnings.extend(aux_warnings)
+    generated_title = build_job_target_title(job["content"], job_keywords=job_keywords)
+    cover_letter = resume.get("cover_letter") if isinstance(resume.get("cover_letter"), str) else None
+    outreach_message = (
+        resume.get("outreach_message")
+        if isinstance(resume.get("outreach_message"), str)
+        else None
+    )
     with timer.track("target_metadata", "merge"):
         job = _backfill_job_target_metadata(
             job_id=request.job_id,
@@ -1787,15 +1785,10 @@ async def improve_resume_confirm_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    language = get_content_language()
     theme_settings = _resolve_request_theme_settings(
         request_theme_settings=request.theme_settings,
         resume=resume,
         application_pack_id=request.application_pack_id,
-    )
-    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
-        include_cover_letter=request.include_cover_letter,
-        include_outreach_message=request.include_outreach_message,
     )
     request_id = str(uuid4())
 
@@ -1890,45 +1883,28 @@ async def improve_resume_confirm_endpoint(
                 location_value=location_value,
             ).model_dump()
 
-        stage = "generate_auxiliary_messages"
-        with llm_trace_scope(
-            request_id,
-            "resumes.improve_confirm",
-            {
-                "resume_id": request.resume_id,
-                "job_id": request.job_id,
-                "application_pack_id": request.application_pack_id,
-            },
-        ):
-            (
-                cover_letter,
-                outreach_message,
-                title,
-                aux_warnings,
-            ) = await _resolve_confirm_auxiliary_messages(
-                generation_run_id=request.generation_run_id,
-                improved_data=improved_data,
-                job_content=job["content"],
-                job_keywords=(
-                    job.get("job_keywords")
-                    if isinstance(job.get("job_keywords"), dict)
-                    else None
-                ),
-                language=language,
-                include_cover_letter=include_cover_letter,
-                include_outreach_message=include_outreach_message,
-            )
-            llm_summary = db.summarize_llm_calls(trace_id=request_id)
-        response_warnings.extend(aux_warnings)
+        preview_auxiliary = _read_preview_auxiliary_payload(request.generation_run_id)
+        job_keywords = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
+        title = preview_auxiliary.get("title") or build_job_target_title(
+            job["content"],
+            job_keywords=job_keywords,
+        )
+        cover_letter = resume.get("cover_letter") if isinstance(resume.get("cover_letter"), str) else None
+        outreach_message = (
+            resume.get("outreach_message")
+            if isinstance(resume.get("outreach_message"), str)
+            else None
+        )
+        llm_summary = db.summarize_llm_calls(trace_id=request_id)
         job = _backfill_job_target_metadata(
             job_id=request.job_id,
             job=job,
-            job_keywords=job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None,
+            job_keywords=job_keywords,
         )
         target_role, target_company, target_location = _merge_target_metadata(
             job,
             job_description=job["content"],
-            job_keywords=job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None,
+            job_keywords=job_keywords,
             title=title,
         )
         title = title or _compose_target_title(target_role, target_company)
@@ -2104,8 +2080,9 @@ async def improve_resume_endpoint(
     """Improve/tailor a resume for a specific job description.
 
     Uses LLM to analyze the job and generate an optimized resume version
-    with improvement suggestions. Also generates cover letter and outreach
-    message together using a single merged message request.
+    with improvement suggestions.
+    Auxiliary content (cover letter/outreach) is generated separately
+    from the edit page via an explicit merged action.
     Persists the tailored resume and returns a non-null resume_id.
     """
     # Fetch resume
@@ -2122,11 +2099,6 @@ async def improve_resume_endpoint(
     stage_state = {"stage": "load_job_keywords"}
     detail = "Failed to improve resume. Please try again."
     request_id = str(uuid4())
-    include_cover_letter, include_outreach_message = _resolve_auxiliary_include_flags(
-        include_cover_letter=request.include_cover_letter,
-        include_outreach_message=request.include_outreach_message,
-    )
-
     try:
         _set_stage(stage_state, "load_job_keywords")
         with llm_trace_scope(
@@ -2177,34 +2149,20 @@ async def improve_resume_endpoint(
         # Generate improvement suggestions
         improvements = generate_improvements(job_keywords)
 
-        # Generate cover letter, outreach message, and title.
-        _set_stage(stage_state, "generate_auxiliary_messages")
-        with llm_trace_scope(
-            request_id,
-            "resumes.improve",
-            {"resume_id": request.resume_id, "job_id": request.job_id},
-        ):
-            (
-                cover_letter,
-                outreach_message,
-                title,
-                aux_warnings,
-            ) = await _generate_auxiliary_messages(
-                improved_data,
-                job["content"],
-                job_keywords,
-                language,
-                include_cover_letter=include_cover_letter,
-                include_outreach_message=include_outreach_message,
-            )
-        response_warnings.extend(aux_warnings)
+        cover_letter = resume.get("cover_letter") if isinstance(resume.get("cover_letter"), str) else None
+        outreach_message = (
+            resume.get("outreach_message")
+            if isinstance(resume.get("outreach_message"), str)
+            else None
+        )
+        title = build_job_target_title(job["content"], job_keywords=job_keywords)
         job = _backfill_job_target_metadata(
             job_id=request.job_id,
             job=job,
             job_keywords=job_keywords,
         )
 
-        # Store the tailored resume with cover letter, outreach message, and title
+        # Store the tailored resume and carry over any already persisted auxiliary content.
         _set_stage(stage_state, "create_resume")
         tailored_resume = db.create_resume(
             content=improved_text,
@@ -2705,6 +2663,93 @@ async def update_title(resume_id: str, request: UpdateTitleRequest) -> dict:
     return {"message": "Title updated successfully"}
 
 
+def _load_tailored_resume_generation_context(
+    resume_id: str,
+    *,
+    feature_name: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]:
+    """Load resume/job context needed for auxiliary generation endpoints."""
+
+    resume = db.get_resume(resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    if not resume.get("parent_id"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{feature_name} can only be generated for tailored resumes. "
+                "Please tailor this resume to a job description first."
+            ),
+        )
+
+    improvement = db.get_improvement_by_tailored_resume(resume_id)
+    if not improvement:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No job context found for this resume. "
+                "The resume may have been created before job tracking was implemented."
+            ),
+        )
+
+    job = db.get_job(improvement["job_id"])
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail="The associated job description was not found.",
+        )
+
+    resume_data = resume.get("processed_data")
+    if not resume_data:
+        raise HTTPException(
+            status_code=400,
+            detail="Resume has no processed data. Please re-upload the resume.",
+        )
+
+    return resume, resume_data, job, get_content_language()
+
+
+@router.post(
+    "/{resume_id}/generate-auxiliary-package",
+    response_model=GenerateAuxiliaryPackageResponse,
+)
+async def generate_auxiliary_package_endpoint(
+    resume_id: str,
+) -> GenerateAuxiliaryPackageResponse:
+    """Generate cover letter + outreach in one explicit merged action."""
+
+    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+        resume_id,
+        feature_name="CL + message package",
+    )
+    try:
+        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+            resume_data,
+            job["content"],
+            language,
+        )
+    except Exception as e:
+        logger.error("CL + message package generation failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate CL + message package. Please try again.",
+        )
+
+    db.update_resume(
+        resume_id,
+        {
+            "cover_letter": cover_letter_content,
+            "outreach_message": outreach_content,
+        },
+    )
+    return GenerateAuxiliaryPackageResponse(
+        cover_letter=cover_letter_content,
+        outreach_message=outreach_content,
+        message="CL + message package generated successfully",
+    )
+
+
 @router.post(
     "/{resume_id}/generate-cover-letter", response_model=GenerateContentResponse
 )
@@ -2716,46 +2761,10 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
     - The resume must be a tailored resume (has parent_id)
     - The resume must have an associated job context in the improvements table
     """
-    # Get the resume
-    resume = db.get_resume(resume_id)
-    if not resume:
-        raise HTTPException(status_code=404, detail="Resume not found")
-
-    # Check if it's a tailored resume (has parent_id)
-    if not resume.get("parent_id"):
-        raise HTTPException(
-            status_code=400,
-            detail="Cover letter can only be generated for tailored resumes. "
-            "Please tailor this resume to a job description first.",
-        )
-
-    # Get improvement record to find the job_id
-    improvement = db.get_improvement_by_tailored_resume(resume_id)
-    if not improvement:
-        raise HTTPException(
-            status_code=400,
-            detail="No job context found for this resume. "
-            "The resume may have been created before job tracking was implemented.",
-        )
-
-    # Get the job description
-    job = db.get_job(improvement["job_id"])
-    if not job:
-        raise HTTPException(
-            status_code=404,
-            detail="The associated job description was not found.",
-        )
-
-    # Get resume data
-    resume_data = resume.get("processed_data")
-    if not resume_data:
-        raise HTTPException(
-            status_code=400,
-            detail="Resume has no processed data. Please re-upload the resume.",
-        )
-
-    # Get language setting
-    language = get_content_language()
+    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+        resume_id,
+        feature_name="Cover letter",
+    )
 
     # Generate the shared auxiliary package once and return the requested field.
     try:
@@ -2795,46 +2804,10 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     - The resume must be a tailored resume (has parent_id)
     - The resume must have an associated job context in the improvements table
     """
-    # Get the resume
-    resume = db.get_resume(resume_id)
-    if not resume:
-        raise HTTPException(status_code=404, detail="Resume not found")
-
-    # Check if it's a tailored resume (has parent_id)
-    if not resume.get("parent_id"):
-        raise HTTPException(
-            status_code=400,
-            detail="Outreach message can only be generated for tailored resumes. "
-            "Please tailor this resume to a job description first.",
-        )
-
-    # Get improvement record to find the job_id
-    improvement = db.get_improvement_by_tailored_resume(resume_id)
-    if not improvement:
-        raise HTTPException(
-            status_code=400,
-            detail="No job context found for this resume. "
-            "The resume may have been created before job tracking was implemented.",
-        )
-
-    # Get the job description
-    job = db.get_job(improvement["job_id"])
-    if not job:
-        raise HTTPException(
-            status_code=404,
-            detail="The associated job description was not found.",
-        )
-
-    # Get resume data
-    resume_data = resume.get("processed_data")
-    if not resume_data:
-        raise HTTPException(
-            status_code=400,
-            detail="Resume has no processed data. Please re-upload the resume.",
-        )
-
-    # Get language setting
-    language = get_content_language()
+    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+        resume_id,
+        feature_name="Outreach message",
+    )
 
     # Generate the shared auxiliary package once and return the requested field.
     try:

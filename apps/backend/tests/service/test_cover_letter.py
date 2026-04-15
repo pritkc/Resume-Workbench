@@ -30,6 +30,29 @@ class TestJobTargetMetadata:
             "location": None,
         }
 
+    def test_reads_nested_jd_intelligence_role_and_company_objects(self):
+        """When job_keywords only has 2.0 nested shapes (no flat core_title/company_name)."""
+        metadata = extract_job_target_metadata(
+            "Details about the role.",
+            job_keywords={
+                "role": {
+                    "title": "Back End Engineer",
+                    "seniority": "senior",
+                    "function": "backend",
+                    "scope": "team-level delivery",
+                },
+                "company": {
+                    "name": "Pylon",
+                    "team": "Underwriting",
+                    "domain": "fintech",
+                    "product_context": "Mortgage platform.",
+                },
+            },
+        )
+
+        assert metadata["role"] == "Back End Engineer"
+        assert metadata["company"] == "Pylon"
+
     def test_splits_company_from_malformed_core_title(self):
         metadata = extract_job_target_metadata(
             "Join our team.",

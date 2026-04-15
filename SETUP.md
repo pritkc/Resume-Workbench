@@ -1,6 +1,6 @@
 # Resume Matcher Setup Guide
 
-[**English**](SETUP.md) | [Español](SETUP.es.md) | [简体中文](SETUP.zh-CN.md) | [日本語](SETUP.ja.md)
+**[English](SETUP.md)** | [Español](SETUP.es.md) | [简体中文](SETUP.zh-CN.md) | [日本語](SETUP.ja.md)
 
 Welcome! This guide will walk you through setting up Resume Matcher on your local machine. Whether you're a developer looking to contribute or someone who wants to run the application locally, this guide has you covered.
 
@@ -31,13 +31,15 @@ Welcome! This guide will walk you through setting up Resume Matcher on your loca
 
 Before you begin, make sure you have the following installed on your system:
 
-| Tool | Minimum Version | How to Check | Installation |
-|------|-----------------|--------------|--------------|
-| **Python** | 3.13+ | `python --version` | [python.org](https://python.org) |
-| **Node.js** | 22+ | `node --version` | [nodejs.org](https://nodejs.org) |
-| **npm** | 10+ | `npm --version` | Comes with Node.js |
-| **uv** | Latest | `uv --version` | [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
-| **Git** | Any | `git --version` | [git-scm.com](https://git-scm.com) |
+
+| Tool        | Minimum Version | How to Check       | Installation                                                            |
+| ----------- | --------------- | ------------------ | ----------------------------------------------------------------------- |
+| **Python**  | 3.13+           | `python --version` | [python.org](https://python.org)                                        |
+| **Node.js** | 22+             | `node --version`   | [nodejs.org](https://nodejs.org)                                        |
+| **npm**     | 10+             | `npm --version`    | Comes with Node.js                                                      |
+| **uv**      | Latest          | `uv --version`     | [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
+| **Git**     | Any             | `git --version`    | [git-scm.com](https://git-scm.com)                                      |
+
 
 ### Installing uv (Python Package Manager)
 
@@ -79,7 +81,7 @@ npm install                  # Install Node.js dependencies
 npm run dev                  # Start the dev server
 ```
 
-Open your browser to **<http://localhost:3000>** and you're ready to go!
+Open your browser to **[http://localhost:3000](http://localhost:3000)** and you're ready to go!
 
 > **Note:** You'll need to configure an AI provider before using the app. See [Configuring Your AI Provider](#configuring-your-ai-provider) below.
 
@@ -211,7 +213,7 @@ You should see:
 - Local:        http://localhost:3000
 ```
 
-Open **<http://localhost:3000>** in your browser. You should see the Resume Matcher dashboard!
+Open **[http://localhost:3000](http://localhost:3000)** in your browser. You should see the Resume Matcher dashboard!
 
 ---
 
@@ -221,13 +223,15 @@ Resume Matcher supports multiple AI providers. You can configure your provider t
 
 ### Option A: Cloud Providers
 
-| Provider | Configuration | Get API Key |
-|----------|--------------|-------------|
-| **OpenAI** | `LLM_PROVIDER=openai`<br>`LLM_MODEL=gpt-5-nano-2025-08-07` | [platform.openai.com](https://platform.openai.com/api-keys) |
-| **Anthropic** | `LLM_PROVIDER=anthropic`<br>`LLM_MODEL=claude-haiku-4-5-20251001` | [console.anthropic.com](https://console.anthropic.com/) |
-| **Google Gemini** | `LLM_PROVIDER=gemini`<br>`LLM_MODEL=gemini-3-flash-preview` | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
-| **OpenRouter** | `LLM_PROVIDER=openrouter`<br>`LLM_MODEL=deepseek/deepseek-chat` | [openrouter.ai](https://openrouter.ai/keys) |
-| **DeepSeek** | `LLM_PROVIDER=deepseek`<br>`LLM_MODEL=deepseek-chat` | [platform.deepseek.com](https://platform.deepseek.com/) |
+
+| Provider          | Configuration                                                  | Get API Key                                                   |
+| ----------------- | -------------------------------------------------------------- | ------------------------------------------------------------- |
+| **OpenAI**        | `LLM_PROVIDER=openai` `LLM_MODEL=gpt-5-nano-2025-08-07`        | [platform.openai.com](https://platform.openai.com/api-keys)   |
+| **Anthropic**     | `LLM_PROVIDER=anthropic` `LLM_MODEL=claude-haiku-4-5-20251001` | [console.anthropic.com](https://console.anthropic.com/)       |
+| **Google Gemini** | `LLM_PROVIDER=gemini` `LLM_MODEL=gemini-3-flash-preview`       | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| **OpenRouter**    | `LLM_PROVIDER=openrouter` `LLM_MODEL=deepseek/deepseek-chat`   | [openrouter.ai](https://openrouter.ai/keys)                   |
+| **DeepSeek**      | `LLM_PROVIDER=deepseek` `LLM_MODEL=deepseek-chat`              | [platform.deepseek.com](https://platform.deepseek.com/)       |
+
 
 Example `.env` for Anthropic:
 
@@ -280,12 +284,14 @@ Resume Matcher only needs your **local proxy** `api-keys` value and never your C
 
 **Upstream references (refresh locally with `./scripts/sync-upstream-references.sh`):**
 
-| Resource | Location / URL |
-|----------|----------------|
-| Example server config | `reference/CLIProxyAPI/config.example.yaml` |
-| User guides | [help.router-for.me](https://help.router-for.me/) |
-| Management API | [Management API docs](https://help.router-for.me/management/api) |
-| Management UI | Served at `/management.html` on the proxy port (also bundled in server ≥ 6.0.19; UI project recommends server ≥ 6.8.0) |
+
+| Resource              | Location / URL                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Example server config | `reference/CLIProxyAPI/config.example.yaml`                                                                            |
+| User guides           | [help.router-for.me](https://help.router-for.me/)                                                                      |
+| Management API        | [Management API docs](https://help.router-for.me/management/api)                                                       |
+| Management UI         | Served at `/management.html` on the proxy port (also bundled in server ≥ 6.0.19; UI project recommends server ≥ 6.8.0) |
+
 
 #### Quick Clarification
 
@@ -397,7 +403,7 @@ Expected:
 
 Open:
 
-- <http://127.0.0.1:8317/management.html>
+- [http://127.0.0.1:8317/management.html](http://127.0.0.1:8317/management.html)
 
 Connect using the **Management Key** (`remote-management.secret-key`). The UI talks to the [Management API](https://help.router-for.me/management/api); it does not proxy inference traffic.
 
@@ -416,8 +422,8 @@ Field mapping:
 
 If Management login fails:
 
-- **`403` remote management disabled** — set `remote-management.allow-remote: true` (required for Docker + host browser).
-- **`401` invalid management key** — key you typed does not match `secret-key`.
+- `**403` remote management disabled** — set `remote-management.allow-remote: true` (required for Docker + host browser).
+- `**401` invalid management key** — key you typed does not match `secret-key`.
 - **Unknown hash in config** (`$2a$...`) — rotate to a new plaintext `secret-key`, then `make cliproxy-down && make cliproxy-up`.
 
 Validation:
@@ -443,15 +449,17 @@ The Management Center README covers remote access and errors ([troubleshooting](
 
 **CLI inside the container** (parity with UI; handy with `-no-browser` so you paste URLs yourself). Replace or delete lines you do not need:
 
-| Provider (upstream) | Typical CLI flag |
-|---------------------|------------------|
-| Google / Gemini CLI | `-login` |
+
+| Provider (upstream)    | Typical CLI flag                                           |
+| ---------------------- | ---------------------------------------------------------- |
+| Google / Gemini CLI    | `-login`                                                   |
 | OpenAI Codex (ChatGPT) | `-codex-login` or `-codex-device-login` (device code flow) |
-| Claude Code | `-claude-login` |
-| Qwen Code | `-qwen-login` |
-| iFlow | `-iflow-login` or `-iflow-cookie` |
-| Antigravity | `-antigravity-login` |
-| Kimi | `-kimi-login` |
+| Claude Code            | `-claude-login`                                            |
+| Qwen Code              | `-qwen-login`                                              |
+| iFlow                  | `-iflow-login` or `-iflow-cookie`                          |
+| Antigravity            | `-antigravity-login`                                       |
+| Kimi                   | `-kimi-login`                                              |
+
 
 Example:
 
@@ -471,7 +479,7 @@ Flags are defined in `reference/CLIProxyAPI/cmd/server/main.go` after `./scripts
 
 #### 6b) Trying multiple models
 
-1. After OAuth, open **System** in the Management UI and fetch **`/v1/models`** (grouped view), or run `make cliproxy-health` with `CLIPROXY_API_KEY` set.
+1. After OAuth, open **System** in the Management UI and fetch `**/v1/models`** (grouped view), or run `make cliproxy-health` with `CLIPROXY_API_KEY` set.
 2. In Resume Matcher **Settings**, click **Refresh Aliases** and pick models exposed by your sessions.
 3. To add **short aliases** or extra client-visible names for OAuth-backed models, edit `oauth-model-alias` in `config.yaml` (see upstream `config.example.yaml` and comments in `config.template.yaml`), then restart the container.
 
@@ -503,12 +511,14 @@ npm run dev
 
 #### 8) Configure Resume Matcher -> Settings
 
-Open <http://localhost:3000/settings> and set:
+Open [http://localhost:3000/settings](http://localhost:3000/settings) and set:
+
 - `AI Route = CLIProxyAPI`
 - `CLIProxy Base URL = http://127.0.0.1:8317/v1`
 - `CLIProxy Client API Key = resume-local-client-key`
 
 Then:
+
 1. Click `Refresh Aliases`
 2. Test with provider filter `codex`
 3. Test with provider filter `gemini`
@@ -516,6 +526,7 @@ Then:
 5. Click `Save`
 
 If `Test Connection` fails for some models in this OAuth proxy setup, validate with:
+
 - `make cliproxy-health`
 - direct `/v1/chat/completions` call to `http://127.0.0.1:8317/v1`
 - one real generation run from Dashboard
@@ -523,6 +534,7 @@ If `Test Connection` fails for some models in this OAuth proxy setup, validate w
 #### 9) Validate prompt catalog and one real run
 
 In Settings -> Prompt Settings:
+
 - Confirm `LLM Prompt Catalog` is visible and expandable
 
 Optional API check:
@@ -561,16 +573,18 @@ PORT=4000 docker compose up -d
 
 ### Configuration Options
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | Host port mapped to container port `3000` |
-| `LOG_LEVEL` | `INFO` | Application-wide Python/Uvicorn log level (`ERROR`, `WARNING`, `INFO`, `DEBUG`) |
-| `LOG_LLM` | `WARNING` | LiteLLM log level (`ERROR`, `WARNING`, `INFO`, `DEBUG`) |
-| `LLM_PROVIDER` | `openai` | AI provider (openai, anthropic, gemini, etc.) |
-| `LLM_MODEL` | — | Model to use (configured via Settings UI) |
-| `LLM_API_KEY` | — | API key (recommended: configure via Settings UI) |
-| `LLM_API_BASE` | — | Custom API endpoint (for Ollama or proxies) |
-| `ENABLE_CLIPROXY_ROUTE` | `true` | Enables CLIProxyAPI route in Settings and backend config endpoints |
+
+| Variable                | Default   | Description                                                                     |
+| ----------------------- | --------- | ------------------------------------------------------------------------------- |
+| `PORT`                  | `3000`    | Host port mapped to container port `3000`                                       |
+| `LOG_LEVEL`             | `INFO`    | Application-wide Python/Uvicorn log level (`ERROR`, `WARNING`, `INFO`, `DEBUG`) |
+| `LOG_LLM`               | `WARNING` | LiteLLM log level (`ERROR`, `WARNING`, `INFO`, `DEBUG`)                         |
+| `LLM_PROVIDER`          | `openai`  | AI provider (openai, anthropic, gemini, etc.)                                   |
+| `LLM_MODEL`             | —         | Model to use (configured via Settings UI)                                       |
+| `LLM_API_KEY`           | —         | API key (recommended: configure via Settings UI)                                |
+| `LLM_API_BASE`          | —         | Custom API endpoint (for Ollama or proxies)                                     |
+| `ENABLE_CLIPROXY_ROUTE` | `true`    | Enables CLIProxyAPI route in Settings and backend config endpoints              |
+
 
 > **Note:** Changes to `LOG_LEVEL` and `LOG_LLM` require a container restart to take effect.
 
@@ -596,14 +610,16 @@ LLM_API_KEY_FILE=/run/secrets/llm_api_key docker compose up -d
 
 Supported `*_FILE` variables:
 
-| Variable | `*_FILE` variant |
-|----------|-----------------|
-| `LOG_LEVEL` | `LOG_LEVEL_FILE` |
-| `LOG_LLM` | `LOG_LLM_FILE` |
+
+| Variable       | `*_FILE` variant    |
+| -------------- | ------------------- |
+| `LOG_LEVEL`    | `LOG_LEVEL_FILE`    |
+| `LOG_LLM`      | `LOG_LLM_FILE`      |
 | `LLM_PROVIDER` | `LLM_PROVIDER_FILE` |
-| `LLM_MODEL` | `LLM_MODEL_FILE` |
-| `LLM_API_KEY` | `LLM_API_KEY_FILE` |
+| `LLM_MODEL`    | `LLM_MODEL_FILE`    |
+| `LLM_API_KEY`  | `LLM_API_KEY_FILE`  |
 | `LLM_API_BASE` | `LLM_API_BASE_FILE` |
+
 
 Rules:
 
@@ -634,22 +650,22 @@ LOG_LEVEL=INFO LOG_LLM=DEBUG docker compose up -d
 - The Settings UI configuration is stored in the volume and persists across restarts
 - App and API share the same origin: frontend on `/`, API on `/api`
 
-
-
 ## Accessing the Application
 
 Once the container is running, open your browser:
 
-| URL | Description |
-|-----|-------------|
-| **<http://localhost:3000>** | Main application (Dashboard) |
-| **<http://localhost:3000/settings>** | Configure AI provider |
-| **<http://localhost:3000/api/v1/health>** | Backend health check |
-| **<http://localhost:3000/docs>** | Interactive API documentation |
+
+| URL                                                                            | Description                   |
+| ------------------------------------------------------------------------------ | ----------------------------- |
+| **[http://localhost:3000](http://localhost:3000)**                             | Main application (Dashboard)  |
+| **[http://localhost:3000/settings](http://localhost:3000/settings)**           | Configure AI provider         |
+| **[http://localhost:3000/api/v1/health](http://localhost:3000/api/v1/health)** | Backend health check          |
+| **[http://localhost:3000/docs](http://localhost:3000/docs)**                   | Interactive API documentation |
+
 
 ### First-Time Setup Checklist
 
-1. Open <http://localhost:3000/settings>
+1. Open [http://localhost:3000/settings](http://localhost:3000/settings)
 2. Select your AI provider
 3. Enter your API key (or configure Ollama)
 4. Click "Save Configuration"
@@ -795,7 +811,7 @@ If `http://127.0.0.1:8317/management.html` is not opening, usually the CLIProxy 
 docker ps -a --filter name=cli-proxy-api
 ```
 
-2. If **Restarting**, read logs — often a **bad `config.yaml`** (YAML shape or parse error):
+1. If **Restarting**, read logs — often a **bad `config.yaml`** (YAML shape or parse error):
 
 ```bash
 docker logs cli-proxy-api --tail 80
@@ -803,27 +819,27 @@ docker logs cli-proxy-api --tail 80
 
 Common fix: remove invalid `claude-api-key` / `gemini-api-key` / `codex-api-key` blocks, or rewrite them as proper YAML **lists** (see Option C and `reference/CLIProxyAPI/config.example.yaml`). Replace `config.yaml` from `infra/cliproxyapi/config.template.yaml` if needed, then `make cliproxy-down && make cliproxy-up`.
 
-3. Start or restart a healthy container:
+1. Start or restart a healthy container:
 
 ```bash
 make cliproxy-up
 ```
 
-4. Validate health:
+1. Validate health:
 
 ```bash
 export CLIPROXY_API_KEY="resume-local-client-key"
 make cliproxy-health
 ```
 
-5. Confirm `infra/cliproxyapi/config.yaml` has:
+1. Confirm `infra/cliproxyapi/config.yaml` has:
+
 - `host: ""` or `host: "0.0.0.0"` so the host can reach port `8317` from Docker
 - `remote-management.allow-remote: true` if you open the Management UI from the host browser
 - `api-keys` matching **CLIProxy Client API Key** in Resume Matcher (not `remote-management.secret-key`)
 
-6. **401 / cannot connect** to Management API from a non-localhost URL: enable `allow-remote` and use the plaintext management key (see [Management Center troubleshooting](https://github.com/router-for-me/Cli-Proxy-API-Management-Center#troubleshooting)).
-
-7. After the server stays up, add OAuth sessions via **Management UI → OAuth** (recommended) or CLI login:
+1. **401 / cannot connect** to Management API from a non-localhost URL: enable `allow-remote` and use the plaintext management key (see [Management Center troubleshooting](https://github.com/router-for-me/Cli-Proxy-API-Management-Center#troubleshooting)).
+2. After the server stays up, add OAuth sessions via **Management UI → OAuth** (recommended) or CLI login:
 
 ```bash
 docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/config.yaml -codex-login -no-browser
@@ -877,11 +893,13 @@ Stuck? Here are your options:
 
 ### Useful Documentation
 
-| Document | Description |
-|----------|-------------|
-| [backend-guide.md](docs/agent/architecture/backend-guide.md) | Backend architecture and API details |
-| [frontend-workflow.md](docs/agent/architecture/frontend-workflow.md) | User flow and component architecture |
-| [style-guide.md](docs/agent/design/style-guide.md) | UI design system (Swiss International Style) |
+
+| Document                                                             | Description                                  |
+| -------------------------------------------------------------------- | -------------------------------------------- |
+| [backend-guide.md](docs/agent/architecture/backend-guide.md)         | Backend architecture and API details         |
+| [frontend-workflow.md](docs/agent/architecture/frontend-workflow.md) | User flow and component architecture         |
+| [style-guide.md](docs/agent/design/style-guide.md)                   | UI design system (Swiss International Style) |
+
 
 ---
 

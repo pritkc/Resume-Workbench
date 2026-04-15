@@ -200,16 +200,14 @@ describe('TailorPage', () => {
     expect(screen.getAllByAltText('preview.png').length).toBeGreaterThan(0);
     expect(updateGenerationDefaults).toHaveBeenCalledWith({
       prompt_id: 'keywords',
-      include_cover_letter: true,
-      include_outreach_message: true,
     });
     expect(previewImproveResume).toHaveBeenCalledWith(
       'master-123',
       'job-123',
       expect.objectContaining({
         promptId: 'keywords',
-        includeCoverLetter: true,
-        includeOutreachMessage: true,
+        includeCoverLetter: false,
+        includeOutreachMessage: false,
       })
     );
 
@@ -223,42 +221,11 @@ describe('TailorPage', () => {
         job_id: 'job-123',
         application_pack_id: 'pack-123',
         generation_run_id: 'run-123',
-        include_cover_letter: true,
-        include_outreach_message: true,
+        include_cover_letter: false,
+        include_outreach_message: false,
       })
     );
     expect(setImprovedData).toHaveBeenCalledWith(confirmedResult);
     expect(push).toHaveBeenCalledWith('/resumes/tailored-123');
-  });
-
-  it('lets the user disable the auxiliary package before previewing', async () => {
-    render(<TailorPage />);
-
-    await waitFor(() => expect(screen.getByText('keywords')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('switch', { name: 'CL + message package' }));
-    fireEvent.change(screen.getByPlaceholderText('tailor.jobDescriptionPlaceholder'), {
-      target: {
-        value:
-          'Senior backend role focused on FastAPI, architecture, APIs, testing, metrics, and ATS alignment for one-page resume tailoring.',
-      },
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'tailor.generateTailored' }));
-
-    expect(await screen.findByText('tailor.diffModal.title')).toBeInTheDocument();
-    expect(previewImproveResume).toHaveBeenCalledWith(
-      'master-123',
-      'job-123',
-      expect.objectContaining({
-        includeCoverLetter: false,
-        includeOutreachMessage: false,
-      })
-    );
-    expect(updateGenerationDefaults).toHaveBeenCalledWith({
-      prompt_id: 'keywords',
-      include_cover_letter: false,
-      include_outreach_message: false,
-    });
   });
 });
