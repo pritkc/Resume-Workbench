@@ -110,11 +110,11 @@ export function ResumeUploadDialog({
       const data = response as {
         resume_id?: string;
         processing_status?: 'pending' | 'processing' | 'ready' | 'failed';
-        is_master?: boolean;
+        is_active?: boolean;
       };
       if (data.resume_id) {
         const processingFailed = data.processing_status === 'failed';
-        const successMessage = data.is_master
+        const successMessage = data.is_active
           ? t('dashboard.uploadDialog.successMaster')
           : t('dashboard.uploadDialog.success');
         if (processingFailed) {

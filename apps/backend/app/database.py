@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,7 +49,9 @@ def _serialize_resume(record: Resume) -> dict[str, Any]:
         "content": record.content,
         "content_type": record.content_type,
         "filename": record.filename,
-        "is_master": record.is_master,
+        "is_active": record.is_active,
+        "is_pinned": record.is_pinned,
+        "pinned_at": _iso(record.pinned_at),
         "parent_id": record.parent_id,
         "application_pack_id": record.application_pack_id,
         "processed_data": record.processed_data,
@@ -162,7 +165,7 @@ def _serialize_llm_call(record: LLMCall) -> dict[str, Any]:
 class Database:
     """Compatibility wrapper exposing the legacy db.* interface."""
 
-    _master_resume_lock = asyncio.Lock()
+    _active_resume_lock = asyncio.Lock()
 
     def __init__(
         self,
@@ -194,7 +197,7 @@ class Database:
         content: str,
         content_type: str = "md",
         filename: str | None = None,
-        is_master: bool = False,
+        is_active: bool = False,
         parent_id: str | None = None,
         processed_data: dict[str, Any] | None = None,
         processing_status: str = "pending",
@@ -212,7 +215,7 @@ class Database:
                 content=content,
                 content_type=content_type,
                 filename=filename,
-                is_master=is_master,
+                is_active=is_active,
                 parent_id=parent_id,
                 application_pack_id=application_pack_id,
                 processed_data=processed_data,
@@ -225,7 +228,7 @@ class Database:
             )
             return _serialize_resume(record)
 
-    async def create_resume_atomic_master(
+    async def create_resume_atomic_active(
         self,
         content: str,
         content_type: str = "md",
@@ -236,19 +239,22 @@ class Database:
         outreach_message: str | None = None,
         original_markdown: str | None = None,
     ) -> dict[str, Any]:
-        async with self._master_resume_lock:
-            current_master = self.get_master_resume()
-            is_master = current_master is None
+        async with self._active_resume_lock:
+            current_active = self.get_active_resume()
+            is_active = current_active is None
 
-            if current_master and current_master.get("processing_status") in ("failed", "processing"):
-                self.update_resume(current_master["resume_id"], {"is_master": False})
-                is_master = True
+            if current_active and current_active.get("processing_status") in (
+                "failed",
+                "processing",
+            ):
+                self.update_resume(current_active["resume_id"], {"is_active": False})
+                is_active = True
 
             return self.create_resume(
                 content=content,
                 content_type=content_type,
                 filename=filename,
-                is_master=is_master,
+                is_active=is_active,
                 processed_data=processed_data,
                 processing_status=processing_status,
                 cover_letter=cover_letter,
@@ -256,14 +262,52 @@ class Database:
                 original_markdown=original_markdown,
             )
 
+    def duplicate_resume(self, source_resume_id: str) -> dict[str, Any] | None:
+        source = self.get_resume(source_resume_id)
+        if not source:
+            return None
+        pd_raw = source.get("processed_data")
+        processed_data = copy.deepcopy(pd_raw) if isinstance(pd_raw, dict) else pd_raw
+        ts_raw = source.get("theme_settings")
+        theme_settings = copy.deepcopy(ts_raw) if isinstance(ts_raw, dict) else ts_raw
+        title = source.get("title")
+        base_title = title.strip() if isinstance(title, str) and title.strip() else None
+        new_title = f"{base_title} (copy)" if base_title else None
+        filename: str | None = None
+        fn = source.get("filename")
+        if isinstance(fn, str) and fn.strip():
+            name = fn.strip()
+            dot = name.rfind(".")
+            if dot > 0:
+                filename = f"{name[:dot]} (copy){name[dot:]}"
+            else:
+                filename = f"{name} (copy)"
+        content = source.get("content")
+        if not isinstance(content, str):
+            return None
+        return self.create_resume(
+            content=content,
+            content_type=source.get("content_type") or "md",
+            filename=filename,
+            is_active=False,
+            parent_id=None,
+            processed_data=processed_data,
+            processing_status=source.get("processing_status") or "pending",
+            cover_letter=source.get("cover_letter"),
+            outreach_message=source.get("outreach_message"),
+            title=new_title,
+            original_markdown=source.get("original_markdown"),
+            theme_settings=theme_settings,
+        )
+
     def get_resume(self, resume_id: str) -> dict[str, Any] | None:
         with self._session() as session:
             record = resume_repo.get_resume(session, resume_id)
             return _serialize_resume(record) if record else None
 
-    def get_master_resume(self) -> dict[str, Any] | None:
+    def get_active_resume(self) -> dict[str, Any] | None:
         with self._session() as session:
-            record = resume_repo.get_master_resume(session)
+            record = resume_repo.get_active_resume(session)
             return _serialize_resume(record) if record else None
 
     def update_resume(self, resume_id: str, updates: dict[str, Any]) -> dict[str, Any]:
@@ -281,9 +325,18 @@ class Database:
         with self._session() as session:
             return [_serialize_resume(record) for record in resume_repo.list_resumes(session)]
 
-    def set_master_resume(self, resume_id: str) -> bool:
+    def count_resumes(self) -> int:
         with self._session() as session:
-            record = resume_repo.set_master_resume(session, resume_id)
+            return resume_repo.count_resumes(session)
+
+    def set_active_resume(self, resume_id: str) -> bool:
+        with self._session() as session:
+            record = resume_repo.set_active_resume(session, resume_id)
+            return record is not None
+
+    def set_resume_pinned(self, resume_id: str, pinned: bool) -> bool:
+        with self._session() as session:
+            record = resume_repo.set_resume_pinned(session, resume_id, pinned)
             return record is not None
 
     def create_job(
@@ -628,12 +681,12 @@ class Database:
             total_resumes = len(resume_repo.list_resumes(session))
             total_jobs = len(job_repo.list_jobs(session))
             total_improvements = generation_run_repo.count_generation_runs(session)
-            has_master_resume = resume_repo.get_master_resume(session) is not None
+            has_active_resume = resume_repo.get_active_resume(session) is not None
         return {
             "total_resumes": total_resumes,
             "total_jobs": total_jobs,
             "total_improvements": total_improvements,
-            "has_master_resume": has_master_resume,
+            "has_active_resume": has_active_resume,
         }
 
     def reset_database(self) -> None:

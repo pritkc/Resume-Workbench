@@ -9,12 +9,12 @@ async function mockBuilderRoutes(page: Page) {
       status: "ready",
       llm_configured: true,
       llm_healthy: true,
-      has_master_resume: true,
+      has_active_resume: true,
       database_stats: {
         total_resumes: 1,
         total_jobs: 1,
         total_improvements: 0,
-        has_master_resume: true,
+        has_active_resume: true,
       },
     });
   });

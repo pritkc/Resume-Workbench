@@ -76,7 +76,7 @@ export default function RunTimingPage() {
     setLoading(true);
     setError(null);
     try {
-      const [resumes, runs] = await Promise.all([
+      const [{ resumes }, runs] = await Promise.all([
         fetchResumeList(false),
         fetchGenerationRunTimingDetails({ limit: 1000 }),
       ]);

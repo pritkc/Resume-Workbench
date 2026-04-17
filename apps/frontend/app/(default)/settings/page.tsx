@@ -738,6 +738,7 @@ export default function SettingsPage() {
 
       // Clear all related localStorage keys
       localStorage.removeItem('master_resume_id');
+      localStorage.removeItem('active_resume_id');
       localStorage.removeItem('resume_builder_draft');
       localStorage.removeItem('resume_builder_settings');
       localStorage.removeItem('resume_matcher_content_language');
@@ -955,7 +956,7 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {systemStatus.has_master_resume ? (
+                    {systemStatus.has_active_resume ? (
                       <>
                         <CheckCircle2 className="w-5 h-5 text-green-600" />
                         <span className="font-mono text-sm font-bold">

@@ -1,17 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   AlertCircle,
   AlertTriangle,
   FileText,
+  GitBranch,
   Loader2,
+  MoreVertical,
+  PenLine,
+  Pin,
   Plus,
   RefreshCw,
   Search,
   Settings,
+  Star,
   Upload,
 } from 'lucide-react';
 import { ResumeUploadDialog } from '@/components/dashboard/resume-upload-dialog';
@@ -20,9 +25,12 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import {
   deleteResume,
+  duplicateResume,
   fetchResume,
   fetchResumeList,
+  pinResume,
   retryProcessing,
+  setActiveResume,
   type ResumeListItem,
 } from '@/lib/api/resume';
 import { useStatusCache } from '@/lib/context/status-cache';
@@ -32,6 +40,20 @@ type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed' | 'loading
 type DateFilter = 'all' | '7d' | '30d' | '90d';
 type SortOption = 'updated' | 'created' | 'company' | 'role' | 'code';
 const TITLE_SPLIT_RE = /^(.+?)\s*@\s*(.+)$/;
+const ACTIVE_RESUME_STORAGE_KEY = 'active_resume_id';
+const LEGACY_MASTER_RESUME_STORAGE_KEY = 'master_resume_id';
+
+const TABLE_GRID =
+  'grid w-full grid-cols-[minmax(0,1.55fr)_56px_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.7fr)_72px_68px] items-center gap-x-2';
+
+function migrateLegacyActiveResumeStorage(): void {
+  if (typeof window === 'undefined') return;
+  const legacy = localStorage.getItem(LEGACY_MASTER_RESUME_STORAGE_KEY);
+  if (legacy && !localStorage.getItem(ACTIVE_RESUME_STORAGE_KEY)) {
+    localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, legacy);
+    localStorage.removeItem(LEGACY_MASTER_RESUME_STORAGE_KEY);
+  }
+}
 
 function normalizeFilterValue(value?: string | null): string {
   return value?.trim() || '';
@@ -94,13 +116,114 @@ function resolveTargetMetadata(resume: ResumeListItem): {
   return { role, company, location };
 }
 
+type ResumeRowActionsProps = {
+  resume: ResumeListItem;
+  busy: boolean;
+  tailorDisabled: boolean;
+  onTailor: () => void;
+  onSetActive: () => void;
+  onPin: () => void;
+  onDuplicate: () => void;
+  labels: { setActive: string; pin: string; unpin: string; duplicate: string; tailor: string };
+};
+
+function ResumeRowActions({
+  resume,
+  busy,
+  tailorDisabled,
+  onTailor,
+  onSetActive,
+  onPin,
+  onDuplicate,
+  labels,
+}: ResumeRowActionsProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpen]);
+
+  return (
+    <div className="flex shrink-0 items-center justify-end gap-0.5">
+      <Button
+        type="button"
+        variant="default"
+        size="xs"
+        className="h-7 w-7 shrink-0 p-0"
+        title={labels.tailor}
+        disabled={tailorDisabled || busy}
+        onClick={onTailor}
+      >
+        <PenLine className="h-3.5 w-3.5" />
+      </Button>
+      <div className="relative" ref={wrapRef}>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="h-7 w-7 shrink-0 p-0"
+          title="More"
+          disabled={busy}
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </Button>
+        {menuOpen ? (
+          <div className="absolute right-0 top-full z-30 mt-0.5 min-w-[148px] border border-black bg-white py-0.5 shadow-[2px_2px_0_0_rgba(0,0,0,0.12)]">
+            <button
+              type="button"
+              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1] disabled:opacity-40"
+              disabled={resume.is_active}
+              onClick={() => {
+                onSetActive();
+                setMenuOpen(false);
+              }}
+            >
+              {labels.setActive}
+            </button>
+            <button
+              type="button"
+              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1]"
+              onClick={() => {
+                onPin();
+                setMenuOpen(false);
+              }}
+            >
+              {resume.is_pinned ? labels.unpin : labels.pin}
+            </button>
+            <button
+              type="button"
+              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1]"
+              onClick={() => {
+                onDuplicate();
+                setMenuOpen(false);
+              }}
+            >
+              {labels.duplicate}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { t, locale } = useTranslations();
   const router = useRouter();
-  const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
+  const [activeResumeId, setActiveResumeId] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('loading');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [tailoredResumes, setTailoredResumes] = useState<ResumeListItem[]>([]);
+  const [allResumes, setAllResumes] = useState<ResumeListItem[]>([]);
+  const [rowActionBusyId, setRowActionBusyId] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,34 +237,37 @@ export default function DashboardPage() {
     isLoading: statusLoading,
     incrementResumes,
     decrementResumes,
-    setHasMasterResume,
+    setHasActiveResume,
   } = useStatusCache();
 
   const isLlmConfigured = !statusLoading && systemStatus?.llm_configured;
   const isTailorEnabled =
-    Boolean(masterResumeId) && processingStatus === 'ready' && isLlmConfigured;
+    Boolean(activeResumeId) && processingStatus === 'ready' && isLlmConfigured;
 
-  const formatDateTimeParts = useCallback(
-    (value: string): { date: string; time: string } => {
+  const actionLabels = useMemo(
+    () => ({
+      setActive: t('dashboard.setActive'),
+      pin: t('dashboard.pinAction'),
+      unpin: t('dashboard.unpinAction'),
+      duplicate: t('dashboard.duplicateResume'),
+      tailor: t('dashboard.tailorResume'),
+    }),
+    [t]
+  );
+
+  const formatShortDate = useCallback(
+    (value: string): string => {
       const fallback = t('common.unknown');
-      if (!value) return { date: fallback, time: fallback };
+      if (!value) return fallback;
       const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return { date: fallback, time: fallback };
-
+      if (Number.isNaN(date.getTime())) return fallback;
       const dateLocale =
         locale === 'es' ? 'es-ES' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
-
-      return {
-        date: date.toLocaleDateString(dateLocale, {
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric',
-        }),
-        time: date.toLocaleTimeString(dateLocale, {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      };
+      return date.toLocaleDateString(dateLocale, {
+        month: 'short',
+        day: 'numeric',
+        year: '2-digit',
+      });
     },
     [locale, t]
   );
@@ -155,71 +281,73 @@ export default function DashboardPage() {
     } catch (err: unknown) {
       console.error('Failed to check resume status:', err);
       if (err instanceof Error && err.message.includes('404')) {
-        localStorage.removeItem('master_resume_id');
-        setMasterResumeId(null);
+        localStorage.removeItem(ACTIVE_RESUME_STORAGE_KEY);
+        setActiveResumeId(null);
         return;
       }
       setProcessingStatus('failed');
     }
   }, []);
 
-  const loadTailoredResumes = useCallback(async () => {
+  const loadResumes = useCallback(async () => {
     try {
-      const data = await fetchResumeList(true);
-      const masterFromList = data.find((resume) => resume.is_master);
-      const storedId = localStorage.getItem('master_resume_id');
-      const resolvedMasterId = masterFromList?.resume_id || storedId;
+      migrateLegacyActiveResumeStorage();
+      const { resumes, active_resume_id } = await fetchResumeList(true);
+      const activeFromList = resumes.find((r) => r.is_active);
+      const storedId = localStorage.getItem(ACTIVE_RESUME_STORAGE_KEY);
+      const resolvedActiveId = active_resume_id ?? activeFromList?.resume_id ?? storedId ?? null;
 
-      if (resolvedMasterId) {
-        localStorage.setItem('master_resume_id', resolvedMasterId);
-        setMasterResumeId(resolvedMasterId);
-        checkResumeStatus(resolvedMasterId);
+      if (resolvedActiveId) {
+        localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, resolvedActiveId);
+        setActiveResumeId(resolvedActiveId);
+        void checkResumeStatus(resolvedActiveId);
       } else {
-        localStorage.removeItem('master_resume_id');
-        setMasterResumeId(null);
+        localStorage.removeItem(ACTIVE_RESUME_STORAGE_KEY);
+        setActiveResumeId(null);
       }
 
-      setTailoredResumes(data.filter((resume) => resume.resume_id !== resolvedMasterId));
+      setAllResumes(resumes);
     } catch (err) {
-      console.error('Failed to load tailored resumes:', err);
+      console.error('Failed to load resumes:', err);
     }
   }, [checkResumeStatus]);
 
   useEffect(() => {
-    const storedId = localStorage.getItem('master_resume_id');
+    migrateLegacyActiveResumeStorage();
+    const storedId = localStorage.getItem(ACTIVE_RESUME_STORAGE_KEY);
     if (storedId) {
-      setMasterResumeId(storedId);
+      setActiveResumeId(storedId);
       checkResumeStatus(storedId);
     }
   }, [checkResumeStatus]);
 
   useEffect(() => {
-    loadTailoredResumes();
-  }, [loadTailoredResumes]);
+    void loadResumes();
+  }, [loadResumes]);
 
   useEffect(() => {
     const handleFocus = () => {
-      loadTailoredResumes();
+      void loadResumes();
     };
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [loadTailoredResumes]);
+  }, [loadResumes]);
 
   const handleUploadComplete = (resumeId: string) => {
-    localStorage.setItem('master_resume_id', resumeId);
-    setMasterResumeId(resumeId);
+    localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, resumeId);
+    setActiveResumeId(resumeId);
     checkResumeStatus(resumeId);
     incrementResumes();
-    setHasMasterResume(true);
-    void loadTailoredResumes();
+    setHasActiveResume(true);
+    void loadResumes();
   };
 
   const handleRetryProcessing = async () => {
-    if (!masterResumeId) return;
+    if (!activeResumeId) return;
     setIsRetrying(true);
     try {
-      const result = await retryProcessing(masterResumeId);
+      const result = await retryProcessing(activeResumeId);
       if (result.processing_status === 'ready') {
         setProcessingStatus('ready');
       } else if (
@@ -239,18 +367,58 @@ export default function DashboardPage() {
   };
 
   const confirmDeleteAndReupload = async () => {
-    if (!masterResumeId) return;
+    if (!activeResumeId) return;
     try {
-      await deleteResume(masterResumeId);
+      await deleteResume(activeResumeId);
       decrementResumes();
-      setHasMasterResume(false);
-      localStorage.removeItem('master_resume_id');
-      setMasterResumeId(null);
+      setHasActiveResume(false);
+      localStorage.removeItem(ACTIVE_RESUME_STORAGE_KEY);
+      setActiveResumeId(null);
       setProcessingStatus('loading');
       setIsUploadDialogOpen(true);
-      await loadTailoredResumes();
+      await loadResumes();
     } catch (err) {
       console.error('Failed to delete resume:', err);
+    }
+  };
+
+  const handleSetActiveResume = async (resumeId: string) => {
+    setRowActionBusyId(resumeId);
+    try {
+      await setActiveResume(resumeId);
+      localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, resumeId);
+      setActiveResumeId(resumeId);
+      void checkResumeStatus(resumeId);
+      await loadResumes();
+    } catch (err) {
+      console.error('Failed to set active resume:', err);
+    } finally {
+      setRowActionBusyId(null);
+    }
+  };
+
+  const handlePinResume = async (resumeId: string, pinned: boolean) => {
+    setRowActionBusyId(resumeId);
+    try {
+      await pinResume(resumeId, pinned);
+      await loadResumes();
+    } catch (err) {
+      console.error('Failed to pin resume:', err);
+    } finally {
+      setRowActionBusyId(null);
+    }
+  };
+
+  const handleDuplicateResume = async (resumeId: string) => {
+    setRowActionBusyId(resumeId);
+    try {
+      await duplicateResume(resumeId);
+      incrementResumes();
+      await loadResumes();
+    } catch (err) {
+      console.error('Failed to duplicate resume:', err);
+    } finally {
+      setRowActionBusyId(null);
     }
   };
 
@@ -259,13 +427,13 @@ export default function DashboardPage() {
       case 'loading':
         return {
           text: t('dashboard.status.checking'),
-          icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
+          icon: <Loader2 className="h-3 w-3 animate-spin" />,
           color: 'text-gray-500',
         };
       case 'processing':
         return {
           text: t('dashboard.status.processing'),
-          icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
+          icon: <Loader2 className="h-3 w-3 animate-spin" />,
           color: 'text-blue-700',
         };
       case 'ready':
@@ -277,7 +445,7 @@ export default function DashboardPage() {
       case 'failed':
         return {
           text: t('dashboard.status.failed'),
-          icon: <AlertCircle className="h-3.5 w-3.5" />,
+          icon: <AlertCircle className="h-3 w-3" />,
           color: 'text-red-600',
         };
       default:
@@ -291,18 +459,18 @@ export default function DashboardPage() {
 
   const resumeCompanies = useMemo(
     () =>
-      Array.from(
-        new Set(tailoredResumes.map((resume) => resolveCompany(resume)).filter(Boolean))
-      ).sort((left, right) => left.localeCompare(right)),
-    [tailoredResumes]
+      Array.from(new Set(allResumes.map((resume) => resolveCompany(resume)).filter(Boolean))).sort(
+        (left, right) => left.localeCompare(right)
+      ),
+    [allResumes]
   );
 
   const resumeRoles = useMemo(
     () =>
-      Array.from(
-        new Set(tailoredResumes.map((resume) => resolveRole(resume)).filter(Boolean))
-      ).sort((left, right) => left.localeCompare(right)),
-    [tailoredResumes]
+      Array.from(new Set(allResumes.map((resume) => resolveRole(resume)).filter(Boolean))).sort(
+        (left, right) => left.localeCompare(right)
+      ),
+    [allResumes]
   );
 
   const filteredResumes = useMemo(() => {
@@ -312,7 +480,7 @@ export default function DashboardPage() {
     const dateWindowDays =
       dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : dateFilter === '90d' ? 90 : null;
 
-    const filtered = tailoredResumes.filter((resume) => {
+    const filtered = allResumes.filter((resume) => {
       const title = normalizeFilterValue(resume.title || resume.filename || 'Untitled resume');
       const role = resolveRole(resume);
       const company = resolveCompany(resume);
@@ -362,59 +530,134 @@ export default function DashboardPage() {
     });
 
     return filtered;
-  }, [companyFilter, dateFilter, roleFilter, searchQuery, sortBy, tailoredResumes]);
+  }, [companyFilter, dateFilter, roleFilter, searchQuery, sortBy, allResumes]);
 
-  const masterStatus = getStatusDisplay();
+  const pinnedFiltered = useMemo(
+    () => filteredResumes.filter((resume) => resume.is_pinned),
+    [filteredResumes]
+  );
+  const unpinnedFiltered = useMemo(
+    () => filteredResumes.filter((resume) => !resume.is_pinned),
+    [filteredResumes]
+  );
+
+  const activeStatus = getStatusDisplay();
+
+  const activeResumeMeta = useMemo(
+    () => allResumes.find((r) => r.resume_id === activeResumeId),
+    [allResumes, activeResumeId]
+  );
+  const activeTitle =
+    activeResumeMeta?.title || activeResumeMeta?.filename || t('dashboard.masterResume');
+
+  const renderResumeRow = (resume: ResumeListItem) => {
+    const title = resume.title || resume.filename || 'Untitled resume';
+    const resolvedRole = resolveRole(resume);
+    const resolvedCompany = resolveCompany(resume);
+    const resolvedLocation = resolveLocation(resume);
+    const resolvedCode = resolveResumeCode(resume);
+    const shortDate = formatShortDate(resume.updated_at || resume.created_at);
+    const busy = rowActionBusyId === resume.resume_id;
+    return (
+      <div key={resume.resume_id} className={`${TABLE_GRID} border-b border-black/10 px-2 py-0.5`}>
+        <div className="flex min-h-[26px] min-w-0 items-center gap-1">
+          <Link
+            href={`/builder?id=${resume.resume_id}`}
+            className="min-w-0 truncate text-[13px] font-medium leading-tight hover:text-blue-800"
+          >
+            {title}
+          </Link>
+          {resume.is_active ? (
+            <Star className="h-3 w-3 shrink-0 fill-blue-700 text-blue-700" aria-label="Active" />
+          ) : null}
+          {resume.is_pinned ? (
+            <Pin className="h-3 w-3 shrink-0 text-gray-600" aria-label="Pinned" />
+          ) : null}
+          {resume.parent_id ? (
+            <GitBranch
+              className="h-3 w-3 shrink-0 text-gray-400"
+              aria-label={t('dashboard.tailoredResume')}
+            />
+          ) : null}
+        </div>
+        <div className="font-mono text-[11px] text-gray-700">{resolvedCode || '—'}</div>
+        <div className="truncate text-[11px] text-gray-800">{resolvedRole || '—'}</div>
+        <div className="truncate text-[11px] text-gray-800">{resolvedCompany || '—'}</div>
+        <div className="truncate text-[11px] text-gray-800">{resolvedLocation || '—'}</div>
+        <div className="text-[11px] text-gray-600">{shortDate}</div>
+        <div className="flex justify-end">
+          <ResumeRowActions
+            resume={resume}
+            busy={busy}
+            tailorDisabled={resume.processing_status !== 'ready' || !isLlmConfigured}
+            labels={actionLabels}
+            onTailor={() => {
+              router.push(`/tailor?source=${encodeURIComponent(resume.resume_id)}`);
+            }}
+            onSetActive={() => void handleSetActiveResume(resume.resume_id)}
+            onPin={() => void handlePinResume(resume.resume_id, !resume.is_pinned)}
+            onDuplicate={() => void handleDuplicateResume(resume.resume_id)}
+          />
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-3 py-4 md:px-4 md:py-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
+    <div className="mx-auto flex w-full max-w-[min(100vw-12px,1600px)] flex-col gap-2 px-1.5 py-2 md:px-2 md:py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
           {t('dashboard.title')}
         </p>
-        <Button variant="outline" size="xs" onClick={() => router.push('/settings')}>
-          <Settings className="h-4 w-4" />
-          {t('nav.settings')}
+        <Button
+          variant="outline"
+          size="xs"
+          className="h-7 w-7 p-0"
+          title={t('nav.settings')}
+          onClick={() => router.push('/settings')}
+        >
+          <Settings className="h-3.5 w-3.5" />
         </Button>
       </div>
 
-      {masterResumeId && !isLlmConfigured && !statusLoading && (
-        <div className="flex items-start justify-between gap-3 border border-amber-500 bg-amber-50 px-3 py-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />
+      {activeResumeId && !isLlmConfigured && !statusLoading && (
+        <div className="flex items-start justify-between gap-2 border border-amber-500 bg-amber-50 px-2 py-2 text-[12px] text-amber-800 shadow-[1px_1px_0_0_rgba(0,0,0,0.06)]">
+          <div className="flex min-w-0 items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <div>
-              <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-800">
+              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em]">
                 {t('dashboard.llmNotConfiguredTitle')}
               </p>
-              <p className="mt-1 text-[13px] text-amber-700">
-                {t('dashboard.llmNotConfiguredMessage')}
-              </p>
+              <p className="mt-0.5 leading-snug">{t('dashboard.llmNotConfiguredMessage')}</p>
             </div>
           </div>
           <Link href="/settings">
-            <Button variant="outline" size="xs" className="border-amber-500 text-amber-700">
-              <Settings className="h-4 w-4" />
-              {t('nav.settings')}
+            <Button
+              variant="outline"
+              size="xs"
+              className="h-7 border-amber-500 px-2 text-amber-800"
+            >
+              <Settings className="h-3.5 w-3.5" />
             </Button>
           </Link>
         </div>
       )}
 
-      {!masterResumeId ? (
+      {!activeResumeId ? (
         !isLlmConfigured && !statusLoading ? (
-          <div className="border border-black bg-white px-4 py-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-2">
-                <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-700">
+          <div className="border border-black bg-white px-3 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">
                   {t('dashboard.setupRequiredTitle')}
                 </p>
-                <h1 className="font-serif text-3xl font-bold uppercase tracking-tight">
+                <h1 className="font-serif text-xl font-bold uppercase tracking-tight">
                   {t('dashboard.setupRequiredMessage')}
                 </h1>
               </div>
               <Link href="/settings">
-                <Button size="lg" className="gap-2">
-                  <Settings className="h-4 w-4" />
+                <Button size="sm" className="gap-1.5">
+                  <Settings className="h-3.5 w-3.5" />
                   {t('nav.goToSettings')}
                 </Button>
               </Link>
@@ -426,21 +669,18 @@ export default function DashboardPage() {
             onOpenChange={setIsUploadDialogOpen}
             onUploadComplete={handleUploadComplete}
             trigger={
-              <div className="cursor-pointer border border-black bg-white px-4 py-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)] transition-transform hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div className="space-y-2">
-                    <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
-                      Workspace setup
-                    </p>
-                    <h1 className="font-serif text-3xl font-bold uppercase tracking-tight">
+              <div className="cursor-pointer border border-black bg-white px-3 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)] transition-transform hover:translate-x-px hover:translate-y-px hover:shadow-none">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1">
+                    <h1 className="font-serif text-xl font-bold uppercase tracking-tight">
                       {t('dashboard.initializeMasterResume')}
                     </h1>
-                    <p className="text-[13px] text-gray-600">{t('dashboard.initializeSequence')}</p>
+                    <p className="text-[12px] text-gray-600">{t('dashboard.initializeSequence')}</p>
                   </div>
-                  <div className="flex items-center gap-3 border border-black bg-[#F8F7F1] px-4 py-3">
-                    <Upload className="h-5 w-5" />
-                    <span className="font-mono text-xs font-bold uppercase tracking-[0.18em]">
-                      Upload resume
+                  <div className="flex items-center gap-2 border border-black bg-[#F8F7F1] px-3 py-2">
+                    <Upload className="h-4 w-4" />
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em]">
+                      {t('dashboard.uploadResume')}
                     </span>
                   </div>
                 </div>
@@ -449,119 +689,109 @@ export default function DashboardPage() {
           />
         )
       ) : (
-        <section className="border border-black bg-white px-4 py-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
+        <section className="border border-black bg-white px-2 py-2 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <button
                 type="button"
-                className="flex items-center gap-3 text-left transition-colors hover:text-blue-700"
-                onClick={() => router.push(`/builder?id=${masterResumeId}`)}
+                className="min-w-0 truncate text-left font-serif text-base font-bold leading-tight hover:text-blue-800"
+                onClick={() => router.push(`/builder?id=${activeResumeId}`)}
               >
-                <div className="flex h-12 w-12 items-center justify-center border border-black bg-blue-700 text-white">
-                  <FileText className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
-                    {t('dashboard.masterResume')}
-                  </p>
-                  <h1 className="font-serif text-2xl font-bold uppercase tracking-tight">
-                    Focused editing workspace
-                  </h1>
-                </div>
+                {activeTitle}
               </button>
               <div
-                className={`flex items-center gap-2 font-mono text-xs uppercase ${masterStatus.color}`}
+                className={`flex shrink-0 items-center gap-1 font-mono text-[10px] uppercase ${activeStatus.color}`}
               >
-                {masterStatus.icon}
-                <span>{t('dashboard.statusLine', { status: masterStatus.text })}</span>
+                {activeStatus.icon}
+                <span>{t('dashboard.statusLine', { status: activeStatus.text })}</span>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-0.5">
               <Button
                 variant="outline"
                 size="xs"
-                onClick={() => router.push(`/builder?id=${masterResumeId}`)}
+                className="h-7 w-7 p-0"
+                title={t('builder.title')}
+                onClick={() => router.push(`/builder?id=${activeResumeId}`)}
               >
-                <FileText className="h-4 w-4" />
-                Open builder
+                <FileText className="h-3.5 w-3.5" />
               </Button>
               {(processingStatus === 'failed' || processingStatus === 'processing') && (
                 <>
                   <Button
                     variant="outline"
                     size="xs"
+                    className="h-7 w-7 p-0"
+                    title={t('dashboard.retryProcessing')}
                     onClick={handleRetryProcessing}
                     disabled={isRetrying}
                   >
                     {isRetrying ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <RefreshCw className="h-4 w-4" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                     )}
-                    {t('dashboard.retryProcessing')}
                   </Button>
                   <Button
                     variant="outline"
                     size="xs"
-                    className="border-red-500 text-red-600 hover:bg-red-50"
+                    className="h-7 w-7 border-red-500 p-0 text-red-600 hover:bg-red-50"
+                    title={t('dashboard.deleteAndReupload')}
                     onClick={() => setShowDeleteDialog(true)}
                   >
-                    {t('dashboard.deleteAndReupload')}
+                    <AlertTriangle className="h-3.5 w-3.5" />
                   </Button>
                 </>
               )}
               <Button
-                size="lg"
+                size="xs"
+                className="h-7 w-7 p-0"
+                title={t('dashboard.createResume')}
                 onClick={() => {
                   if (isTailorEnabled) {
-                    router.push('/tailor');
+                    router.push(
+                      activeResumeId
+                        ? `/tailor?source=${encodeURIComponent(activeResumeId)}`
+                        : '/tailor'
+                    );
                   }
                 }}
                 disabled={!isTailorEnabled}
               >
-                <Plus className="h-4 w-4" />
-                {t('dashboard.createResume')}
+                <Plus className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         </section>
       )}
 
-      <section className="border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="border-b border-black bg-[#F8F7F1] px-4 py-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
-                Tailored resumes
-              </p>
-              <h2 className="font-serif text-2xl font-bold uppercase tracking-tight">
-                Scan by role, company, and recency
-              </h2>
-            </div>
-            <div className="flex items-center gap-2 font-mono text-xs uppercase text-gray-500">
-              <span>{filteredResumes.length}</span>
-              <span>results</span>
-            </div>
-          </div>
+      <section className="border border-black bg-white shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-black bg-[#F8F7F1] px-2 py-1.5">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-gray-600">
+            {t('dashboard.myResumes')}
+          </p>
+          <span className="font-mono text-[10px] text-gray-500">
+            {filteredResumes.length} / {allResumes.length}
+          </span>
         </div>
 
-        <div className="sticky top-3 z-10 border-b border-black bg-white px-4 py-3">
-          <div className="grid gap-2 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto_minmax(0,0.9fr)]">
-            <label className="relative block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <div className="sticky top-2 z-10 border-b border-black bg-white px-2 py-1.5">
+          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto_minmax(0,0.85fr)]">
+            <label className="relative block sm:col-span-2 lg:col-span-1">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search title, role, company, or code"
-                className="pl-9"
+                placeholder="Search…"
+                className="h-8 pl-8 text-xs"
               />
             </label>
 
             <select
               value={companyFilter}
               onChange={(event) => setCompanyFilter(event.target.value)}
-              className="h-10 border border-black bg-white px-3 font-mono text-sm"
+              className="h-8 border border-black bg-white px-2 font-mono text-xs"
             >
               <option value="">All companies</option>
               {resumeCompanies.map((company) => (
@@ -574,7 +804,7 @@ export default function DashboardPage() {
             <select
               value={roleFilter}
               onChange={(event) => setRoleFilter(event.target.value)}
-              className="h-10 border border-black bg-white px-3 font-mono text-sm"
+              className="h-8 border border-black bg-white px-2 font-mono text-xs"
             >
               <option value="">All roles</option>
               {resumeRoles.map((role) => (
@@ -584,13 +814,13 @@ export default function DashboardPage() {
               ))}
             </select>
 
-            <div className="flex border border-black bg-[#F8F7F1]">
+            <div className="flex h-8 border border-black bg-[#F8F7F1]">
               {(['all', '7d', '30d', '90d'] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => setDateFilter(option)}
-                  className={`min-w-[56px] border-r border-black px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.16em] last:border-r-0 ${
+                  className={`min-w-[44px] flex-1 border-r border-black px-1.5 font-mono text-[10px] font-bold uppercase tracking-wide last:border-r-0 ${
                     dateFilter === option
                       ? 'bg-black text-white'
                       : 'text-gray-600 hover:bg-[#ECEADF]'
@@ -604,9 +834,9 @@ export default function DashboardPage() {
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as SortOption)}
-              className="h-10 border border-black bg-white px-3 font-mono text-sm"
+              className="h-8 border border-black bg-white px-2 font-mono text-xs"
             >
-              <option value="updated">Last updated</option>
+              <option value="updated">Updated</option>
               <option value="created">Created</option>
               <option value="company">Company</option>
               <option value="role">Role</option>
@@ -615,66 +845,51 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden">
-          <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px] md:gap-3">
-            {['Resume', 'Code', 'Role', 'Company', 'Location', 'Updated'].map((label) => (
-              <span
-                key={label}
-                className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500"
-              >
-                {label}
-              </span>
-            ))}
+        {filteredResumes.length === 0 ? (
+          <div className="px-2 py-6 text-center">
+            <p className="font-serif text-base font-bold">
+              {allResumes.length === 0 ? t('dashboard.noResumes') : 'No matches'}
+            </p>
+            <p className="mt-1 text-[12px] text-gray-600">
+              {allResumes.length === 0
+                ? t('dashboard.noResumesDescription')
+                : 'Adjust filters or search.'}
+            </p>
           </div>
-
-          {filteredResumes.length === 0 ? (
-            <div className="px-4 py-10 text-center">
-              <p className="font-serif text-xl font-bold uppercase tracking-tight">
-                No tailored resumes yet
-              </p>
-              <p className="mt-2 text-[13px] text-gray-600">
-                Generate a new resume to start building a searchable history here.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-black/10">
-              {filteredResumes.map((resume) => {
-                const title = resume.title || resume.filename || 'Untitled resume';
-                const resolvedRole = resolveRole(resume);
-                const resolvedCompany = resolveCompany(resume);
-                const resolvedLocation = resolveLocation(resume);
-                const resolvedCode = resolveResumeCode(resume);
-                const updatedParts = formatDateTimeParts(resume.updated_at || resume.created_at);
-                return (
-                  <Link
-                    key={resume.resume_id}
-                    href={`/builder?id=${resume.resume_id}`}
-                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F8F7F1] md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px] md:items-center"
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[720px]">
+              <div className={`${TABLE_GRID} border-b border-black bg-[#ECEADF] px-2 py-1`}>
+                {['Resume', 'Code', 'Role', 'Company', 'Loc.', 'Updated', ''].map((label, col) => (
+                  <span
+                    key={`col-${col}`}
+                    className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-600"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate font-serif text-lg font-bold leading-tight">{title}</p>
-                      <p className="mt-1 font-mono text-xs uppercase tracking-[0.14em] text-gray-500 md:hidden">
-                        {resolvedCode || 'N/A'}
-                      </p>
+                    {col === 6 ? '\u00a0' : label}
+                  </span>
+                ))}
+              </div>
+              {pinnedFiltered.length > 0 ? (
+                <div>
+                  <div className="border-b border-black bg-[#E8E6DC] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-700">
+                    Pinned
+                  </div>
+                  {pinnedFiltered.map((resume) => renderResumeRow(resume))}
+                </div>
+              ) : null}
+              {unpinnedFiltered.length > 0 ? (
+                <div>
+                  {pinnedFiltered.length > 0 ? (
+                    <div className="border-b border-black bg-[#E8E6DC] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-700">
+                      All
                     </div>
-                    <div className="font-mono text-sm text-gray-700">{resolvedCode || 'N/A'}</div>
-                    <div className="font-mono text-sm text-gray-700">{resolvedRole || 'N/A'}</div>
-                    <div className="font-mono text-sm text-gray-700">
-                      {resolvedCompany || 'N/A'}
-                    </div>
-                    <div className="font-mono text-sm text-gray-700">
-                      {resolvedLocation || 'N/A'}
-                    </div>
-                    <div className="font-mono text-xs uppercase text-gray-500">
-                      <div>{updatedParts.date}</div>
-                      <div className="mt-1">{updatedParts.time}</div>
-                    </div>
-                  </Link>
-                );
-              })}
+                  ) : null}
+                  {unpinnedFiltered.map((resume) => renderResumeRow(resume))}
+                </div>
+              ) : null}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </section>
 
       <ConfirmDialog

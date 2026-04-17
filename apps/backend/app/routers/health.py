@@ -45,7 +45,7 @@ async def get_status() -> StatusResponse:
     llm_checked = bool(llm_status["checked"])
     llm_healthy = bool(llm_status["healthy"]) if llm_checked else False
     status = "ready"
-    if not llm_configured or not db_stats["has_master_resume"]:
+    if not llm_configured or not db_stats["has_active_resume"]:
         status = "setup_required"
     elif llm_checked and not llm_healthy:
         status = "setup_required"
@@ -57,6 +57,6 @@ async def get_status() -> StatusResponse:
         llm_health_status=str(llm_status["status"]),
         llm_health_checked=llm_checked,
         llm_health_checked_at=llm_status.get("checked_at"),
-        has_master_resume=db_stats["has_master_resume"],
+        has_active_resume=db_stats["has_active_resume"],
         database_stats=db_stats,
     )

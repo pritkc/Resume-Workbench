@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Resume
@@ -22,12 +23,22 @@ def get_resume(session: Session, resume_id: str) -> Resume | None:
     return session.scalar(select(Resume).where(Resume.resume_id == resume_id))
 
 
-def get_master_resume(session: Session) -> Resume | None:
-    return session.scalar(select(Resume).where(Resume.is_master.is_(True)).limit(1))
+def get_active_resume(session: Session) -> Resume | None:
+    return session.scalar(select(Resume).where(Resume.is_active.is_(True)).limit(1))
+
+
+def count_resumes(session: Session) -> int:
+    value = session.scalar(select(func.count()).select_from(Resume))
+    return int(value or 0)
 
 
 def list_resumes(session: Session) -> list[Resume]:
-    return list(session.scalars(select(Resume).order_by(Resume.created_at.desc())))
+    stmt = select(Resume).order_by(
+        Resume.is_pinned.desc(),
+        Resume.pinned_at.desc().nulls_last(),
+        Resume.created_at.desc(),
+    )
+    return list(session.scalars(stmt))
 
 
 def update_resume(session: Session, resume_id: str, updates: dict[str, Any]) -> Resume | None:
@@ -50,19 +61,30 @@ def delete_resume(session: Session, resume_id: str) -> bool:
     return True
 
 
-def clear_master_flag(session: Session) -> None:
-    for record in session.scalars(select(Resume).where(Resume.is_master.is_(True))):
-        record.is_master = False
+def clear_active_flag(session: Session) -> None:
+    for record in session.scalars(select(Resume).where(Resume.is_active.is_(True))):
+        record.is_active = False
     session.commit()
 
 
-def set_master_resume(session: Session, resume_id: str) -> Resume | None:
+def set_active_resume(session: Session, resume_id: str) -> Resume | None:
     record = get_resume(session, resume_id)
     if record is None:
         return None
-    for current in session.scalars(select(Resume).where(Resume.is_master.is_(True))):
-        current.is_master = False
-    record.is_master = True
+    for current in session.scalars(select(Resume).where(Resume.is_active.is_(True))):
+        current.is_active = False
+    record.is_active = True
+    session.commit()
+    session.refresh(record)
+    return record
+
+
+def set_resume_pinned(session: Session, resume_id: str, pinned: bool) -> Resume | None:
+    record = get_resume(session, resume_id)
+    if record is None:
+        return None
+    record.is_pinned = pinned
+    record.pinned_at = datetime.now(timezone.utc) if pinned else None
     session.commit()
     session.refresh(record)
     return record

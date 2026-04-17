@@ -9,7 +9,7 @@ import {
 } from '@/lib/types/render-theme';
 import { type Locale } from '@/i18n/config';
 import { normalizeResumeSkills } from '@/lib/utils/additional-groups';
-import { API_BASE, apiPost, apiPatch, apiDelete, apiFetch } from './client';
+import { API_BASE, apiPost, apiPatch, apiPut, apiDelete, apiFetch } from './client';
 
 // Matches backend schemas/models.py ResumeData
 interface ProcessedResume {
@@ -120,7 +120,7 @@ export interface ResumeUploadResponse {
   request_id: string;
   resume_id: string;
   processing_status: 'pending' | 'processing' | 'ready' | 'failed';
-  is_master: boolean;
+  is_active: boolean;
 }
 
 interface ImproveResumeConfirmRequest {
@@ -344,7 +344,9 @@ export interface ResumeListItem {
   resume_id: string;
   resume_code?: string | null;
   filename: string | null;
-  is_master: boolean;
+  is_active: boolean;
+  is_pinned: boolean;
+  pinned_at: string | null;
   parent_id: string | null;
   processing_status: 'pending' | 'processing' | 'ready' | 'failed';
   created_at: string;
@@ -479,13 +481,61 @@ export async function fetchResume(resumeId: string): Promise<ResumeResponse['dat
   return payload.data;
 }
 
-export async function fetchResumeList(includeMaster = false): Promise<ResumeListItem[]> {
-  const res = await apiFetch(`/resumes/list?include_master=${includeMaster ? 'true' : 'false'}`);
+export async function fetchResumeList(
+  includeActive = true
+): Promise<{ resumes: ResumeListItem[]; active_resume_id: string | null }> {
+  const res = await apiFetch(`/resumes/list?include_active=${includeActive ? 'true' : 'false'}`);
   if (!res.ok) {
     throw new Error(`Failed to load resumes list (status ${res.status}).`);
   }
-  const payload = (await res.json()) as { data: ResumeListItem[] };
-  return payload.data;
+  const payload = (await res.json()) as {
+    data: ResumeListItem[];
+    active_resume_id?: string | null;
+  };
+  return {
+    resumes: payload.data,
+    active_resume_id: payload.active_resume_id ?? null,
+  };
+}
+
+export async function setActiveResume(resumeId: string): Promise<ResumeListItem> {
+  const res = await apiFetch(`/resumes/${encodeURIComponent(resumeId)}/active`, {
+    method: 'PUT',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to set active resume (${res.status}): ${text}`);
+  }
+  return (await res.json()) as ResumeListItem;
+}
+
+export async function pinResume(resumeId: string, pinned: boolean): Promise<ResumeListItem> {
+  const res = await apiPut(`/resumes/${encodeURIComponent(resumeId)}/pin`, { pinned });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to update pin (${res.status}): ${text}`);
+  }
+  return (await res.json()) as ResumeListItem;
+}
+
+export async function duplicateResume(resumeId: string): Promise<ResumeListItem> {
+  const res = await apiPost(`/resumes/${encodeURIComponent(resumeId)}/duplicate`, {});
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to duplicate resume (${res.status}): ${text}`);
+  }
+  return (await res.json()) as ResumeListItem;
+}
+
+export async function getActiveResume(): Promise<ResumeListItem | null> {
+  const res = await apiFetch('/resumes/active');
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`Failed to load active resume (status ${res.status}).`);
+  }
+  return (await res.json()) as ResumeListItem;
 }
 
 export async function updateResume(

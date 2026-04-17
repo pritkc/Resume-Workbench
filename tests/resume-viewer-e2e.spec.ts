@@ -31,7 +31,7 @@ test.describe("resume URL redirect and builder journey", () => {
             {
               resume_id: masterResumeId,
               filename: "master.pdf",
-              is_master: true,
+              is_active: true,
               parent_id: null,
               processing_status: "ready",
               created_at: "2026-04-01T00:00:00Z",
@@ -44,7 +44,7 @@ test.describe("resume URL redirect and builder journey", () => {
             {
               resume_id: tailoredResumeId,
               filename: "tailored.pdf",
-              is_master: false,
+              is_active: false,
               parent_id: masterResumeId,
               processing_status: "ready",
               created_at: "2026-04-03T00:00:00Z",
@@ -83,7 +83,7 @@ test.describe("resume URL redirect and builder journey", () => {
     );
 
     await page.addInitScript((storedResumeId: string) => {
-      window.localStorage.setItem("master_resume_id", storedResumeId);
+      window.localStorage.setItem("active_resume_id", storedResumeId);
     }, masterResumeId);
 
     await page.goto(`${frontendBaseUrl}/resumes/${masterResumeId}`);

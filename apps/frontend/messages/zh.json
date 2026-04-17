@@ -75,6 +75,10 @@
     "retrySuccess": "处理成功！",
     "retryFailed": "重试失败。请尝试上传其他文件。",
     "createResume": "创建简历",
+    "duplicateResume": "复制",
+    "setActive": "设为活动",
+    "pinAction": "固定",
+    "unpinAction": "取消固定",
     "edited": "编辑于 {date}",
     "statusLine": "状态：{status}",
     "status": {

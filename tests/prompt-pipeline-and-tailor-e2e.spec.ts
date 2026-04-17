@@ -207,7 +207,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
         {
           resume_id: masterResumeId,
           filename: "master.pdf",
-          is_master: true,
+          is_active: true,
           parent_id: null,
           processing_status: "ready",
           created_at: "2026-04-01T00:00:00Z",
@@ -290,7 +290,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
   );
 
   await page.addInitScript((resumeId: string) => {
-    window.localStorage.setItem("master_resume_id", resumeId);
+    window.localStorage.setItem("active_resume_id", resumeId);
   }, masterResumeId);
 
   // Dashboard first: warms status cache + resume list (matches real usage; avoids tailor stuck on LLM gate).

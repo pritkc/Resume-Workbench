@@ -44,7 +44,7 @@ export interface DatabaseStats {
   total_resumes: number;
   total_jobs: number;
   total_improvements: number;
-  has_master_resume: boolean;
+  has_active_resume: boolean;
 }
 
 export interface SystemStatus {
@@ -54,7 +54,7 @@ export interface SystemStatus {
   llm_health_status?: 'healthy' | 'unhealthy' | 'unchecked' | 'not_configured';
   llm_health_checked?: boolean;
   llm_health_checked_at?: string | null;
-  has_master_resume: boolean;
+  has_active_resume: boolean;
   database_stats: DatabaseStats;
 }
 

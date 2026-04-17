@@ -753,7 +753,7 @@ class ResumeUploadResponse(BaseModel):
     request_id: str
     resume_id: str
     processing_status: Literal["pending", "processing", "ready", "failed"] = "pending"
-    is_master: bool = False
+    is_active: bool = False
 
 
 class RawResume(BaseModel):
@@ -794,7 +794,9 @@ class ResumeSummary(BaseModel):
     resume_id: str
     resume_code: str | None = None
     filename: str | None = None
-    is_master: bool = False
+    is_active: bool = False
+    is_pinned: bool = False
+    pinned_at: str | None = None
     parent_id: str | None = None
     processing_status: str = "pending"
     created_at: str
@@ -810,6 +812,11 @@ class ResumeListResponse(BaseModel):
 
     request_id: str
     data: list[ResumeSummary]
+    active_resume_id: str | None = None
+
+
+class ResumePinRequest(BaseModel):
+    pinned: bool
 
 
 class ApplicationPackSummary(BaseModel):
@@ -1675,7 +1682,7 @@ class StatusResponse(BaseModel):
     llm_health_status: str = "unchecked"
     llm_health_checked: bool = False
     llm_health_checked_at: str | None = None
-    has_master_resume: bool
+    has_active_resume: bool
     database_stats: dict[str, Any]
 
 

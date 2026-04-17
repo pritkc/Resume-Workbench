@@ -61,7 +61,7 @@ def test_resume_and_job_crud_round_trip(tmp_path: Path) -> None:
             content="# Jane Doe",
             content_type="md",
             filename="resume.md",
-            is_master=True,
+            is_active=True,
             processed_data={"summary": "Test"},
             processing_status="ready",
         )
@@ -77,7 +77,7 @@ def test_resume_and_job_crud_round_trip(tmp_path: Path) -> None:
         fetched_job = database.get_job(job["job_id"])
 
         assert fetched_resume is not None
-        assert fetched_resume["is_master"] is True
+        assert fetched_resume["is_active"] is True
         assert fetched_resume["filename"] == "resume.md"
         assert fetched_job is not None
         assert fetched_job["company"] == "Acme"
@@ -86,7 +86,7 @@ def test_resume_and_job_crud_round_trip(tmp_path: Path) -> None:
 
 def test_generation_runs_replace_legacy_improvements(tmp_path: Path) -> None:
     with create_test_database(tmp_path) as database:
-        source = database.create_resume(content="# Source", is_master=True)
+        source = database.create_resume(content="# Source", is_active=True)
         tailored = database.create_resume(content='{"summary": "Tailored"}', content_type="json")
         job = database.create_job(content="JD", resume_id=source["resume_id"])
         improvement = database.create_improvement(
@@ -106,7 +106,7 @@ def test_generation_runs_replace_legacy_improvements(tmp_path: Path) -> None:
 
 def test_application_pack_artifact_and_reset_flow(tmp_path: Path) -> None:
     with create_test_database(tmp_path) as database:
-        resume = database.create_resume(content="# Base", is_master=True)
+        resume = database.create_resume(content="# Base", is_active=True)
         job = database.create_job(content="JD", resume_id=resume["resume_id"])
         pack = database.create_application_pack(
             base_resume_id=resume["resume_id"],
@@ -145,3 +145,49 @@ def test_application_pack_artifact_and_reset_flow(tmp_path: Path) -> None:
         assert stats_after["total_resumes"] == 0
         assert stats_after["total_jobs"] == 0
         assert stats_after["total_improvements"] == 0
+
+
+def test_active_resume_swap_pin_and_list_order(tmp_path: Path) -> None:
+    with create_test_database(tmp_path) as database:
+        first = database.create_resume(content="# First", is_active=True)
+        second = database.create_resume(content="# Second", is_active=False)
+
+        assert database.get_active_resume() is not None
+        assert database.get_active_resume()["resume_id"] == first["resume_id"]
+        assert database.count_resumes() == 2
+
+        assert database.set_active_resume(second["resume_id"]) is True
+        assert database.get_resume(first["resume_id"])["is_active"] is False
+        assert database.get_resume(second["resume_id"])["is_active"] is True
+
+        assert database.set_resume_pinned(first["resume_id"], True) is True
+        pinned_first = database.get_resume(first["resume_id"])
+        assert pinned_first["is_pinned"] is True
+        assert pinned_first["pinned_at"] is not None
+
+        ids = [r["resume_id"] for r in database.list_resumes()]
+        assert ids[0] == first["resume_id"]
+
+        assert database.set_resume_pinned(first["resume_id"], False) is True
+        assert database.get_resume(first["resume_id"])["is_pinned"] is False
+        assert database.get_resume(first["resume_id"])["pinned_at"] is None
+
+
+def test_duplicate_resume_copies_content_and_clears_lineage(tmp_path: Path) -> None:
+    with create_test_database(tmp_path) as database:
+        source = database.create_resume(
+            content="# Source",
+            content_type="md",
+            filename="base.md",
+            is_active=True,
+            processed_data={"summary": "S"},
+            processing_status="ready",
+            title="Engineer",
+        )
+        dup = database.duplicate_resume(source["resume_id"])
+        assert dup is not None
+        assert dup["resume_id"] != source["resume_id"]
+        assert dup["parent_id"] is None
+        assert dup["is_active"] is False
+        assert dup["processed_data"] == {"summary": "S"}
+        assert dup["title"] == "Engineer (copy)"

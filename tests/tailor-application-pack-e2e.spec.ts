@@ -71,7 +71,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
         {
           resume_id: masterResumeId,
           filename: "master.pdf",
-          is_master: true,
+          is_active: true,
           parent_id: null,
           processing_status: "ready",
           created_at: "2026-04-01T00:00:00Z",
@@ -147,7 +147,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   );
 
   await page.addInitScript((resumeId: string) => {
-    window.localStorage.setItem("master_resume_id", resumeId);
+    window.localStorage.setItem("active_resume_id", resumeId);
   }, masterResumeId);
 
   await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);

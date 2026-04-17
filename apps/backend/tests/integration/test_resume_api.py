@@ -24,7 +24,9 @@ def mock_resume_record(sample_resume):
         "content": "# Jane Doe\nSenior Backend Engineer",
         "content_type": "md",
         "filename": "resume.pdf",
-        "is_master": True,
+        "is_active": True,
+        "is_pinned": False,
+        "pinned_at": None,
         "parent_id": None,
         "application_pack_id": "pack-123",
         "processed_data": sample_resume,
@@ -238,12 +240,12 @@ class TestUploadResume:
         sample_markdown = "# PRIT CHAKALASIYA\nSenior Backend Engineer"
         state: dict[str, object] = {}
 
-        async def create_resume_atomic_master(**kwargs):
+        async def create_resume_atomic_active(**kwargs):
             state.update(kwargs)
             return {
                 "resume_id": "res-sample",
                 "processing_status": "processing",
-                "is_master": True,
+                "is_active": True,
             }
 
         def update_resume(resume_id, updates):
@@ -251,7 +253,7 @@ class TestUploadResume:
             return {
                 "resume_id": resume_id,
                 "processing_status": state.get("processing_status", "pending"),
-                "is_master": True,
+                "is_active": True,
             }
 
         def get_resume(resume_id):
@@ -260,7 +262,7 @@ class TestUploadResume:
                 "content": state["content"],
                 "content_type": state["content_type"],
                 "filename": sample_filename,
-                "is_master": True,
+                "is_active": True,
                 "parent_id": None,
                 "application_pack_id": None,
                 "processed_data": state.get("processed_data"),
@@ -276,7 +278,7 @@ class TestUploadResume:
 
         mock_parse_document.return_value = sample_markdown
         mock_parse_resume.return_value = sample_resume
-        mock_db.create_resume_atomic_master = AsyncMock(side_effect=create_resume_atomic_master)
+        mock_db.create_resume_atomic_active = AsyncMock(side_effect=create_resume_atomic_active)
         mock_db.update_resume.side_effect = update_resume
         mock_db.get_resume.side_effect = get_resume
 
@@ -311,15 +313,15 @@ class TestUploadResume:
     ):
         mock_parse_document.return_value = "# Jane Doe\nSenior Backend Engineer"
         mock_parse_resume.return_value = sample_resume
-        mock_db.create_resume_atomic_master = AsyncMock(return_value={
+        mock_db.create_resume_atomic_active = AsyncMock(return_value={
             "resume_id": "res-123",
             "processing_status": "processing",
-            "is_master": True,
+            "is_active": True,
         })
         mock_db.update_resume.return_value = {
             "resume_id": "res-123",
             "processing_status": "ready",
-            "is_master": True,
+            "is_active": True,
         }
 
         async with client:
@@ -634,14 +636,20 @@ class TestListResumes:
     """GET /api/v1/resumes/list"""
 
     @patch("app.routers.resumes.db")
-    async def test_list_excludes_master_by_default(self, mock_db, client):
+    async def test_list_excludes_active_when_requested(self, mock_db, client):
         mock_db.list_resumes.return_value = [
-            {"resume_id": "master", "is_master": True, "created_at": "2026-01-01", "updated_at": "2026-01-01"},
-            {"resume_id": "tailored-1", "is_master": False, "created_at": "2026-01-02", "updated_at": "2026-01-02"},
+            {"resume_id": "master", "is_active": True, "created_at": "2026-01-01", "updated_at": "2026-01-01"},
+            {"resume_id": "tailored-1", "is_active": False, "created_at": "2026-01-02", "updated_at": "2026-01-02"},
         ]
         mock_db.list_application_packs.return_value = []
+        mock_db.get_active_resume.return_value = {
+            "resume_id": "master",
+            "is_active": True,
+            "created_at": "2026-01-01",
+            "updated_at": "2026-01-01",
+        }
         async with client:
-            resp = await client.get("/api/v1/resumes/list")
+            resp = await client.get("/api/v1/resumes/list", params={"include_active": "false"})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert len(data) == 1
@@ -649,14 +657,20 @@ class TestListResumes:
         assert data[0]["resume_code"] == derive_resume_code("tailored-1")
 
     @patch("app.routers.resumes.db")
-    async def test_list_includes_master_when_requested(self, mock_db, client):
+    async def test_list_includes_all_by_default(self, mock_db, client):
         mock_db.list_resumes.return_value = [
-            {"resume_id": "master", "is_master": True, "created_at": "2026-01-01", "updated_at": "2026-01-01"},
-            {"resume_id": "tailored-1", "is_master": False, "created_at": "2026-01-02", "updated_at": "2026-01-02"},
+            {"resume_id": "master", "is_active": True, "created_at": "2026-01-01", "updated_at": "2026-01-01"},
+            {"resume_id": "tailored-1", "is_active": False, "created_at": "2026-01-02", "updated_at": "2026-01-02"},
         ]
         mock_db.list_application_packs.return_value = []
+        mock_db.get_active_resume.return_value = {
+            "resume_id": "master",
+            "is_active": True,
+            "created_at": "2026-01-01",
+            "updated_at": "2026-01-01",
+        }
         async with client:
-            resp = await client.get("/api/v1/resumes/list", params={"include_master": True})
+            resp = await client.get("/api/v1/resumes/list")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert len(data) == 2
@@ -670,7 +684,7 @@ class TestListResumes:
         mock_db.list_resumes.return_value = [
             {
                 "resume_id": "tailored-1",
-                "is_master": False,
+                "is_active": False,
                 "application_pack_id": "pack-123",
                 "created_at": "2026-01-02",
                 "updated_at": "2026-01-02",
@@ -685,6 +699,7 @@ class TestListResumes:
                 "location": "Mountain View, CA",
             }
         ]
+        mock_db.get_active_resume.return_value = None
         async with client:
             resp = await client.get("/api/v1/resumes/list")
         assert resp.status_code == 200
@@ -698,7 +713,7 @@ class TestListResumes:
         mock_db.list_resumes.return_value = [
             {
                 "resume_id": "tailored-1",
-                "is_master": False,
+                "is_active": False,
                 "application_pack_id": "pack-123",
                 "created_at": "2026-01-02",
                 "updated_at": "2026-01-02",
@@ -713,6 +728,7 @@ class TestListResumes:
                 "location": "This role is based out of our Seattle office and follows a hybrid schedule.",
             }
         ]
+        mock_db.get_active_resume.return_value = None
         async with client:
             resp = await client.get("/api/v1/resumes/list")
         assert resp.status_code == 200
@@ -726,7 +742,7 @@ class TestListResumes:
         mock_db.list_resumes.return_value = [
             {
                 "resume_id": "tailored-1",
-                "is_master": False,
+                "is_active": False,
                 "application_pack_id": "pack-123",
                 "created_at": "2026-01-02",
                 "updated_at": "2026-01-02",
@@ -741,6 +757,7 @@ class TestListResumes:
                 "location": None,
             }
         ]
+        mock_db.get_active_resume.return_value = None
         async with client:
             resp = await client.get("/api/v1/resumes/list")
         assert resp.status_code == 200
@@ -752,7 +769,7 @@ class TestListResumes:
         mock_db.list_resumes.return_value = [
             {
                 "resume_id": "tailored-1",
-                "is_master": False,
+                "is_active": False,
                 "application_pack_id": "pack-123",
                 "created_at": "2026-01-02",
                 "updated_at": "2026-01-02",
@@ -774,6 +791,7 @@ class TestListResumes:
             "role": "Senior Backend Engineer",
             "location": "Mountain View, CA",
         }
+        mock_db.get_active_resume.return_value = None
 
         async with client:
             resp = await client.get("/api/v1/resumes/list")
@@ -790,7 +808,7 @@ class TestListResumes:
         mock_db.list_resumes.return_value = [
             {
                 "resume_id": "tailored-1",
-                "is_master": False,
+                "is_active": False,
                 "application_pack_id": "pack-123",
                 "created_at": "2026-01-02",
                 "updated_at": "2026-01-02",
@@ -818,6 +836,7 @@ class TestListResumes:
                 "location": "Mountain View, CA",
             },
         }
+        mock_db.get_active_resume.return_value = None
 
         async with client:
             resp = await client.get("/api/v1/resumes/list")
@@ -829,11 +848,44 @@ class TestListResumes:
         assert item["target_location"] == "Mountain View, CA"
 
 
+class TestDuplicateResume:
+    """POST /api/v1/resumes/{resume_id}/duplicate"""
+
+    @patch("app.routers.resumes.db")
+    async def test_duplicate_returns_summary(self, mock_db, client, mock_resume_record):
+        dup = {
+            **mock_resume_record,
+            "resume_id": "res-999",
+            "is_active": False,
+            "parent_id": None,
+            "title": "Copy title",
+            "application_pack_id": None,
+        }
+        mock_db.duplicate_resume.return_value = dup
+        mock_db.get_resume.return_value = dup
+        mock_db.list_application_packs.return_value = []
+        async with client:
+            resp = await client.post("/api/v1/resumes/res-123/duplicate", json={})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["resume_id"] == "res-999"
+        assert body["is_active"] is False
+
+    @patch("app.routers.resumes.db")
+    async def test_duplicate_missing_returns_404(self, mock_db, client):
+        mock_db.duplicate_resume.return_value = None
+        async with client:
+            resp = await client.post("/api/v1/resumes/missing/duplicate", json={})
+        assert resp.status_code == 404
+
+
 class TestDeleteResume:
     """DELETE /api/v1/resumes/{resume_id}"""
 
     @patch("app.routers.resumes.db")
     async def test_delete_existing_resume(self, mock_db, client):
+        mock_db.get_resume.return_value = {"resume_id": "res-123", "is_active": False}
+        mock_db.count_resumes.return_value = 2
         mock_db.delete_resume.return_value = True
         async with client:
             resp = await client.delete("/api/v1/resumes/res-123")
@@ -841,10 +893,18 @@ class TestDeleteResume:
 
     @patch("app.routers.resumes.db")
     async def test_delete_nonexistent_returns_404(self, mock_db, client):
-        mock_db.delete_resume.return_value = False
+        mock_db.get_resume.return_value = None
         async with client:
             resp = await client.delete("/api/v1/resumes/nonexistent")
         assert resp.status_code == 404
+
+    @patch("app.routers.resumes.db")
+    async def test_delete_active_blocked_when_other_resumes_exist(self, mock_db, client):
+        mock_db.get_resume.return_value = {"resume_id": "res-123", "is_active": True}
+        mock_db.count_resumes.return_value = 2
+        async with client:
+            resp = await client.delete("/api/v1/resumes/res-123")
+        assert resp.status_code == 400
 
 
 class TestUpdateTitle:
@@ -898,7 +958,7 @@ class TestGenerateAuxiliaryPackage:
     async def test_generate_auxiliary_package_overwrites_both_fields(
         self, mock_db, mock_generate_auxiliary, client, mock_resume_record
     ):
-        tailored_resume = {**mock_resume_record, "parent_id": "master-1", "is_master": False}
+        tailored_resume = {**mock_resume_record, "parent_id": "master-1", "is_active": False}
         mock_db.get_resume.return_value = tailored_resume
         mock_db.get_improvement_by_tailored_resume.return_value = {"job_id": "job-123"}
         mock_db.get_job.return_value = {"job_id": "job-123", "content": "Senior Backend Engineer"}

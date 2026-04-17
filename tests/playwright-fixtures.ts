@@ -195,12 +195,12 @@ export function statusPayload(overrides?: Partial<Record<string, unknown>>) {
     status: "ready",
     llm_configured: true,
     llm_healthy: true,
-    has_master_resume: true,
+    has_active_resume: true,
     database_stats: {
       total_resumes: 2,
       total_jobs: 4,
       total_improvements: 3,
-      has_master_resume: true,
+      has_active_resume: true,
     },
     ...overrides,
   };

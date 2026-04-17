@@ -75,6 +75,10 @@
     "retrySuccess": "¡Procesamiento completado!",
     "retryFailed": "El reintento falló. Prueba a subir otro archivo.",
     "createResume": "Crear currículum",
+    "duplicateResume": "Duplicar",
+    "setActive": "Establecer activo",
+    "pinAction": "Fijar",
+    "unpinAction": "Desfijar",
     "edited": "Editado {date}",
     "statusLine": "ESTADO: {status}",
     "status": {

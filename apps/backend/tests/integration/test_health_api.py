@@ -80,7 +80,7 @@ class TestStatusEndpoint:
             "total_resumes": 1,
             "total_jobs": 0,
             "total_improvements": 0,
-            "has_master_resume": True,
+            "has_active_resume": True,
         }
         async with client:
             resp = await client.get("/api/v1/status")
@@ -88,7 +88,7 @@ class TestStatusEndpoint:
         data = resp.json()
         assert data["status"] == "ready"
         assert data["llm_healthy"] is False
-        assert data["has_master_resume"] is True
+        assert data["has_active_resume"] is True
         assert data["llm_health_status"] == "unchecked"
         assert data["llm_health_checked"] is False
 
@@ -106,7 +106,7 @@ class TestStatusEndpoint:
             "total_resumes": 0,
             "total_jobs": 0,
             "total_improvements": 0,
-            "has_master_resume": False,
+            "has_active_resume": False,
         }
         async with client:
             resp = await client.get("/api/v1/status")
@@ -134,7 +134,7 @@ class TestStatusEndpoint:
             "total_resumes": 1,
             "total_jobs": 0,
             "total_improvements": 0,
-            "has_master_resume": True,
+            "has_active_resume": True,
         }
         async with client:
             resp = await client.get("/api/v1/status")

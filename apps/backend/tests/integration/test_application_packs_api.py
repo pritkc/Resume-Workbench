@@ -26,7 +26,9 @@ def _fake_resume_record(sample_resume: dict) -> dict:
         "content": "# Jane Doe\nSenior Backend Engineer",
         "content_type": "md",
         "filename": "resume.md",
-        "is_master": True,
+        "is_active": True,
+        "is_pinned": False,
+        "pinned_at": None,
         "parent_id": None,
         "processed_data": copy.deepcopy(sample_resume),
         "processing_status": "ready",
@@ -114,7 +116,6 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
         }
         mock_db.get_application_pack.return_value = None
         mock_db.update_job.return_value = {"job_id": "job-123"}
-        mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
         mock_db.list_llm_calls.return_value = []
         mock_db.summarize_llm_calls.return_value = {
             "trace_id": "trace-123",
@@ -214,7 +215,6 @@ async def test_preview_uses_generation_defaults_and_request_scoped_flags(
         }
         mock_db.get_application_pack.return_value = None
         mock_db.update_job.return_value = {"job_id": "job-123"}
-        mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
         mock_db.create_application_pack.return_value = {"pack_id": "pack-123"}
         mock_db.create_generation_run.return_value = {"generation_run_id": "run-123"}
         mock_db.update_generation_run.return_value = {"generation_run_id": "run-123"}
@@ -274,7 +274,6 @@ async def test_preview_uses_primary_full_generation(
         }
         mock_db.get_application_pack.return_value = None
         mock_db.update_job.return_value = {"job_id": "job-123"}
-        mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
         mock_db.create_application_pack.return_value = {"pack_id": "pack-123"}
         mock_db.create_generation_run.return_value = {"generation_run_id": "run-123"}
         mock_db.update_generation_run.return_value = {"generation_run_id": "run-123"}
@@ -359,7 +358,6 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         mock_db.get_job.side_effect = lambda _job_id: job_record
         mock_db.get_application_pack.return_value = application_pack
         mock_db.update_job.side_effect = update_job
-        mock_db.get_master_resume.return_value = _fake_resume_record(sample_resume)
         mock_db.create_application_pack.return_value = application_pack
         mock_db.create_generation_run.side_effect = [
             {"generation_run_id": "preview-run-123"},

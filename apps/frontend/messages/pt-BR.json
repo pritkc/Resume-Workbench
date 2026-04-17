@@ -75,6 +75,10 @@
     "retrySuccess": "Processamento concluído com sucesso!",
     "retryFailed": "A nova tentativa falhou. Tente enviar outro arquivo.",
     "createResume": "Criar Currículo",
+    "duplicateResume": "Duplicar",
+    "setActive": "Definir como ativo",
+    "pinAction": "Fixar",
+    "unpinAction": "Desafixar",
     "edited": "Editado {date}",
     "statusLine": "STATUS: {status}",
     "status": {

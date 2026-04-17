@@ -31,7 +31,7 @@ interface StatusCacheContextValue {
   decrementResumes: () => void;
   incrementJobs: () => void;
   incrementImprovements: () => void;
-  setHasMasterResume: (value: boolean) => void;
+  setHasActiveResume: (value: boolean) => void;
 }
 
 const StatusCacheContext = createContext<StatusCacheContextValue | null>(null);
@@ -158,17 +158,17 @@ export function StatusCacheProvider({ children }: { children: React.ReactNode })
     });
   }, []);
 
-  const setHasMasterResume = useCallback((value: boolean) => {
+  const setHasActiveResume = useCallback((value: boolean) => {
     setCache((prev) => {
       if (!prev.status) return prev;
       return {
         ...prev,
         status: {
           ...prev.status,
-          has_master_resume: value,
+          has_active_resume: value,
           database_stats: {
             ...prev.status.database_stats,
-            has_master_resume: value,
+            has_active_resume: value,
           },
         },
       };
@@ -209,7 +209,7 @@ export function StatusCacheProvider({ children }: { children: React.ReactNode })
     decrementResumes,
     incrementJobs,
     incrementImprovements,
-    setHasMasterResume,
+    setHasActiveResume,
   };
 
   return <StatusCacheContext.Provider value={value}>{children}</StatusCacheContext.Provider>;

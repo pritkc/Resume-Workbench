@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,6 +12,9 @@ import {
   uploadJobDescriptions,
   previewImproveResume,
   confirmImproveResume,
+  fetchResumeList,
+  getActiveResume,
+  type ResumeListItem,
 } from '@/lib/api/resume';
 import { normalizeRenderThemeSettings, type RenderThemeSettings } from '@/lib/types/render-theme';
 import {
@@ -28,6 +31,17 @@ import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
+const ACTIVE_RESUME_STORAGE_KEY = 'active_resume_id';
+const LEGACY_MASTER_RESUME_STORAGE_KEY = 'master_resume_id';
+
+function migrateLegacyTailorStorage(): void {
+  if (typeof window === 'undefined') return;
+  const legacy = localStorage.getItem(LEGACY_MASTER_RESUME_STORAGE_KEY);
+  if (legacy && !localStorage.getItem(ACTIVE_RESUME_STORAGE_KEY)) {
+    localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, legacy);
+    localStorage.removeItem(LEGACY_MASTER_RESUME_STORAGE_KEY);
+  }
+}
 
 const PROMPT_ID_MIGRATION: Record<string, string> = {
   nudge: 'lite',
@@ -166,12 +180,14 @@ function appendFrontendPipelineTiming(
   };
 }
 
-export default function TailorPage() {
+function TailorPageContent() {
   const { t } = useTranslations();
   const [jobDescription, setJobDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
+  const [sourceResumeId, setSourceResumeId] = useState<string | null>(null);
+  const [resumeOptions, setResumeOptions] = useState<ResumeListItem[]>([]);
+  const [resumeListLoading, setResumeListLoading] = useState(true);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('full');
   const [promptLoading, setPromptLoading] = useState(false);
@@ -215,6 +231,7 @@ export default function TailorPage() {
   }, []);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setImprovedData } = useResumePreview();
   const {
     status: systemStatus,
@@ -228,13 +245,47 @@ export default function TailorPage() {
   const isLlmConfigured = !statusLoading && systemStatus?.llm_configured;
 
   useEffect(() => {
-    const storedId = localStorage.getItem('master_resume_id');
-    if (!storedId) {
-      router.push('/dashboard');
-    } else {
-      setMasterResumeId(storedId);
-    }
-  }, [router]);
+    let cancelled = false;
+    const run = async () => {
+      migrateLegacyTailorStorage();
+      setResumeListLoading(true);
+      try {
+        const paramSource = searchParams.get('source');
+        const { resumes } = await fetchResumeList(true);
+        if (cancelled) return;
+        setResumeOptions(resumes);
+        const fromQuery =
+          paramSource && resumes.some((r) => r.resume_id === paramSource) ? paramSource : null;
+        const active = await getActiveResume();
+        if (cancelled) return;
+        const storedId = localStorage.getItem(ACTIVE_RESUME_STORAGE_KEY);
+        const fallbackActive = resumes.find((r) => r.is_active)?.resume_id ?? null;
+        const resolved =
+          fromQuery ??
+          (active && resumes.some((r) => r.resume_id === active.resume_id)
+            ? active.resume_id
+            : null) ??
+          (storedId && resumes.some((r) => r.resume_id === storedId) ? storedId : null) ??
+          fallbackActive ??
+          resumes[0]?.resume_id ??
+          null;
+        if (!resolved) {
+          router.push('/dashboard');
+          return;
+        }
+        setSourceResumeId(resolved);
+        localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, resolved);
+      } catch {
+        if (!cancelled) router.push('/dashboard');
+      } finally {
+        if (!cancelled) setResumeListLoading(false);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [router, searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,8 +337,8 @@ export default function TailorPage() {
   };
 
   const buildConfirmPayload = (result: ImprovedResult) => {
-    if (!masterResumeId) {
-      throw new Error('Master resume ID is missing.');
+    if (!sourceResumeId) {
+      throw new Error('Source resume ID is missing.');
     }
     const resumePreview = result.data.resume_preview;
     if (!resumePreview || typeof resumePreview !== 'object' || Array.isArray(resumePreview)) {
@@ -320,7 +371,7 @@ export default function TailorPage() {
     }
 
     return {
-      resume_id: masterResumeId,
+      resume_id: sourceResumeId,
       job_id: result.data.job_id,
       improved_data: resumePreview as ResumeData,
       improvements:
@@ -459,13 +510,13 @@ export default function TailorPage() {
 
   const handleGenerate = async () => {
     const trimmedDescription = jobDescription.trim();
-    if (!trimmedDescription || !masterResumeId) return;
+    if (!trimmedDescription || !sourceResumeId) return;
     const validationError = getGenerateValidationError(trimmedDescription);
     if (validationError) {
       setError(validationError);
       return;
     }
-    const resumeId = masterResumeId;
+    const resumeId = sourceResumeId;
     const nextDefaults: StoredGenerationDefaults = {
       prompt_id: selectedPromptId,
     };
@@ -557,13 +608,13 @@ export default function TailorPage() {
   const handleRegenerateConfirm = async () => {
     setShowRegenerateDialog(false);
     const trimmedDescription = jobDescription.trim();
-    if (!trimmedDescription || !masterResumeId) return;
+    if (!trimmedDescription || !sourceResumeId) return;
     const validationError = getGenerateValidationError(trimmedDescription);
     if (validationError) {
       setError(validationError);
       return;
     }
-    const resumeId = masterResumeId;
+    const resumeId = sourceResumeId;
     setIsLoading(true);
     setIsGenerationInFlight(true);
     setError(null);
@@ -652,102 +703,133 @@ export default function TailorPage() {
           </div>
         )}
 
-        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-          <div className="border border-black bg-[#F0F0E8] p-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
-                Job Description
-              </p>
-              <span className="font-mono text-[11px] text-gray-400">
-                {t('tailor.charactersCount', { count: jobDescription.length })}
-              </span>
-            </div>
-            <Textarea
-              placeholder={t('tailor.jobDescriptionPlaceholder')}
-              className="min-h-[420px] border border-black bg-white font-mono text-sm focus:ring-0 focus:border-blue-700 resize-none rounded-none"
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              onKeyDown={handleTextareaKeyDown}
-              disabled={isLoading}
-            />
+        <div className="space-y-4 p-4">
+          <div className="border border-black bg-[#F8F7F1] p-3">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
+              Source resume
+            </p>
+            <select
+              className="mt-2 h-10 w-full border border-black bg-white px-3 font-mono text-sm"
+              value={sourceResumeId ?? ''}
+              disabled={resumeListLoading || resumeOptions.length === 0}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSourceResumeId(id);
+                localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, id);
+              }}
+            >
+              {resumeOptions.map((r) => (
+                <option key={r.resume_id} value={r.resume_id}>
+                  {(r.title || r.filename || 'Untitled resume') + (r.is_active ? ' (Active)' : '')}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="space-y-3">
-            <div className="border border-black bg-[#F8F7F1] p-3">
-              <Dropdown
-                options={
-                  promptOptions.length > 0
-                    ? promptOptions.map((opt) => ({
-                        id: opt.id,
-                        label: t(`tailor.promptOptions.${opt.id}.label`),
-                        description: t(`tailor.promptOptions.${opt.id}.description`),
-                      }))
-                    : [
-                        {
-                          id: 'full',
-                          label: t('tailor.promptOptions.full.label'),
-                          description: t('tailor.promptOptions.full.description'),
-                        },
-                        {
-                          id: 'lite',
-                          label: t('tailor.promptOptions.lite.label'),
-                          description: t('tailor.promptOptions.lite.description'),
-                        },
-                      ]
-                }
-                value={selectedPromptId}
-                onChange={(value) => {
-                  hasUserSelectedPrompt.current = true;
-                  setSelectedPromptId(value);
-                }}
-                label={t('tailor.promptLabel')}
-                description={t('tailor.promptDescription')}
-                disabled={isLoading || promptLoading}
-                density="compact"
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+            <div className="border border-black bg-[#F0F0E8] p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
+                  Job Description
+                </p>
+                <span className="font-mono text-[11px] text-gray-400">
+                  {t('tailor.charactersCount', { count: jobDescription.length })}
+                </span>
+              </div>
+              <Textarea
+                placeholder={t('tailor.jobDescriptionPlaceholder')}
+                className="min-h-[420px] border border-black bg-white font-mono text-sm focus:ring-0 focus:border-blue-700 resize-none rounded-none"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                onKeyDown={handleTextareaKeyDown}
+                disabled={isLoading}
               />
             </div>
 
-            {error && (
-              <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
-                {error}
+            <div className="space-y-3">
+              <div className="border border-black bg-[#F8F7F1] p-3">
+                <Dropdown
+                  options={
+                    promptOptions.length > 0
+                      ? promptOptions.map((opt) => ({
+                          id: opt.id,
+                          label: t(`tailor.promptOptions.${opt.id}.label`),
+                          description: t(`tailor.promptOptions.${opt.id}.description`),
+                        }))
+                      : [
+                          {
+                            id: 'full',
+                            label: t('tailor.promptOptions.full.label'),
+                            description: t('tailor.promptOptions.full.description'),
+                          },
+                          {
+                            id: 'lite',
+                            label: t('tailor.promptOptions.lite.label'),
+                            description: t('tailor.promptOptions.lite.description'),
+                          },
+                        ]
+                  }
+                  value={selectedPromptId}
+                  onChange={(value) => {
+                    hasUserSelectedPrompt.current = true;
+                    setSelectedPromptId(value);
+                  }}
+                  label={t('tailor.promptLabel')}
+                  description={t('tailor.promptDescription')}
+                  disabled={isLoading || promptLoading}
+                  density="compact"
+                />
               </div>
-            )}
 
-            <Button
-              size="lg"
-              onClick={handleGenerate}
-              disabled={isLoading || statusLoading || !jobDescription.trim() || !isLlmConfigured}
-              className="w-full"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  {t('common.processing')}
-                  {elapsed > 0 && (
-                    <span className="ml-2 font-mono text-xs opacity-70">{elapsed}s</span>
-                  )}
-                </>
-              ) : statusLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  {t('common.checking')}
-                </>
-              ) : !isLlmConfigured ? (
-                t('tailor.configureApiKeyFirst')
-              ) : (
-                t('tailor.generateTailored')
+              {error && (
+                <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
+                  {error}
+                </div>
               )}
-            </Button>
-            {isGenerationInFlight && (
-              <div className="flex items-center justify-between gap-3 border border-black bg-[#F8F7F1] px-3 py-2">
-                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
-                  {progressLabel}
-                </p>
-                <Button size="xs" variant="outline" onClick={handleCancelGeneration}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            )}
+
+              <Button
+                size="lg"
+                onClick={handleGenerate}
+                disabled={
+                  isLoading ||
+                  statusLoading ||
+                  resumeListLoading ||
+                  !sourceResumeId ||
+                  !jobDescription.trim() ||
+                  !isLlmConfigured
+                }
+                className="w-full"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    {t('common.processing')}
+                    {elapsed > 0 && (
+                      <span className="ml-2 font-mono text-xs opacity-70">{elapsed}s</span>
+                    )}
+                  </>
+                ) : statusLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    {t('common.checking')}
+                  </>
+                ) : !isLlmConfigured ? (
+                  t('tailor.configureApiKeyFirst')
+                ) : (
+                  t('tailor.generateTailored')
+                )}
+              </Button>
+              {isGenerationInFlight && (
+                <div className="flex items-center justify-between gap-3 border border-black bg-[#F8F7F1] px-3 py-2">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
+                    {progressLabel}
+                  </p>
+                  <Button size="xs" variant="outline" onClick={handleCancelGeneration}>
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -800,5 +882,19 @@ export default function TailorPage() {
         errorMessage={missingDiffError ?? undefined}
       />
     </div>
+  );
+}
+
+export default function TailorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen w-full items-center justify-center bg-[#F6F5EE]">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+        </div>
+      }
+    >
+      <TailorPageContent />
+    </Suspense>
   );
 }

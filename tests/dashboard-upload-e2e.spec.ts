@@ -17,12 +17,12 @@ test("dashboard upload sets the master resume and unlocks the main flow", async 
     await fulfillJson(
       route,
       statusPayload({
-        has_master_resume: false,
+        has_active_resume: false,
         database_stats: {
           total_resumes: 0,
           total_jobs: 0,
           total_improvements: 0,
-          has_master_resume: false,
+          has_active_resume: false,
         },
       }),
     );
@@ -37,7 +37,7 @@ test("dashboard upload sets the master resume and unlocks the main flow", async 
       body: JSON.stringify({
         resume_id: uploadedResumeId,
         processing_status: "ready",
-        is_master: true,
+        is_active: true,
       }),
     });
   });
@@ -96,7 +96,7 @@ test("dashboard upload sets the master resume and unlocks the main flow", async 
   await expect
     .poll(async () => {
       return page.evaluate(() =>
-        window.localStorage.getItem("master_resume_id"),
+        window.localStorage.getItem("active_resume_id"),
       );
     })
     .toBe(uploadedResumeId);
@@ -127,7 +127,7 @@ test("dashboard filters and sorts tailored resumes in the row view", async ({
         {
           resume_id: "master-123",
           filename: "master.pdf",
-          is_master: true,
+          is_active: true,
           parent_id: null,
           processing_status: "ready",
           created_at: "2026-04-01T00:00:00Z",
@@ -140,7 +140,7 @@ test("dashboard filters and sorts tailored resumes in the row view", async ({
         {
           resume_id: "tailored-1",
           filename: "one.pdf",
-          is_master: false,
+          is_active: false,
           parent_id: "master-123",
           processing_status: "ready",
           created_at: "2026-04-01T00:00:00Z",
@@ -153,7 +153,7 @@ test("dashboard filters and sorts tailored resumes in the row view", async ({
         {
           resume_id: "tailored-2",
           filename: "two.pdf",
-          is_master: false,
+          is_active: false,
           parent_id: "master-123",
           processing_status: "ready",
           created_at: "2026-04-02T00:00:00Z",
@@ -208,7 +208,7 @@ test("dashboard filters and sorts tailored resumes in the row view", async ({
   });
 
   await page.addInitScript(() => {
-    window.localStorage.setItem("master_resume_id", "master-123");
+    window.localStorage.setItem("active_resume_id", "master-123");
   });
 
   await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);
@@ -249,7 +249,7 @@ test("dashboard keeps a settings shortcut available in the main workspace state"
         {
           resume_id: "master-123",
           filename: "master.pdf",
-          is_master: true,
+          is_active: true,
           parent_id: null,
           processing_status: "ready",
           created_at: "2026-04-01T00:00:00Z",
@@ -330,7 +330,7 @@ test("dashboard keeps a settings shortcut available in the main workspace state"
   });
 
   await page.addInitScript(() => {
-    window.localStorage.setItem("master_resume_id", "master-123");
+    window.localStorage.setItem("active_resume_id", "master-123");
   });
 
   await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);

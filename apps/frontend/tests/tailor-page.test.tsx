@@ -14,12 +14,15 @@ const updateGenerationDefaults = vi.fn();
 const incrementJobs = vi.fn();
 const incrementImprovements = vi.fn();
 const incrementResumes = vi.fn();
+const fetchResumeList = vi.fn();
+const getActiveResume = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push,
     back,
   }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/components/common/resume_previewer_context', () => ({
@@ -29,11 +32,17 @@ vi.mock('@/components/common/resume_previewer_context', () => ({
   }),
 }));
 
-vi.mock('@/lib/api/resume', () => ({
-  uploadJobDescriptions: (...args: unknown[]) => uploadJobDescriptions(...args),
-  previewImproveResume: (...args: unknown[]) => previewImproveResume(...args),
-  confirmImproveResume: (...args: unknown[]) => confirmImproveResume(...args),
-}));
+vi.mock('@/lib/api/resume', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/resume')>();
+  return {
+    ...actual,
+    uploadJobDescriptions: (...args: unknown[]) => uploadJobDescriptions(...args),
+    previewImproveResume: (...args: unknown[]) => previewImproveResume(...args),
+    confirmImproveResume: (...args: unknown[]) => confirmImproveResume(...args),
+    fetchResumeList: (...args: unknown[]) => fetchResumeList(...args),
+    getActiveResume: (...args: unknown[]) => getActiveResume(...args),
+  };
+});
 
 vi.mock('@/lib/api/config', () => ({
   fetchPromptConfig: (...args: unknown[]) => fetchPromptConfig(...args),
@@ -157,8 +166,41 @@ describe('TailorPage', () => {
     incrementJobs.mockReset();
     incrementImprovements.mockReset();
     incrementResumes.mockReset();
+    fetchResumeList.mockReset();
+    getActiveResume.mockReset();
     localStorage.clear();
-    localStorage.setItem('master_resume_id', 'master-123');
+    localStorage.setItem('active_resume_id', 'master-123');
+    fetchResumeList.mockResolvedValue({
+      resumes: [
+        {
+          resume_id: 'master-123',
+          resume_code: 'ABC123',
+          filename: null,
+          is_active: true,
+          is_pinned: false,
+          pinned_at: null,
+          parent_id: null,
+          processing_status: 'ready',
+          created_at: '2026-01-01',
+          updated_at: '2026-01-01',
+          title: 'Test',
+        },
+      ],
+      active_resume_id: 'master-123',
+    });
+    getActiveResume.mockResolvedValue({
+      resume_id: 'master-123',
+      resume_code: 'ABC123',
+      filename: null,
+      is_active: true,
+      is_pinned: false,
+      pinned_at: null,
+      parent_id: null,
+      processing_status: 'ready',
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+      title: 'Test',
+    });
     uploadJobDescriptions.mockResolvedValue('job-123');
     previewImproveResume.mockResolvedValue(previewResult);
     confirmImproveResume.mockResolvedValue(confirmedResult);
@@ -189,6 +231,10 @@ describe('TailorPage', () => {
           'Senior backend role focused on FastAPI, architecture, APIs, testing, metrics, and ATS alignment for one-page resume tailoring.',
       },
     });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'tailor.generateTailored' })).not.toBeDisabled()
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'tailor.generateTailored' }));
 

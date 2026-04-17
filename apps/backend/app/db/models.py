@@ -41,7 +41,11 @@ class Resume(TimestampMixin, Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     content_type: Mapped[str] = mapped_column(String(32), nullable=False, default="md")
     filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    is_master: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    pinned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     parent_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     application_pack_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     processed_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

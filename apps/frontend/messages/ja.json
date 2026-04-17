@@ -75,6 +75,10 @@
     "retrySuccess": "処理に成功しました！",
     "retryFailed": "再処理に失敗しました。別のファイルをアップロードしてください。",
     "createResume": "履歴書を作成",
+    "duplicateResume": "複製",
+    "setActive": "アクティブにする",
+    "pinAction": "ピン留め",
+    "unpinAction": "ピン留め解除",
     "edited": "編集 {date}",
     "statusLine": "ステータス: {status}",
     "status": {

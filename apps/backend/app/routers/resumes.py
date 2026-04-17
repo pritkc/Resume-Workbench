@@ -60,6 +60,7 @@ from app.schemas import (
     ResumeFetchData,
     ResumeFetchResponse,
     ResumeListResponse,
+    ResumePinRequest,
     ResumeSummary,
     ResumeUpdateRequest,
     ResumeUploadResponse,
@@ -526,6 +527,58 @@ def _backfill_job_target_metadata(
     return {**job, **updates}
 
 
+def _resume_to_summary(
+    resume: dict[str, Any],
+    *,
+    application_packs: dict[str, dict[str, Any]],
+    jobs_by_id: dict[str, dict[str, Any] | None],
+) -> ResumeSummary:
+    application_pack = application_packs.get(resume.get("application_pack_id"))
+    pack_job_id = (
+        application_pack.get("job_id") if isinstance(application_pack, dict) else None
+    )
+    job = None
+    if isinstance(pack_job_id, str) and pack_job_id.strip():
+        if pack_job_id not in jobs_by_id:
+            jobs_by_id[pack_job_id] = db.get_job(pack_job_id)
+        job = jobs_by_id.get(pack_job_id)
+
+    job_description = ""
+    job_keywords = None
+    if isinstance(job, dict):
+        content = job.get("content")
+        job_description = content if isinstance(content, str) else ""
+        raw_keywords = job.get("job_keywords")
+        job_keywords = raw_keywords if isinstance(raw_keywords, dict) else None
+
+    target_role, target_company, target_location = _merge_target_metadata(
+        application_pack,
+        job,
+        job_description=job_description,
+        job_keywords=job_keywords,
+        title=resume.get("title"),
+    )
+    return ResumeSummary(
+        resume_id=resume["resume_id"],
+        resume_code=_resume_code_from_record(
+            resume,
+            resume_id=resume["resume_id"],
+        ),
+        filename=resume.get("filename"),
+        is_active=resume.get("is_active", False),
+        is_pinned=resume.get("is_pinned", False),
+        pinned_at=resume.get("pinned_at"),
+        parent_id=resume.get("parent_id"),
+        processing_status=resume.get("processing_status", "pending"),
+        created_at=resume.get("created_at", ""),
+        updated_at=resume.get("updated_at", ""),
+        title=resume.get("title"),
+        target_role=target_role,
+        target_company=target_company,
+        target_location=target_location,
+    )
+
+
 def _build_processed_resume(
     processed_data: Any, *, resume_id: str
 ) -> ResumeData | None:
@@ -923,12 +976,7 @@ async def _generate_tailored_resume_data(
 ) -> Any:
     """Generate tailored resume data through the primary full-resume prompt."""
     original_resume_data = _get_original_resume_data(resume)
-    master_resume = db.get_master_resume()
-    cleanup_source_data = (
-        _get_original_resume_data(master_resume)
-        if master_resume
-        else original_resume_data
-    )
+    cleanup_source_data = original_resume_data
     _set_stage(stage_state, "generate_full_resume")
     tailoring_result = await generate_tailored_resume(
         original_resume=resume["content"],
@@ -1229,7 +1277,7 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     # Store in database first with "processing" status (atomic master assignment)
     # original_markdown is preserved permanently for date reference even after
     # builder saves overwrite `content` with JSON.
-    resume = await db.create_resume_atomic_master(
+    resume = await db.create_resume_atomic_active(
         content=markdown_content,
         content_type="md",
         filename=file.filename,
@@ -1271,7 +1319,7 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
         request_id=request_id,
         resume_id=resume["resume_id"],
         processing_status=resume["processing_status"],
-        is_master=resume.get("is_master", False),
+        is_active=resume.get("is_active", False),
     )
 
 
@@ -1412,68 +1460,105 @@ async def render_resume_draft_preview(
 
 
 @router.get("/list", response_model=ResumeListResponse)
-async def list_resumes(include_master: bool = Query(False)) -> ResumeListResponse:
-    """List resumes, optionally including the master resume."""
+async def list_resumes(include_active: bool = Query(True)) -> ResumeListResponse:
+    """List resumes (pinned first), optionally excluding the active resume."""
     resumes = db.list_resumes()
     application_packs = {
         pack["pack_id"]: pack for pack in db.list_application_packs()
     }
     jobs_by_id: dict[str, dict[str, Any] | None] = {}
-    if not include_master:
-        resumes = [resume for resume in resumes if not resume.get("is_master", False)]
+    if not include_active:
+        resumes = [resume for resume in resumes if not resume.get("is_active", False)]
 
-    resumes.sort(key=lambda item: item.get("updated_at", ""), reverse=True)
+    active = db.get_active_resume()
+    active_resume_id = active["resume_id"] if active else None
 
     summaries: list[ResumeSummary] = []
     for resume in resumes:
-        application_pack = application_packs.get(resume.get("application_pack_id"))
-        pack_job_id = (
-            application_pack.get("job_id")
-            if isinstance(application_pack, dict)
-            else None
-        )
-        job = None
-        if isinstance(pack_job_id, str) and pack_job_id.strip():
-            if pack_job_id not in jobs_by_id:
-                jobs_by_id[pack_job_id] = db.get_job(pack_job_id)
-            job = jobs_by_id.get(pack_job_id)
-
-        job_description = ""
-        job_keywords = None
-        if isinstance(job, dict):
-            content = job.get("content")
-            job_description = content if isinstance(content, str) else ""
-            raw_keywords = job.get("job_keywords")
-            job_keywords = raw_keywords if isinstance(raw_keywords, dict) else None
-
-        target_role, target_company, target_location = _merge_target_metadata(
-            application_pack,
-            job,
-            job_description=job_description,
-            job_keywords=job_keywords,
-            title=resume.get("title"),
-        )
         summaries.append(
-            ResumeSummary(
-                resume_id=resume["resume_id"],
-                resume_code=_resume_code_from_record(
-                    resume,
-                    resume_id=resume["resume_id"],
-                ),
-                filename=resume.get("filename"),
-                is_master=resume.get("is_master", False),
-                parent_id=resume.get("parent_id"),
-                processing_status=resume.get("processing_status", "pending"),
-                created_at=resume.get("created_at", ""),
-                updated_at=resume.get("updated_at", ""),
-                title=resume.get("title"),
-                target_role=target_role,
-                target_company=target_company,
-                target_location=target_location,
+            _resume_to_summary(
+                resume,
+                application_packs=application_packs,
+                jobs_by_id=jobs_by_id,
             )
         )
 
-    return ResumeListResponse(request_id=str(uuid4()), data=summaries)
+    return ResumeListResponse(
+        request_id=str(uuid4()),
+        data=summaries,
+        active_resume_id=active_resume_id,
+    )
+
+
+@router.get("/active", response_model=ResumeSummary)
+async def get_active_resume_endpoint() -> ResumeSummary:
+    active = db.get_active_resume()
+    if not active:
+        raise HTTPException(status_code=404, detail="No active resume")
+    application_packs = {
+        pack["pack_id"]: pack for pack in db.list_application_packs()
+    }
+    jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    return _resume_to_summary(
+        active,
+        application_packs=application_packs,
+        jobs_by_id=jobs_by_id,
+    )
+
+
+@router.put("/{resume_id}/active", response_model=ResumeSummary)
+async def put_active_resume(resume_id: str) -> ResumeSummary:
+    if not db.set_active_resume(resume_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
+    updated = db.get_resume(resume_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    application_packs = {
+        pack["pack_id"]: pack for pack in db.list_application_packs()
+    }
+    jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    return _resume_to_summary(
+        updated,
+        application_packs=application_packs,
+        jobs_by_id=jobs_by_id,
+    )
+
+
+@router.put("/{resume_id}/pin", response_model=ResumeSummary)
+async def put_resume_pin(resume_id: str, body: ResumePinRequest) -> ResumeSummary:
+    if not db.set_resume_pinned(resume_id, body.pinned):
+        raise HTTPException(status_code=404, detail="Resume not found")
+    updated = db.get_resume(resume_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    application_packs = {
+        pack["pack_id"]: pack for pack in db.list_application_packs()
+    }
+    jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    return _resume_to_summary(
+        updated,
+        application_packs=application_packs,
+        jobs_by_id=jobs_by_id,
+    )
+
+
+@router.post("/{resume_id}/duplicate", response_model=ResumeSummary)
+async def post_duplicate_resume(resume_id: str) -> ResumeSummary:
+    created = db.duplicate_resume(resume_id)
+    if not created:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    updated = db.get_resume(created["resume_id"])
+    if not updated:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    application_packs = {
+        pack["pack_id"]: pack for pack in db.list_application_packs()
+    }
+    jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    return _resume_to_summary(
+        updated,
+        application_packs=application_packs,
+        jobs_by_id=jobs_by_id,
+    )
 
 
 @router.post("/improve/preview", response_model=ImproveResumeResponse)
@@ -1934,7 +2019,7 @@ async def improve_resume_confirm_endpoint(
             content=improved_text,
             content_type="json",
             filename=f"tailored_{resume.get('filename', 'resume')}",
-            is_master=False,
+            is_active=False,
             parent_id=request.resume_id,
             processed_data=improved_data,
             processing_status="ready",
@@ -2188,7 +2273,7 @@ async def improve_resume_endpoint(
             content=improved_text,
             content_type="json",
             filename=f"tailored_{resume.get('filename', 'resume')}",
-            is_master=False,
+            is_active=False,
             parent_id=request.resume_id,
             processed_data=improved_data,
             processing_status="ready",
@@ -2577,6 +2662,14 @@ async def render_resume_preview(
 @router.delete("/{resume_id}")
 async def delete_resume(resume_id: str) -> dict:
     """Delete a resume by ID."""
+    existing = db.get_resume(resume_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    if existing.get("is_active") and db.count_resumes() > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete active resume. Set another resume as active first.",
+        )
     if not db.delete_resume(resume_id):
         raise HTTPException(status_code=404, detail="Resume not found")
 
@@ -2627,7 +2720,7 @@ async def retry_processing(resume_id: str) -> ResumeUploadResponse:
                 request_id=request_id,
                 resume_id=resume_id,
                 processing_status="ready",
-                is_master=resume.get("is_master", False),
+                is_active=resume.get("is_active", False),
             )
         except Exception as e:
             logger.warning(f"Retry processing failed for resume {resume_id}: {e}")
@@ -2637,7 +2730,7 @@ async def retry_processing(resume_id: str) -> ResumeUploadResponse:
                 request_id=request_id,
                 resume_id=resume_id,
                 processing_status="failed",
-                is_master=resume.get("is_master", False),
+                is_active=resume.get("is_active", False),
             )
 
 
