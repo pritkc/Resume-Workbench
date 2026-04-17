@@ -4,7 +4,7 @@ import logging
 import re
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from markitdown import MarkItDown
 
@@ -13,9 +13,7 @@ from app.llm import complete_json
 from app.prompts import PROMPT_VERSIONS
 from app.prompts._schema import RESUME_SCHEMA_EXAMPLE
 from app.prompts.parse_resume import build_messages as build_parse_messages
-
-if TYPE_CHECKING:
-    from app.schemas import ResumeData
+from app.schemas import ResumeData
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +173,6 @@ async def parse_resume_to_json(markdown_text: str) -> dict[str, Any]:
 
     # Patch dates: restore months the LLM may have dropped
     result = restore_dates_from_markdown(result, markdown_text)
-
-    from app.schemas import ResumeData
 
     validated = ResumeData.model_validate(result)
     return validated.model_dump()

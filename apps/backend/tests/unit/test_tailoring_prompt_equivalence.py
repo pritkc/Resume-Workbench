@@ -6,7 +6,6 @@ from app.prompts import get_prompt
 from app.prompts.tailoring_blocks import TAILORING_USER_SHELL
 from app.services.tailoring.prompting import (
     assemble_tailoring_system_prompt,
-    render_tailoring_user_prompt,
 )
 
 

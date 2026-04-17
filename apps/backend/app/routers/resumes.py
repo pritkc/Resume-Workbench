@@ -40,8 +40,6 @@ from app.services.tailoring.change_manifest import (
     build_change_manifest,
     build_stage_breakdown,
 )
-
-logger = logging.getLogger(__name__)
 from app.schemas import (
     GenerateAuxiliaryPackageResponse,
     GenerateContentResponse,
@@ -87,6 +85,8 @@ from app.services.resume_codes import (
     derive_resume_code,
 )
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
+
+logger = logging.getLogger(__name__)
 
 _URL_LIKE_RE = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
 _METADATA_NOISE_RE = re.compile(
@@ -2392,10 +2392,6 @@ async def download_resume_pdf(
     sectionSpacing: int = Query(3, ge=1, le=5),
     itemSpacing: int = Query(2, ge=1, le=5),
     lineHeight: int = Query(3, ge=1, le=5),
-    fontSize: int = Query(3, ge=1, le=5),
-    headerScale: int = Query(3, ge=1, le=5),
-    headerFont: str = Query("serif", pattern="^(serif|sans-serif|mono)$"),
-    bodyFont: str = Query("sans-serif", pattern="^(serif|sans-serif|mono)$"),
     compactMode: bool = Query(False),
     showContactIcons: bool = Query(False),
     accentColor: str = Query("blue", pattern="^(blue|green|orange|red)$"),

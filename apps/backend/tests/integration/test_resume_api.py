@@ -1,7 +1,6 @@
 """Integration tests for resume CRUD endpoints."""
 import re
 from unittest.mock import patch, AsyncMock, MagicMock
-from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient

@@ -1,7 +1,6 @@
 """Unit tests for refiner pure functions — no LLM calls needed."""
 
 import copy
-import pytest
 
 from app.services.additional_groups import normalize_additional_groups
 from app.services.refiner import (

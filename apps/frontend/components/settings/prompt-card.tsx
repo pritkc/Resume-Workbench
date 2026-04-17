@@ -1,16 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import type {
-  PromptComposerPayload,
-  PromptManagerEntry,
-  PromptVariable,
-} from '@/lib/api/config';
-import {
-  deletePromptComposer,
-  fetchPromptComposer,
-  putPromptComposer,
-} from '@/lib/api/config';
+import type { PromptComposerPayload, PromptManagerEntry, PromptVariable } from '@/lib/api/config';
+import { deletePromptComposer, fetchPromptComposer, putPromptComposer } from '@/lib/api/config';
 import { Button } from '@/components/ui/button';
 import { CopyCharBar } from '@/components/settings/prompt-field-chrome';
 
@@ -94,9 +86,7 @@ export function PromptCard({
   const inferredVarNames =
     typeof shippedUser === 'string'
       ? [
-          ...new Set(
-            Array.from(shippedUser.matchAll(/\$([a-z_][a-z0-9_]*)/gi)).map((m) => m[1])
-          ),
+          ...new Set(Array.from(shippedUser.matchAll(/\$([a-z_][a-z0-9_]*)/gi)).map((m) => m[1])),
         ].sort()
       : [];
   const displayVariables: PromptVariable[] =
@@ -175,7 +165,9 @@ export function PromptCard({
               </span>
             ) : null}
           </div>
-          {composerError ? <p className="font-mono text-[10px] text-red-700">{composerError}</p> : null}
+          {composerError ? (
+            <p className="font-mono text-[10px] text-red-700">{composerError}</p>
+          ) : null}
           <div className="grid gap-2 lg:grid-cols-2">
             <div>
               <div className="flex items-end justify-between gap-2">

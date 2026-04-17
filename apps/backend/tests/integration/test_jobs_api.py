@@ -1,6 +1,6 @@
 """Integration tests for job description endpoints."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient

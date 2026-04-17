@@ -528,10 +528,9 @@ export async function fetchPromptCatalog(): Promise<PromptCatalogResponse> {
 }
 
 export async function fetchPromptComposer(stepName: string): Promise<PromptComposerResponse> {
-  const res = await apiFetch(
-    `/config/prompts/${encodeURIComponent(stepName)}/composer`,
-    { credentials: 'include' }
-  );
+  const res = await apiFetch(`/config/prompts/${encodeURIComponent(stepName)}/composer`, {
+    credentials: 'include',
+  });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(
@@ -587,8 +586,7 @@ export async function putSharedRulesOverride(
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(
-      (data as { detail?: string }).detail ||
-        `Failed to save shared rules (status ${res.status}).`
+      (data as { detail?: string }).detail || `Failed to save shared rules (status ${res.status}).`
     );
   }
   return res.json();

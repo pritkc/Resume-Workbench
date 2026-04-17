@@ -6,19 +6,13 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-
-# Fix for Windows: Use ProactorEventLoop for subprocess support (Playwright)
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config import settings
 from app.db.session import close_database, init_database
 from app.database import db
-from app.pdf import close_pdf_renderer, init_pdf_renderer
+from app.pdf import close_pdf_renderer
 from app.routers import (
     artifacts_router,
     application_packs_router,
@@ -30,6 +24,12 @@ from app.routers import (
     resumes_router,
     themes_router,
 )
+
+# Fix for Windows: Use ProactorEventLoop for subprocess support (Playwright)
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+logger = logging.getLogger(__name__)
 
 
 def _configure_application_logging() -> None:

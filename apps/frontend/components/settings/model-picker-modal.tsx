@@ -4,11 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  fetchCLIProxyModels,
-  type CLIProxyModelOption,
-  type LLMConfig,
-} from '@/lib/api/config';
+import { fetchCLIProxyModels, type CLIProxyModelOption, type LLMConfig } from '@/lib/api/config';
 
 export function ModelPickerModal({
   stepLabel,
@@ -60,7 +56,9 @@ export function ModelPickerModal({
         if (!cancelled) {
           setModels([]);
           setModelsError(
-            err instanceof Error ? err.message : t('settings.promptCatalog.modelPickerCliproxyLoadError')
+            err instanceof Error
+              ? err.message
+              : t('settings.promptCatalog.modelPickerCliproxyLoadError')
           );
         }
       })
@@ -79,7 +77,8 @@ export function ModelPickerModal({
   }, [models, llmConfig?.cliproxy?.provider_filter]);
 
   const formatModelOptionLabel = (m: CLIProxyModelOption): string => {
-    const src = (m.owned_by && m.owned_by.trim()) || t('settings.promptCatalog.modelPickerSourceUnknown');
+    const src =
+      (m.owned_by && m.owned_by.trim()) || t('settings.promptCatalog.modelPickerSourceUnknown');
     return `${m.id} — ${src} — ${m.provider}`;
   };
 
@@ -137,7 +136,9 @@ export function ModelPickerModal({
                     value={pickId}
                     onChange={(e) => setPickId(e.target.value)}
                   >
-                    <option value="">{t('settings.promptCatalog.modelPickerCliproxySelectPlaceholder')}</option>
+                    <option value="">
+                      {t('settings.promptCatalog.modelPickerCliproxySelectPlaceholder')}
+                    </option>
                     {modelSelectOptions.map((m) => (
                       <option key={m.id} value={m.id} title={formatModelOptionLabel(m)}>
                         {formatModelOptionLabel(m)}
@@ -145,7 +146,13 @@ export function ModelPickerModal({
                     ))}
                   </select>
                 </div>
-                <Button type="button" variant="outline" size="xs" className="h-8" onClick={applyPick}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="h-8"
+                  onClick={applyPick}
+                >
                   {t('settings.promptCatalog.modelPickerCliproxyInsert')}
                 </Button>
               </div>

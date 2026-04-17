@@ -9,7 +9,7 @@ from typing import Any
 from app.config import get_step_llm_config
 from app.llm import complete_json
 from app.prompts import PROMPT_VERSIONS
-from app.prompts.answer_questions import APPLICATION_QUESTIONS_PROMPT, APPLICATION_QUESTIONS_SYSTEM_PROMPT
+from app.prompts.answer_questions import build_messages as build_application_questions_messages
 from app.schemas import (
     ApplicationQuestionAnswer,
     ApplicationQuestionInput,
@@ -360,7 +360,7 @@ async def generate_application_question_answers(
         {"question_id": item.question_id, "question": item.question} for item in questions
     ]
 
-    prompt = APPLICATION_QUESTIONS_PROMPT.format(
+    system_prompt, prompt = build_application_questions_messages(
         job_target=json.dumps(job_target_payload, separators=(",", ":"), ensure_ascii=True),
         job_description=sanitized_job_description,
         resume_profile=profile.to_prompt_json(),
@@ -372,7 +372,7 @@ async def generate_application_question_answers(
 
     raw_result = await complete_json(
         prompt=prompt,
-        system_prompt=APPLICATION_QUESTIONS_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         config=get_step_llm_config("answer_questions"),
         max_tokens=4096,
         retries=2,

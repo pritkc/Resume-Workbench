@@ -5,8 +5,6 @@ import copy
 import json
 import logging
 import re
-from uuid import uuid4
-
 from fastapi import APIRouter, HTTPException
 
 from app.config_cache import get_content_language

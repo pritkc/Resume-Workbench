@@ -133,7 +133,10 @@ export default function PromptCatalogPage(): React.ReactElement {
             </p>
             <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-blue-900">
               <li>
-                <a href="#catalog-pipeline" className="underline decoration-black/20 underline-offset-2 hover:text-blue-950">
+                <a
+                  href="#catalog-pipeline"
+                  className="underline decoration-black/20 underline-offset-2 hover:text-blue-950"
+                >
                   {t('settings.promptCatalog.catalogIndexPipeline')}
                 </a>
               </li>

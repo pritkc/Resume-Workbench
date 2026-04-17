@@ -12,7 +12,7 @@ from app.llm import complete_json
 from app.prompts import PROMPT_VERSIONS
 from app.prompts.extract_jd_intel import build_messages as build_jd_intel_messages
 from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
-from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
+from app.services.prompt_utils import sanitize_user_input
 
 from app.services.tailoring.models import JDIntelligence, TailoringJobAnalysis
 

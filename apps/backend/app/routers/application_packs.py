@@ -15,7 +15,6 @@ from app.routers.resumes import (
 )
 from app.schemas import (
     ApplicationQuestionAnswer,
-    ApplicationQuestionInput,
     ApplicationPackListResponse,
     ApplicationQuestionsAnswerRequest,
     ApplicationQuestionsData,

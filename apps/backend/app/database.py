@@ -10,20 +10,17 @@ from collections.abc import Sequence
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.db.base import Base
 from app.db.models import (
-    ApplicationPack,
     Artifact,
     GenerationRun,
     Job,
     LLMCall,
     Resume,
-    User,
     utcnow,
 )
 from app.db.repositories import application_packs as application_pack_repo

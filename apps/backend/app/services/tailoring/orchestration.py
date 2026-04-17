@@ -37,10 +37,7 @@ from app.services.tailoring.preservation import (
 from app.prompts.critique_resume import build_messages as build_critique_messages
 from app.prompts.rewrite_resume import build_messages as build_rewrite_messages
 from app.services.tailoring.llm_calls import run_primary_tailoring
-from app.services.tailoring.prompting import (
-    TailoringPromptContext,
-    build_prompt_context,
-)
+from app.services.tailoring.prompting import build_prompt_context
 
 logger = logging.getLogger(__name__)
 

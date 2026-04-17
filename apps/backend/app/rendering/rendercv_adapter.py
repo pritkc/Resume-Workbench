@@ -887,8 +887,6 @@ def _base_custom_section_type_by_title(
             section_type_by_title[key] = section_type
     return section_type_by_title
 
-    return {"sectionType": "stringList", "strings": _text_list(items)}
-
 
 def _default_group_label_for_id(group_id: str, base_resume_data: dict[str, Any] | None) -> str:
     if base_resume_data:
