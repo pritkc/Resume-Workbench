@@ -29,6 +29,12 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 
+const PROMPT_ID_MIGRATION: Record<string, string> = {
+  nudge: 'lite',
+  light: 'lite',
+  keywords: 'full',
+};
+
 type StoredGenerationDefaults = {
   prompt_id: string;
 };
@@ -49,8 +55,9 @@ function readStoredGenerationDefaults(): StoredGenerationDefaults | null {
       return null;
     }
 
+    const pid = PROMPT_ID_MIGRATION[parsed.prompt_id] ?? parsed.prompt_id;
     return {
-      prompt_id: parsed.prompt_id,
+      prompt_id: pid,
     };
   } catch {
     window.localStorage.removeItem(GENERATION_DEFAULTS_STORAGE_KEY);
@@ -166,7 +173,7 @@ export default function TailorPage() {
   const [error, setError] = useState<string | null>(null);
   const [masterResumeId, setMasterResumeId] = useState<string | null>(null);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
-  const [selectedPromptId, setSelectedPromptId] = useState('keywords');
+  const [selectedPromptId, setSelectedPromptId] = useState('full');
   const [promptLoading, setPromptLoading] = useState(false);
   const hasUserSelectedPrompt = useRef(false);
   const missingDiffConfirmInFlight = useRef(false);
@@ -253,9 +260,7 @@ export default function TailorPage() {
           }
 
           if (!hasUserSelectedPrompt.current) {
-            setSelectedPromptId(
-              resolvedDefaults?.prompt_id || config.default_prompt_id || 'keywords'
-            );
+            setSelectedPromptId(resolvedDefaults?.prompt_id || config.default_prompt_id || 'full');
           }
         }
       } catch (err) {
@@ -679,19 +684,14 @@ export default function TailorPage() {
                       }))
                     : [
                         {
-                          id: 'nudge',
-                          label: t('tailor.promptOptions.nudge.label'),
-                          description: t('tailor.promptOptions.nudge.description'),
-                        },
-                        {
-                          id: 'keywords',
-                          label: t('tailor.promptOptions.keywords.label'),
-                          description: t('tailor.promptOptions.keywords.description'),
-                        },
-                        {
                           id: 'full',
                           label: t('tailor.promptOptions.full.label'),
                           description: t('tailor.promptOptions.full.description'),
+                        },
+                        {
+                          id: 'lite',
+                          label: t('tailor.promptOptions.lite.label'),
+                          description: t('tailor.promptOptions.lite.description'),
                         },
                       ]
                 }

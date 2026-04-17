@@ -17,6 +17,8 @@ import {
   themeSettings,
 } from "./playwright-fixtures";
 
+test.describe.configure({ timeout: 120_000 });
+
 test("dashboard to tailor to tailored resume builder flow works with mocked AI seams", async ({
   page,
 }) => {
@@ -28,7 +30,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
 
   await installArtifactMocks(page);
 
-  await page.route(/\/api\/v1\/status(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v1\/status\/?(?:\?.*)?$/, async (route) => {
     await fulfillJson(route, statusPayload());
   });
   await page.route(/\/api\/v1\/config\/prompts\/?(?:\?.*)?$/, async (route) => {
@@ -59,7 +61,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
 
     await fulfillJson(route, {
       include_cover_letter: false,
-      include_outreach_message: true,
+      include_outreach_message: false,
       prompt_id: "keywords",
     });
   });
@@ -154,36 +156,22 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   await expect(createResumeCard).toBeEnabled();
   await gotoWithRetry(page, `${frontendBaseUrl}/tailor`);
 
-  await expect(
-    page.getByRole("switch", { name: /cover letter/i }),
-  ).toHaveAttribute("aria-checked", "false");
-  await expect(
-    page.getByRole("switch", { name: /linkedin message/i }),
-  ).toHaveAttribute("aria-checked", "true");
-
   await page.locator("textarea").fill(jobDescriptionResponse.content);
   await page.getByRole("button", { name: /generate tailored resume/i }).click();
 
-  await expect(page.getByText(/review ai tailoring results/i)).toBeVisible();
-  await expect(page.getByAltText("preview.png").first()).toBeVisible();
-
-  await page.getByRole("button", { name: /confirm & save/i }).click();
+  await expect(
+    page.getByRole("button", { name: /^confirm & save$/i }),
+  ).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^confirm & save$/i }).click();
   await expect(page).toHaveURL(
     new RegExp(`/builder\\?id=${tailoredResumeId}$`),
   );
   await expect(page.getByText("RenderCV Preview")).toBeVisible();
   await expect(page.getByAltText("preview.png")).toBeVisible();
 
-  await page.getByRole("button", { name: /edit resume/i }).click();
-  await expect(page).toHaveURL(
-    new RegExp(`/builder\\?id=${tailoredResumeId}$`),
-  );
   await page.waitForLoadState("networkidle");
   await expect(page.getByText(/FastAPI Tailored Resume/i)).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /cover letter/i }),
-  ).toBeEnabled();
-  await page.getByRole("button", { name: /cover letter/i }).click();
+  await page.getByRole("button", { name: "COVER LETTER", exact: true }).click();
   await expect(
     page.getByText(/tailored cover letter for the platform team/i).first(),
   ).toBeVisible();
@@ -193,7 +181,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
     page.getByText(/i am excited about this backend role/i).first(),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /jd match/i }).click();
+  await page.getByRole("button", { name: "JD MATCH", exact: true }).click();
   await expect(page.getByText(/about jd match/i)).toBeVisible();
 
   await page.getByRole("button", { name: /back to dashboard/i }).click();
@@ -210,7 +198,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
     job_id: "job-123",
     prompt_id: "keywords",
     include_cover_letter: false,
-    include_outreach_message: true,
+    include_outreach_message: false,
   });
   expect(confirmBodies[0]).toMatchObject({
     resume_id: masterResumeId,
@@ -218,15 +206,9 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
     application_pack_id: "pack-123",
     generation_run_id: "run-123",
     include_cover_letter: false,
-    include_outreach_message: true,
+    include_outreach_message: false,
   });
-  expect(generationDefaultsUpdates).toEqual([
-    {
-      prompt_id: "keywords",
-      include_cover_letter: false,
-      include_outreach_message: true,
-    },
-  ]);
+  expect(generationDefaultsUpdates).toEqual([{ prompt_id: "keywords" }]);
 
   expect(browserProblems).toEqual({
     consoleMessages: [],

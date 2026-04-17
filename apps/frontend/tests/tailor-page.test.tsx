@@ -163,25 +163,25 @@ describe('TailorPage', () => {
     previewImproveResume.mockResolvedValue(previewResult);
     confirmImproveResume.mockResolvedValue(confirmedResult);
     fetchPromptConfig.mockResolvedValue({
-      prompt_options: [{ id: 'keywords' }],
-      default_prompt_id: 'keywords',
+      prompt_options: [{ id: 'full' }],
+      default_prompt_id: 'full',
     });
     fetchGenerationDefaults.mockResolvedValue({
       include_cover_letter: true,
       include_outreach_message: true,
-      prompt_id: 'keywords',
+      prompt_id: 'full',
     });
     updateGenerationDefaults.mockResolvedValue({
       include_cover_letter: true,
       include_outreach_message: true,
-      prompt_id: 'keywords',
+      prompt_id: 'full',
     });
   });
 
   it('loads last-used defaults and confirms the request-scoped tailoring payload', async () => {
     render(<TailorPage />);
 
-    await waitFor(() => expect(screen.getByText('keywords')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('full')).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText('tailor.jobDescriptionPlaceholder'), {
       target: {
@@ -195,13 +195,13 @@ describe('TailorPage', () => {
     expect(await screen.findByText('tailor.diffModal.title')).toBeInTheDocument();
     expect(screen.getAllByAltText('preview.png').length).toBeGreaterThan(0);
     expect(updateGenerationDefaults).toHaveBeenCalledWith({
-      prompt_id: 'keywords',
+      prompt_id: 'full',
     });
     expect(previewImproveResume).toHaveBeenCalledWith(
       'master-123',
       'job-123',
       expect.objectContaining({
-        promptId: 'keywords',
+        promptId: 'full',
         includeCoverLetter: false,
         includeOutreachMessage: false,
       })

@@ -330,6 +330,8 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.queryAllByText('System cleanup on the same item')).toHaveLength(1);
-    expect(screen.getByText(new RegExp(ragSnippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(ragSnippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    ).toBeInTheDocument();
   });
 });

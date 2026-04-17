@@ -8,9 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 from markitdown import MarkItDown
 
+from app.config import get_step_llm_config
 from app.llm import complete_json
-from app.prompts import PARSE_RESUME_PROMPT, PROMPT_VERSIONS
-from app.prompts.templates import PARSE_SYSTEM_PROMPT, RESUME_SCHEMA_EXAMPLE
+from app.prompts import PROMPT_VERSIONS
+from app.prompts._schema import RESUME_SCHEMA_EXAMPLE
+from app.prompts.parse_resume import build_messages as build_parse_messages
 
 if TYPE_CHECKING:
     from app.schemas import ResumeData
@@ -156,14 +158,12 @@ async def parse_resume_to_json(markdown_text: str) -> dict[str, Any]:
     Returns:
         Structured resume data matching ResumeData schema
     """
-    prompt = PARSE_RESUME_PROMPT.format(
-        schema=RESUME_SCHEMA_EXAMPLE,
-        resume_text=markdown_text,
-    )
+    system_prompt, prompt = build_parse_messages(markdown_text, schema=RESUME_SCHEMA_EXAMPLE)
 
     result = await complete_json(
         prompt=prompt,
-        system_prompt=PARSE_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
+        config=get_step_llm_config("parse_resume"),
         max_tokens=6144,
         retries=3,
         operation="resume_parse_json",

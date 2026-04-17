@@ -89,3 +89,7 @@ RULES:
 - Only include values from CURRENT VALUES or explicitly from USER FEEDBACK — never invent facts or certifications
 - Preserve overall item set unless user explicitly asks to remove/regroup
 - Order by relevance per feedback"""
+
+ENRICHMENT_ANALYZE_SYSTEM_PROMPT = "You are a professional resume analyst. Output only valid JSON."
+ENRICHMENT_ENHANCE_SYSTEM_PROMPT = "You are a professional resume writer. Output only valid JSON."
+ENRICHMENT_REGENERATE_SYSTEM_PROMPT = "You are a professional resume writer. Output only valid JSON."

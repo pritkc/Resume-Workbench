@@ -7,9 +7,10 @@ import logging
 import re
 from typing import Any
 
+from app.config import get_step_llm_config
 from app.llm import complete_json
 from app.prompts import PROMPT_VERSIONS
-from app.prompts.templates import EXTRACT_JD_INTELLIGENCE_PROMPT, EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
+from app.prompts.extract_jd_intel import build_messages as build_jd_intel_messages
 from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -164,15 +165,19 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
     """
 
     sanitized_jd = sanitize_user_input(job_description)
-    prompt = EXTRACT_JD_INTELLIGENCE_PROMPT.format(job_description=sanitized_jd)
+    system_prompt, prompt = build_jd_intel_messages(sanitized_jd)
 
     result = await complete_json(
         prompt=prompt,
-        system_prompt=EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
+        config=get_step_llm_config("extract_jd_intel"),
         operation="job_extract_keywords",
         metadata={
             "job_description_chars": len(job_description),
-            "prompt_version": PROMPT_VERSIONS.get("extract_keywords", "unknown"),
+            "prompt_version": PROMPT_VERSIONS.get(
+                "jd_intelligence_user",
+                PROMPT_VERSIONS.get("extract_keywords", "unknown"),
+            ),
         },
     )
     if not isinstance(result, dict):

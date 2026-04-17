@@ -141,23 +141,23 @@ def verify_generated_resume_result(
                 f"{', '.join(sorted(invented_metrics))} (not in original)"
             )
 
-    if prompt_id == "nudge":
+    if prompt_id == "lite":
         if any(
             change.change_type in {"added", "removed"}
             and change.field_type in {"description", "experience", "education", "project"}
             for change in changes
         ):
-            warnings.append("Nudge mode introduced structural content changes")
+            warnings.append("Light touch mode introduced structural content changes")
 
-    if prompt_id == "keywords":
+    if prompt_id == "full":
         if any(
             change.change_type in {"added", "removed"}
             and change.field_type in {"description", "experience", "education", "project"}
             for change in changes
         ):
-            warnings.append("Keyword mode changed section structure more than expected")
+            warnings.append("Full mode changed section structure more than expected")
 
-    if prompt_id in {"keywords", "full"}:
+    if prompt_id == "full":
         ats_keywords = job_keywords.get("ats_keywords")
         if ats_keywords and isinstance(ats_keywords, list):
             # 2.0 pipeline: use the richer ats_keywords list from JDIntelligence,

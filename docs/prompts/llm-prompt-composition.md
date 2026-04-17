@@ -6,30 +6,26 @@ This document explains how **static templates** in `apps/backend/app/prompts/` c
 
 ---
 
-## 1. Resume tailoring: three modes (`resume_generate_full`)
+## 1. Resume tailoring: two modes (`resume_generate_full`)
 
-### What “three modes” means
+### What “two modes” means
 
-There is **one** tailoring operation in the catalog: `resume_generate_full` (trace operation name `resume_generate_full`). The modes **`nudge`**, **`keywords`**, and **`full`** are a **user-selected parameter** (`prompt_id`), not three separate catalog entries.
+There is **one** tailoring operation in the catalog: `resume_generate_full`. The user picks **`full`** (default) or **`light`** via `prompt_id`. Legacy values **`nudge`** and **`keywords`** are migrated to **`light`** and **`full`** respectively (API and localStorage).
 
-All three modes share:
+The system message is assembled in one place — `assemble_tailoring_system_prompt(mode)` in `services/tailoring/prompting.py` — by concatenating:
 
-- The **same system prompt**: `TAILORING_SYSTEM_PROMPT` (`templates.py`).
-- The **same user-message shell**: `IMPROVE_RESUME_PROMPT` / `IMPROVE_RESUME_PROMPT_TEMPLATE` (`templates.py`).
+1. **`TAILORING_CONTRACT_BLOCK`** — role line + OUTPUT FORMAT (JSON shape; calibrated).
+2. **`TAILORING_CRAFT_BLOCK`** — APPROACH, WRITING STANDARDS, ATS OPTIMIZATION (voice and quality; iterate freely).
+3. **`TAILORING_MODE_STRATEGY[mode]`** — full multi-paragraph strategy for **full** vs **light** (isolated instructions; not a single `MODE:` constraint line).
 
-What changes per mode is **only** the resolved strings for:
-
-- `mode_id` → `nudge` | `keywords` | `full`
-- `mode_constraint` → one paragraph from `TAILORING_MODE_CONSTRAINTS[mode_id]`
-
-The dict `IMPROVE_STRATEGY_GUIDANCE` is loaded in code (`prompting.py`) but **is not interpolated** into the user template today—only `TAILORING_MODE_CONSTRAINTS` appears in the final user message via the `MODE:` line.
+The **user** message uses **`TAILORING_USER_SHELL`**: same template for both modes, with `MODE: {mode_id}` (and runtime slots for job intelligence, resume, response contract, language). Mode-specific behavior lives primarily in the **system** message.
 
 ### Flow: from user choice to LLM call
 
 ```mermaid
 flowchart LR
   subgraph inputs["Inputs"]
-    U[User picks mode\nnudge / keywords / full]
+    U[User picks mode\nfull / light]
     JD[Job description text]
     R[Resume structured or markdown]
     L[Content language]
@@ -42,22 +38,22 @@ flowchart LR
 
   subgraph build["Tailoring prompt build"]
     C[build_prompt_context]
-    M[Resolve mode_constraint from\nTAILORING_MODE_CONSTRAINTS]
-    P[render_tailoring_prompt\nIMPROVE_RESUME_PROMPT.format(...)]
+    A[assemble_tailoring_system_prompt\ncontract + craft + mode strategy]
+    P[render_tailoring_user_prompt\nTAILORING_USER_SHELL.format...]
   end
 
   subgraph llm["LLM request"]
-    SYS[TAILORING_SYSTEM_PROMPT]
-    USR[User message with MODE line +\njob intelligence + resume +\nresponse contract + language]
+    SYS[Assembled system prompt]
+    USR[User message:\nMODE line + slots]
   end
 
   JD --> E
   E --> K
-  U --> M
+  U --> A
   K --> C
   R --> C
   L --> C
-  M --> C
+  A --> C
   C --> P
   P --> USR
   SYS --> llm
@@ -68,9 +64,9 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  subgraph static["Static template (same for all modes)"]
-    T1[Intro line: Tailor this resume...]
-    T2[MODE line placeholder\nMODE: {mode_id} — {mode_constraint}]
+  subgraph static["User shell TAILORING_USER_SHELL"]
+    T1[Intro: Tailor this resume...]
+    T2[MODE: {mode_id}]
     T3[REWRITING EXAMPLE block]
     T4[JOB INTELLIGENCE:\n{job_intelligence}]
     T5[MASTER RESUME:\n{original_resume}]
@@ -78,45 +74,39 @@ flowchart TB
     T7[Output language:\n{output_language}]
   end
 
-  subgraph mode_only["Mode-specific (only this differs by nudge/keywords/full)"]
-    MC[TAILORING_MODE_CONSTRAINTS\nselected paragraph]
-  end
-
   subgraph runtime["Runtime-filled"]
-    J[jd_intelligence JSON\nfrom analysis pipeline]
+    J[jd_intelligence JSON]
     O[Resume JSON or markdown]
-    RC[Response contract JSON\nallowed keys / indices per resume]
-    OL[Language name e.g. English]
+    RC[Response contract JSON]
+    OL[Language name]
   end
 
-  mode_only --> T2
   J --> T4
   O --> T5
   RC --> T6
   OL --> T7
   static --> OUT[Final user message string]
-  runtime --> OUT
 ```
 
 ### System vs user: what the model sees
 
 ```mermaid
 flowchart LR
-  subgraph system_msg["System message (unchanged across modes)"]
-    S1[Role: senior resume strategist]
-    S2[APPROACH / WRITING STANDARDS /\nATS / OUTPUT FORMAT rules]
+  subgraph system_msg["System message per mode"]
+    S1[TAILORING_CONTRACT_BLOCK]
+    S2[TAILORING_CRAFT_BLOCK]
+    S3[TAILORING_MODE_STRATEGY full or light]
   end
 
-  subgraph user_msg["User message (mode affects one line)"]
-    U1[MODE: keywords — Keyword-focused alignment...]
-    U2[...rest identical structure...]
+  subgraph user_msg["User message"]
+    U1[MODE: full or light +\nshared slots]
   end
 
   system_msg --> API[Chat completion:\nsystem + user]
   user_msg --> API
 ```
 
-**Design note:** Because the system prompt is identical for every mode, **behavioral differences rely heavily** on the `MODE:` line text. If nudge feels too aggressive, consider a **mode-specific system addendum** or **injecting** `IMPROVE_STRATEGY_GUIDANCE` into the user template (see discussion in code / future work).
+The primary LLM call is wrapped by `run_tailoring_pipeline()` in `orchestration.py` (optional per-step model override via `PRIMARY_TAILORING_MODEL_OVERRIDE`). JD extraction still runs **before** tailoring in the HTTP flow.
 
 ---
 

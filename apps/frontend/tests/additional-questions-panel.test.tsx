@@ -107,7 +107,9 @@ describe('AdditionalQuestionsPanel', () => {
       })
     );
 
-    const answerBox = await screen.findByDisplayValue('My experience aligns with this role and team.');
+    const answerBox = await screen.findByDisplayValue(
+      'My experience aligns with this role and team.'
+    );
     fireEvent.change(answerBox, { target: { value: 'Edited answer' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Edits' }));
 

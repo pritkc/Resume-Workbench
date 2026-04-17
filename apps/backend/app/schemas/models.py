@@ -1449,6 +1449,108 @@ class PromptConfigResponse(BaseModel):
     prompt_options: list[PromptOption]
 
 
+class PromptVariable(BaseModel):
+    """Named placeholder in a prompt data template."""
+
+    name: str
+    description: str
+
+
+class PromptManagerEntry(BaseModel):
+    """Rich catalog row for Prompt Manager (per-step instructions, rules, model)."""
+
+    step_name: str
+    label: str
+    version: str
+    file_path: str
+    pipeline: Literal["full", "lite", "standalone"]
+    pipeline_order: int
+    receives_from: list[str]
+    feeds_into: list[str]
+    instructions: str
+    instructions_is_override: bool
+    instructions_default: str
+    rules: str
+    rules_source: str | None = None
+    rules_is_override: bool
+    rules_default: str
+    data_template: str
+    variables: list[PromptVariable]
+    model: str
+    model_is_override: bool
+    read_only: bool = True
+    # Two-scroll / Composer (phase 3.7.6)
+    composer_override_active: bool = False
+    system_shipped: str = ""
+    user_template_shipped: str = ""
+    system_resolved: str = ""
+    user_template_resolved: str = ""
+
+
+class SharedRuleEntry(BaseModel):
+    """Shared rule fragment used by multiple steps."""
+
+    name: str
+    label: str
+    rules: str
+    rules_is_override: bool
+    rules_default: str
+    used_by: list[str]
+
+
+class PromptInstructionPutRequest(BaseModel):
+    instructions: str
+
+
+class PromptRulesPutRequest(BaseModel):
+    rules: str
+
+
+class PromptComposerPutRequest(BaseModel):
+    system: str
+    user: str
+
+
+class PromptComposerResponse(BaseModel):
+    step_name: str
+    composer_override_active: bool
+    system: str
+    user: str
+    system_shipped: str
+    user_template_shipped: str
+
+
+class SharedRulesPutRequest(BaseModel):
+    rules: str
+
+
+class PromptOverrideSuccess(BaseModel):
+    success: bool
+    step_name: str
+
+
+class SharedRuleOverrideSuccess(BaseModel):
+    success: bool
+    rules_name: str
+    affected_steps: list[str]
+
+
+class CritiqueConfigResponse(BaseModel):
+    enabled: bool
+
+
+class CritiqueConfigRequest(BaseModel):
+    enabled: bool
+
+
+class ModelOverridesResponse(BaseModel):
+    overrides: dict[str, str | None]
+
+
+class ModelOverridesRequest(BaseModel):
+    overrides: dict[str, str | None]
+
+
 PromptCatalogPolicy = Literal["system", "user_editable_future", "user_choice", "runtime_injected"]
 
 
@@ -1480,6 +1582,8 @@ class PromptCatalogResponse(BaseModel):
     """Response containing all configured prompt templates used by LLM operations."""
 
     prompts: list[PromptCatalogEntry] = Field(default_factory=list)
+    entries: list[PromptManagerEntry] = Field(default_factory=list)
+    shared_rules: list[SharedRuleEntry] = Field(default_factory=list)
 
 
 # API Key Management Models

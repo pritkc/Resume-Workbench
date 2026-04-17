@@ -27,6 +27,51 @@ def load_config_file() -> dict[str, Any]:
     return {}
 
 
+def get_enable_critique() -> bool:
+    raw = load_config_file().get("enable_critique")
+    if raw is None:
+        return True
+    return bool(raw)
+
+
+def get_step_model(step_name: str) -> str | None:
+    overrides = load_config_file().get("model_overrides")
+    if not isinstance(overrides, dict):
+        return None
+    raw = overrides.get(step_name)
+    if raw in (None, ""):
+        return None
+    return str(raw).strip()
+
+
+def get_step_llm_config(step_name: str):
+    from app.llm import LLMConfig, get_llm_config
+
+    overrides = load_config_file().get("model_overrides")
+    if not isinstance(overrides, dict):
+        overrides = {}
+    raw = overrides.get(step_name)
+    if raw in (None, ""):
+        return None
+    base = get_llm_config()
+    text = str(raw).strip()
+    if "/" in text:
+        provider, model = text.split("/", 1)
+        provider = provider.strip()
+        model = model.strip()
+    else:
+        provider = base.provider
+        model = text
+    return LLMConfig(
+        provider=provider,
+        model=model,
+        api_key=base.api_key,
+        api_base=base.api_base,
+        ai_route=base.ai_route,
+        route_provider_filter=base.route_provider_filter,
+    )
+
+
 def save_config_file(config: dict[str, Any]) -> None:
     """Save configuration to config.json file.
 

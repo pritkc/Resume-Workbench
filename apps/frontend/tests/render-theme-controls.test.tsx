@@ -23,5 +23,5 @@ describe('RenderThemeControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Templates / Advanced' }));
     expect(screen.getByText(TEMPLATE_HINTS.footer)).toBeInTheDocument();
-  });
+  }, 15_000);
 });

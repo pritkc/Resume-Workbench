@@ -95,12 +95,24 @@ _METADATA_NOISE_RE = re.compile(
 )
 
 
+_PROMPT_ID_MIGRATION = {
+    "nudge": "lite",
+    "light": "lite",
+    "keywords": "full",
+}
+
+
 def _get_default_prompt_id() -> str:
     """Get configured default prompt id from config file."""
     config = _load_config()
     option_ids = {option["id"] for option in IMPROVE_PROMPT_OPTIONS}
     prompt_id = config.get("default_prompt_id", DEFAULT_IMPROVE_PROMPT_ID)
-    return prompt_id if prompt_id in option_ids else DEFAULT_IMPROVE_PROMPT_ID
+    if prompt_id in option_ids:
+        return prompt_id
+    migrated = _PROMPT_ID_MIGRATION.get(prompt_id)
+    if migrated and migrated in option_ids:
+        return migrated
+    return DEFAULT_IMPROVE_PROMPT_ID
 
 
 def _get_generation_defaults_config() -> dict[str, Any]:
@@ -116,10 +128,18 @@ def _resolve_prompt_id(request_prompt_id: str | None) -> str:
     if request_prompt_id in option_ids:
         return request_prompt_id
 
+    migrated = _PROMPT_ID_MIGRATION.get(request_prompt_id) if request_prompt_id else None
+    if migrated and migrated in option_ids:
+        return migrated
+
     generation_defaults = _get_generation_defaults_config()
     generation_default_prompt = generation_defaults.get("prompt_id")
-    if generation_default_prompt in option_ids:
-        return generation_default_prompt
+    if isinstance(generation_default_prompt, str):
+        if generation_default_prompt in option_ids:
+            return generation_default_prompt
+        migrated_default = _PROMPT_ID_MIGRATION.get(generation_default_prompt)
+        if migrated_default and migrated_default in option_ids:
+            return migrated_default
 
     return _get_default_prompt_id()
 

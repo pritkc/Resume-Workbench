@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiDelete, apiFetch } from './client';
 
 // Supported LLM providers
 export type LLMProvider = 'openai' | 'anthropic' | 'openrouter' | 'gemini' | 'deepseek' | 'ollama';
@@ -397,8 +397,83 @@ export interface PromptCatalogEntry {
   sections?: PromptCatalogSection[] | null;
 }
 
+export interface PromptVariable {
+  name: string;
+  description: string;
+}
+
+export type PromptPipeline = 'full' | 'lite' | 'standalone';
+
+export interface PromptManagerEntry {
+  step_name: string;
+  label: string;
+  version: string;
+  file_path: string;
+  pipeline: PromptPipeline;
+  pipeline_order: number;
+  receives_from: string[];
+  feeds_into: string[];
+  instructions: string;
+  instructions_is_override: boolean;
+  instructions_default: string;
+  rules: string;
+  rules_source: string | null;
+  rules_is_override: boolean;
+  rules_default: string;
+  data_template: string;
+  variables: PromptVariable[];
+  model: string;
+  model_is_override: boolean;
+  read_only: boolean;
+  /** Phase 3.7.6 composer: two-scroll model + optional JSON override */
+  composer_override_active?: boolean;
+  system_shipped?: string;
+  user_template_shipped?: string;
+  system_resolved?: string;
+  user_template_resolved?: string;
+}
+
+export interface PromptComposerPayload {
+  system: string;
+  user: string;
+}
+
+export interface PromptComposerResponse {
+  step_name: string;
+  composer_override_active: boolean;
+  system: string;
+  user: string;
+  system_shipped: string;
+  user_template_shipped: string;
+}
+
+export interface SharedRuleEntry {
+  name: string;
+  label: string;
+  rules: string;
+  rules_is_override: boolean;
+  rules_default: string;
+  used_by: string[];
+}
+
+export interface SharedRuleOverrideSuccess {
+  success: boolean;
+  rules_name: string;
+  affected_steps: string[];
+}
+
 export interface PromptCatalogResponse {
   prompts: PromptCatalogEntry[];
+  entries?: PromptManagerEntry[];
+  shared_rules?: SharedRuleEntry[];
+}
+
+export interface CritiqueConfig {
+  enabled: boolean;
+}
+
+export interface ModelOverridesResponse {
+  overrides: Record<string, string | null>;
 }
 
 export interface GenerationDefaults {
@@ -449,6 +524,133 @@ export async function fetchPromptCatalog(): Promise<PromptCatalogResponse> {
     throw new Error(`Failed to load prompt catalog (status ${res.status}).`);
   }
 
+  return res.json();
+}
+
+export async function fetchPromptComposer(stepName: string): Promise<PromptComposerResponse> {
+  const res = await apiFetch(
+    `/config/prompts/${encodeURIComponent(stepName)}/composer`,
+    { credentials: 'include' }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to load prompt composer (status ${res.status}).`
+    );
+  }
+  return res.json();
+}
+
+export async function putPromptComposer(
+  stepName: string,
+  payload: PromptComposerPayload
+): Promise<PromptComposerResponse> {
+  const res = await apiFetch(`/config/prompts/${encodeURIComponent(stepName)}/composer`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to save prompt composer (status ${res.status}).`
+    );
+  }
+  return res.json();
+}
+
+export async function deletePromptComposer(stepName: string): Promise<PromptComposerResponse> {
+  const res = await apiDelete(`/config/prompts/${encodeURIComponent(stepName)}/composer`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to reset prompt composer (status ${res.status}).`
+    );
+  }
+  return res.json();
+}
+
+export async function putSharedRulesOverride(
+  rulesName: string,
+  rules: string
+): Promise<SharedRuleOverrideSuccess> {
+  const res = await apiFetch(`/config/shared-rules/${encodeURIComponent(rulesName)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ rules }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to save shared rules (status ${res.status}).`
+    );
+  }
+  return res.json();
+}
+
+export async function deleteSharedRulesOverride(
+  rulesName: string
+): Promise<SharedRuleOverrideSuccess> {
+  const res = await apiDelete(`/config/shared-rules/${encodeURIComponent(rulesName)}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to delete shared rules override (status ${res.status}).`
+    );
+  }
+  return res.json();
+}
+
+export async function fetchCritiqueConfig(): Promise<CritiqueConfig> {
+  const res = await apiFetch('/config/critique', { credentials: 'include' });
+  if (!res.ok) {
+    throw new Error(`Failed to load critique config (status ${res.status}).`);
+  }
+  return res.json();
+}
+
+export async function updateCritiqueConfig(enabled: boolean): Promise<CritiqueConfig> {
+  const res = await apiFetch('/config/critique', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to update critique config (status ${res.status}).`);
+  }
+  return res.json();
+}
+
+export async function fetchModelOverrides(): Promise<ModelOverridesResponse> {
+  const res = await apiFetch('/config/model-overrides', { credentials: 'include' });
+  if (!res.ok) {
+    throw new Error(`Failed to load model overrides (status ${res.status}).`);
+  }
+  return res.json();
+}
+
+export async function updateModelOverrides(
+  overrides: Record<string, string | null>
+): Promise<ModelOverridesResponse> {
+  const res = await apiFetch('/config/model-overrides', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ overrides }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to save model overrides (status ${res.status}).`);
+  }
   return res.json();
 }
 

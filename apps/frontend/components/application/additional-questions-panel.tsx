@@ -26,9 +26,7 @@ interface AdditionalQuestionsPanelProps {
 type GenerationState = 'idle' | 'loading' | 'generating' | 'saving';
 
 function normalizeQuestionLine(value: string): string {
-  return value
-    .replace(/^\s*\d+\s*[\).:-]\s*/, '')
-    .trim();
+  return value.replace(/^\s*\d+\s*[\).:-]\s*/, '').trim();
 }
 
 function buildQuestionsFromText(value: string) {
@@ -84,10 +82,7 @@ export function AdditionalQuestionsPanel({
     setLocalGenerationRunId(generationRunId ?? null);
   }, [generationRunId]);
 
-  const canFetchExisting = useMemo(
-    () => Boolean(localPackId || resumeId),
-    [localPackId, resumeId]
-  );
+  const canFetchExisting = useMemo(() => Boolean(localPackId || resumeId), [localPackId, resumeId]);
 
   const loadExistingAnswers = useCallback(async () => {
     if (!canFetchExisting || disabled) {
@@ -233,21 +228,12 @@ export function AdditionalQuestionsPanel({
       onDataChange?.(response.data);
     } catch (saveError) {
       console.error('Failed to save additional question answers:', saveError);
-      const message =
-        saveError instanceof Error ? saveError.message : 'Failed to save answers.';
+      const message = saveError instanceof Error ? saveError.message : 'Failed to save answers.';
       setError(message);
     } finally {
       setGenerationState('idle');
     }
-  }, [
-    answers,
-    disabled,
-    jobId,
-    localGenerationRunId,
-    localPackId,
-    onDataChange,
-    resumeId,
-  ]);
+  }, [answers, disabled, jobId, localGenerationRunId, localPackId, onDataChange, resumeId]);
 
   const copyText = useCallback(async (value: string, id: string) => {
     try {
@@ -452,4 +438,3 @@ export function AdditionalQuestionsPanel({
     </div>
   );
 }
-

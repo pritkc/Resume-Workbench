@@ -4,16 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
 
-from app.prompts import (
-    DEFAULT_IMPROVE_PROMPT_ID,
-    IMPROVE_RESUME_PROMPT,
-    IMPROVE_STRATEGY_GUIDANCE,
-    TAILORING_MODE_CONSTRAINTS,
-    TAILORING_SYSTEM_PROMPT,
-    get_language_name,
-)
+from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, get_prompt
+from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
 
 from app.services.tailoring.analysis import jd_intelligence_to_prompt_json
 from app.services.tailoring.models import (
@@ -29,32 +24,42 @@ logger = logging.getLogger(__name__)
 class TailoringPromptContext:
     prompt_id: str
     output_language: str
-    mode_constraint: str
-    strategy_primary_goal: str
     response_contract_json: str
     job_intelligence_json: str
     original_resume_json: str
     retry_hint: str
     system_prompt: str
+    user_prompt: str
     used_structured_resume_input: bool
 
 
-def _resolve_strategy(prompt_id: str | None) -> tuple[str, dict[str, str], str]:
-    selected_prompt_id = prompt_id or DEFAULT_IMPROVE_PROMPT_ID
-    strategy_guidance = IMPROVE_STRATEGY_GUIDANCE.get(
-        selected_prompt_id,
-        IMPROVE_STRATEGY_GUIDANCE[DEFAULT_IMPROVE_PROMPT_ID],
+def assemble_tailoring_system_prompt(mode: str) -> str:
+    mod = get_prompt("tailor_resume_full" if mode == "full" else "tailor_resume_lite")
+    system, _ = mod.build_messages(
+        original_resume="{}",
+        job_intelligence="{}",
+        response_contract="{}",
+        output_language="English",
     )
-    mode_constraint = TAILORING_MODE_CONSTRAINTS.get(
-        selected_prompt_id,
-        TAILORING_MODE_CONSTRAINTS[DEFAULT_IMPROVE_PROMPT_ID],
+    return system
+
+
+def render_tailoring_user_prompt(
+    *,
+    mode_id: str,
+    job_intelligence_json: str,
+    original_resume_json: str,
+    response_contract_json: str,
+    output_language: str,
+) -> str:
+    mod = get_prompt("tailor_resume_full" if mode_id == "full" else "tailor_resume_lite")
+    _, user = mod.build_messages(
+        original_resume=original_resume_json,
+        job_intelligence=job_intelligence_json,
+        response_contract=response_contract_json,
+        output_language=output_language,
     )
-    if selected_prompt_id not in IMPROVE_STRATEGY_GUIDANCE:
-        logger.warning(
-            "Unknown prompt_id '%s'; using default tailoring guidance.",
-            selected_prompt_id,
-        )
-    return selected_prompt_id, strategy_guidance, mode_constraint
+    return user
 
 
 def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> str:
@@ -69,6 +74,18 @@ def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> 
     )
 
 
+def _resolve_mode(prompt_id: str | None) -> str:
+    selected = prompt_id or DEFAULT_IMPROVE_PROMPT_ID
+    if selected not in TAILORING_MODE_STRATEGY:
+        logger.warning(
+            "Unknown prompt_id '%s'; falling back to default '%s'.",
+            selected,
+            DEFAULT_IMPROVE_PROMPT_ID,
+        )
+        selected = DEFAULT_IMPROVE_PROMPT_ID
+    return selected
+
+
 def build_prompt_context(
     *,
     prompt_id: str | None,
@@ -78,39 +95,78 @@ def build_prompt_context(
     resume_payload: TailoringResumePayload | None,
     original_resume_markdown: str,
 ) -> TailoringPromptContext:
-    selected_prompt_id, strategy_guidance, mode_constraint = _resolve_strategy(prompt_id)
+    from app.prompts._constants import get_language_name
+
+    selected_mode = _resolve_mode(prompt_id)
     output_language = get_language_name(language)
+
     resume_input = (
-        json.dumps(resume_payload.model_dump(), separators=(',', ':'), ensure_ascii=True)
+        json.dumps(resume_payload.model_dump(), separators=(",", ":"), ensure_ascii=True)
         if resume_payload is not None
         else original_resume_markdown
     )
     response_contract_json = json.dumps(
         response_contract.to_prompt_dict(),
-        separators=(',', ':'),
+        separators=(",", ":"),
         ensure_ascii=True,
+    )
+    job_json = jd_intelligence_to_prompt_json(jd_intelligence)
+
+    mod = get_prompt("tailor_resume_full" if selected_mode == "full" else "tailor_resume_lite")
+    system_prompt, user_prompt = mod.build_messages(
+        original_resume=resume_input,
+        job_intelligence=job_json,
+        response_contract=response_contract_json,
+        output_language=output_language,
     )
 
     return TailoringPromptContext(
-        prompt_id=selected_prompt_id,
+        prompt_id=selected_mode,
         output_language=output_language,
-        mode_constraint=mode_constraint,
-        strategy_primary_goal=strategy_guidance["primary_goal"],
         response_contract_json=response_contract_json,
-        job_intelligence_json=jd_intelligence_to_prompt_json(jd_intelligence),
+        job_intelligence_json=job_json,
         original_resume_json=resume_input,
         retry_hint=build_tailoring_retry_hint(response_contract),
-        system_prompt=TAILORING_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
         used_structured_resume_input=resume_payload is not None,
     )
 
 
 def render_tailoring_prompt(context: TailoringPromptContext) -> str:
-    return IMPROVE_RESUME_PROMPT.format(
-        job_intelligence=context.job_intelligence_json,
-        original_resume=context.original_resume_json,
-        response_contract=context.response_contract_json,
-        output_language=context.output_language,
-        mode_id=context.prompt_id,
-        mode_constraint=context.mode_constraint,
-    )
+    return context.user_prompt
+
+
+@dataclass
+class PipelineStep:
+    name: str
+    build_messages: Callable[..., tuple[str, str]] | None = None
+    enabled: bool = True
+    model_override: str | None = None
+    max_tokens: int = 15000
+    operation: str = "tailoring_step"
+    metadata_keys: list[str] = field(default_factory=list)
+
+
+DEFAULT_TAILORING_PIPELINE: list[PipelineStep] = [
+    PipelineStep(
+        name="jd_intelligence",
+        build_messages=None,
+        enabled=False,
+        operation="job_extract_keywords",
+        max_tokens=4096,
+    ),
+    PipelineStep(
+        name="primary_tailor",
+        build_messages=None,
+        operation="resume_generate_full",
+        max_tokens=15000,
+    ),
+    PipelineStep(
+        name="critic",
+        build_messages=None,
+        enabled=False,
+        operation="tailoring_critic",
+        max_tokens=2048,
+    ),
+]

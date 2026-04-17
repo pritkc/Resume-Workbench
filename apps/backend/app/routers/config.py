@@ -27,46 +27,60 @@ from app.schemas import (
     CLIProxyModelsResponse,
     CLIProxyModelOption,
     CLIProxyQuickProfile,
+    CritiqueConfigRequest,
+    CritiqueConfigResponse,
     FeatureConfigRequest,
     FeatureConfigResponse,
     GenerationDefaultsRequest,
     GenerationDefaultsResponse,
     LanguageConfigRequest,
     LanguageConfigResponse,
+    ModelOverridesRequest,
+    ModelOverridesResponse,
     PromptConfigRequest,
     PromptConfigResponse,
     PromptCatalogEntry,
     PromptCatalogResponse,
+    PromptComposerPutRequest,
+    PromptComposerResponse,
+    PromptInstructionPutRequest,
     PromptOption,
+    PromptOverrideSuccess,
+    PromptRulesPutRequest,
     ApiKeyProviderStatus,
     ApiKeyStatusResponse,
     ApiKeysUpdateRequest,
     ApiKeysUpdateResponse,
     ResetDatabaseRequest,
+    SharedRuleOverrideSuccess,
+    SharedRulesPutRequest,
 )
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
-from app.prompts.catalog_sections import build_resume_tailoring_catalog_sections
+from app.prompts._constants import PROMPT_VERSIONS
+from app.prompts.answer_questions import APPLICATION_QUESTIONS_PROMPT, APPLICATION_QUESTIONS_SYSTEM_PROMPT
+from app.prompts.cover_letter import COMBINED_MESSAGES_SYSTEM_PROMPT, COVER_LETTER_OUTREACH_PROMPT
 from app.prompts.enrichment import (
     ANALYZE_RESUME_PROMPT,
     ENHANCE_DESCRIPTION_PROMPT,
-    REGENERATE_ADDITIONAL_GROUP_PROMPT,
-    REGENERATE_ITEM_PROMPT,
-)
-from app.prompts.templates import (
-    APPLICATION_QUESTIONS_PROMPT,
-    APPLICATION_QUESTIONS_SYSTEM_PROMPT,
-    COMBINED_MESSAGES_SYSTEM_PROMPT,
-    COVER_LETTER_OUTREACH_PROMPT,
     ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
     ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
     ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
-    EXTRACT_JD_INTELLIGENCE_PROMPT,
-    EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT,
-    IMPROVE_RESUME_PROMPT,
-    PARSE_RESUME_PROMPT,
-    PARSE_SYSTEM_PROMPT,
-    PROMPT_VERSIONS,
-    TAILORING_SYSTEM_PROMPT,
+    REGENERATE_ADDITIONAL_GROUP_PROMPT,
+    REGENERATE_ITEM_PROMPT,
+)
+from app.prompts.extract_jd_intel import EXTRACT_JD_INTELLIGENCE_PROMPT, EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
+from app.prompts.parse_resume import PARSE_RESUME_PROMPT, PARSE_SYSTEM_PROMPT
+from app.prompts.tailoring_blocks import (
+    TAILORING_CONTRACT_BLOCK,
+    TAILORING_CRAFT_BLOCK,
+    TAILORING_MODE_STRATEGY,
+    TAILORING_USER_SHELL,
+)
+from app.prompts.tailoring_catalog import build_resume_tailoring_catalog_sections
+from app.routers.prompt_catalog_builder import (
+    build_composer_snapshot,
+    build_prompt_manager_entries,
+    build_shared_rule_entries,
 )
 from app.config import (
     get_api_keys_from_config,
@@ -207,8 +221,8 @@ def _get_prompt_options() -> list[PromptOption]:
     return [PromptOption(**option) for option in IMPROVE_PROMPT_OPTIONS]
 
 
-def _get_prompt_catalog() -> list[PromptCatalogEntry]:
-    """Return read-only catalog of all prompt templates shared with the LLM."""
+def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
+    """Legacy flat catalog rows (operations, enrichment, health)."""
     return [
         PromptCatalogEntry(
             id="llm_health_check",
@@ -236,8 +250,14 @@ def _get_prompt_catalog() -> list[PromptCatalogEntry]:
             id="resume_generate_full",
             operation="resume_tailoring",
             version=PROMPT_VERSIONS.get("tailoring_user"),
-            system_prompt=TAILORING_SYSTEM_PROMPT,
-            user_prompt=IMPROVE_RESUME_PROMPT,
+            system_prompt="\n\n".join(
+                [
+                    TAILORING_CONTRACT_BLOCK,
+                    TAILORING_CRAFT_BLOCK,
+                    TAILORING_MODE_STRATEGY["full"],
+                ]
+            ),
+            user_prompt=TAILORING_USER_SHELL,
             sections=build_resume_tailoring_catalog_sections(),
         ),
         PromptCatalogEntry(
@@ -285,9 +305,27 @@ def _get_prompt_catalog() -> list[PromptCatalogEntry]:
     ]
 
 
+def _get_prompt_catalog_response() -> PromptCatalogResponse:
+    return PromptCatalogResponse(
+        prompts=_legacy_prompt_catalog_rows(),
+        entries=build_prompt_manager_entries(),
+        shared_rules=build_shared_rule_entries(),
+    )
+
+
+_PROMPT_ID_MIGRATION = {
+    "nudge": "lite",
+    "light": "lite",
+    "keywords": "full",
+}
+
+
 def _resolve_prompt_id(value: str | None, option_ids: set[str]) -> str:
     if value in option_ids:
         return value
+    migrated = _PROMPT_ID_MIGRATION.get(value) if value else None
+    if migrated and migrated in option_ids:
+        return migrated
     return DEFAULT_IMPROVE_PROMPT_ID
 
 
@@ -620,15 +658,20 @@ async def update_generation_defaults(
     if request.include_outreach_message is not None:
         defaults["include_outreach_message"] = request.include_outreach_message
     if request.prompt_id is not None:
-        if request.prompt_id not in option_ids:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Unsupported prompt id: "
-                    f"{request.prompt_id}. Supported: {sorted(option_ids)}"
-                ),
-            )
-        defaults["prompt_id"] = request.prompt_id
+        if request.prompt_id in option_ids:
+            defaults["prompt_id"] = request.prompt_id
+        else:
+            migrated = _PROMPT_ID_MIGRATION.get(request.prompt_id)
+            if migrated and migrated in option_ids:
+                defaults["prompt_id"] = migrated
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Unsupported prompt id: "
+                        f"{request.prompt_id}. Supported: {sorted(option_ids)}"
+                    ),
+                )
 
     stored["generation_defaults"] = defaults
     _save_config(stored)
@@ -743,7 +786,176 @@ async def update_prompt_config(
 @router.get("/prompts/catalog", response_model=PromptCatalogResponse)
 async def get_prompt_catalog() -> PromptCatalogResponse:
     """Return read-only catalog of prompt templates currently used by LLM operations."""
-    return PromptCatalogResponse(prompts=_get_prompt_catalog())
+    return _get_prompt_catalog_response()
+
+
+@router.get("/critique", response_model=CritiqueConfigResponse)
+async def get_critique_config() -> CritiqueConfigResponse:
+    stored = _load_config()
+    raw = stored.get("enable_critique")
+    enabled = True if raw is None else bool(raw)
+    return CritiqueConfigResponse(enabled=enabled)
+
+
+@router.put("/critique", response_model=CritiqueConfigResponse)
+async def put_critique_config(request: CritiqueConfigRequest) -> CritiqueConfigResponse:
+    stored = _load_config()
+    stored["enable_critique"] = request.enabled
+    _save_config(stored)
+    return CritiqueConfigResponse(enabled=request.enabled)
+
+
+@router.get("/model-overrides", response_model=ModelOverridesResponse)
+async def get_model_overrides() -> ModelOverridesResponse:
+    stored = _load_config()
+    raw = stored.get("model_overrides")
+    if not isinstance(raw, dict):
+        return ModelOverridesResponse(overrides={})
+    out: dict[str, str | None] = {}
+    for k, v in raw.items():
+        if v is None:
+            out[str(k)] = None
+        else:
+            out[str(k)] = str(v)
+    return ModelOverridesResponse(overrides=out)
+
+
+@router.put("/model-overrides", response_model=ModelOverridesResponse)
+async def put_model_overrides(request: ModelOverridesRequest) -> ModelOverridesResponse:
+    stored = _load_config()
+    stored["model_overrides"] = dict(request.overrides)
+    _save_config(stored)
+    return ModelOverridesResponse(overrides=dict(request.overrides))
+
+
+@router.put("/prompts/{step_name}/instructions", response_model=PromptOverrideSuccess)
+async def put_prompt_instructions(
+    step_name: str,
+    request: PromptInstructionPutRequest,
+) -> PromptOverrideSuccess:
+    from app.prompts import VALID_STEPS, save_override
+
+    if step_name not in VALID_STEPS:
+        raise HTTPException(status_code=404, detail="Unknown prompt step.")
+    save_override(step_name, "instructions", request.instructions)
+    return PromptOverrideSuccess(success=True, step_name=step_name)
+
+
+@router.delete("/prompts/{step_name}/instructions", response_model=PromptOverrideSuccess)
+async def delete_prompt_instructions(step_name: str) -> PromptOverrideSuccess:
+    from app.prompts import VALID_STEPS, delete_override
+
+    if step_name not in VALID_STEPS:
+        raise HTTPException(status_code=404, detail="Unknown prompt step.")
+    delete_override(step_name, "instructions")
+    return PromptOverrideSuccess(success=True, step_name=step_name)
+
+
+@router.put("/prompts/{step_name}/rules", response_model=PromptOverrideSuccess)
+async def put_prompt_rules(step_name: str, request: PromptRulesPutRequest) -> PromptOverrideSuccess:
+    from app.prompts import VALID_STEPS, save_override
+
+    if step_name not in VALID_STEPS:
+        raise HTTPException(status_code=404, detail="Unknown prompt step.")
+    save_override(step_name, "rules", request.rules)
+    return PromptOverrideSuccess(success=True, step_name=step_name)
+
+
+@router.delete("/prompts/{step_name}/rules", response_model=PromptOverrideSuccess)
+async def delete_prompt_rules(step_name: str) -> PromptOverrideSuccess:
+    from app.prompts import VALID_STEPS, delete_override
+
+    if step_name not in VALID_STEPS:
+        raise HTTPException(status_code=404, detail="Unknown prompt step.")
+    delete_override(step_name, "rules")
+    return PromptOverrideSuccess(success=True, step_name=step_name)
+
+
+@router.get("/prompts/{step_name}/composer", response_model=PromptComposerResponse)
+async def get_prompt_composer(step_name: str) -> PromptComposerResponse:
+    from app.prompts import VALID_STEPS
+
+    if step_name not in VALID_STEPS:
+        raise HTTPException(status_code=404, detail="Unknown prompt step.")
+    try:
+        return build_composer_snapshot(step_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.put("/prompts/{step_name}/composer", response_model=PromptComposerResponse)
+async def put_prompt_composer(
+    step_name: str,
+    request: PromptComposerPutRequest,
+) -> PromptComposerResponse:
+    from app.prompts import VALID_STEPS, get_prompt, save_composer_override, validate_user_template_against_variables
+
+    if step_name not in VALID_STEPS:
+        raise HTTPException(status_code=404, detail="Unknown prompt step.")
+    mod = get_prompt(step_name)
+    raw_vars = getattr(mod, "VARIABLES", None)
+    if not isinstance(raw_vars, dict):
+        raise HTTPException(status_code=500, detail="Step module missing VARIABLES dict.")
+    allowed = frozenset(str(k) for k in raw_vars.keys())
+    try:
+        validate_user_template_against_variables(request.user, allowed)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    save_composer_override(step_name, request.system, request.user)
+    return build_composer_snapshot(step_name)
+
+
+@router.delete("/prompts/{step_name}/composer", response_model=PromptComposerResponse)
+async def delete_prompt_composer(step_name: str) -> PromptComposerResponse:
+    from app.prompts import VALID_STEPS, delete_composer_override
+
+    if step_name not in VALID_STEPS:
+        raise HTTPException(status_code=404, detail="Unknown prompt step.")
+    delete_composer_override(step_name)
+    return build_composer_snapshot(step_name)
+
+
+@router.put("/shared-rules/{rules_name}", response_model=SharedRuleOverrideSuccess)
+async def put_shared_rules(
+    rules_name: str,
+    request: SharedRulesPutRequest,
+) -> SharedRuleOverrideSuccess:
+    from app.prompts import save_shared_rules_override
+    from app.prompts._rules.critique import USED_BY as CRITIQUE_USED_BY
+    from app.prompts._rules.jd_intel import USED_BY as JD_USED_BY
+    from app.prompts._rules.resume_diff import USED_BY as RD_USED_BY
+
+    affected: list[str]
+    if rules_name == "resume_diff":
+        affected = list(RD_USED_BY)
+    elif rules_name == "jd_intel":
+        affected = list(JD_USED_BY)
+    elif rules_name == "critique":
+        affected = list(CRITIQUE_USED_BY)
+    else:
+        raise HTTPException(status_code=404, detail="Unknown shared rules name.")
+    save_shared_rules_override(rules_name, request.rules)
+    return SharedRuleOverrideSuccess(success=True, rules_name=rules_name, affected_steps=affected)
+
+
+@router.delete("/shared-rules/{rules_name}", response_model=SharedRuleOverrideSuccess)
+async def delete_shared_rules(rules_name: str) -> SharedRuleOverrideSuccess:
+    from app.prompts import delete_shared_rules_override
+    from app.prompts._rules.critique import USED_BY as CRITIQUE_USED_BY
+    from app.prompts._rules.jd_intel import USED_BY as JD_USED_BY
+    from app.prompts._rules.resume_diff import USED_BY as RD_USED_BY
+
+    affected: list[str]
+    if rules_name == "resume_diff":
+        affected = list(RD_USED_BY)
+    elif rules_name == "jd_intel":
+        affected = list(JD_USED_BY)
+    elif rules_name == "critique":
+        affected = list(CRITIQUE_USED_BY)
+    else:
+        raise HTTPException(status_code=404, detail="Unknown shared rules name.")
+    delete_shared_rules_override(rules_name)
+    return SharedRuleOverrideSuccess(success=True, rules_name=rules_name, affected_steps=affected)
 
 
 # Supported API key providers

@@ -8,10 +8,7 @@ describe('RenderRuntimeSettingsControls', () => {
     const onChange = vi.fn();
 
     render(
-      <RenderRuntimeSettingsControls
-        settings={DEFAULT_RENDER_THEME_SETTINGS}
-        onChange={onChange}
-      />
+      <RenderRuntimeSettingsControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={onChange} />
     );
 
     const headingToggle = screen.getByRole('checkbox');

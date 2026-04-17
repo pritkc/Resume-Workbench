@@ -617,16 +617,14 @@ export default function DashboardPage() {
 
         <div className="overflow-hidden">
           <div className="hidden border-b border-black bg-[#F8F7F1] px-4 py-2 md:grid md:grid-cols-[minmax(0,1.8fr)_100px_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_130px] md:gap-3">
-            {['Resume', 'Code', 'Role', 'Company', 'Location', 'Updated'].map(
-              (label) => (
-                <span
-                  key={label}
-                  className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500"
-                >
-                  {label}
-                </span>
-              )
-            )}
+            {['Resume', 'Code', 'Role', 'Company', 'Location', 'Updated'].map((label) => (
+              <span
+                key={label}
+                className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500"
+              >
+                {label}
+              </span>
+            ))}
           </div>
 
           {filteredResumes.length === 0 ? (

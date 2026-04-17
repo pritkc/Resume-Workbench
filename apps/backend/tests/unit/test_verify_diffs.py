@@ -14,7 +14,7 @@ class TestVerifyGeneratedResumeResult:
             sample_resume,
             result,
             sample_job_keywords,
-            prompt_id="keywords",
+            prompt_id="full",
         )
 
         assert warnings == []
@@ -24,7 +24,7 @@ class TestVerifyGeneratedResumeResult:
             sample_resume,
             copy.deepcopy(sample_resume),
             sample_job_keywords,
-            prompt_id="keywords",
+            prompt_id="full",
         )
 
         assert len(warnings) == 1
@@ -87,7 +87,7 @@ class TestVerifyGeneratedResumeResult:
 
         assert any("word count" in warning.lower() for warning in warnings)
 
-    def test_warns_when_keywords_mode_adds_bullets(self, sample_resume, sample_job_keywords):
+    def test_warns_when_full_mode_adds_bullets(self, sample_resume, sample_job_keywords):
         result = copy.deepcopy(sample_resume)
         result["workExperience"][0]["description"].append("Added extra keyword-focused bullet")
 
@@ -95,10 +95,10 @@ class TestVerifyGeneratedResumeResult:
             sample_resume,
             result,
             sample_job_keywords,
-            prompt_id="keywords",
+            prompt_id="full",
         )
 
-        assert any("keyword mode" in warning.lower() for warning in warnings)
+        assert any("full mode" in warning.lower() for warning in warnings)
 
     def test_warns_when_supported_keywords_are_still_missing(
         self, sample_resume, sample_job_keywords
@@ -120,7 +120,7 @@ class TestVerifyGeneratedResumeResult:
             sample_resume,
             result,
             sample_job_keywords,
-            prompt_id="keywords",
+            prompt_id="full",
         )
 
         assert any("supported job keywords still missing" in warning.lower() for warning in warnings)

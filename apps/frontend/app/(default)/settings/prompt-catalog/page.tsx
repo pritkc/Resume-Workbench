@@ -1,70 +1,60 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, FileText, Loader2 } from 'lucide-react';
-import { fetchPromptCatalog, type PromptCatalogEntry } from '@/lib/api/config';
-import { PromptCatalogTree } from '@/components/settings/prompt-catalog-tree';
+import {
+  deleteSharedRulesOverride,
+  fetchLlmConfig,
+  fetchModelOverrides,
+  fetchPromptCatalog,
+  updateModelOverrides,
+  type LLMConfig,
+  type PromptManagerEntry,
+  type SharedRuleEntry,
+} from '@/lib/api/config';
+import { PipelineDiagram } from '@/components/settings/pipeline-diagram';
+import { PromptCard } from '@/components/settings/prompt-card';
+import { ModelPickerModal } from '@/components/settings/model-picker-modal';
+import { SharedRulesCard } from '@/components/settings/shared-rules-card';
 import { useTranslations } from '@/lib/i18n';
-
-const sectionCardClass =
-  'rounded border border-black/15 bg-[#F4F4F0] p-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,0.12)]';
-
-function RawPromptBlocks({
-  entry,
-  t,
-}: {
-  entry: PromptCatalogEntry;
-  t: (key: string, params?: Record<string, string | number>) => string;
-}): React.ReactElement {
-  return (
-    <>
-      {entry.system_prompt ? (
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">
-            {t('settings.promptCatalog.systemPrompt')}
-          </p>
-          <pre className="mt-1 max-h-[min(360px,50vh)] overflow-auto whitespace-pre-wrap border border-black/20 bg-[#FAFAF7] p-2 text-[11px] text-gray-800">
-            {entry.system_prompt}
-          </pre>
-        </div>
-      ) : null}
-      {entry.user_prompt ? (
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-gray-500">
-            {t('settings.promptCatalog.userPrompt')}
-          </p>
-          <pre className="mt-1 max-h-[min(360px,50vh)] overflow-auto whitespace-pre-wrap border border-black/20 bg-[#FAFAF7] p-2 text-[11px] text-gray-800">
-            {entry.user_prompt}
-          </pre>
-        </div>
-      ) : null}
-      {!entry.system_prompt && !entry.user_prompt ? (
-        <p className="font-mono text-[11px] text-gray-500">—</p>
-      ) : null}
-    </>
-  );
-}
 
 export default function PromptCatalogPage(): React.ReactElement {
   const { t } = useTranslations();
-  const [entries, setEntries] = useState<PromptCatalogEntry[]>([]);
+  const [managerEntries, setManagerEntries] = useState<PromptManagerEntry[]>([]);
+  const [sharedRules, setSharedRules] = useState<SharedRuleEntry[]>([]);
+  const [modelOverrides, setModelOverrides] = useState<Record<string, string | null>>({});
+  const [defaultModelLabel, setDefaultModelLabel] = useState('');
+  const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modelPickerStep, setModelPickerStep] = useState<string | null>(null);
+  const [resettingSharedRule, setResettingSharedRule] = useState<string | null>(null);
+
+  const loadAll = useCallback(async () => {
+    const [catalog, overrides, llm] = await Promise.all([
+      fetchPromptCatalog(),
+      fetchModelOverrides(),
+      fetchLlmConfig(),
+    ]);
+    setManagerEntries(catalog.entries || []);
+    setSharedRules(catalog.shared_rules || []);
+    setModelOverrides(overrides.overrides || {});
+    setLlmConfig(llm);
+    setDefaultModelLabel(`${llm.provider}/${llm.model}`);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetchPromptCatalog();
-        if (!cancelled) {
-          setEntries(res.prompts || []);
-          setError(null);
-        }
-      } catch (e) {
+        await loadAll();
+        if (!cancelled) setError(null);
+      } catch {
         if (!cancelled) {
           setError(t('settings.promptCatalog.loadError'));
-          setEntries([]);
+          setManagerEntries([]);
+          setSharedRules([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -73,10 +63,36 @@ export default function PromptCatalogPage(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [loadAll, t]);
+
+  const pickerEntry = useMemo(
+    () => managerEntries.find((e) => e.step_name === modelPickerStep),
+    [managerEntries, modelPickerStep]
+  );
+
+  const applyModelOverride = async (stepName: string, value: string | null) => {
+    const next = { ...modelOverrides, [stepName]: value };
+    await updateModelOverrides(next);
+    setModelOverrides(next);
+    await loadAll();
+    setModelPickerStep(null);
+  };
+
+  const onResetSharedRule = async (rulesName: string) => {
+    setResettingSharedRule(rulesName);
+    try {
+      await deleteSharedRulesOverride(rulesName);
+      await loadAll();
+      setError(null);
+    } catch {
+      setError(t('settings.promptCatalog.resetSharedRulesError'));
+    } finally {
+      setResettingSharedRule(null);
+    }
+  };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-3 py-5">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/settings"
@@ -87,13 +103,13 @@ export default function PromptCatalogPage(): React.ReactElement {
         </Link>
       </div>
 
-      <div className="mb-6 flex flex-wrap items-end gap-3 border-b border-black/10 pb-4">
-        <FileText className="h-8 w-8 text-gray-800" />
+      <div className="mb-4 flex flex-wrap items-end gap-2 border-b border-black/10 pb-3">
+        <FileText className="h-7 w-7 shrink-0 text-gray-800" />
         <div>
-          <h1 className="font-mono text-xl font-bold uppercase tracking-tight text-gray-900">
+          <h1 className="font-mono text-lg font-bold uppercase tracking-tight text-gray-900">
             {t('settings.promptCatalog.pageTitle')}
           </h1>
-          <p className="mt-1 max-w-2xl text-[13px] text-gray-600">
+          <p className="mt-0.5 max-w-2xl text-[12px] leading-snug text-gray-600">
             {t('settings.promptCatalog.metaDescription')}
           </p>
         </div>
@@ -106,60 +122,104 @@ export default function PromptCatalogPage(): React.ReactElement {
         </div>
       ) : error ? (
         <p className="font-mono text-sm text-red-700">{error}</p>
-      ) : entries.length === 0 ? (
-        <p className="font-mono text-sm text-gray-600">{t('settings.promptCatalog.empty')}</p>
       ) : (
-        <div className="space-y-4">
-          <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-            {t('settings.promptCatalog.promptCount', { count: entries.length })}
-          </p>
+        <div className="space-y-5">
+          <nav
+            className="rounded border border-black/10 bg-[#FAFAF7] px-3 py-2"
+            aria-label={t('settings.promptCatalog.catalogIndexTitle')}
+          >
+            <p className="font-mono text-[9px] font-bold uppercase tracking-wider text-gray-600">
+              {t('settings.promptCatalog.catalogIndexTitle')}
+            </p>
+            <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-blue-900">
+              <li>
+                <a href="#catalog-pipeline" className="underline decoration-black/20 underline-offset-2 hover:text-blue-950">
+                  {t('settings.promptCatalog.catalogIndexPipeline')}
+                </a>
+              </li>
+              {sharedRules.length > 0 ? (
+                <li>
+                  <a
+                    href="#catalog-shared-rules"
+                    className="underline decoration-black/20 underline-offset-2 hover:text-blue-950"
+                  >
+                    {t('settings.promptCatalog.catalogIndexSharedDiff')}
+                  </a>
+                </li>
+              ) : null}
+              {managerEntries.map((e) => (
+                <li key={e.step_name}>
+                  <a
+                    href={`#catalog-step-${e.step_name}`}
+                    className="underline decoration-black/20 underline-offset-2 hover:text-blue-950"
+                  >
+                    {e.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-          {entries.map((entry) => (
-            <article key={entry.id} className={sectionCardClass}>
-              <div className="flex flex-wrap items-center gap-2 border-b border-black/10 pb-3">
-                <span className="font-mono text-sm font-bold text-gray-900">{entry.id}</span>
-                <span className="font-mono text-[10px] uppercase text-gray-500">{entry.operation}</span>
-                {entry.version ? (
-                  <span className="font-mono text-[10px] uppercase text-gray-500">{entry.version}</span>
-                ) : null}
-                <span className="font-mono text-[10px] uppercase text-gray-500">
-                  {entry.read_only ? 'Read-only' : 'Editable'}
-                </span>
+          <section id="catalog-pipeline" className="space-y-2 scroll-mt-4">
+            <h2 className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-700">
+              {t('settings.promptCatalog.pipelineTitle')}
+            </h2>
+            <PipelineDiagram />
+          </section>
+
+          {sharedRules.length > 0 ? (
+            <section id="catalog-shared-rules" className="space-y-2 scroll-mt-4">
+              <h2 className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                {t('settings.promptCatalog.sharedRulesTitle')}
+              </h2>
+              <div className="space-y-3">
+                {sharedRules.map((rule) => (
+                  <SharedRulesCard
+                    key={rule.name}
+                    rule={rule}
+                    t={t}
+                    onReset={onResetSharedRule}
+                    onSaved={loadAll}
+                    resetting={resettingSharedRule === rule.name}
+                  />
+                ))}
               </div>
+            </section>
+          ) : null}
 
-              {entry.notes ? (
-                <p className="mt-3 text-[13px] text-gray-600">{entry.notes}</p>
-              ) : null}
-
-              {entry.sections && entry.sections.length > 0 ? (
-                <div className="mt-4">
-                  <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-gray-600">
-                    {t('settings.promptCatalog.structuredSections')}
-                  </p>
-                  <div className="mt-2">
-                    <PromptCatalogTree sections={entry.sections} label={t} />
-                  </div>
-                </div>
-              ) : null}
-
-              {entry.sections && entry.sections.length > 0 ? (
-                <details className="mt-4 group">
-                  <summary className="cursor-pointer font-mono text-[10px] font-bold uppercase tracking-wider text-gray-600 hover:text-gray-900">
-                    {t('settings.promptCatalog.rawTemplates')}
-                  </summary>
-                  <div className="mt-3 space-y-3 border-t border-black/10 pt-3">
-                    <RawPromptBlocks entry={entry} t={t} />
-                  </div>
-                </details>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  <RawPromptBlocks entry={entry} t={t} />
-                </div>
-              )}
-            </article>
-          ))}
+          {managerEntries.length > 0 ? (
+            <section id="catalog-pipeline-steps" className="space-y-2 scroll-mt-4">
+              <h2 className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                {t('settings.promptCatalog.managerSectionTitle')}
+              </h2>
+              <div className="space-y-3">
+                {managerEntries.map((entry) => (
+                  <PromptCard
+                    key={entry.step_name}
+                    entry={entry}
+                    onChangeModel={(step) => setModelPickerStep(step)}
+                    onComposerSaved={loadAll}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
+
+      {modelPickerStep && pickerEntry ? (
+        <ModelPickerModal
+          stepLabel={pickerEntry.label}
+          resolvedModel={pickerEntry.model}
+          appDefaultModel={defaultModelLabel}
+          initialOverride={modelOverrides[modelPickerStep] ?? ''}
+          llmConfig={llmConfig}
+          onClose={() => setModelPickerStep(null)}
+          onApply={(v) => applyModelOverride(modelPickerStep, v)}
+          t={t}
+        />
+      ) : null}
     </div>
   );
 }

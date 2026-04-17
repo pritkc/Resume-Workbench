@@ -199,8 +199,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                 <div className="space-y-1.5">
                   <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
                     <Globe className="mr-1 inline h-3 w-3" />
-                    Live Link{' '}
-                    <span className="text-gray-400">({t('common.optional')})</span>
+                    Live Link <span className="text-gray-400">({t('common.optional')})</span>
                   </Label>
                   <Input
                     value={item.website || ''}

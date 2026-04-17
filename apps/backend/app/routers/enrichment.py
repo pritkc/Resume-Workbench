@@ -12,18 +12,15 @@ from fastapi import APIRouter, HTTPException
 from app.config_cache import get_content_language
 from app.database import db
 from app.llm import complete_json
+from app.prompts._constants import PROMPT_VERSIONS, get_language_name
 from app.prompts.enrichment import (
     ANALYZE_RESUME_PROMPT,
     ENHANCE_DESCRIPTION_PROMPT,
-    REGENERATE_ADDITIONAL_GROUP_PROMPT,
-    REGENERATE_ITEM_PROMPT,
-)
-from app.prompts.templates import (
     ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
     ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
     ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
-    PROMPT_VERSIONS,
-    get_language_name,
+    REGENERATE_ADDITIONAL_GROUP_PROMPT,
+    REGENERATE_ITEM_PROMPT,
 )
 from app.schemas.enrichment import (
     AnalysisResponse,

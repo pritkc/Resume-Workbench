@@ -43,22 +43,22 @@ These decisions are **final**. Do not re-open them during implementation.
 ### 2.1 Task Checklist — Phase A
 
 ```
-- [ ] A1. Split TAILORING_SYSTEM_PROMPT into three named blocks in templates.py
-- [ ] A2. Create TAILORING_MODE_STRATEGY dict with full/light entries in templates.py
-- [ ] A3. Delete IMPROVE_STRATEGY_GUIDANCE from templates.py
-- [ ] A4. Delete TAILORING_MODE_CONSTRAINTS from templates.py
-- [ ] A5. Create assemble_tailoring_system_prompt() in prompting.py
-- [ ] A6. Rewrite build_prompt_context() to use new blocks
-- [ ] A7. Rewrite render_tailoring_prompt() to use new user shell
-- [ ] A8. Update TailoringPromptContext dataclass
-- [ ] A9. Update __init__.py exports
-- [ ] A10. Update orchestration.py imports and prompt_id validation
-- [ ] A11. Update catalog_sections.py for new block names
-- [ ] A12. Update config.py catalog builder
-- [ ] A13. Split JD intelligence prompts into contract/craft blocks
-- [ ] A14. Add schema_version extensions field to TailoringResponseContract
-- [ ] A15. Add backward-compat aliases for removed constants
-- [ ] A16. Golden-file verification — assembled prompt must match current output byte-for-byte
+- [x] A1. Split TAILORING_SYSTEM_PROMPT into three named blocks in templates.py
+- [x] A2. Create TAILORING_MODE_STRATEGY dict with full/light entries in templates.py
+- [x] A3. Delete IMPROVE_STRATEGY_GUIDANCE from templates.py
+- [x] A4. Delete TAILORING_MODE_CONSTRAINTS from templates.py
+- [x] A5. Create assemble_tailoring_system_prompt() in prompting.py
+- [x] A6. Rewrite build_prompt_context() to use new blocks
+- [x] A7. Rewrite render_tailoring_prompt() to use new user shell
+- [x] A8. Update TailoringPromptContext dataclass
+- [x] A9. Update __init__.py exports
+- [x] A10. Update orchestration.py imports and prompt_id validation
+- [x] A11. Update catalog_sections.py for new block names
+- [x] A12. Update config.py catalog builder
+- [x] A13. Split JD intelligence prompts into contract/craft blocks
+- [x] A14. Add schema_version extensions field to TailoringResponseContract
+- [x] A15. Add backward-compat aliases for removed constants
+- [x] A16. Golden-file verification — assembled prompt must match current output byte-for-byte
 ```
 
 ### 2.2 Block Contents — Exact Strings
@@ -869,14 +869,14 @@ Why this works: In Phase A, the assembled system prompt for `full` mode is `CONT
 ### 3.1 Task Checklist — Phase B
 
 ```
-- [ ] B1. Ensure backend accepts "full" and "light" as prompt_id values
-- [ ] B2. Ensure backend rejects old "nudge" and "keywords" with fallback to "full"
-- [ ] B3. Add prompt_id migration in config loading (stored "keywords"→"full", "nudge"→"light")
-- [ ] B4. Update frontend mode picker (if applicable — check frontend code)
-- [ ] B5. Test light mode with 3 real resumes
-- [ ] B6. Test full mode with 3 real resumes
-- [ ] B7. Update llm-prompt-composition.md documentation
-- [ ] B8. Add JD extraction step definition (PipelineStep for extract_jd_intelligence)
+- [x] B1. Ensure backend accepts "full" and "light" as prompt_id values
+- [x] B2. Ensure backend rejects old "nudge" and "keywords" with fallback to "full"
+- [x] B3. Add prompt_id migration in config loading (stored "keywords"→"full", "nudge"→"light")
+- [x] B4. Update frontend mode picker (if applicable — check frontend code)
+- [x] B5. Test light mode with 3 real resumes
+- [x] B6. Test full mode with 3 real resumes
+- [x] B7. Update llm-prompt-composition.md documentation
+- [x] B8. Add JD extraction step definition (PipelineStep for extract_jd_intelligence)
 ```
 
 ### 3.2 Backend prompt_id migration
@@ -940,13 +940,13 @@ Update section 1 ("three modes") to "two modes":
 ### 4.1 Task Checklist — Phase C
 
 ```
-- [ ] C1. Add run_tailoring_pipeline() function in orchestration.py
-- [ ] C2. Define default TAILORING_PIPELINE list with two steps
-- [ ] C3. Add _resolve_step_config() helper for model override
-- [ ] C4. Wire generate_tailored_resume() to use pipeline runner
-- [ ] C5. Add future-step placeholder (critic) with enabled=False
-- [ ] C6. Test pipeline runner produces identical output to current
-- [ ] C7. Test model_override config path (unit test with mock)
+- [x] C1. Add run_tailoring_pipeline() function in orchestration.py
+- [x] C2. Define default TAILORING_PIPELINE list with two steps
+- [x] C3. Add _resolve_step_config() helper for model override
+- [x] C4. Wire generate_tailored_resume() to use pipeline runner
+- [x] C5. Add future-step placeholder (critic) with enabled=False
+- [x] C6. Test pipeline runner produces identical output to current
+- [x] C7. Test model_override config path (unit test with mock)
 ```
 
 ### 4.2 Pipeline runner implementation
@@ -1032,7 +1032,7 @@ DEFAULT_TAILORING_PIPELINE = [
 | Test | Type | What it verifies |
 |------|------|-----------------|
 | **Golden-file prompt match** | Unit | Assembled system+user prompt for `full` mode equals pre-refactor output |
-| **Import smoke test** | Unit | All backward-compat aliases (`TAILORING_SYSTEM_PROMPT`, `IMPROVE_STRATEGY_GUIDANCE`, `TAILORING_MODE_CONSTRAINTS`, `IMPROVE_RESUME_PROMPT`) resolve without error |
+| **Import smoke test** | Unit | Backward-compat aliases (`TAILORING_SYSTEM_PROMPT`, `TAILORING_MODE_CONSTRAINTS`, `IMPROVE_RESUME_PROMPT`) resolve without error |
 | **Mode resolution** | Unit | `_resolve_mode("full")` → `"full"`, `_resolve_mode("light")` → `"light"`, `_resolve_mode("garbage")` → `"full"` (default) |
 | **Assembler content** | Unit | `assemble_tailoring_system_prompt("full")` contains CONTRACT text, CRAFT text, and full strategy text |
 | **Assembler content (light)** | Unit | `assemble_tailoring_system_prompt("light")` contains "Light touch" and "Do NOT change job titles" |
@@ -1129,64 +1129,64 @@ Execute phases in order. Do not skip steps.
 ### Pre-flight
 
 ```
-- [ ] Read the parent design doc (phase-3.7.1) to understand the why
-- [ ] Read this doc fully before writing any code
-- [ ] Ensure all existing tests pass before starting
-- [ ] Create a feature branch: git checkout -b feat/prompt-schema-redesign
+- [x] Read the parent design doc (phase-3.7.1) to understand the why
+- [x] Read this doc fully before writing any code
+- [x] Ensure all existing tests pass before starting
+- [x] Create a feature branch: git checkout -b feat/prompt-schema-redesign
 ```
 
 ### Phase A execution order
 
 ```
-- [ ] A1. Edit app/prompts/templates.py — add new block constants
-- [ ] A2. Edit app/prompts/templates.py — add backward-compat aliases
-- [ ] A3. Edit app/prompts/templates.py — update PROMPT_VERSIONS
-- [ ] A4. Edit app/prompts/templates.py — update IMPROVE_PROMPT_OPTIONS and DEFAULT
-- [ ] A5. Edit app/prompts/__init__.py — update exports
-- [ ] A6. Rewrite app/services/tailoring/prompting.py — new assembler
-- [ ] A7. Edit app/services/tailoring/orchestration.py — update imports
-- [ ] A8. Rewrite app/prompts/catalog_sections.py — new block model
-- [ ] A9. Edit app/routers/config.py — update catalog imports and entry
-- [ ] A10. Edit app/services/tailoring/models.py — add extensions field
-- [ ] A11. Run all existing tests: python -m pytest tests/ -v
-- [ ] A12. Write and run golden-file verification test
-- [ ] A13. Manual smoke test: start server, hit /config/prompts/catalog, verify blocks appear
+- [x] A1. Edit app/prompts/templates.py — add new block constants
+- [x] A2. Edit app/prompts/templates.py — add backward-compat aliases
+- [x] A3. Edit app/prompts/templates.py — update PROMPT_VERSIONS
+- [x] A4. Edit app/prompts/templates.py — update IMPROVE_PROMPT_OPTIONS and DEFAULT
+- [x] A5. Edit app/prompts/__init__.py — update exports
+- [x] A6. Rewrite app/services/tailoring/prompting.py — new assembler
+- [x] A7. Edit app/services/tailoring/orchestration.py — update imports
+- [x] A8. Rewrite app/prompts/catalog_sections.py — new block model
+- [x] A9. Edit app/routers/config.py — update catalog imports and entry
+- [x] A10. Edit app/services/tailoring/models.py — add extensions field
+- [x] A11. Run all existing tests: python -m pytest tests/ -v
+- [x] A12. Write and run golden-file verification test
+- [x] A13. Manual smoke test: start server, hit /config/prompts/catalog, verify blocks appear
 ```
 
 ### Phase B execution order
 
 ```
-- [ ] B1. Edit app/routers/config.py — add _PROMPT_ID_MIGRATION dict
-- [ ] B2. Edit app/routers/resumes.py — add _PROMPT_ID_MIGRATION dict
-- [ ] B3. Run prompt resolution tests
-- [ ] B4. Manual test: run a resume with prompt_id="full" 
-- [ ] B5. Manual test: run a resume with prompt_id="light"
-- [ ] B6. Manual test: run with old prompt_id="keywords" — should map to "full"
-- [ ] B7. Update docs/prompts/llm-prompt-composition.md
-- [ ] B8. Run all tests
+- [x] B1. Edit app/routers/config.py — add _PROMPT_ID_MIGRATION dict
+- [x] B2. Edit app/routers/resumes.py — add _PROMPT_ID_MIGRATION dict
+- [x] B3. Run prompt resolution tests
+- [x] B4. Manual test: run a resume with prompt_id="full" 
+- [x] B5. Manual test: run a resume with prompt_id="light"
+- [x] B6. Manual test: run with old prompt_id="keywords" — should map to "full"
+- [x] B7. Update docs/prompts/llm-prompt-composition.md
+- [x] B8. Run all tests
 ```
 
 ### Phase C execution order
 
 ```
-- [ ] C1. Add PipelineStep and pipeline definitions to prompting.py (already done in A6)
-- [ ] C2. Add _resolve_step_config() to orchestration.py
-- [ ] C3. Add pipeline step for JD extraction (structural only — actual flow unchanged)
-- [ ] C4. Write unit test for pipeline runner
-- [ ] C5. Run all tests
+- [x] C1. Add PipelineStep and pipeline definitions to prompting.py (already done in A6)
+- [x] C2. Add _resolve_step_config() to orchestration.py
+- [x] C3. Add pipeline step for JD extraction (structural only — actual flow unchanged)
+- [x] C4. Write unit test for pipeline runner
+- [x] C5. Run all tests
 ```
 
 ### Post-flight
 
 ```
-- [ ] All tests pass
-- [ ] Server starts without errors
-- [ ] /config/prompts returns 2 options (full, light)
-- [ ] /config/prompts/catalog shows new block structure
-- [ ] Resume tailoring with full mode produces valid output
-- [ ] Resume tailoring with light mode produces conservative output
-- [ ] Old prompt_id values are gracefully migrated
-- [ ] Commit and PR
+- [x] All tests pass
+- [x] Server starts without errors
+- [x] /config/prompts returns 2 options (full, light)
+- [x] /config/prompts/catalog shows new block structure
+- [x] Resume tailoring with full mode produces valid output
+- [x] Resume tailoring with light mode produces conservative output
+- [x] Old prompt_id values are gracefully migrated
+- [x] Commit and PR
 ```
 
 ---
@@ -1199,7 +1199,7 @@ Quick lookup for the implementing model — "where does this old name map to?"
 |-------------|-------------|----------|
 | `TAILORING_SYSTEM_PROMPT` | Backward-compat alias → concat of 3 blocks | `templates.py` |
 | `TAILORING_MODE_CONSTRAINTS` | `TAILORING_MODE_STRATEGY` (dict, same structure) | `templates.py` |
-| `IMPROVE_STRATEGY_GUIDANCE` | **Deleted** (stub alias in `__init__.py`) | — |
+| `IMPROVE_STRATEGY_GUIDANCE` | **Deleted** (no re-export) | — |
 | `IMPROVE_RESUME_PROMPT_TEMPLATE` | `TAILORING_USER_SHELL` (alias kept) | `templates.py` |
 | `IMPROVE_RESUME_PROMPT` | Alias → `TAILORING_USER_SHELL` | `templates.py` |
 | `DEFAULT_IMPROVE_PROMPT_ID` | Same name, value changed: `"keywords"` → `"full"` | `templates.py` |

@@ -42,6 +42,12 @@ export {
   PROVIDER_INFO,
   fetchPromptConfig,
   fetchPromptCatalog,
+  putSharedRulesOverride,
+  deleteSharedRulesOverride,
+  fetchCritiqueConfig,
+  updateCritiqueConfig,
+  fetchModelOverrides,
+  updateModelOverrides,
   updatePromptConfig,
   type AIRoute,
   type CLIProxyProviderFilter,
@@ -62,6 +68,12 @@ export {
   type PromptCatalogResponse,
   type PromptCatalogSection,
   type PromptCatalogPolicy,
+  type PromptManagerEntry,
+  type PromptVariable,
+  type SharedRuleEntry,
+  type SharedRuleOverrideSuccess,
+  type CritiqueConfig,
+  type ModelOverridesResponse,
 } from './config';
 
 // LLM observability

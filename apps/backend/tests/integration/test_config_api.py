@@ -246,7 +246,7 @@ class TestGenerationDefaults:
         assert resp.json() == {
             "include_cover_letter": True,
             "include_outreach_message": True,
-            "prompt_id": "keywords",
+            "prompt_id": "full",
         }
 
 
@@ -275,6 +275,49 @@ class TestLanguageConfig:
         assert resp.status_code == 400
 
 
+class TestSharedRulesDelete:
+    """DELETE /api/v1/config/shared-rules/{rules_name}"""
+
+    @patch("app.prompts.delete_shared_rules_override")
+    async def test_delete_shared_rules_resume_diff(self, mock_delete, client):
+        mock_delete.return_value = True
+        async with client:
+            resp = await client.delete("/api/v1/config/shared-rules/resume_diff")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["rules_name"] == "resume_diff"
+        assert isinstance(data["affected_steps"], list)
+        assert len(data["affected_steps"]) >= 1
+        mock_delete.assert_called_once_with("resume_diff")
+
+    async def test_delete_shared_rules_unknown_returns_404(self, client):
+        async with client:
+            resp = await client.delete("/api/v1/config/shared-rules/not_a_rule")
+        assert resp.status_code == 404
+
+
+class TestCritiqueConfig:
+    """GET/PUT /api/v1/config/critique"""
+
+    @patch("app.routers.config._load_config")
+    async def test_get_critique_default_true(self, mock_load, client):
+        mock_load.return_value = {}
+        async with client:
+            resp = await client.get("/api/v1/config/critique")
+        assert resp.status_code == 200
+        assert resp.json()["enabled"] is True
+
+    @patch("app.routers.config._save_config")
+    @patch("app.routers.config._load_config")
+    async def test_put_critique(self, mock_load, mock_save, client):
+        mock_load.return_value = {}
+        async with client:
+            resp = await client.put("/api/v1/config/critique", json={"enabled": False})
+        assert resp.status_code == 200
+        assert resp.json()["enabled"] is False
+
+
 class TestPromptCatalog:
     """GET /api/v1/config/prompts/catalog"""
 
@@ -284,7 +327,11 @@ class TestPromptCatalog:
         assert resp.status_code == 200
         data = resp.json()
         assert "prompts" in data
+        assert "entries" in data
+        assert "shared_rules" in data
         assert isinstance(data["prompts"], list)
+        assert isinstance(data["entries"], list)
+        assert isinstance(data["shared_rules"], list)
         ids = {row["id"] for row in data["prompts"]}
         assert {
             "llm_health_check",
@@ -301,11 +348,51 @@ class TestPromptCatalog:
 
         tailoring = next(row for row in data["prompts"] if row["id"] == "resume_generate_full")
         assert tailoring.get("sections")
-        assert len(tailoring["sections"]) == 2
+        assert len(tailoring["sections"]) == 4
         assert {s["id"] for s in tailoring["sections"]} == {
-            "tailoring_system_message",
+            "tailoring_contract_block",
+            "tailoring_craft_block",
+            "tailoring_mode_strategies",
             "tailoring_user_message",
         }
+
+        entry = next(e for e in data["entries"] if e["step_name"] == "extract_jd_intel")
+        assert "system_resolved" in entry
+        assert "user_template_resolved" in entry
+        assert "composer_override_active" in entry
+
+
+class TestPromptComposer:
+    """GET/PUT/DELETE /api/v1/config/prompts/{step}/composer"""
+
+    async def test_composer_put_get_delete_roundtrip(self, client, tmp_path, monkeypatch):
+        monkeypatch.setattr("app.prompts._prompt_loader._OVERRIDE_DIR", tmp_path)
+        step = "extract_jd_intel"
+        body = {"system": "custom system line", "user": "$job_description"}
+        async with client:
+            put_resp = await client.put(f"/api/v1/config/prompts/{step}/composer", json=body)
+            assert put_resp.status_code == 200
+            put_data = put_resp.json()
+            assert put_data["composer_override_active"] is True
+            assert put_data["system"] == "custom system line"
+            assert put_data["user"] == "$job_description"
+
+            get_resp = await client.get(f"/api/v1/config/prompts/{step}/composer")
+            assert get_resp.status_code == 200
+            assert get_resp.json()["composer_override_active"] is True
+
+            del_resp = await client.delete(f"/api/v1/config/prompts/{step}/composer")
+            assert del_resp.status_code == 200
+            assert del_resp.json()["composer_override_active"] is False
+
+    async def test_composer_put_unknown_placeholder_returns_400(self, client, tmp_path, monkeypatch):
+        monkeypatch.setattr("app.prompts._prompt_loader._OVERRIDE_DIR", tmp_path)
+        async with client:
+            resp = await client.put(
+                "/api/v1/config/prompts/extract_jd_intel/composer",
+                json={"system": "s", "user": "Hello $not_a_declared_variable"},
+            )
+        assert resp.status_code == 400
 
 
 class TestResetDatabase:

@@ -28,7 +28,7 @@ function PolicyBadge({
   );
 }
 
-export function PromptCatalogTree({
+export function PromptSectionTree({
   sections,
   depth = 0,
   label,
@@ -47,12 +47,16 @@ export function PromptCatalogTree({
             <div className="flex flex-wrap items-start gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[12px] font-bold text-gray-900">{node.label}</span>
+                  <span className="font-mono text-[12px] font-bold text-gray-900">
+                    {node.label}
+                  </span>
                   <PolicyBadge policy={node.policy ?? null} label={label} />
                 </div>
-                {node.note && (
-                  <p className="mt-1 font-mono text-[11px] leading-snug text-gray-600">{node.note}</p>
-                )}
+                {node.note ? (
+                  <p className="mt-1 font-mono text-[11px] leading-snug text-gray-600">
+                    {node.note}
+                  </p>
+                ) : null}
               </div>
             </div>
             {node.content ? (
@@ -61,7 +65,7 @@ export function PromptCatalogTree({
               </pre>
             ) : null}
             {node.children?.length ? (
-              <PromptCatalogTree sections={node.children} depth={depth + 1} label={label} />
+              <PromptSectionTree sections={node.children} depth={depth + 1} label={label} />
             ) : null}
           </div>
         </li>

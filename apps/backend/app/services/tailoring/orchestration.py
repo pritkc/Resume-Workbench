@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from pydantic import ValidationError
 
+from app.config import get_enable_critique, get_step_llm_config
 from app.llm import complete_json
-from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_STRATEGY_GUIDANCE, PROMPT_VERSIONS
+from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, PROMPT_VERSIONS
+from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
 
 from app.services.tailoring.analysis import (
     build_jd_intelligence,
@@ -31,7 +34,13 @@ from app.services.tailoring.preservation import (
     finalize_tailored_resume,
     rehydrate_tailoring_resume,
 )
-from app.services.tailoring.prompting import build_prompt_context, render_tailoring_prompt
+from app.prompts.critique_resume import build_messages as build_critique_messages
+from app.prompts.rewrite_resume import build_messages as build_rewrite_messages
+from app.services.tailoring.llm_calls import run_primary_tailoring
+from app.services.tailoring.prompting import (
+    TailoringPromptContext,
+    build_prompt_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +80,7 @@ async def generate_tailored_resume(
     """Run the primary tailoring prompt and return the full locally restored resume."""
 
     resolved_prompt_id = (
-        prompt_id if prompt_id in IMPROVE_STRATEGY_GUIDANCE else DEFAULT_IMPROVE_PROMPT_ID
+        prompt_id if prompt_id in TAILORING_MODE_STRATEGY else DEFAULT_IMPROVE_PROMPT_ID
     )
     prompt_resume_data = TailoringResumePayload.from_resume_data(original_resume_data)
     jd_intelligence = build_jd_intelligence(job_keywords)
@@ -88,22 +97,49 @@ async def generate_tailored_resume(
         resume_payload=prompt_resume_data,
         original_resume_markdown=original_resume,
     )
-    prompt = render_tailoring_prompt(prompt_context)
-
-    result = await complete_json(
-        prompt=prompt,
-        system_prompt=prompt_context.system_prompt,
-        max_tokens=15000,
-        retries=1,
-        operation="resume_generate_full",
-        metadata={
-            "prompt_id": prompt_context.prompt_id,
-            "prompt_version": PROMPT_VERSIONS.get("tailoring_user", "unknown"),
-            "job_description_chars": len(job_description),
-            "structured_resume_input": prompt_context.used_structured_resume_input,
-        },
-        retry_hint=prompt_context.retry_hint,
+    result = await run_primary_tailoring(
+        prompt_context,
+        job_description=job_description,
     )
+
+    critique_analysis: dict[str, object] | None = None
+    if resolved_prompt_id == "full" and get_enable_critique():
+        draft_json = json.dumps(result, ensure_ascii=True)
+        jd_json = prompt_context.job_intelligence_json
+        c_sys, c_user = build_critique_messages(draft_json, jd_json)
+        critique_raw = await complete_json(
+            prompt=c_user,
+            system_prompt=c_sys,
+            config=get_step_llm_config("critique_resume"),
+            max_tokens=4096,
+            retries=1,
+            operation="critique_resume",
+            metadata={
+                "prompt_version": PROMPT_VERSIONS.get("critique_resume", "unknown"),
+            },
+        )
+        critique_analysis = critique_raw if isinstance(critique_raw, dict) else None
+        critique_s = json.dumps(critique_raw, ensure_ascii=True)
+        r_sys, r_user = build_rewrite_messages(
+            original_resume=prompt_context.original_resume_json,
+            draft_resume=draft_json,
+            critique=critique_s,
+            jd_intelligence=jd_json,
+            response_contract=prompt_context.response_contract_json,
+        )
+        result = await complete_json(
+            prompt=r_user,
+            system_prompt=r_sys,
+            config=get_step_llm_config("rewrite_resume"),
+            max_tokens=15000,
+            retries=1,
+            operation="rewrite_resume",
+            metadata={
+                "prompt_version": PROMPT_VERSIONS.get("rewrite_resume", "unknown"),
+                "prompt_id": prompt_context.prompt_id,
+            },
+            retry_hint=prompt_context.retry_hint,
+        )
 
     _check_for_truncation(result)
 
@@ -190,6 +226,7 @@ async def generate_tailored_resume(
         cleanup_changes=cleanup_changes,
         stage_breakdown=stage_breakdown,
         bold_keywords=bold_keywords,
+        critique_analysis=critique_analysis,
     )
 
 

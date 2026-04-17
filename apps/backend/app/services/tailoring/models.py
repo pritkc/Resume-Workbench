@@ -470,6 +470,7 @@ class TailoringResponseContract(BaseModel):
     )
     mode_rules: list[str] = Field(default_factory=list)
     sections: dict[str, TailoringSectionContract] = Field(default_factory=dict)
+    extensions: dict[str, object] = Field(default_factory=dict)
 
     # Compact address data — populated by build_response_contract
     experience_entries: list[str] = Field(default_factory=list)
@@ -509,6 +510,7 @@ class TailoringResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     resume_data: dict[str, Any]
+    critique_analysis: dict[str, object] | None = None
     warnings: list[str] = Field(default_factory=list)
     response_contract: TailoringResponseContract
     used_structured_resume_input: bool = True

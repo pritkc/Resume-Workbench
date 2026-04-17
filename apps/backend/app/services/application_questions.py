@@ -6,12 +6,10 @@ import copy
 import json
 from typing import Any
 
+from app.config import get_step_llm_config
 from app.llm import complete_json
-from app.prompts import (
-    APPLICATION_QUESTIONS_PROMPT,
-    APPLICATION_QUESTIONS_SYSTEM_PROMPT,
-    PROMPT_VERSIONS,
-)
+from app.prompts import PROMPT_VERSIONS
+from app.prompts.answer_questions import APPLICATION_QUESTIONS_PROMPT, APPLICATION_QUESTIONS_SYSTEM_PROMPT
 from app.schemas import (
     ApplicationQuestionAnswer,
     ApplicationQuestionInput,
@@ -375,6 +373,7 @@ async def generate_application_question_answers(
     raw_result = await complete_json(
         prompt=prompt,
         system_prompt=APPLICATION_QUESTIONS_SYSTEM_PROMPT,
+        config=get_step_llm_config("answer_questions"),
         max_tokens=4096,
         retries=2,
         operation="application_questions_generate",

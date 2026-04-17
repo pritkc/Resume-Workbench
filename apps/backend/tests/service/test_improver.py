@@ -89,9 +89,10 @@ class TestExtractJobKeywords:
 class TestImproveResume:
     """Tests for the single primary full-resume tailoring prompt."""
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_returns_validated_resume(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume)
 
@@ -100,7 +101,7 @@ class TestImproveResume:
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
             language="en",
-            prompt_id="keywords",
+            prompt_id="full",
             original_resume_data=sample_resume,
         )
 
@@ -109,9 +110,10 @@ class TestImproveResume:
         assert result["personalInfo"]["email"] == sample_resume["personalInfo"]["email"]
         assert result["sectionMeta"] == DEFAULT_SECTION_META
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_uses_structured_json_input_without_personal_info(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume)
 
@@ -120,7 +122,7 @@ class TestImproveResume:
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
             language="en",
-            prompt_id="keywords",
+            prompt_id="full",
             original_resume_data=sample_resume,
         )
 
@@ -132,9 +134,10 @@ class TestImproveResume:
         assert "linkedin.com/in/janedoe" not in prompt
         assert '"sectionMeta"' not in prompt
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_prompt_contains_response_contract_and_jd_intelligence(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume)
 
@@ -165,9 +168,10 @@ class TestImproveResume:
         assert "JOB DESCRIPTION:" not in prompt
         assert "supported_keywords_from_resume" not in prompt
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_primary_prompt_uses_single_retry_with_specific_retry_hint(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume)
 
@@ -176,7 +180,7 @@ class TestImproveResume:
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
             language="en",
-            prompt_id="keywords",
+            prompt_id="full",
             original_resume_data=sample_resume,
         )
 
@@ -187,9 +191,10 @@ class TestImproveResume:
         assert "bullet_counts" in retry_hint or "bullets" in retry_hint
         assert "Do not include personalInfo" in retry_hint or "personalInfo" in retry_hint
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_keeps_structured_json_input_even_when_dates_are_year_only(
-        self, mock_llm, sample_job_keywords
+        self, mock_llm, _critique_off, sample_job_keywords
     ):
         year_only_resume = {
             "personalInfo": {"name": "Test", "email": "", "title": "", "phone": "", "location": ""},
@@ -223,9 +228,10 @@ class TestImproveResume:
         assert "# Markdown with Jan 2020" not in prompt
         assert '"years":"2020 - 2023"' in prompt
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_unknown_prompt_id_falls_back_to_default_guidance(
-        self, mock_llm, sample_resume, sample_job_keywords
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume)
 
@@ -238,11 +244,12 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "MODE: keywords" in prompt
+        assert "MODE: full" in prompt
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_synthesizes_default_section_meta_when_missing_from_source(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         resume_without_meta = copy.deepcopy(sample_resume)
         resume_without_meta.pop("sectionMeta", None)
@@ -257,9 +264,10 @@ class TestImproveResume:
 
         assert result["sectionMeta"] == DEFAULT_SECTION_META
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_custom_section_keys_and_types_survive_round_trip_without_section_meta(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         resume_with_custom = copy.deepcopy(sample_resume)
         resume_with_custom.pop("sectionMeta", None)
@@ -288,9 +296,10 @@ class TestImproveResume:
         assert custom_meta["displayName"] == "Publications"
         assert custom_meta["sectionType"] == "text"
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_ignores_non_city_state_job_location_and_keeps_master_location(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_resume_output(sample_resume, summary="Remote-ready summary")
 
@@ -303,9 +312,10 @@ class TestImproveResume:
 
         assert result["personalInfo"]["location"] == sample_resume["personalInfo"]["location"]
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_compact_bullet_rewrite_applied_correctly(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_compact_output(
             summary="Improved summary.",
@@ -330,9 +340,10 @@ class TestImproveResume:
         assert result["workExperience"][0]["description"][1] == "Improved service reliability for Python microservices"
         assert result["workExperience"][0]["description"][2] == "Mentored 3 junior developers on backend best practices"
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_sample_data_run_reports_manifest_and_stage_breakdown(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_compact_output(
             summary="6 years building Python APIs for remote platform teams.",
@@ -363,9 +374,10 @@ class TestImproveResume:
         assert result.stage_breakdown.location_source == "master"
         assert any(change.path == "summary" for change in result.change_manifest)
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_legacy_full_body_response_applies_bullets_and_trusts_llm_skills(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         legacy_output = copy.deepcopy(sample_resume)
         legacy_output["summary"] = "Tailored summary from legacy full-body output."
@@ -408,9 +420,10 @@ class TestImproveResume:
         # Omitted source-only skills should not be re-injected when LLM returns skills.
         assert "Docker" not in merged_skill_values
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_bold_keywords_flow_into_tailoring_result(
-        self, mock_llm, sample_resume, sample_job_keywords, sample_job_description
+        self, mock_llm, _critique_off, sample_resume, sample_job_keywords, sample_job_description
     ):
         mock_llm.return_value = _llm_compact_output(
             summary="5 years building distributed systems.",
@@ -424,8 +437,9 @@ class TestImproveResume:
         )
         assert result.bold_keywords == ["Kubernetes", "microservices", "CI/CD", "REST APIs"]
 
-    @patch("app.services.tailoring.orchestration.complete_json", new_callable=AsyncMock)
-    async def test_raises_on_invalid_json(self, mock_llm):
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
+    async def test_raises_on_invalid_json(self, mock_llm, _critique_off):
         mock_llm.side_effect = ValueError("Failed to parse JSON")
 
         with pytest.raises(ValueError):

@@ -8,7 +8,9 @@ import {
   updateLlmConfig,
   testLlmConnection,
   fetchCLIProxyModels,
+  fetchCritiqueConfig,
   fetchPromptConfig,
+  updateCritiqueConfig,
   updatePromptConfig,
   clearAllApiKeys,
   resetDatabase,
@@ -149,7 +151,9 @@ export default function SettingsPage() {
 
   const [promptConfigLoading, setPromptConfigLoading] = useState(false);
   const [promptOptions, setPromptOptions] = useState<PromptOption[]>([]);
-  const [defaultPromptId, setDefaultPromptId] = useState('keywords');
+  const [defaultPromptId, setDefaultPromptId] = useState('full');
+  const [critiqueEnabled, setCritiqueEnabled] = useState(true);
+  const [critiqueLoading, setCritiqueLoading] = useState(false);
 
   // Danger Zone state
   const [showClearApiKeysDialog, setShowClearApiKeysDialog] = useState(false);
@@ -177,36 +181,27 @@ export default function SettingsPage() {
   const fallbackPromptOptions = useMemo<PromptOption[]>(
     () => [
       {
-        id: 'nudge',
-        label: t('tailor.promptOptions.nudge.label'),
-        description: t('tailor.promptOptions.nudge.description'),
-      },
-      {
-        id: 'keywords',
-        label: t('tailor.promptOptions.keywords.label'),
-        description: t('tailor.promptOptions.keywords.description'),
-      },
-      {
         id: 'full',
         label: t('tailor.promptOptions.full.label'),
         description: t('tailor.promptOptions.full.description'),
+      },
+      {
+        id: 'lite',
+        label: t('tailor.promptOptions.lite.label'),
+        description: t('tailor.promptOptions.lite.description'),
       },
     ],
     [t]
   );
   const promptOptionOverrides = useMemo<Record<string, { label: string; description: string }>>(
     () => ({
-      nudge: {
-        label: t('tailor.promptOptions.nudge.label'),
-        description: t('tailor.promptOptions.nudge.description'),
-      },
-      keywords: {
-        label: t('tailor.promptOptions.keywords.label'),
-        description: t('tailor.promptOptions.keywords.description'),
-      },
       full: {
         label: t('tailor.promptOptions.full.label'),
         description: t('tailor.promptOptions.full.description'),
+      },
+      lite: {
+        label: t('tailor.promptOptions.lite.label'),
+        description: t('tailor.promptOptions.lite.description'),
       },
     }),
     [t]
@@ -296,9 +291,10 @@ export default function SettingsPage() {
 
     async function loadConfig() {
       try {
-        const [llmConfig, promptConfig] = await Promise.all([
+        const [llmConfig, promptConfig, critiqueCfg] = await Promise.all([
           fetchLlmConfig().catch(() => null),
           fetchPromptConfig().catch(() => null),
+          fetchCritiqueConfig().catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -345,7 +341,11 @@ export default function SettingsPage() {
 
         if (promptConfig) {
           setPromptOptions(promptConfig.prompt_options || []);
-          setDefaultPromptId(promptConfig.default_prompt_id || 'keywords');
+          setDefaultPromptId(promptConfig.default_prompt_id || 'full');
+        }
+
+        if (critiqueCfg) {
+          setCritiqueEnabled(critiqueCfg.enabled);
         }
 
         setStatus('idle');
@@ -1506,6 +1506,36 @@ export default function SettingsPage() {
                   </Button>
                 </Link>
               </div>
+            </div>
+
+            <div className={`${sectionCardClass} py-3`}>
+              <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
+                {t('settings.critiquePipeline.title')}
+              </p>
+              <p className="mt-1 text-[13px] text-gray-700">
+                {t('settings.critiquePipeline.description')}
+              </p>
+              <label className="mt-3 flex cursor-pointer items-center gap-2 font-mono text-[13px] text-gray-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-blue-700"
+                  checked={critiqueEnabled}
+                  disabled={critiqueLoading}
+                  onChange={async (e) => {
+                    const next = e.target.checked;
+                    setCritiqueLoading(true);
+                    try {
+                      const r = await updateCritiqueConfig(next);
+                      setCritiqueEnabled(r.enabled);
+                    } catch {
+                      setCritiqueEnabled(!next);
+                    } finally {
+                      setCritiqueLoading(false);
+                    }
+                  }}
+                />
+                {t('settings.critiquePipeline.toggle')}
+              </label>
             </div>
           </section>
 

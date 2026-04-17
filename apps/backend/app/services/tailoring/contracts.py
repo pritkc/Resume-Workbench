@@ -27,7 +27,7 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
 
 
 def _mode_rules(prompt_id: str) -> list[str]:
-    if prompt_id in {"nudge", "keywords"}:
+    if prompt_id == "lite":
         return [
             "Keep description arrays the same length.",
             "Do not change indexed bullet counts in workExperience or personalProjects.",

@@ -5,13 +5,10 @@ import json
 import re
 from typing import Any
 
+from app.config import get_step_llm_config
 from app.llm import complete
-from app.prompts import (
-    COMBINED_MESSAGES_SYSTEM_PROMPT,
-    PROMPT_VERSIONS,
-    get_language_name,
-)
-from app.prompts.templates import COVER_LETTER_OUTREACH_PROMPT
+from app.prompts import PROMPT_VERSIONS, get_language_name
+from app.prompts.cover_letter import COMBINED_MESSAGES_SYSTEM_PROMPT, COVER_LETTER_OUTREACH_PROMPT
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -652,6 +649,7 @@ async def generate_cover_letter_and_outreach(
         complete(
             prompt=prompt,
             system_prompt=COMBINED_MESSAGES_SYSTEM_PROMPT,
+            config=get_step_llm_config("cover_letter"),
             max_tokens=COMBINED_MESSAGE_MAX_TOKENS,
             retries=2,
             retry_hint=_COMBINED_MESSAGES_RETRY_HINT,

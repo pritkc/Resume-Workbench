@@ -291,7 +291,6 @@ function buildDisplayChanges(
       }
     }
 
-    let bestCandidate: ManifestCandidate | undefined = exactCandidate;
     let bestScore = exactCandidate ? 4 : 0;
 
     if (!exactCandidate) {
@@ -299,7 +298,6 @@ function buildDisplayChanges(
         const score = matchScore(canonicalDiffPath, candidate.canonicalPath);
         if (score > bestScore) {
           bestScore = score;
-          bestCandidate = candidate;
         }
       }
     }
@@ -318,10 +316,7 @@ function buildDisplayChanges(
     if (includeSystemCleanupNotes && exactCandidate && change.new_value) {
       const aiValue = extractManifestValue(exactCandidate.raw, change.field_path);
       const finalText = change.new_value;
-      if (
-        aiValue &&
-        normalizeTextForCompare(aiValue) !== normalizeTextForCompare(finalText)
-      ) {
+      if (aiValue && normalizeTextForCompare(aiValue) !== normalizeTextForCompare(finalText)) {
         const focusedDiff = extractFocusedWordChange(aiValue, finalText);
         if (
           focusedDiff &&
@@ -452,7 +447,10 @@ function buildOrderedSections(displayChanges: DisplayChange[]): OrderedSection[]
 }
 
 /** Trim a shared prefix/suffix inside two strings (character-level). */
-function refineCharacterFocus(before: string, after: string): { oldFragment: string; newFragment: string } {
+function refineCharacterFocus(
+  before: string,
+  after: string
+): { oldFragment: string; newFragment: string } {
   let i = 0;
   const minLen = Math.min(before.length, after.length);
   while (i < minLen && before[i] === after[i]) {
@@ -526,7 +524,10 @@ function extractFocusedWordChange(
   };
 }
 
-function displayValuesForModifiedField(original: string | null | undefined, next: string | null | undefined) {
+function displayValuesForModifiedField(
+  original: string | null | undefined,
+  next: string | null | undefined
+) {
   const o = original ?? '';
   const n = next ?? '';
   const focused = extractFocusedWordChange(o, n);
@@ -867,18 +868,19 @@ function ChangeItem({ item }: { item: DisplayChange }) {
         <DiffValueBox label="Before" value={change.original_value} tone="removed" />
       )}
 
-      {change.change_type === 'modified' && (() => {
-        const { before, after } = displayValuesForModifiedField(
-          change.original_value,
-          change.new_value
-        );
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <DiffValueBox label="Before" value={before} tone="removed" />
-            <DiffValueBox label="After" value={after} tone="added" />
-          </div>
-        );
-      })()}
+      {change.change_type === 'modified' &&
+        (() => {
+          const { before, after } = displayValuesForModifiedField(
+            change.original_value,
+            change.new_value
+          );
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <DiffValueBox label="Before" value={before} tone="removed" />
+              <DiffValueBox label="After" value={after} tone="added" />
+            </div>
+          );
+        })()}
 
       {item.cleanupNote && (
         <div className="border border-[#92400E] bg-[#FFFBEB] p-2">
