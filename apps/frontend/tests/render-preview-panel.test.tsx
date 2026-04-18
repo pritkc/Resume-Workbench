@@ -125,7 +125,7 @@ describe('RenderPreviewPanel', () => {
 
     await screen.findByAltText('preview.png');
 
-    expect(screen.getAllByText('RenderCV Preview')).toHaveLength(1);
+    expect(screen.getAllByText('Preview')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Refresh preview' })).toBeInTheDocument();
   });
 

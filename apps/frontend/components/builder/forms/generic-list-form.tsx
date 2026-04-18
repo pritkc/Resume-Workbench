@@ -47,15 +47,13 @@ export const GenericListForm: React.FC<GenericListFormProps> = ({
 
   return (
     <div className="space-y-2">
-      <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
-        {finalLabel}
-      </Label>
+      <Label className="text-[11px] font-medium text-gray-700">{finalLabel}</Label>
       <Textarea
         value={formatItems(items)}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={finalPlaceholder}
-        className="min-h-[120px] bg-white text-black rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700"
+        className="min-h-[100px] rounded-none border-black/15 bg-white text-[13px] text-gray-900 focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
       />
     </div>
   );

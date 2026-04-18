@@ -109,6 +109,10 @@
     "editMode": "Modo Edición",
     "previewMode": "Modo Vista Previa",
     "createAndPreview": "Crear y previsualizar",
+    "renameTitleHint": "Clic para renombrar el currículo",
+    "renameTitleInputLabel": "Nombre del currículo",
+    "renameTitleEmpty": "El nombre no puede estar vacío.",
+    "renameTitleError": "No se pudo renombrar. Inténtalo de nuevo.",
     "unsavedDraft": "Borrador sin guardar",
     "personalInfo": "Información Personal",
     "summary": "Resumen",
@@ -187,6 +191,7 @@
     },
     "previewTabs": {
       "resume": "CURRÍCULUM",
+      "letters": "CARTA Y MENSAJE",
       "coverLetter": "CARTA",
       "outreach": "MENSAJE",
       "jdMatch": "COINCIDENCIA JD",
@@ -194,6 +199,13 @@
     },
     "additionalQuestions": {
       "disabledReason": "Se requiere contexto del puesto. Abre un currículum adaptado (o termina de adaptarlo en la página Tailor) para activar esta pestaña."
+    },
+    "lettersWorkspace": {
+      "hint": "Pega tu propio texto en cualquier momento o genera para rellenar ambos desde el currículum y el contexto del puesto."
+    },
+    "lettersPreview": {
+      "coverLetterEmpty": "Aún no hay carta — pega texto o usa Generar arriba.",
+      "outreachEmpty": "Aún no hay mensaje — pega texto o usa Generar arriba."
     },
     "generateClMessage": {
       "toolbarLabel": "Generar carta + mensaje",
@@ -216,7 +228,12 @@
       "outreachDescription": "Genera un mensaje de contacto breve para LinkedIn o email según tu currículum y la descripción del puesto.",
       "generateButton": "Generar {title}",
       "coverLetterFooter": "Consejo: adapta primero para mejores resultados.",
-      "outreachFooter": "Consejo: manténlo breve y personalizado."
+      "outreachFooter": "Consejo: manténlo breve y personalizado.",
+      "lettersNotAvailableTitle": "Carta y mensaje no disponibles",
+      "lettersNotAvailableDescription": "Primero adapta el currículum con una descripción del puesto. Luego podrás generar ambos documentos de una vez.",
+      "lettersGenerateTitle": "Generar carta y mensaje",
+      "lettersDescription": "Crea ambos documentos a la vez a partir del currículum y el contexto del puesto. Podrás editar cada panel por separado después.",
+      "lettersFooter": "Una sola generación actualiza ambos."
     },
     "regenerateDialog": {
       "title": "¿Regenerar {title}?",

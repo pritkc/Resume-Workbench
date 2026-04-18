@@ -40,20 +40,18 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
   );
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center gap-2 p-4 border-b border-gray-200 bg-gray-50">
-        <FileUser className="w-4 h-4 text-gray-600" />
-        <h3 className="font-mono text-sm font-bold uppercase text-gray-700">
+    <div className="flex h-full flex-col">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-black/10 bg-white px-2.5 py-1.5">
+        <FileUser className="h-3.5 w-3.5 text-gray-500" aria-hidden />
+        <h3 className="text-[12px] font-semibold text-gray-800">
           {t('builder.jdMatch.yourResume')}
         </h3>
-        <span className="text-xs text-gray-500 ml-2">
+        <span className="text-[11px] text-gray-500">
           {t('builder.jdMatch.matchingKeywordsHighlighted')}
         </span>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-2.5">
         {/* Summary */}
         {resumeData.summary && (
           <Section title={t('resume.sections.summary')} icon={<FileUser className="w-4 h-4" />}>
@@ -207,12 +205,14 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-gray-200 bg-white rounded-none">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50">
-        {icon}
-        <span className="font-mono text-xs font-bold uppercase text-gray-600">{title}</span>
+    <div className="border border-black/10 bg-white">
+      <div className="flex items-center gap-1.5 border-b border-black/10 bg-gray-50/80 px-2 py-1.5">
+        <span className="text-gray-500 [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">
+          {title}
+        </span>
       </div>
-      <div className="p-3">{children}</div>
+      <div className="p-2">{children}</div>
     </div>
   );
 }

@@ -87,11 +87,11 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
 
   return (
     <div
-      className={`space-y-0 border bg-white px-3 py-2.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,0.06)] ${
-        isHidden ? 'border-dashed border-gray-400 opacity-60' : 'border-black'
+      className={`space-y-0 border bg-white px-2.5 py-2 ${
+        isHidden ? 'border-dashed border-gray-300 opacity-60' : 'border-black/15'
       }`}
     >
-      <div className="mb-2 flex items-center justify-between border-b border-black pb-1.5">
+      <div className="mb-1.5 flex items-center justify-between border-b border-black/10 pb-1">
         <div className="flex items-center gap-2">
           {isEditing ? (
             <div className="flex items-center gap-1">
@@ -123,7 +123,9 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
             </div>
           ) : (
             <>
-              <h3 className="font-serif text-base font-bold">{section.displayName}</h3>
+              <h3 className="font-serif text-[15px] font-bold leading-snug text-gray-900">
+                {section.displayName}
+              </h3>
               {!isPersonalInfo && (
                 <Button
                   variant="ghost"

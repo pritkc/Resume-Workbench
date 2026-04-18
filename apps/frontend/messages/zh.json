@@ -109,6 +109,10 @@
     "editMode": "编辑模式",
     "previewMode": "预览模式",
     "createAndPreview": "创建与预览",
+    "renameTitleHint": "点击重命名简历",
+    "renameTitleInputLabel": "简历名称",
+    "renameTitleEmpty": "名称不能为空。",
+    "renameTitleError": "无法重命名，请重试。",
     "unsavedDraft": "未保存草稿",
     "personalInfo": "个人信息",
     "summary": "个人简介",
@@ -187,6 +191,7 @@
     },
     "previewTabs": {
       "resume": "简历",
+      "letters": "求职信与外联",
       "coverLetter": "求职信",
       "outreach": "联系邮件",
       "jdMatch": "JD 匹配",
@@ -194,6 +199,13 @@
     },
     "additionalQuestions": {
       "disabledReason": "需要职位上下文。请打开已针对职位调整的简历，或在 Tailor 页面完成调整后再使用此标签。"
+    },
+    "lettersWorkspace": {
+      "hint": "可随时粘贴正文，或使用上方生成按钮根据简历与职位上下文填充两侧。"
+    },
+    "lettersPreview": {
+      "coverLetterEmpty": "尚无求职信 — 粘贴正文或使用上方生成。",
+      "outreachEmpty": "尚无外联消息 — 粘贴正文或使用上方生成。"
     },
     "generateClMessage": {
       "toolbarLabel": "生成求职信与消息",
@@ -216,7 +228,12 @@
       "outreachDescription": "基于你的简历与职位描述生成用于 LinkedIn 或邮件的外联消息。",
       "generateButton": "生成 {title}",
       "coverLetterFooter": "提示：先完成简历定制效果更佳。",
-      "outreachFooter": "提示：尽量简短并加入个性化细节。"
+      "outreachFooter": "提示：尽量简短并加入个性化细节。",
+      "lettersNotAvailableTitle": "求职信与外联暂不可用",
+      "lettersNotAvailableDescription": "请先使用职位描述完成简历定制，然后可一次性生成求职信与外联邮件。",
+      "lettersGenerateTitle": "生成求职信与外联",
+      "lettersDescription": "根据简历与职位上下文同时生成两侧内容，生成后可分别编辑。",
+      "lettersFooter": "一次生成会同时更新两侧。"
     },
     "regenerateDialog": {
       "title": "重新生成 {title}？",

@@ -50,13 +50,11 @@ export function RenderRuntimeSettingsControls({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between border border-black bg-white px-3 py-2.5">
+    <div className="space-y-2">
+      <div className="flex flex-col gap-2 border border-black/15 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Settings</p>
-          <p className="mt-1 text-[13px] text-gray-600">
-            Keep runtime defaults compact and close to the preview.
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">Runtime</p>
+          <p className="mt-0.5 text-[13px] text-gray-600">PDF title, date format, and defaults.</p>
         </div>
         <Button
           variant="outline"

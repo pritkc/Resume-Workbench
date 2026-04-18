@@ -109,6 +109,10 @@
     "editMode": "Edit Mode",
     "previewMode": "Preview Mode",
     "createAndPreview": "Create & Preview",
+    "renameTitleHint": "Click to rename resume",
+    "renameTitleInputLabel": "Resume name",
+    "renameTitleEmpty": "Resume name cannot be empty.",
+    "renameTitleError": "Could not rename resume. Try again.",
     "unsavedDraft": "Unsaved Draft",
     "personalInfo": "Personal Information",
     "summary": "Summary",
@@ -187,6 +191,7 @@
     },
     "previewTabs": {
       "resume": "RESUME",
+      "letters": "CL & OUTREACH",
       "coverLetter": "COVER LETTER",
       "outreach": "OUTREACH MAIL",
       "jdMatch": "JD MATCH",
@@ -194,6 +199,13 @@
     },
     "additionalQuestions": {
       "disabledReason": "Job context is required. Open a tailored resume (or finish tailoring from the Tailor page) to enable this tab."
+    },
+    "lettersWorkspace": {
+      "hint": "Paste your own copy anytime, or generate to fill both from your resume and job context."
+    },
+    "lettersPreview": {
+      "coverLetterEmpty": "No cover letter yet — paste text or use Generate above.",
+      "outreachEmpty": "No outreach message yet — paste text or use Generate above."
     },
     "generateClMessage": {
       "toolbarLabel": "Generate CL + Message",
@@ -216,7 +228,12 @@
       "outreachDescription": "Generate a concise outreach message for LinkedIn or email based on your resume and job description.",
       "generateButton": "Generate {title}",
       "coverLetterFooter": "Tip: tailor first for best results.",
-      "outreachFooter": "Tip: keep it short and personalized."
+      "outreachFooter": "Tip: keep it short and personalized.",
+      "lettersNotAvailableTitle": "Cover letter & outreach not available",
+      "lettersNotAvailableDescription": "Tailor this resume with a job description first. Then you can generate both documents in one step.",
+      "lettersGenerateTitle": "Generate cover letter & outreach",
+      "lettersDescription": "Creates both documents at once from your resume and job context. You can edit each panel separately afterward.",
+      "lettersFooter": "One generation updates both sides."
     },
     "regenerateDialog": {
       "title": "Regenerate {title}?",

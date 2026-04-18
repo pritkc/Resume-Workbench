@@ -43,25 +43,27 @@ export function ArtifactGallery({
 
   return (
     <>
-      <div className="border border-black bg-white">
+      <div className="border border-black/15 bg-white">
         {showHeader ? (
-          <div className="border-b border-black px-3 py-2">
-            <p className="font-mono text-xs font-bold uppercase tracking-wider">{title}</p>
+          <div className="border-b border-black/10 px-2.5 py-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">
+              {title}
+            </p>
           </div>
         ) : null}
-        <div className="space-y-3 p-3">
+        <div className="space-y-2 p-2">
           {previewArtifacts.length === 0 && !pdfArtifact ? (
             <p className="font-mono text-xs text-gray-600">{emptyMessage}</p>
           ) : (
             <>
               {previewArtifacts.length > 0 && (
-                <div className="grid gap-2.5">
+                <div className="grid gap-2">
                   {previewArtifacts.map((artifact) => (
                     <button
                       key={artifact.artifact_id}
                       type="button"
                       onClick={() => setSelectedPreviewId(artifact.artifact_id)}
-                      className="block w-full border border-black bg-[#F8F7F1] p-2 text-left hover:bg-[#F0F0E8]"
+                      className="block w-full border border-black/15 bg-gray-50/80 p-1.5 text-left hover:bg-gray-100"
                       aria-label={`Open large preview for ${artifact.file_name}`}
                     >
                       <Image

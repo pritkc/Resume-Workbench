@@ -56,13 +56,11 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between border border-black bg-white px-3 py-2.5">
+    <div className="space-y-2">
+      <div className="flex flex-col gap-2 border border-black/15 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Locale</p>
-          <p className="mt-1 text-[13px] text-gray-600">
-            Adjust renderer copy without dragging through a long form.
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">Locale</p>
+          <p className="mt-0.5 text-[13px] text-gray-600">Renderer labels and month names.</p>
         </div>
         <Button
           variant="outline"

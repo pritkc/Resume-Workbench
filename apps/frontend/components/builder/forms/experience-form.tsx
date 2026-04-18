@@ -171,22 +171,22 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
           variant="outline"
           size="xs"
           onClick={handleAdd}
-          className="rounded-none border-black px-2.5 transition-colors hover:bg-black hover:text-white"
+          className="rounded-none border-black/15 px-2.5 transition-colors hover:border-gray-900 hover:bg-gray-900 hover:text-white"
         >
           <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('builder.forms.experience.addJob')}
         </Button>
       </div>
 
       {data.length === 0 ? (
-        <div className="border border-dashed border-black bg-gray-50 px-3 py-4 text-center">
-          <p className="mb-2 font-mono text-[11px] text-gray-500">
+        <div className="border border-dashed border-black/20 bg-gray-50/80 px-3 py-3 text-center">
+          <p className="mb-2 text-[11px] text-gray-600">
             {t('builder.genericItemForm.noEntries', { label: t('resume.sections.experience') })}
           </p>
           <Button
             variant="outline"
             size="xs"
             onClick={handleAdd}
-            className="rounded-none border-black"
+            className="rounded-none border-black/15"
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('builder.forms.experience.addFirstJob')}
           </Button>
@@ -204,7 +204,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
                 return (
                   <DraggableListItem key={item.id} id={item.id}>
-                    <div className="group relative border border-black bg-gray-50 px-3 py-2.5">
+                    <div className="group relative border border-black/15 bg-white px-2.5 py-2">
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -217,7 +217,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
                       <div className="mb-2.5 grid grid-cols-1 gap-2.5 pr-7 md:grid-cols-2">
                         <div className="space-y-1.5">
-                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                          <Label className="text-[11px] font-medium text-gray-700">
                             {t('builder.forms.experience.fields.position')}
                           </Label>
                           <Input
@@ -226,11 +226,11 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'position', e.target.value)
                             }
                             placeholder={t('builder.forms.experience.placeholders.position')}
-                            className="rounded-none border-black bg-white"
+                            className="rounded-none border-black/15 bg-white"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                          <Label className="text-[11px] font-medium text-gray-700">
                             {t('builder.forms.experience.fields.company')}
                           </Label>
                           <Input
@@ -239,11 +239,11 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'company', e.target.value)
                             }
                             placeholder={t('builder.forms.experience.placeholders.company')}
-                            className="rounded-none border-black bg-white"
+                            className="rounded-none border-black/15 bg-white"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                          <Label className="text-[11px] font-medium text-gray-700">
                             {t('builder.genericItemForm.fields.location')}
                           </Label>
                           <Input
@@ -252,11 +252,11 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'location', e.target.value)
                             }
                             placeholder={t('builder.forms.experience.placeholders.location')}
-                            className="rounded-none border-black bg-white"
+                            className="rounded-none border-black/15 bg-white"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                          <Label className="text-[11px] font-medium text-gray-700">
                             Start Date
                           </Label>
                           <Input
@@ -265,31 +265,29 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'start_date', e.target.value)
                             }
                             placeholder="2021-01"
-                            className="rounded-none border-black bg-white"
+                            className="rounded-none border-black/15 bg-white"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
-                            End Date
-                          </Label>
+                          <Label className="text-[11px] font-medium text-gray-700">End Date</Label>
                           <Input
                             value={item.end_date || ''}
                             onChange={(e) =>
                               handleTextFieldChange(item.id, 'end_date', e.target.value)
                             }
                             placeholder="present or 2024-03"
-                            className="rounded-none border-black bg-white"
+                            className="rounded-none border-black/15 bg-white"
                           />
                         </div>
                         <div className="space-y-1.5 md:col-span-2">
-                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                          <Label className="text-[11px] font-medium text-gray-700">
                             {t('builder.genericItemForm.fields.date')}
                           </Label>
                           <Input
                             value={getExperienceExplicitDate(item)}
                             onChange={(e) => handleTextFieldChange(item.id, 'date', e.target.value)}
                             placeholder={t('builder.forms.experience.placeholders.date')}
-                            className="rounded-none border-black bg-white"
+                            className="rounded-none border-black/15 bg-white"
                           />
                           <p className="font-mono text-[11px] text-gray-500">
                             Optional override. If blank, the preview uses start and end dates.
@@ -298,7 +296,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                       </div>
 
                       <div className="mb-2.5 space-y-1.5">
-                        <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                        <Label className="text-[11px] font-medium text-gray-700">
                           {t('builder.genericItemForm.fields.summaryOptional')}
                         </Label>
                         <RichTextEditor
@@ -311,7 +309,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <Label className="font-mono text-xs uppercase tracking-wider text-gray-500">
+                          <Label className="text-[11px] font-medium text-gray-700">
                             {t('builder.genericItemForm.fields.highlights')}
                           </Label>
                           <Button

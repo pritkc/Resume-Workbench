@@ -141,16 +141,13 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
   };
 
   return (
-    <div className="space-y-3 border border-black bg-white px-4 py-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
-      <h3 className="mb-3 border-b border-black pb-2 font-serif text-lg font-bold">
+    <div className="space-y-2.5 border border-black/15 bg-white px-3 py-2.5">
+      <h3 className="mb-2 border-b border-black/10 pb-1.5 font-serif text-base font-bold text-gray-900">
         {t('builder.personalInfo')}
       </h3>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
         <div className="space-y-2">
-          <Label
-            htmlFor="name"
-            className="font-mono text-xs uppercase tracking-wider text-gray-500"
-          >
+          <Label htmlFor="name" className="text-[11px] font-medium text-gray-700">
             {t('resume.personalInfo.name')}
           </Label>
           <Input
@@ -158,14 +155,11 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             value={data.name || ''}
             onChange={(e) => handleChange('name', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.name')}
-            className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
+            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <div className="space-y-2">
-          <Label
-            htmlFor="headline"
-            className="font-mono text-xs uppercase tracking-wider text-gray-500"
-          >
+          <Label htmlFor="headline" className="text-[11px] font-medium text-gray-700">
             Headline
           </Label>
           <Input
@@ -173,14 +167,11 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             value={data.headline || data.title || ''}
             onChange={(e) => handleChange('headline', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.title')}
-            className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
+            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <div className="space-y-2">
-          <Label
-            htmlFor="email"
-            className="font-mono text-xs uppercase tracking-wider text-gray-500"
-          >
+          <Label htmlFor="email" className="text-[11px] font-medium text-gray-700">
             {t('resume.personalInfo.email')}
           </Label>
           <Input
@@ -189,14 +180,11 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             value={data.email || ''}
             onChange={(e) => handleChange('email', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.email')}
-            className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
+            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <div className="space-y-2">
-          <Label
-            htmlFor="phone"
-            className="font-mono text-xs uppercase tracking-wider text-gray-500"
-          >
+          <Label htmlFor="phone" className="text-[11px] font-medium text-gray-700">
             {t('resume.personalInfo.phone')}
           </Label>
           <Input
@@ -205,14 +193,11 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             value={data.phone || ''}
             onChange={(e) => handleChange('phone', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.phone')}
-            className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
+            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <div className="space-y-2">
-          <Label
-            htmlFor="location"
-            className="font-mono text-xs uppercase tracking-wider text-gray-500"
-          >
+          <Label htmlFor="location" className="text-[11px] font-medium text-gray-700">
             {t('resume.personalInfo.location')}
           </Label>
           <Input
@@ -220,14 +205,11 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             value={data.location || ''}
             onChange={(e) => handleChange('location', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.location')}
-            className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
+            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <div className="space-y-2 md:col-span-2">
-          <Label
-            htmlFor="photo"
-            className="font-mono text-xs uppercase tracking-wider text-gray-500"
-          >
+          <Label htmlFor="photo" className="text-[11px] font-medium text-gray-700">
             Photo URL <span className="text-gray-400">({t('common.optional')})</span>
           </Label>
           <Input
@@ -235,43 +217,46 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             value={data.photo || data.photoUrl || ''}
             onChange={(e) => handleChange('photo', e.target.value)}
             placeholder="https://example.com/photo.jpg"
-            className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
+            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
       </div>
 
-      <div className="space-y-3 border-t border-black pt-3">
+      <div className="space-y-2 border-t border-black/10 pt-2.5">
         <div className="flex items-center justify-between">
-          <h4 className="font-mono text-xs uppercase tracking-wider text-gray-500">
+          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">
             Profile Links
           </h4>
           <Button
             variant="outline"
             size="xs"
             onClick={handleAddProfileLink}
-            className="rounded-none border-black"
+            className="rounded-none border-black/15"
           >
             <Plus className="mr-1 h-3 w-3" /> Add Link
           </Button>
         </div>
         {profileLinks.length === 0 ? (
-          <p className="font-mono text-[11px] text-gray-500">No profile links added yet.</p>
+          <p className="text-[11px] text-gray-500">No profile links added yet.</p>
         ) : (
           <div className="space-y-2">
             {profileLinks.map((item, index) => (
-              <div key={index} className="space-y-2 border border-dashed border-black/20 p-2">
+              <div
+                key={index}
+                className="space-y-2 border border-dashed border-black/15 bg-gray-50/50 p-2"
+              >
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <Input
                     value={item.label || ''}
                     onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
                     placeholder="Portfolio"
-                    className="rounded-none border-black bg-transparent"
+                    className="rounded-none border-black/15 bg-white"
                   />
                   <Input
                     value={item.url || ''}
                     onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
                     placeholder="https://example.com"
-                    className="rounded-none border-black bg-transparent"
+                    className="rounded-none border-black/15 bg-white"
                   />
                   <Button
                     variant="ghost"
@@ -289,7 +274,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
                     handleProfileLinkChange(index, 'fontawesome_icon', e.target.value)
                   }
                   placeholder="linkedin-in or fa-brands fa-linkedin-in"
-                  className="rounded-none border-black bg-transparent"
+                  className="rounded-none border-black/15 bg-white"
                 />
               </div>
             ))}

@@ -109,6 +109,10 @@
     "editMode": "Modo Edição",
     "previewMode": "Modo Visualização",
     "createAndPreview": "Criar e Visualizar",
+    "renameTitleHint": "Clique para renomear o currículo",
+    "renameTitleInputLabel": "Nome do currículo",
+    "renameTitleEmpty": "O nome não pode ficar vazio.",
+    "renameTitleError": "Não foi possível renomear. Tente novamente.",
     "unsavedDraft": "Rascunho Não Salvo",
     "personalInfo": "Informações Pessoais",
     "summary": "Resumo",
@@ -187,6 +191,7 @@
     },
     "previewTabs": {
       "resume": "CURRÍCULO",
+      "letters": "CARTA E MENSAGEM",
       "coverLetter": "CARTA DE APRESENTAÇÃO",
       "outreach": "MENSAGEM DE CONTATO",
       "jdMatch": "ANÁLISE DE VAGA",
@@ -194,6 +199,13 @@
     },
     "additionalQuestions": {
       "disabledReason": "É necessário o contexto da vaga. Abra um currículo personalizado (ou conclua a personalização na página Tailor) para ativar esta aba."
+    },
+    "lettersWorkspace": {
+      "hint": "Cole seu texto a qualquer momento ou gere para preencher ambos com o currículo e o contexto da vaga."
+    },
+    "lettersPreview": {
+      "coverLetterEmpty": "Ainda sem carta — cole texto ou use Gerar acima.",
+      "outreachEmpty": "Ainda sem mensagem — cole texto ou use Gerar acima."
     },
     "generateClMessage": {
       "toolbarLabel": "Gerar carta + mensagem",
@@ -216,7 +228,12 @@
       "outreachDescription": "Gere uma mensagem de contato concisa para LinkedIn ou email com base no seu currículo e descrição da vaga.",
       "generateButton": "Gerar {title}",
       "coverLetterFooter": "Dica: personalize primeiro para melhores resultados.",
-      "outreachFooter": "Dica: mantenha curta e personalizada."
+      "outreachFooter": "Dica: mantenha curta e personalizada.",
+      "lettersNotAvailableTitle": "Carta e mensagem indisponíveis",
+      "lettersNotAvailableDescription": "Personalize o currículo com uma descrição de vaga primeiro. Depois você pode gerar os dois de uma vez.",
+      "lettersGenerateTitle": "Gerar carta e mensagem",
+      "lettersDescription": "Cria ambos de uma vez a partir do currículo e do contexto da vaga. Você pode editar cada painel separadamente depois.",
+      "lettersFooter": "Uma geração atualiza os dois lados."
     },
     "regenerateDialog": {
       "title": "Regenerar {title}?",

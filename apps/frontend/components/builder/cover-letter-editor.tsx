@@ -34,17 +34,16 @@ export function CoverLetterEditor({
   const charCount = content.length;
 
   return (
-    <div className={cn('flex flex-col h-full', className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-black bg-[#F5F5F0] px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4" />
-          <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
+    <div className={cn('flex h-full flex-col', className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white px-2.5 py-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <FileText className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+          <h2 className="truncate text-[13px] font-semibold text-gray-900">
             {t('coverLetter.title')}
           </h2>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-gray-500">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-gray-500">
             {t('builder.contentStats.wordsChars', { wordCount, charCount })}
           </span>
           <Button size="xs" onClick={onSave} disabled={isSaving}>
@@ -54,26 +53,24 @@ export function CoverLetterEditor({
         </div>
       </div>
 
-      {/* Editor Area */}
-      <div className="flex-1 overflow-hidden p-3">
+      <div className="flex-1 overflow-hidden p-2">
         <textarea
           value={content}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t('coverLetter.editor.placeholder')}
           className={cn(
-            'h-full min-h-[280px] w-full p-3',
-            'font-mono text-sm leading-relaxed',
-            'border border-black bg-white',
+            'h-full min-h-[220px] w-full p-2.5',
+            'font-mono text-[13px] leading-relaxed',
+            'border border-black/15 bg-white',
             'resize-none',
-            'focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2',
+            'focus:outline-none focus:ring-1 focus:ring-blue-700',
             'placeholder:text-gray-400'
           )}
+          aria-describedby="cover-letter-tip"
         />
-      </div>
-
-      {/* Footer Tips */}
-      <div className="border-t border-gray-200 bg-[#F5F5F0] px-3 py-2">
-        <p className="font-mono text-[11px] text-gray-500">{t('coverLetter.editor.tip')}</p>
+        <p id="cover-letter-tip" className="mt-1.5 text-[10px] leading-snug text-gray-500">
+          {t('coverLetter.editor.tip')}
+        </p>
       </div>
     </div>
   );

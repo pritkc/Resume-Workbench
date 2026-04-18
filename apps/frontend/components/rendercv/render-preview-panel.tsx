@@ -88,13 +88,11 @@ export function RenderPreviewPanel({
   }, [draftRequest, error, hasFetchedResume, stale]);
 
   return (
-    <div className="space-y-3 p-3 md:p-4">
-      <div className="flex items-center justify-between gap-3 border border-black bg-white px-3 py-2">
+    <div className="space-y-2 p-2 md:p-2.5">
+      <div className="flex items-center justify-between gap-2 border border-black/15 bg-white px-2.5 py-1.5">
         <div className="min-w-0">
-          <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Preview</p>
-          <p className="mt-0.5 truncate text-[11px] text-gray-600">
-            Preview and PDF come from the same render snapshot.
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">Preview</p>
+          <p className="mt-0.5 truncate text-[11px] text-gray-600">Same snapshot as PDF export.</p>
         </div>
         <Button
           variant="outline"
@@ -114,7 +112,7 @@ export function RenderPreviewPanel({
       </div>
 
       {statusMessage && (
-        <div className="flex items-start gap-2 border border-black bg-[#F8F7F1] px-3 py-2 font-mono text-[11px] text-gray-700">
+        <div className="flex items-start gap-2 border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] text-amber-950">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {statusMessage}
         </div>

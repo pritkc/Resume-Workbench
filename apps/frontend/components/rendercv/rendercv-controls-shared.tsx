@@ -19,11 +19,9 @@ export function textToArray(value: string): string[] {
 
 export function RenderCvSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border border-black bg-white">
-      <div className="border-b border-black bg-[#F8F7F1] px-3 py-1.5">
-        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-600">
-          {title}
-        </p>
+    <section className="border border-black/15 bg-white">
+      <div className="border-b border-black/10 bg-gray-50/80 px-2.5 py-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">{title}</p>
       </div>
       <div>{children}</div>
     </section>
@@ -40,18 +38,18 @@ export function RenderCvQuickNav({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="sticky top-0 z-10 border border-black bg-[#F8F7F1] p-1.5">
-      <div className="flex flex-wrap gap-1.5">
+    <div className="sticky top-0 z-10 border border-black/15 bg-white p-1">
+      <div className="flex flex-wrap gap-1">
         {items.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => onChange(item.id)}
             className={cn(
-              'border px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] transition-colors',
+              'border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors',
               item.id === activeId
-                ? 'border-black bg-black text-white'
-                : 'border-gray-300 bg-white text-gray-600 hover:border-black hover:text-black'
+                ? 'border-gray-900 bg-gray-900 text-white'
+                : 'border-transparent bg-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900'
             )}
           >
             {item.label}
@@ -82,8 +80,8 @@ export function RenderCvRow({
       className={cn(
         'grid border-b border-gray-200 last:border-b-0',
         isCompact
-          ? 'gap-2 px-3 py-2.5 md:grid-cols-[156px_minmax(0,1fr)] md:items-start'
-          : 'gap-3 px-4 py-3 md:grid-cols-[180px_minmax(0,1fr)] md:items-center'
+          ? 'gap-2 px-2.5 py-2 md:grid-cols-[150px_minmax(0,1fr)] md:items-start'
+          : 'gap-2.5 px-3 py-2.5 md:grid-cols-[170px_minmax(0,1fr)] md:items-center'
       )}
     >
       <div>
@@ -121,7 +119,7 @@ export function RenderCvInput({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="h-8 font-mono text-sm"
+      className="h-8 border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
     />
   );
 }
@@ -143,7 +141,7 @@ export function RenderCvTextarea({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="min-h-[72px] font-mono text-sm"
+      className="min-h-[64px] border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
     />
   );
 }
@@ -165,7 +163,7 @@ export function RenderCvAutocompleteInput({
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-8 font-mono text-sm"
+        className="h-8 border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
       />
       <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
         {options.map((option) => (
@@ -251,7 +249,7 @@ export function RenderCvColorInput({
           value={value ?? ''}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="h-8 min-w-[220px] flex-1 font-mono text-sm"
+          className="h-8 min-w-[220px] flex-1 border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
         />
       </div>
       <p className="text-[11px] text-gray-500">
@@ -410,7 +408,7 @@ export function RenderCvSelect<T extends string>({
     <select
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
-      className="h-8 w-full border border-black bg-white px-2.5 py-1.5 font-mono text-sm"
+      className="h-8 w-full border border-black/15 bg-white px-2.5 py-1.5 font-mono text-[13px]"
     >
       {options.map((option) => (
         <option key={option.id} value={option.id}>

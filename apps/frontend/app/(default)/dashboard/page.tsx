@@ -255,21 +255,35 @@ export default function DashboardPage() {
     [t]
   );
 
+  const dateLocale =
+    locale === 'es' ? 'es-ES' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
+
   const formatShortDate = useCallback(
     (value: string): string => {
       const fallback = t('common.unknown');
       if (!value) return fallback;
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return fallback;
-      const dateLocale =
-        locale === 'es' ? 'es-ES' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
       return date.toLocaleDateString(dateLocale, {
         month: 'short',
         day: 'numeric',
         year: '2-digit',
       });
     },
-    [locale, t]
+    [dateLocale, t]
+  );
+
+  const formatDateTimeTooltip = useCallback(
+    (value: string): string => {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString(dateLocale, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    },
+    [dateLocale]
   );
 
   const checkResumeStatus = useCallback(async (resumeId: string) => {
@@ -556,7 +570,9 @@ export default function DashboardPage() {
     const resolvedCompany = resolveCompany(resume);
     const resolvedLocation = resolveLocation(resume);
     const resolvedCode = resolveResumeCode(resume);
-    const shortDate = formatShortDate(resume.updated_at || resume.created_at);
+    const updatedRaw = resume.updated_at || resume.created_at;
+    const shortDate = formatShortDate(updatedRaw);
+    const updatedTooltip = formatDateTimeTooltip(updatedRaw);
     const busy = rowActionBusyId === resume.resume_id;
     return (
       <div key={resume.resume_id} className={`${TABLE_GRID} border-b border-black/10 px-2 py-0.5`}>
@@ -584,7 +600,14 @@ export default function DashboardPage() {
         <div className="truncate text-[11px] text-gray-800">{resolvedRole || '—'}</div>
         <div className="truncate text-[11px] text-gray-800">{resolvedCompany || '—'}</div>
         <div className="truncate text-[11px] text-gray-800">{resolvedLocation || '—'}</div>
-        <div className="text-[11px] text-gray-600">{shortDate}</div>
+        <time
+          dateTime={updatedRaw || undefined}
+          title={updatedTooltip || undefined}
+          aria-label={updatedTooltip || shortDate || undefined}
+          className="cursor-default text-[11px] text-gray-600 underline decoration-dotted decoration-gray-400 underline-offset-2"
+        >
+          {shortDate}
+        </time>
         <div className="flex justify-end">
           <ResumeRowActions
             resume={resume}

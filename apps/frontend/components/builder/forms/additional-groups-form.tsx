@@ -102,24 +102,26 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
 
   return (
     <div className="space-y-4">
-      <p className="font-mono text-xs text-gray-500">{t('builder.additionalForm.instructions')}</p>
+      <p className="text-[12px] leading-snug text-gray-600">
+        {t('builder.additionalForm.instructions')}
+      </p>
 
       <div className="space-y-4">
         {groups.map((group, index) => {
           const displayLabel = getAdditionalGroupDisplayLabel(group, t);
 
           return (
-            <div key={`${group.label}-${index}`} className="border border-black bg-white">
-              <div className="flex items-center justify-between gap-3 border-b border-black bg-[#F0F0E8] px-4 py-3">
+            <div key={`${group.label}-${index}`} className="border border-black/15 bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-gray-50/80 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <Label className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
+                  <Label className="text-[11px] font-medium text-gray-700">
                     {t('builder.additionalForm.groupLabel')}
                   </Label>
                   <Input
                     value={displayLabel}
                     onChange={(event) => handleLabelChange(index, event.target.value)}
                     placeholder={t('builder.additionalForm.groupLabelPlaceholder')}
-                    className="mt-2 bg-white"
+                    className="mt-1.5 border-black/15 bg-white"
                   />
                 </div>
 
@@ -156,10 +158,10 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
                 </div>
               </div>
 
-              <div className="p-4">
+              <div className="p-3">
                 <Label
                   htmlFor={`additional-group-items-${index}`}
-                  className="font-mono text-[11px] uppercase tracking-wider text-gray-500"
+                  className="text-[11px] font-medium text-gray-700"
                 >
                   {t('builder.additionalForm.groupValues')}
                 </Label>
@@ -169,7 +171,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
                   onChange={(event) => handleItemsChange(index, event.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={t('builder.additionalForm.groupValuesPlaceholder')}
-                  className="mt-2 min-h-[104px] rounded-none border-black bg-white text-black focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="mt-1.5 min-h-[96px] rounded-none border-black/15 bg-white text-[13px] text-gray-900 focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
               </div>
             </div>
@@ -178,14 +180,17 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({ data
       </div>
 
       {groups.length === 0 && (
-        <div className="border border-dashed border-black bg-white px-4 py-6 text-center">
-          <p className="font-mono text-xs text-gray-500">
-            {t('builder.additionalForm.emptyState')}
-          </p>
+        <div className="border border-dashed border-black/20 bg-gray-50/50 px-3 py-5 text-center">
+          <p className="text-[12px] text-gray-600">{t('builder.additionalForm.emptyState')}</p>
         </div>
       )}
 
-      <Button type="button" variant="outline" onClick={handleAdd} className="rounded-none">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={handleAdd}
+        className="rounded-none border-black/15"
+      >
         <Plus className="h-4 w-4" />
         {t('builder.additionalForm.addGroup')}
       </Button>

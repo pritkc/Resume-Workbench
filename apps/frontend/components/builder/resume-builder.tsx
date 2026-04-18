@@ -6,12 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { ResumeForm } from './resume-form';
 import { RawYamlEditor } from './raw-yaml-editor';
-import { CoverLetterEditor } from './cover-letter-editor';
-import { OutreachEditor } from './outreach-editor';
+import { LettersWorkspace } from './letters-workspace';
 import { CoverLetterPreview } from './cover-letter-preview';
 import { OutreachPreview } from './outreach-preview';
-import { GeneratePrompt } from './generate-prompt';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { RetroTabs } from '@/components/ui/retro-tabs';
 import { ConfirmDialog, type ConfirmDialogProps } from '@/components/ui/confirm-dialog';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
@@ -48,6 +47,7 @@ import {
   generateAuxiliaryPackage,
   fetchJobDescription,
   normalizeResumeDraft,
+  renameResume,
   saveResumeDraft,
   isDraftRequestError,
   type DraftValidationDetail,
@@ -89,7 +89,7 @@ import {
 } from '@/lib/utils/rendercv-fields';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
 
-type TabId = 'resume' | 'cover-letter' | 'outreach' | 'jd-match' | 'additional-questions';
+type TabId = 'resume' | 'letters' | 'jd-match' | 'additional-questions';
 type EditorSection = 'cv' | 'design' | 'locale' | 'settings';
 type EditorMode = 'visual' | 'raw';
 type PaneMode = 'editor' | 'split' | 'preview';
@@ -252,7 +252,8 @@ const ResumeBuilderContent = () => {
   const resumeId = searchParams.get('id');
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const [paneMode, setPaneMode] = useState<PaneMode>('split');
-  const [paneRatio, setPaneRatio] = useState(52);
+  /** Default favors preview (more resume visibility in split view). */
+  const [paneRatio, setPaneRatio] = useState(42);
   const [isDesktop, setIsDesktop] = useState(false);
   const [isResizingPane, setIsResizingPane] = useState(false);
   const currentDraftSnapshot = useMemo<DraftSnapshot>(
@@ -694,6 +695,11 @@ const ResumeBuilderContent = () => {
   const [isCopied, setIsCopied] = useState(false);
   const [resumeTitle, setResumeTitle] = useState<string | null>(null);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
+  const [isEditingResumeTitle, setIsEditingResumeTitle] = useState(false);
+  const [resumeTitleDraft, setResumeTitleDraft] = useState('');
+  const [isSavingResumeTitle, setIsSavingResumeTitle] = useState(false);
+  const resumeTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const resumeTitleCommitLockRef = useRef(false);
 
   // On-demand generation state
   const [isTailoredResume, setIsTailoredResume] = useState(false);
@@ -1559,16 +1565,9 @@ const ResumeBuilderContent = () => {
   const topLevelTabs = [
     { id: 'resume', label: t('builder.previewTabs.resume') },
     {
-      id: 'cover-letter',
-      label: t('builder.previewTabs.coverLetter'),
-      shortLabel: t('builder.previewTabs.coverLetter'),
-      disabled: !coverLetter,
-    },
-    {
-      id: 'outreach',
-      label: t('builder.previewTabs.outreach'),
-      shortLabel: t('builder.previewTabs.outreach'),
-      disabled: !outreachMessage,
+      id: 'letters',
+      label: t('builder.previewTabs.letters'),
+      shortLabel: t('builder.previewTabs.letters'),
     },
     {
       id: 'jd-match',
@@ -1596,22 +1595,53 @@ const ResumeBuilderContent = () => {
     { id: 'settings', label: 'Settings' },
   ] satisfies Array<{ id: EditorSection; label: string }>;
 
-  const toolbarIconButtonClass = 'text-gray-700';
   const builderHeading = resumeTitle ?? t('nav.builder');
 
+  const beginEditResumeTitle = useCallback(() => {
+    if (!resumeId) return;
+    setResumeTitleDraft(resumeTitle ?? '');
+    setIsEditingResumeTitle(true);
+    queueMicrotask(() => resumeTitleInputRef.current?.focus());
+  }, [resumeId, resumeTitle]);
+
+  const cancelEditResumeTitle = useCallback(() => {
+    setIsEditingResumeTitle(false);
+    setResumeTitleDraft('');
+  }, []);
+
+  const commitResumeTitle = useCallback(async () => {
+    if (!resumeId || resumeTitleCommitLockRef.current) return;
+    const next = resumeTitleDraft.trim();
+    if (!next) {
+      showNotification(t('builder.renameTitleEmpty'), 'danger');
+      return;
+    }
+    if (next === (resumeTitle ?? '')) {
+      setIsEditingResumeTitle(false);
+      return;
+    }
+    resumeTitleCommitLockRef.current = true;
+    setIsSavingResumeTitle(true);
+    try {
+      await renameResume(resumeId, next);
+      setResumeTitle(next);
+      setIsEditingResumeTitle(false);
+    } catch {
+      showNotification(t('builder.renameTitleError'), 'danger');
+    } finally {
+      setIsSavingResumeTitle(false);
+      resumeTitleCommitLockRef.current = false;
+    }
+  }, [resumeId, resumeTitleDraft, resumeTitle, showNotification, t]);
+
+  const toolbarIconButtonClass = 'text-gray-700';
+
   return (
-    <div
-      className="h-[100dvh] overflow-hidden bg-[#F0F0E8] p-3 md:p-4"
-      style={{
-        backgroundImage:
-          'linear-gradient(rgba(29, 78, 216, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 78, 216, 0.08) 1px, transparent 1px)',
-        backgroundSize: '40px 40px',
-      }}
-    >
-      <div className="flex h-full min-h-0 flex-col overflow-hidden border border-black bg-[#F0F0E8] shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="sticky top-0 z-30 border-b border-black bg-[#F0F0E8]/95 backdrop-blur-sm no-print">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 md:px-4">
-            <div className="flex min-w-0 items-start gap-3">
+    <div className="h-[100dvh] overflow-hidden bg-[#F6F5EE] px-1.5 py-2 md:px-2 md:py-2">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden border border-black bg-white shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
+        <div className="sticky top-0 z-30 border-b border-black bg-white/95 backdrop-blur-sm no-print">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1.5 md:px-3">
+            <div className="flex min-w-0 flex-1 items-start gap-2">
               <Button
                 variant="outline"
                 size="icon-sm"
@@ -1622,22 +1652,67 @@ const ResumeBuilderContent = () => {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
 
-              <div className="min-w-0">
-                <h1 className="truncate font-serif text-xl uppercase tracking-tight md:text-2xl">
-                  {builderHeading}
-                </h1>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700">
+              <div className="min-w-0 flex-1">
+                {isEditingResumeTitle && resumeId ? (
+                  <Input
+                    ref={resumeTitleInputRef}
+                    value={resumeTitleDraft}
+                    onChange={(e) => setResumeTitleDraft(e.target.value)}
+                    onBlur={() => void commitResumeTitle()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void commitResumeTitle();
+                      }
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEditResumeTitle();
+                      }
+                    }}
+                    disabled={isSavingResumeTitle}
+                    className="h-9 max-w-md font-serif text-base font-semibold"
+                    aria-label={t('builder.renameTitleInputLabel')}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={beginEditResumeTitle}
+                    disabled={!resumeId}
+                    title={resumeId ? t('builder.renameTitleHint') : undefined}
+                    className={cn(
+                      'group flex max-w-full min-w-0 items-center gap-1.5 rounded-none text-left',
+                      resumeId && 'cursor-pointer hover:text-blue-800',
+                      !resumeId && 'cursor-default'
+                    )}
+                  >
+                    <span className="truncate font-serif text-lg font-bold leading-tight md:text-xl">
+                      {builderHeading}
+                    </span>
+                    {resumeId ? (
+                      <Pencil
+                        className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                        aria-hidden
+                      />
+                    ) : null}
+                  </button>
+                )}
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-600">
+                  <span className="font-mono uppercase tracking-wide text-blue-700">
                     {resumeId ? t('builder.editMode') : t('builder.createAndPreview')}
                   </span>
+                  {resumeCode ? (
+                    <span className="font-mono text-gray-500">· {resumeCode}</span>
+                  ) : null}
                   {hasUnsavedChanges && (
-                    <span className="flex items-center gap-1 border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-amber-700">
-                      <AlertTriangle className="h-3 w-3" />
+                    <span className="inline-flex items-center gap-1 text-amber-800">
+                      <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
                       {t('builder.unsavedDraft')}
                     </span>
                   )}
-                  <span className="flex items-center gap-1 border border-black bg-white px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-700">
-                    {autosaveState === 'saving' && <Loader2 className="h-3 w-3 animate-spin" />}
+                  <span className="inline-flex items-center gap-1 font-mono text-gray-700">
+                    {autosaveState === 'saving' && (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                    )}
                     {autosaveLabel}
                   </span>
                 </div>
@@ -1762,89 +1837,19 @@ const ResumeBuilderContent = () => {
                     <Download className="h-3.5 w-3.5" />
                     {isDownloading ? t('common.generating') : t('common.download')}
                   </Button>
-                  {isTailoredResume && resumeId && (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={handleGenerateAuxiliaryPackage}
-                      disabled={isGeneratingAuxiliaryPackage}
-                      aria-label={t('builder.generateClMessage.buttonAria')}
-                      title={t('builder.generateClMessage.buttonAria')}
-                      className="gap-1.5"
-                    >
-                      {isGeneratingAuxiliaryPackage ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          {t('common.generating')}
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-3.5 w-3.5" />
-                          {t('builder.generateClMessage.toolbarLabel')}
-                        </>
-                      )}
-                    </Button>
-                  )}
                 </>
               )}
 
-              {activeTab === 'cover-letter' && coverLetter && (
+              {activeTab === 'letters' && (
                 <>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={handleGenerateAuxiliaryPackage}
-                    disabled={isGeneratingAuxiliaryPackage}
-                    aria-label="Generate CL + Message"
-                    title="Generate CL + Message"
-                    className="gap-1.5"
-                  >
-                    {isGeneratingAuxiliaryPackage ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        {t('common.generating')}
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Generate CL + Message
-                      </>
-                    )}
-                  </Button>
                   <Button
                     variant="success"
                     size="xs"
                     onClick={handleDownloadCoverLetter}
-                    disabled={!resumeId || isDownloading}
+                    disabled={!resumeId || isDownloading || !coverLetter}
                   >
                     <Download className="h-3.5 w-3.5" />
                     {isDownloading ? t('common.generating') : t('common.download')}
-                  </Button>
-                </>
-              )}
-
-              {activeTab === 'outreach' && outreachMessage && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={handleGenerateAuxiliaryPackage}
-                    disabled={isGeneratingAuxiliaryPackage}
-                    aria-label="Generate CL + Message"
-                    title="Generate CL + Message"
-                    className="gap-1.5"
-                  >
-                    {isGeneratingAuxiliaryPackage ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        {t('common.generating')}
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Generate CL + Message
-                      </>
-                    )}
                   </Button>
                   <Button
                     variant="ghost"
@@ -1866,7 +1871,7 @@ const ResumeBuilderContent = () => {
             </div>
           </div>
 
-          <div className="border-t border-black bg-[#E5E5E0] px-3 md:px-4">
+          <div className="border-t border-black/10 bg-white px-2 md:px-3">
             <RetroTabs
               tabs={topLevelTabs}
               activeTab={activeTab}
@@ -1876,22 +1881,22 @@ const ResumeBuilderContent = () => {
           </div>
         </div>
 
-        <div ref={workspaceRef} className="flex flex-1 min-h-0 overflow-hidden bg-black">
+        <div ref={workspaceRef} className="flex flex-1 min-h-0 overflow-hidden bg-gray-200">
           {showEditorPane && (
             <div
               style={editorPaneWidth ? { width: editorPaneWidth } : undefined}
               className={cn(
-                'min-w-0 overflow-hidden bg-[#F0F0E8] no-print',
+                'min-w-0 overflow-hidden bg-[#F6F5EE] no-print',
                 isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
               )}
             >
-              <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-3 pb-4 pt-3 md:px-4">
-                <div className="mx-auto flex max-w-4xl flex-col gap-3">
+              <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-2 pb-3 pt-2 md:px-3">
+                <div className="mx-auto flex max-w-4xl flex-col gap-2">
                   {activeTab === 'resume' && (
-                    <div className="sticky top-0 z-20 border border-black bg-[#F8F7F1]/95 backdrop-blur-sm">
-                      <div className="flex flex-col gap-2 px-3 py-2.5 md:flex-row md:items-center md:justify-between">
+                    <div className="sticky top-0 z-20 border-b border-black/15 bg-white/95 backdrop-blur-sm">
+                      <div className="flex flex-col gap-1.5 px-2 py-2 md:flex-row md:items-center md:justify-between md:px-2.5">
                         <div className="min-w-0">
-                          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-700">
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-800">
                             {editorMode === 'raw'
                               ? 'RenderCV YAML'
                               : editorSection === 'cv'
@@ -1902,10 +1907,10 @@ const ResumeBuilderContent = () => {
                                     ? 'Locale Copy'
                                     : 'Runtime Settings'}
                           </p>
-                          <p className="mt-0.5 text-[11px] text-gray-600">
+                          <p className="mt-0.5 text-[11px] leading-snug text-gray-600">
                             {editorMode === 'raw'
-                              ? 'Direct section editing with live validation.'
-                              : 'Compact visual editing focused on fast iteration.'}
+                              ? 'Section-based YAML with validation.'
+                              : 'Visual editing for quick changes.'}
                           </p>
                         </div>
                         <ToggleSwitch
@@ -1970,57 +1975,37 @@ const ResumeBuilderContent = () => {
                     />
                   )}
 
-                  {activeTab === 'cover-letter' &&
-                    (coverLetter ? (
-                      <CoverLetterEditor
-                        content={coverLetter}
-                        onChange={setCoverLetter}
-                        onSave={handleSaveCoverLetter}
-                        isSaving={isCoverLetterSaving}
-                      />
-                    ) : (
-                      <GeneratePrompt
-                        type="cover-letter"
-                        isGenerating={isGeneratingAuxiliaryPackage}
-                        onGenerate={handleGenerateAuxiliaryPackage}
-                        isTailoredResume={isTailoredResume}
-                        buttonLabel="Generate CL + Message"
-                      />
-                    ))}
-
-                  {activeTab === 'outreach' &&
-                    (outreachMessage ? (
-                      <OutreachEditor
-                        content={outreachMessage}
-                        onChange={setOutreachMessage}
-                        onSave={handleSaveOutreach}
-                        isSaving={isOutreachSaving}
-                      />
-                    ) : (
-                      <GeneratePrompt
-                        type="outreach"
-                        isGenerating={isGeneratingAuxiliaryPackage}
-                        onGenerate={handleGenerateAuxiliaryPackage}
-                        isTailoredResume={isTailoredResume}
-                        buttonLabel="Generate CL + Message"
-                      />
-                    ))}
+                  {activeTab === 'letters' && (
+                    <LettersWorkspace
+                      coverLetter={coverLetter}
+                      outreachMessage={outreachMessage}
+                      onCoverLetterChange={setCoverLetter}
+                      onOutreachChange={setOutreachMessage}
+                      onSaveCoverLetter={handleSaveCoverLetter}
+                      onSaveOutreach={handleSaveOutreach}
+                      isCoverLetterSaving={isCoverLetterSaving}
+                      isOutreachSaving={isOutreachSaving}
+                      canGeneratePackage={Boolean(isTailoredResume && resumeId)}
+                      isGenerating={isGeneratingAuxiliaryPackage}
+                      onGeneratePackage={handleGenerateAuxiliaryPackage}
+                    />
+                  )}
 
                   {activeTab === 'jd-match' && (
-                    <div className="space-y-3">
-                      <div className="border border-black bg-white px-4 py-3">
-                        <h3 className="font-mono text-xs font-bold uppercase tracking-wider">
+                    <div className="border border-black/15 bg-white text-[13px] leading-snug">
+                      <section className="px-3 py-2">
+                        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
                           {t('builder.jdMatch.aboutTitle')}
                         </h3>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <p className="mt-1 text-gray-600">
                           {t('builder.jdMatch.aboutDescription')}
                         </p>
-                      </div>
-                      <div className="border border-black bg-[#F8F7F1] px-4 py-3">
-                        <h3 className="font-mono text-xs font-bold uppercase tracking-wider">
+                      </section>
+                      <section className="border-t border-black/10 px-3 py-2">
+                        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
                           {t('builder.jdMatch.highlightedKeywordsTitle')}
                         </h3>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <p className="mt-1 text-gray-600">
                           {(() => {
                             const template = t(
                               'builder.jdMatch.highlightedKeywordsDescriptionTemplate'
@@ -2030,7 +2015,7 @@ const ResumeBuilderContent = () => {
                             return (
                               <>
                                 {parts[0]}
-                                <mark className="bg-yellow-200 px-1">
+                                <mark className="bg-yellow-200 px-0.5">
                                   {t('builder.jdMatch.highlightColor')}
                                 </mark>
                                 {parts.slice(1).join('__COLOR__')}
@@ -2038,17 +2023,17 @@ const ResumeBuilderContent = () => {
                             );
                           })()}
                         </p>
-                      </div>
-                      <div className="border border-black bg-white px-4 py-3">
-                        <h3 className="font-mono text-xs font-bold uppercase tracking-wider">
+                      </section>
+                      <section className="border-t border-black/10 px-3 py-2">
+                        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
                           {t('builder.jdMatch.tipsTitle')}
                         </h3>
-                        <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-gray-600">
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-gray-600">
                           <li>{t('builder.jdMatch.tips.items.addMissingKeywords')}</li>
                           <li>{t('builder.jdMatch.tips.items.focusTechnicalSkills')}</li>
                           <li>{t('builder.jdMatch.tips.items.matchActionVerbs')}</li>
                         </ul>
-                      </div>
+                      </section>
                     </div>
                   )}
 
@@ -2086,7 +2071,7 @@ const ResumeBuilderContent = () => {
             <div
               style={previewPaneWidth ? { width: previewPaneWidth } : undefined}
               className={cn(
-                'min-w-0 overflow-hidden bg-[#E5E5E0] no-print',
+                'min-w-0 overflow-hidden bg-[#F0EFEA] no-print',
                 isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
               )}
             >
@@ -2101,46 +2086,39 @@ const ResumeBuilderContent = () => {
                   />
                 )}
 
-                {activeTab === 'cover-letter' &&
-                  (coverLetter && resumeData.personalInfo ? (
-                    <div className="p-3 md:p-4">
-                      <CoverLetterPreview
-                        content={coverLetter}
-                        personalInfo={resumeData.personalInfo}
-                        pageSize={themeSettings.page_size}
-                      />
+                {activeTab === 'letters' && (
+                  <div className="grid min-h-0 flex-1 grid-cols-1 divide-y divide-black/10 md:grid-cols-2 md:divide-x md:divide-y-0">
+                    <div className="min-h-0 overflow-y-auto p-2 md:p-2.5">
+                      {coverLetter && resumeData.personalInfo ? (
+                        <CoverLetterPreview
+                          content={coverLetter}
+                          personalInfo={resumeData.personalInfo}
+                          pageSize={themeSettings.page_size}
+                        />
+                      ) : (
+                        <p className="py-8 text-center text-[12px] text-gray-500">
+                          {t('builder.lettersPreview.coverLetterEmpty')}
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <GeneratePrompt
-                      type="cover-letter"
-                      isGenerating={isGeneratingAuxiliaryPackage}
-                      onGenerate={handleGenerateAuxiliaryPackage}
-                      isTailoredResume={isTailoredResume}
-                      buttonLabel="Generate CL + Message"
-                    />
-                  ))}
-
-                {activeTab === 'outreach' &&
-                  (outreachMessage ? (
-                    <div className="p-3 md:p-4">
-                      <OutreachPreview content={outreachMessage} />
+                    <div className="min-h-0 overflow-y-auto p-2 md:p-2.5">
+                      {outreachMessage ? (
+                        <OutreachPreview content={outreachMessage} />
+                      ) : (
+                        <p className="py-8 text-center text-[12px] text-gray-500">
+                          {t('builder.lettersPreview.outreachEmpty')}
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <GeneratePrompt
-                      type="outreach"
-                      isGenerating={isGeneratingAuxiliaryPackage}
-                      onGenerate={handleGenerateAuxiliaryPackage}
-                      isTailoredResume={isTailoredResume}
-                      buttonLabel="Generate CL + Message"
-                    />
-                  ))}
+                  </div>
+                )}
 
                 {activeTab === 'jd-match' && jobDescription && (
                   <JDComparisonView jobDescription={jobDescription} resumeData={resumeData} />
                 )}
 
                 {showAdditionalQuestionsInPreview && (
-                  <div className="p-3 md:p-4">
+                  <div className="p-2 md:p-2.5">
                     <AdditionalQuestionsPanel
                       title={t('builder.previewTabs.additionalQuestions')}
                       resumeId={resumeId}
@@ -2157,23 +2135,23 @@ const ResumeBuilderContent = () => {
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-black bg-[#F0F0E8] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-blue-700 no-print">
-          <span className="flex items-center gap-1.5 font-bold">
+        <div className="flex items-center justify-between border-t border-black/10 bg-white/90 px-2 py-1 text-[11px] text-gray-600 no-print">
+          <span className="flex items-center gap-1.5 font-medium text-gray-800">
             <Image
               src="/logo.svg"
               alt="Resume Matcher"
-              width={16}
-              height={16}
-              className="h-4 w-4"
+              width={14}
+              height={14}
+              className="h-3.5 w-3.5 opacity-80"
             />
             {t('builder.footer.moduleLabel')}
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 font-mono text-[10px] text-gray-500">
             <span>
               {RENDER_THEME_OPTIONS.find((option) => option.id === themeSettings.theme_id)?.label ??
                 themeSettings.theme_id}
             </span>
-            <span className="text-gray-400">|</span>
+            <span className="text-gray-300">·</span>
             <span>{themeSettings.page_size === 'A4' ? 'A4' : t('builder.pageSize.usLetter')}</span>
           </div>
         </div>

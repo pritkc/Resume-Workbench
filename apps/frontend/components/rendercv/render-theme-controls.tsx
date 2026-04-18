@@ -107,14 +107,16 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
   };
 
   return (
-    <div className="space-y-3">
-      <div className="border border-black bg-white px-3 py-2.5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-2">
+      <div className="border border-black/15 bg-white px-2.5 py-2">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="font-mono text-xs font-bold uppercase tracking-wider">RenderCV Design</p>
-            <p className="mt-1 text-[13px] text-gray-600">
-              Editing{' '}
-              <span className="font-semibold text-black">{titleForTheme(settings.theme_id)}</span>.
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
+              Design
+            </p>
+            <p className="mt-0.5 text-[13px] text-gray-600">
+              Theme:{' '}
+              <span className="font-medium text-gray-900">{titleForTheme(settings.theme_id)}</span>
             </p>
           </div>
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">

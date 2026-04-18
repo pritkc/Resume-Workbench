@@ -43,7 +43,7 @@ export const RetroTabs: React.FC<RetroTabsProps> = ({
       : 'px-4 py-2 text-xs tracking-wider';
 
   return (
-    <div className={cn('flex flex-wrap gap-0 border-b border-black', className)}>
+    <div className={cn('flex flex-wrap gap-0 border-b border-black/15', className)}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         const isDisabled = tab.disabled;
@@ -57,16 +57,18 @@ export const RetroTabs: React.FC<RetroTabsProps> = ({
             className={cn(
               'inline-flex items-center gap-1.5 font-mono uppercase transition-all',
               sizeClasses,
-              'border border-b-0 border-black -mb-px',
+              'border border-b-0 border-black/15 -mb-px',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2',
               isActive && [
-                'bg-white text-black font-bold',
-                'shadow-[2px_-2px_0px_0px_rgba(0,0,0,0.1)]',
+                'bg-white text-black font-semibold',
+                'shadow-[1px_-1px_0_0_rgba(0,0,0,0.06)]',
                 'border-b-white',
               ],
               !isActive &&
-                !isDisabled && ['bg-[#E5E5E0] text-gray-600 hover:bg-[#D8D8D2] hover:text-black'],
-              isDisabled && ['bg-gray-100 text-gray-300 cursor-not-allowed opacity-50']
+                !isDisabled && [
+                  'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                ],
+              isDisabled && ['cursor-not-allowed bg-gray-50 text-gray-300 opacity-50']
             )}
           >
             {tab.icon}

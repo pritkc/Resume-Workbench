@@ -253,58 +253,52 @@ export function AdditionalQuestionsPanel({
   const isBusy = generationState === 'loading' || generationState === 'generating';
 
   return (
-    <div className="space-y-3 border border-black bg-[#F8F7F1] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="font-mono text-xs font-bold uppercase tracking-wider">{title}</p>
-        <div className="flex items-center gap-2">
+    <div className="space-y-2 border border-black/15 bg-white p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13px] font-semibold text-gray-900">{title}</p>
+        <div className="flex items-center gap-1.5">
           {isStale && (
-            <span className="border border-amber-500 bg-amber-50 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-amber-700">
+            <span className="rounded-sm border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900">
               stale
             </span>
           )}
           {generationState === 'loading' && (
-            <span className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-              loading
-            </span>
+            <span className="text-[11px] text-gray-500">loading</span>
           )}
           {generationState === 'generating' && (
-            <span className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-              generating
-            </span>
+            <span className="text-[11px] text-gray-500">generating</span>
           )}
           {generationState === 'saving' && (
-            <span className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-              saving
-            </span>
+            <span className="text-[11px] text-gray-500">saving</span>
           )}
         </div>
       </div>
 
       {disabled && (
-        <div className="border border-dashed border-black bg-white px-3 py-2 font-mono text-xs text-gray-600">
+        <div className="border border-dashed border-black/20 bg-gray-50/80 px-2.5 py-1.5 text-[12px] text-gray-600">
           {disabledReason || 'Generate a resume preview first to enable custom questions.'}
         </div>
       )}
 
       {staleReason && (
-        <div className="border border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+        <div className="border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-950">
           {staleReason}
         </div>
       )}
 
       {!disabled && (
         <>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Textarea
               placeholder="Paste one question per line..."
-              className="min-h-[120px] border border-black bg-white font-mono text-sm focus:ring-0 focus:border-blue-700 resize-y rounded-none"
+              className="min-h-[96px] resize-y rounded-none border border-black/15 bg-white font-mono text-[13px] focus:border-blue-700 focus:ring-0"
               value={questionsText}
               onChange={(event) => setQuestionsText(event.target.value)}
               disabled={isBusy}
             />
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
-                size="sm"
+                size="xs"
                 onClick={() => void runGeneration()}
                 disabled={isBusy || generationState === 'saving'}
               >
@@ -318,7 +312,7 @@ export function AdditionalQuestionsPanel({
                 )}
               </Button>
               <Button
-                size="sm"
+                size="xs"
                 variant="outline"
                 onClick={() => void handleCopyAll()}
                 disabled={answers.length === 0}
@@ -327,7 +321,7 @@ export function AdditionalQuestionsPanel({
                 Copy All
               </Button>
               <Button
-                size="sm"
+                size="xs"
                 variant="outline"
                 onClick={() => void handleSaveEdits()}
                 disabled={generationState !== 'idle' || !isDirty || answers.length === 0}
@@ -339,17 +333,17 @@ export function AdditionalQuestionsPanel({
           </div>
 
           {error && (
-            <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="border border-red-200 bg-red-50 px-2.5 py-1.5 text-[12px] text-red-800">
               {error}
             </div>
           )}
 
           {warnings.length > 0 && (
-            <div className="border border-black bg-white p-3">
-              <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+            <div className="border border-black/10 bg-gray-50/80 p-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                 Warnings
               </p>
-              <ul className="mt-2 list-disc pl-5 text-sm text-gray-700">
+              <ul className="mt-1 list-disc pl-4 text-[12px] text-gray-700">
                 {warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
                 ))}
@@ -358,19 +352,19 @@ export function AdditionalQuestionsPanel({
           )}
 
           {answers.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {answers.map((item) => (
-                <div key={item.question_id} className="border border-black bg-white p-3">
-                  <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                <div key={item.question_id} className="border border-black/15 bg-gray-50/50 p-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                     Question
                   </p>
-                  <p className="mt-1 text-sm font-medium text-gray-900">{item.question}</p>
+                  <p className="mt-0.5 text-[13px] font-medium text-gray-900">{item.question}</p>
 
-                  <p className="mt-3 font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                     Answer
                   </p>
                   <Textarea
-                    className="mt-1 min-h-[96px] border border-black bg-white text-sm focus:ring-0 focus:border-blue-700 rounded-none"
+                    className="mt-1 min-h-[80px] rounded-none border border-black/15 bg-white text-[13px] focus:border-blue-700 focus:ring-0"
                     value={item.answer}
                     disabled={generationState !== 'idle'}
                     onChange={(event) => {
@@ -390,12 +384,12 @@ export function AdditionalQuestionsPanel({
                     }}
                   />
 
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="border border-black bg-[#F8F7F1] px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-gray-700">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-sm border border-black/10 bg-white px-1.5 py-0.5 text-[10px] text-gray-700">
                       confidence: {item.confidence}
                     </span>
                     {item.is_user_edited && (
-                      <span className="border border-black bg-[#F8F7F1] px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-gray-700">
+                      <span className="rounded-sm border border-black/10 bg-white px-1.5 py-0.5 text-[10px] text-gray-700">
                         edited
                       </span>
                     )}

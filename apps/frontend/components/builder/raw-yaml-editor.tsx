@@ -337,13 +337,15 @@ export function RawYamlEditor({
       : null;
 
   return (
-    <div className="space-y-3">
-      <div className="border border-black bg-white px-3 py-2.5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-2">
+      <div className="border border-black/15 bg-white px-2.5 py-2">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="font-mono text-xs font-bold uppercase tracking-wider">Raw YAML</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
+              Raw YAML
+            </p>
             <p className="mt-0.5 text-[13px] text-gray-600">{SECTION_DESCRIPTIONS[section]}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">
+            <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-gray-500">
               <span>{statusLabel}</span>
               <span>Ln {cursorPosition.line}</span>
               <span>Col {cursorPosition.column}</span>
@@ -413,10 +415,10 @@ export function RawYamlEditor({
         </div>
       )}
 
-      <div className="overflow-hidden border border-black bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="flex min-h-[460px]">
+      <div className="overflow-hidden border border-black/15 bg-white shadow-sm">
+        <div className="flex min-h-[min(52vh,420px)]">
           <div
-            className="select-none overflow-hidden border-r border-black bg-[#F4EFE2] py-3 pr-2.5 pl-2 font-mono text-[11px] leading-6 text-right text-slate-500"
+            className="select-none overflow-hidden border-r border-black/10 bg-[#F4EFE2] py-2 pr-2 pl-1.5 font-mono text-[11px] leading-6 text-right text-slate-500"
             style={{ width: gutterWidth }}
           >
             <div style={{ transform: `translateY(-${scrollState.top}px)` }}>
@@ -511,7 +513,7 @@ export function RawYamlEditor({
           </div>
         </div>
 
-        <div className="border-t border-black bg-[#111827] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200">
+        <div className="border-t border-black/10 bg-slate-800 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-slate-200">
           {activeError?.line
             ? `Error near line ${activeError.line}${activeError.column ? `, column ${activeError.column}` : ''}`
             : `Editing ${SECTION_LABELS[section]} YAML`}

@@ -382,7 +382,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
         items={sortedAllSections.map((s) => s.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="space-y-6 pb-20">
+        <div className="space-y-3 pb-10">
           {sortedAllSections.map((section, index) => {
             const isFirst = index === 0 || section.id === 'personalInfo';
             const isLast = index === sortedAllSections.length - 1;

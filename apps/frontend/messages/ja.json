@@ -109,6 +109,10 @@
     "editMode": "編集モード",
     "previewMode": "プレビューモード",
     "createAndPreview": "作成＆プレビュー",
+    "renameTitleHint": "クリックして履歴書名を変更",
+    "renameTitleInputLabel": "履歴書名",
+    "renameTitleEmpty": "名前を入力してください。",
+    "renameTitleError": "名前を変更できませんでした。もう一度お試しください。",
     "unsavedDraft": "未保存の下書き",
     "personalInfo": "個人情報",
     "summary": "概要",
@@ -187,6 +191,7 @@
     },
     "previewTabs": {
       "resume": "履歴書",
+      "letters": "CL・連絡",
       "coverLetter": "カバーレター",
       "outreach": "連絡メール",
       "jdMatch": "JD一致",
@@ -194,6 +199,13 @@
     },
     "additionalQuestions": {
       "disabledReason": "求人コンテキストが必要です。仕上げた職務向け履歴書を開くか、Tailor ページで調整を完了してください。"
+    },
+    "lettersWorkspace": {
+      "hint": "いつでも貼り付け可能です。生成すると履歴書と求人コンテキストから両方に反映されます。"
+    },
+    "lettersPreview": {
+      "coverLetterEmpty": "カバーレターはまだありません — 貼り付けるか上の生成を使ってください。",
+      "outreachEmpty": "連絡文はまだありません — 貼り付けるか上の生成を使ってください。"
     },
     "generateClMessage": {
       "toolbarLabel": "CL・メッセージを生成",
@@ -216,7 +228,12 @@
       "outreachDescription": "履歴書と求人内容に基づいて、LinkedIn またはメール向けの外連絡メッセージを生成します。",
       "generateButton": "{title}を生成",
       "coverLetterFooter": "ヒント：先にカスタマイズすると精度が上がります。",
-      "outreachFooter": "ヒント：短く、個別性を入れましょう。"
+      "outreachFooter": "ヒント：短く、個別性を入れましょう。",
+      "lettersNotAvailableTitle": "カバーレターと連絡文は利用できません",
+      "lettersNotAvailableDescription": "先に求人内容で履歴書を調整してください。その後、両方を一度に生成できます。",
+      "lettersGenerateTitle": "カバーレターと連絡文を生成",
+      "lettersDescription": "履歴書と求人コンテキストから両方を同時に作成します。生成後はそれぞれのパネルで編集できます。",
+      "lettersFooter": "1 回の生成で両方が更新されます。"
     },
     "regenerateDialog": {
       "title": "{title}を再生成しますか？",
