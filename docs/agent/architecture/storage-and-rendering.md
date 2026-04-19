@@ -65,10 +65,12 @@ Important behavior:
 
 The raw-YAML builder works as a round-trip system:
 
-1. structured resume + theme settings -> YAML sections
+1. structured resume + theme settings -> YAML sections (including app-only **metadata**)
 2. user edits YAML
-3. backend parses YAML sections back into resume data + theme settings
-4. validation errors include section, line, column, and optional path
+3. backend parses RenderCV sections (`cv`, `design`, `locale`, `settings`) back into resume data + theme settings; parses **`metadata`** separately (`services/cv_metadata.py`) for dashboard targets and bold keyword list
+4. validation errors include section, line, column, and optional path (`metadata` is a valid section key for errors)
+
+**Fifth section `metadata` (non-RenderCV):** persisted as `yaml_sections.metadata` and duplicated on `resumes.cv_metadata` (TEXT YAML). Root key must be `metadata:` with `role`, `company`, `location`, `bold_keywords`. Not passed to RenderCV CLI; used for list/dashboard targets and runtime bolding.
 
 Endpoints:
 

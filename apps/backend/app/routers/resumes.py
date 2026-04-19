@@ -36,6 +36,14 @@ from app.rendering.theme_profiles import (
     migrate_legacy_theme_settings,
 )
 from app.services.artifact_service import store_rendercv_bundle
+from app.services.cv_metadata import (
+    CvMetadataFields,
+    apply_cv_metadata_to_theme,
+    cv_metadata_fields_from_theme,
+    parse_cv_metadata_yaml,
+    serialize_cv_metadata_yaml,
+    target_strings_from_metadata,
+)
 from app.services.tailoring.change_manifest import (
     build_change_manifest,
     build_stage_breakdown,
@@ -558,6 +566,14 @@ def _resume_to_summary(
         job_keywords=job_keywords,
         title=resume.get("title"),
     )
+    cv_meta = target_strings_from_metadata(resume)
+    if cv_meta:
+        if cv_meta.role:
+            target_role = cv_meta.role
+        if cv_meta.company:
+            target_company = cv_meta.company
+        if cv_meta.location:
+            target_location = cv_meta.location
     return ResumeSummary(
         resume_id=resume["resume_id"],
         resume_code=_resume_code_from_record(
@@ -657,6 +673,7 @@ def _save_resume_payload(
     resume_id: str,
     updated_data: dict[str, Any],
     theme_settings: RenderThemeProfile | None,
+    cv_metadata: str | None = None,
 ) -> dict[str, Any]:
     updated_content = json.dumps(updated_data, indent=2)
     update_fields: dict[str, Any] = {
@@ -667,6 +684,8 @@ def _save_resume_payload(
     }
     if theme_settings is not None:
         update_fields["theme_settings"] = theme_settings.to_storage_dict()
+    if cv_metadata is not None:
+        update_fields["cv_metadata"] = cv_metadata
 
     updated = db.update_resume(
         resume_id,
@@ -682,14 +701,19 @@ def _normalize_draft_request(
     *,
     base_resume: dict[str, Any] | None = None,
     base_theme_settings: RenderThemeProfile | None = None,
+    base_cv_metadata: str | None = None,
 ) -> tuple[dict[str, Any], RenderThemeProfile, RawYamlSections]:
     base_resume_data = copy.deepcopy(base_resume) if base_resume else _default_resume_draft()
     base_theme = base_theme_settings or _default_theme_draft()
+    base_meta = base_cv_metadata.strip() if isinstance(base_cv_metadata, str) else ""
 
     try:
+        meta_fields: CvMetadataFields | None = None
         if request.yaml_sections is not None:
+            ys = request.yaml_sections.model_dump()
+            rendercv_in = {k: ys[k] for k in ("cv", "design", "locale", "settings")}
             normalized_resume_data, resolved_theme_settings = parse_rendercv_yaml_sections(
-                request.yaml_sections.model_dump(),
+                rendercv_in,
                 base_resume_data=base_resume_data,
                 base_theme_settings=(
                     _resolve_render_theme_settings(request.theme_settings)
@@ -697,12 +721,44 @@ def _normalize_draft_request(
                     else base_theme
                 ),
             )
+            meta_raw = ys.get("metadata")
+            meta_raw = meta_raw if isinstance(meta_raw, str) else ""
+            if not meta_raw.strip():
+                meta_raw = base_meta or serialize_cv_metadata_yaml(
+                    cv_metadata_fields_from_theme(resolved_theme_settings)
+                )
+            meta_fields = parse_cv_metadata_yaml(meta_raw)
+            resolved_theme_settings = apply_cv_metadata_to_theme(
+                resolved_theme_settings,
+                meta_fields.bold_keywords,
+            )
         elif request.processed_resume is not None:
             normalized_resume_data = request.processed_resume.model_dump()
             resolved_theme_settings = (
                 _resolve_render_theme_settings(request.theme_settings)
                 if request.theme_settings is not None
                 else base_theme
+            )
+            # Bold keywords always follow the current theme on visual/structured saves.
+            theme_kw = cv_metadata_fields_from_theme(resolved_theme_settings).bold_keywords
+            if base_meta:
+                parsed_base = parse_cv_metadata_yaml(base_meta)
+                meta_fields = CvMetadataFields(
+                    role=parsed_base.role,
+                    company=parsed_base.company,
+                    location=parsed_base.location,
+                    bold_keywords=theme_kw,
+                )
+            else:
+                meta_fields = CvMetadataFields(
+                    role="",
+                    company="",
+                    location="",
+                    bold_keywords=theme_kw,
+                )
+            resolved_theme_settings = apply_cv_metadata_to_theme(
+                resolved_theme_settings,
+                meta_fields.bold_keywords,
             )
         else:
             raise HTTPException(
@@ -753,12 +809,14 @@ def _normalize_draft_request(
     validated_resume = ResumeData.model_validate(
         normalize_resume_data(copy.deepcopy(normalized_resume_data))
     )
-    yaml_sections = RawYamlSections(
-        **rendercv_payload_to_yaml_sections(
-            validated_resume.model_dump(),
-            resolved_theme_settings,
-        )
+    sections_dict = rendercv_payload_to_yaml_sections(
+        validated_resume.model_dump(),
+        resolved_theme_settings,
     )
+    if meta_fields is None:
+        meta_fields = cv_metadata_fields_from_theme(resolved_theme_settings)
+    sections_dict["metadata"] = serialize_cv_metadata_yaml(meta_fields)
+    yaml_sections = RawYamlSections(**sections_dict)
     return validated_resume.model_dump(), resolved_theme_settings, yaml_sections
 
 
@@ -1382,16 +1440,20 @@ async def normalize_resume_draft(
     base_resume_data: dict[str, Any] | None = None
     base_theme_settings: RenderThemeProfile | None = None
 
+    base_cv_metadata: str | None = None
     if request.resume_id:
         resume = db.get_resume(request.resume_id)
         if resume:
             base_resume_data = _get_original_resume_data(resume)
             base_theme_settings = _stored_or_default_theme_settings(resume)
+            cm = resume.get("cv_metadata")
+            base_cv_metadata = cm if isinstance(cm, str) else None
 
     normalized_data, theme_settings, yaml_sections = _normalize_draft_request(
         request,
         base_resume=base_resume_data,
         base_theme_settings=base_theme_settings,
+        base_cv_metadata=base_cv_metadata,
     )
 
     draft_resume_id = request.resume_id or "draft"
@@ -1421,16 +1483,20 @@ async def render_resume_draft_preview(
     base_resume_data: dict[str, Any] | None = None
     base_theme_settings: RenderThemeProfile | None = None
 
+    base_cv_metadata: str | None = None
     if request.resume_id:
         resume = db.get_resume(request.resume_id)
         if resume:
             base_resume_data = _get_original_resume_data(resume)
             base_theme_settings = _stored_or_default_theme_settings(resume)
+            cm = resume.get("cv_metadata")
+            base_cv_metadata = cm if isinstance(cm, str) else None
 
     normalized_data, theme_settings, _ = _normalize_draft_request(
         request,
         base_resume=base_resume_data,
         base_theme_settings=base_theme_settings,
+        base_cv_metadata=base_cv_metadata,
     )
 
     try:
@@ -2381,16 +2447,21 @@ async def save_resume_draft(
     if not existing:
         raise HTTPException(status_code=404, detail="Resume not found")
 
+    cm = existing.get("cv_metadata")
+    base_cv_metadata = cm if isinstance(cm, str) else None
+
     normalized_data, theme_settings, yaml_sections = _normalize_draft_request(
         request,
         base_resume=_get_original_resume_data(existing),
         base_theme_settings=_stored_or_default_theme_settings(existing),
+        base_cv_metadata=base_cv_metadata,
     )
 
     updated = _save_resume_payload(
         resume_id=resume_id,
         updated_data=normalized_data,
         theme_settings=theme_settings,
+        cv_metadata=yaml_sections.metadata,
     )
 
     return ResumeDraftNormalizedResponse(

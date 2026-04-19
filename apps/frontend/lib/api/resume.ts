@@ -202,6 +202,8 @@ export interface RawYamlSections {
   design: string;
   locale: string;
   settings: string;
+  /** App-only YAML (`metadata:` root). Not passed to RenderCV. */
+  metadata: string;
 }
 
 export type RawYamlSection = keyof RawYamlSections;
@@ -270,7 +272,8 @@ function normalizeDraftValidationDetail(value: unknown): DraftValidationDetail |
       raw.section === 'cv' ||
       raw.section === 'design' ||
       raw.section === 'locale' ||
-      raw.section === 'settings'
+      raw.section === 'settings' ||
+      raw.section === 'metadata'
         ? raw.section
         : undefined,
     line: typeof raw.line === 'number' ? raw.line : null,

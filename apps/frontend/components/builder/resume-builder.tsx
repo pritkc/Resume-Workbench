@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { ResumeForm } from './resume-form';
 import { RawYamlEditor } from './raw-yaml-editor';
+import { CvMetadataPanel } from './cv-metadata-panel';
 import { LettersWorkspace } from './letters-workspace';
 import { CoverLetterPreview } from './cover-letter-preview';
 import { OutreachPreview } from './outreach-preview';
@@ -88,9 +89,15 @@ import {
   getProjectSummary,
 } from '@/lib/utils/rendercv-fields';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
+import {
+  DEFAULT_METADATA_YAML,
+  buildLlmClipboardBundle,
+  tryParseLlmClipboardBundle,
+  parseCvMetadataYaml,
+} from '@/lib/cv-metadata';
 
 type TabId = 'resume' | 'letters' | 'jd-match' | 'additional-questions';
-type EditorSection = 'cv' | 'design' | 'locale' | 'settings';
+type EditorSection = 'cv' | 'design' | 'locale' | 'settings' | 'metadata';
 type EditorMode = 'visual' | 'raw';
 type PaneMode = 'editor' | 'split' | 'preview';
 type AutosaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'invalid';
@@ -141,7 +148,22 @@ const EMPTY_RAW_YAML: RawYamlSections = {
   design: 'design: {}\n',
   locale: 'locale: {}\n',
   settings: 'settings: {}\n',
+  metadata: DEFAULT_METADATA_YAML,
 };
+
+function normalizeStoredRawYamlSections(raw: unknown): RawYamlSections {
+  if (!raw || typeof raw !== 'object') {
+    return EMPTY_RAW_YAML;
+  }
+  const o = raw as Record<string, unknown>;
+  return {
+    cv: typeof o.cv === 'string' ? o.cv : EMPTY_RAW_YAML.cv,
+    design: typeof o.design === 'string' ? o.design : EMPTY_RAW_YAML.design,
+    locale: typeof o.locale === 'string' ? o.locale : EMPTY_RAW_YAML.locale,
+    settings: typeof o.settings === 'string' ? o.settings : EMPTY_RAW_YAML.settings,
+    metadata: typeof o.metadata === 'string' ? o.metadata : DEFAULT_METADATA_YAML,
+  };
+}
 
 function buildFullYaml(sections: RawYamlSections): string {
   return [
@@ -149,6 +171,7 @@ function buildFullYaml(sections: RawYamlSections): string {
     sections.design.trimEnd(),
     sections.locale.trimEnd(),
     sections.settings.trimEnd(),
+    sections.metadata.trimEnd(),
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -823,7 +846,7 @@ const ResumeBuilderContent = () => {
     const savedYaml = localStorage.getItem(YAML_STORAGE_KEY);
     if (savedYaml) {
       try {
-        setRawYamlSections(JSON.parse(savedYaml) as RawYamlSections);
+        setRawYamlSections(normalizeStoredRawYamlSections(JSON.parse(savedYaml)));
         setYamlNeedsSync(false);
       } catch {
         localStorage.removeItem(YAML_STORAGE_KEY);
@@ -1421,6 +1444,97 @@ const ResumeBuilderContent = () => {
     }
   }, [rawYamlSections, showNotification]);
 
+  const handleCopyLlmBundle = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(
+        buildLlmClipboardBundle({
+          cv: rawYamlSections.cv,
+          metadata: rawYamlSections.metadata,
+        })
+      );
+    } catch (error) {
+      console.error('Failed to copy LLM bundle:', error);
+      showNotification('Failed to copy.', 'danger');
+    }
+  }, [rawYamlSections.cv, rawYamlSections.metadata, showNotification]);
+
+  const handleApplyLlmClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const { metadata, cv } = tryParseLlmClipboardBundle(text);
+      if (!metadata && !cv) {
+        showNotification(t('builder.metadata.applyClipboardEmpty'), 'warning');
+        return;
+      }
+      let nextSections = { ...rawYamlSections };
+      if (metadata) {
+        nextSections = { ...nextSections, metadata };
+      }
+      if (cv) {
+        nextSections = { ...nextSections, cv };
+      }
+      let nextTheme = themeSettings;
+      if (metadata) {
+        const parsed = parseCvMetadataYaml(metadata);
+        nextTheme = normalizeRenderThemeSettings({
+          ...themeSettings,
+          bold_keywords: parsed.bold_keywords.length > 0,
+          settings: { ...themeSettings.settings, bold_keywords: parsed.bold_keywords },
+        });
+        setThemeSettings(nextTheme);
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextTheme));
+      }
+      setRawYamlSections(nextSections);
+      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
+
+      setRawYamlIssue(null);
+      markDraftDirty('raw');
+      queueHistoryCommit(
+        buildDraftSnapshot({
+          rawYamlSections: nextSections,
+          themeSettings: nextTheme,
+          yamlNeedsSync: false,
+          editorMode: 'raw',
+          editorSection: editorSectionRef.current,
+        })
+      );
+    } catch (error) {
+      console.error('Failed to apply clipboard:', error);
+      showNotification('Failed to read clipboard.', 'danger');
+    }
+  }, [
+    buildDraftSnapshot,
+    markDraftDirty,
+    queueHistoryCommit,
+    rawYamlSections,
+    showNotification,
+    t,
+    themeSettings,
+  ]);
+
+  const handleCvMetadataPanelChange = useCallback(
+    (next: { metadataYaml: string; themeSettings: RenderThemeSettings }) => {
+      const nextSections = { ...rawYamlSectionsRef.current, metadata: next.metadataYaml };
+      const nextTheme = next.themeSettings;
+      setRawYamlSections(nextSections);
+      setThemeSettings(nextTheme);
+      setRawYamlIssue(null);
+      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextTheme));
+      markDraftDirty('visual');
+      queueHistoryCommit(
+        buildDraftSnapshot({
+          rawYamlSections: nextSections,
+          themeSettings: nextTheme,
+          yamlNeedsSync: false,
+          editorMode: 'visual',
+          editorSection: 'metadata',
+        })
+      );
+    },
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit]
+  );
+
   const handleResyncYaml = useCallback(async () => {
     await syncRawYamlFromStructured();
   }, [syncRawYamlFromStructured]);
@@ -1593,6 +1707,7 @@ const ResumeBuilderContent = () => {
     { id: 'design', label: 'Design' },
     { id: 'locale', label: 'Locale' },
     { id: 'settings', label: 'Settings' },
+    { id: 'metadata', label: 'Metadata' },
   ] satisfies Array<{ id: EditorSection; label: string }>;
 
   const builderHeading = resumeTitle ?? t('nav.builder');
@@ -1905,7 +2020,9 @@ const ResumeBuilderContent = () => {
                                   ? 'Theme Design'
                                   : editorSection === 'locale'
                                     ? 'Locale Copy'
-                                    : 'Runtime Settings'}
+                                    : editorSection === 'settings'
+                                      ? 'Runtime Settings'
+                                      : 'CV metadata'}
                           </p>
                           <p className="mt-0.5 text-[11px] leading-snug text-gray-600">
                             {editorMode === 'raw'
@@ -1956,6 +2073,15 @@ const ResumeBuilderContent = () => {
                         onChange={handleSettingsChange}
                       />
                     )}
+                  {activeTab === 'resume' &&
+                    editorMode === 'visual' &&
+                    editorSection === 'metadata' && (
+                      <CvMetadataPanel
+                        metadataYaml={rawYamlSections.metadata}
+                        themeSettings={themeSettings}
+                        onChange={handleCvMetadataPanelChange}
+                      />
+                    )}
                   {activeTab === 'resume' && editorMode === 'raw' && (
                     <RawYamlEditor
                       section={editorSection}
@@ -1972,6 +2098,10 @@ const ResumeBuilderContent = () => {
                           ? () => setEditorSection(rawYamlIssue.section as EditorSection)
                           : undefined
                       }
+                      onCopyLlmBundle={() => void handleCopyLlmBundle()}
+                      onApplyLlmClipboard={() => void handleApplyLlmClipboard()}
+                      copyLlmLabel={t('builder.metadata.copyLlm')}
+                      applyLlmLabel={t('builder.metadata.applyClipboard')}
                     />
                   )}
 

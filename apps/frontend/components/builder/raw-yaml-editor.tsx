@@ -1,7 +1,14 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Copy, Loader2, LocateFixed, RefreshCcw } from 'lucide-react';
+import {
+  AlertTriangle,
+  ClipboardPaste,
+  Copy,
+  Loader2,
+  LocateFixed,
+  RefreshCcw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   formatDraftValidationDetail,
@@ -20,6 +27,11 @@ interface RawYamlEditorProps {
   onCopyAll: () => void;
   onResync: () => void;
   onFocusErrorSection?: () => void;
+  /** Optional: copy metadata+cv bundle for external LLM (same row as Resync / Copy). */
+  onCopyLlmBundle?: () => void | Promise<void>;
+  onApplyLlmClipboard?: () => void | Promise<void>;
+  copyLlmLabel?: string;
+  applyLlmLabel?: string;
 }
 
 const SECTION_DESCRIPTIONS: Record<RawYamlSection, string> = {
@@ -27,6 +39,7 @@ const SECTION_DESCRIPTIONS: Record<RawYamlSection, string> = {
   design: 'Fine-tune theme design values in raw YAML.',
   locale: 'Adjust RenderCV locale labels and month names.',
   settings: 'Control runtime settings like date and PDF title.',
+  metadata: 'App-only: role, company, location, bold keywords (not passed to RenderCV CLI alone).',
 };
 
 const SECTION_LABELS: Record<RawYamlSection, string> = {
@@ -34,6 +47,7 @@ const SECTION_LABELS: Record<RawYamlSection, string> = {
   design: 'Design',
   locale: 'Locale',
   settings: 'Settings',
+  metadata: 'Metadata',
 };
 
 const LINE_HEIGHT_PX = 24;
@@ -191,6 +205,10 @@ export function RawYamlEditor({
   onCopyAll,
   onResync,
   onFocusErrorSection,
+  onCopyLlmBundle,
+  onApplyLlmClipboard,
+  copyLlmLabel,
+  applyLlmLabel,
 }: RawYamlEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
@@ -375,6 +393,30 @@ export function RawYamlEditor({
               <Copy className="h-4 w-4" />
               Copy Full YAML
             </Button>
+            {onCopyLlmBundle ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => void onCopyLlmBundle()}
+                className="gap-1.5"
+              >
+                <Copy className="h-4 w-4" />
+                {copyLlmLabel ?? 'Copy for LLM'}
+              </Button>
+            ) : null}
+            {onApplyLlmClipboard ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => void onApplyLlmClipboard()}
+                className="gap-1.5"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+                {applyLlmLabel ?? 'Apply clipboard'}
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

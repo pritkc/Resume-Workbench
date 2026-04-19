@@ -46,6 +46,7 @@ def mock_resume_record(sample_resume):
         },
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
+        "cv_metadata": None,
     }
 
 
@@ -707,6 +708,42 @@ class TestListResumes:
         assert item["target_company"] == "Acme"
         assert item["target_role"] == "Backend Engineer"
         assert item["target_location"] == "Mountain View, CA"
+
+    @patch("app.routers.resumes.db")
+    async def test_list_cv_metadata_overrides_targets(self, mock_db, client):
+        mock_db.list_resumes.return_value = [
+            {
+                "resume_id": "dup-1",
+                "is_active": False,
+                "application_pack_id": "pack-123",
+                "created_at": "2026-01-02",
+                "updated_at": "2026-01-02",
+                "title": "Backend Engineer @ Acme",
+                "cv_metadata": (
+                    "metadata:\n"
+                    '  role: "Staff Engineer"\n'
+                    '  company: "Contoso"\n'
+                    '  location: "Berlin"\n'
+                    "  bold_keywords: []\n"
+                ),
+            }
+        ]
+        mock_db.list_application_packs.return_value = [
+            {
+                "pack_id": "pack-123",
+                "company": "Acme",
+                "role": "Backend Engineer",
+                "location": "Mountain View, CA",
+            }
+        ]
+        mock_db.get_active_resume.return_value = None
+        async with client:
+            resp = await client.get("/api/v1/resumes/list")
+        assert resp.status_code == 200
+        item = resp.json()["data"][0]
+        assert item["target_company"] == "Contoso"
+        assert item["target_role"] == "Staff Engineer"
+        assert item["target_location"] == "Berlin"
 
     @patch("app.routers.resumes.db")
     async def test_list_sanitizes_polluted_target_metadata(self, mock_db, client):

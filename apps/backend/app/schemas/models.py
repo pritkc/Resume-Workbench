@@ -1201,6 +1201,12 @@ class RawYamlSections(BaseModel):
     design: str
     locale: str
     settings: str
+    metadata: str = Field(
+        default=(
+            'metadata:\n  role: ""\n  company: ""\n  location: ""\n  bold_keywords: []\n'
+        ),
+        description="App-only YAML (non-RenderCV): role, company, location, bold_keywords.",
+    )
 
 
 class ResumeDraftRequest(BaseModel):

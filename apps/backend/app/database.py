@@ -61,6 +61,7 @@ def _serialize_resume(record: Resume) -> dict[str, Any]:
         "title": record.title,
         "original_markdown": record.original_markdown,
         "theme_settings": record.theme_settings,
+        "cv_metadata": record.cv_metadata,
         "created_at": _iso(record.created_at),
         "updated_at": _iso(record.updated_at),
     }
@@ -207,6 +208,7 @@ class Database:
         original_markdown: str | None = None,
         application_pack_id: str | None = None,
         theme_settings: dict[str, Any] | None = None,
+        cv_metadata: str | None = None,
     ) -> dict[str, Any]:
         with self._session() as session:
             record = resume_repo.create_resume(
@@ -225,6 +227,7 @@ class Database:
                 title=title,
                 original_markdown=original_markdown,
                 theme_settings=theme_settings,
+                cv_metadata=cv_metadata,
             )
             return _serialize_resume(record)
 
@@ -270,6 +273,8 @@ class Database:
         processed_data = copy.deepcopy(pd_raw) if isinstance(pd_raw, dict) else pd_raw
         ts_raw = source.get("theme_settings")
         theme_settings = copy.deepcopy(ts_raw) if isinstance(ts_raw, dict) else ts_raw
+        cm_raw = source.get("cv_metadata")
+        cv_metadata = cm_raw if isinstance(cm_raw, str) else None
         title = source.get("title")
         base_title = title.strip() if isinstance(title, str) and title.strip() else None
         new_title = f"{base_title} (copy)" if base_title else None
@@ -298,6 +303,7 @@ class Database:
             title=new_title,
             original_markdown=source.get("original_markdown"),
             theme_settings=theme_settings,
+            cv_metadata=cv_metadata,
         )
 
     def get_resume(self, resume_id: str) -> dict[str, Any] | None:
