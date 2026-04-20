@@ -1275,13 +1275,10 @@ const ResumeBuilderContent = () => {
       return;
     }
 
-    const success = await persistDraft({
+    await persistDraft({
       manual: true,
       version: draftVersionRef.current,
     });
-    if (success) {
-      showNotification('Resume saved.', 'success');
-    }
   };
 
   const handleReset = async () => {
@@ -1400,7 +1397,6 @@ const ResumeBuilderContent = () => {
         fallbackId: resumeId,
       });
       downloadBlobAsFile(blob, filename);
-      showNotification(t('builder.alerts.downloadSuccess'), 'success');
     } catch (error) {
       console.error('Failed to download resume:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
@@ -1542,7 +1538,6 @@ const ResumeBuilderContent = () => {
     try {
       setIsCoverLetterSaving(true);
       await updateCoverLetter(resumeId, coverLetter);
-      showNotification(t('builder.alerts.coverLetterSaveSuccess'), 'success');
     } catch (error) {
       console.error('Failed to save cover letter:', error);
       showNotification(t('builder.alerts.coverLetterSaveFailed'), 'danger');
@@ -1591,7 +1586,6 @@ const ResumeBuilderContent = () => {
     try {
       setIsOutreachSaving(true);
       await updateOutreachMessage(resumeId, outreachMessage);
-      showNotification(t('builder.alerts.outreachSaveSuccess'), 'success');
     } catch (error) {
       console.error('Failed to save outreach message:', error);
       showNotification(t('builder.alerts.outreachSaveFailed'), 'danger');
@@ -1618,7 +1612,6 @@ const ResumeBuilderContent = () => {
       const payload = await generateAuxiliaryPackage(resumeId);
       setCoverLetter(payload.cover_letter);
       setOutreachMessage(payload.outreach_message);
-      showNotification('CL + message package generated successfully', 'success');
     } catch (error) {
       console.error('Failed to generate CL + message package:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -2005,8 +1998,8 @@ const ResumeBuilderContent = () => {
                 isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
               )}
             >
-              <div className="editor-panel h-full min-h-0 overflow-y-auto overscroll-contain px-1.5 pb-2 pt-0.5 md:px-2 md:pt-1">
-                <div className="flex w-full max-w-none flex-col gap-1.5">
+              <div className="editor-panel h-full min-h-0 overflow-y-auto overscroll-contain px-1.5 pb-2 pt-0 md:px-2">
+                <div className="flex w-full max-w-none flex-col gap-1.5 pt-0.5 md:pt-1">
                   {activeTab === 'resume' && (
                     <div className="shrink-0 border-b border-black/15 bg-white">
                       <div className="flex h-8 items-stretch">

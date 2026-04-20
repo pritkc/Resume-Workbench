@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { SkillGroup, SkillsSection } from '@/components/dashboard/resume-component';
@@ -55,6 +55,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
   hideFooterAdd = false,
 }) => {
   const { t } = useTranslations();
+  const listDndId = React.useId();
   const groups = React.useMemo(() => normalizeAdditionalGroups(data), [data]);
   const [draftByIndex, setDraftByIndex] = React.useState<Record<number, string>>({});
 
@@ -138,11 +139,12 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
 
   return (
     <div className="space-y-2">
-      <p className="font-sans text-[11px] leading-snug text-black/40">
-        {t('builder.additionalForm.instructions')}
-      </p>
-
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        id={listDndId}
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
         <SortableContext
           items={groups.map((_, index) => index)}
           strategy={verticalListSortingStrategy}
@@ -163,7 +165,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
                       aria-label={t('builder.additionalForm.removeGroup')}
                       className="absolute right-1 top-1 z-10 h-7 w-7 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/skill:opacity-100 group-focus-within/skill:opacity-100"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
 
                     <div className="mb-2 flex flex-wrap items-end gap-2 border-b border-black/10 pb-2 pr-8">

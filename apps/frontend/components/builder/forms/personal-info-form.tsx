@@ -145,10 +145,6 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
 
   return (
     <div className="entry-card-editor space-y-3 border border-black/20 bg-white">
-      <p className="panel-section-header !mt-0 !border-t-0 !pt-0">
-        {t('builder.personalInfo')}
-      </p>
-
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-0.5">
           <span className={fieldLabel}>{t('resume.personalInfo.name')}</span>

@@ -44,6 +44,7 @@ const addTextBtn =
 
 export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
+  const listDndId = React.useId();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -182,7 +183,12 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
           </button>
         </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          id={listDndId}
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext
             items={data.map((item) => item.id)}
             strategy={verticalListSortingStrategy}

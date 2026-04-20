@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -44,9 +44,9 @@ function CvSectionJumpNav({
   sections: Array<{ id: string; label: string }>;
 }) {
   return (
-    <div className="sticky top-0 z-[12] -mx-1.5 mb-2 border-b border-black/15 bg-[#F0F0E8]/95 py-1.5 backdrop-blur-sm md:-mx-2">
+    <div className="sticky top-0 z-[12] mb-0 border-b border-black/15 bg-[#F0F0E8]/95 shadow-[0_1px_0_0_rgba(0,0,0,0.06)] backdrop-blur-sm">
       <p className="sr-only">Jump to section</p>
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-1.5 overflow-x-auto py-0.5 pl-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {sections.map(({ id, label }) => (
           <button
             key={id}
@@ -86,6 +86,8 @@ interface ResumeFormProps {
 
 export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) => {
   const { t } = useTranslations();
+  /** Stable `id` for nested @dnd-kit `DndContext`s (avoids global counter → hydration mismatch). */
+  const sectionOrderDndId = useId();
   /** Avoid SSR for @dnd-kit (aria-describedby IDs differ server vs client → hydration mismatch). */
   const [dndMounted, setDndMounted] = useState(false);
   useEffect(() => {
@@ -359,7 +361,15 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     if (isPersonalInfo) {
       return (
         <div id={`cv-section-${section.id}`} className="scroll-mt-[4.5rem] pl-3">
-          {renderContent()}
+          <SectionHeader
+            section={section}
+            onRename={(name) => handleRename(section.id, name)}
+            onDelete={() => handleDelete(section.id)}
+            onToggleVisibility={() => handleToggleVisibility(section.id)}
+            canDelete={false}
+          >
+            {renderContent()}
+          </SectionHeader>
         </div>
       );
     }
@@ -490,7 +500,12 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext
+      id={sectionOrderDndId}
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
       <SortableContext
         items={sortedAllSections.map((s) => s.id)}
         strategy={verticalListSortingStrategy}
