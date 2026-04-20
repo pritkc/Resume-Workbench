@@ -4,15 +4,8 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 /**
- * Swiss International Style Tabs Component
- *
- * Design Principles:
- * - Square corners (rounded-none) - Brutalist aesthetic
- * - Hard shadows on active tab
- * - Black borders for high contrast
- * - Monospace uppercase text
+ * Builder tab bar — bottom-border active state, h-7, no fill (phase 3.11.1).
  */
-
 export interface Tab {
   id: string;
   label: string;
@@ -37,13 +30,17 @@ export const RetroTabs: React.FC<RetroTabsProps> = ({
   className,
   size = 'default',
 }) => {
-  const sizeClasses =
-    size === 'compact'
-      ? 'px-2.5 py-1.5 text-[11px] tracking-[0.18em]'
-      : 'px-4 py-2 text-xs tracking-wider';
+  const isCompact = size === 'compact';
+  const tabClass = cn(
+    'inline-flex cursor-pointer items-center justify-center gap-1.5 font-mono uppercase transition-colors',
+    isCompact ? 'h-7 px-3 text-[11px] tracking-widest' : 'h-8 px-4 text-xs tracking-wider',
+    '-mb-px border-b-2 border-transparent bg-transparent',
+    'text-black/50 hover:text-black',
+    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black focus-visible:ring-offset-1'
+  );
 
   return (
-    <div className={cn('flex flex-wrap gap-0 border-b border-black/15', className)}>
+    <div className={cn('editor-tabs tab-container flex flex-wrap gap-0', className)}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         const isDisabled = tab.disabled;
@@ -51,28 +48,18 @@ export const RetroTabs: React.FC<RetroTabsProps> = ({
         return (
           <button
             key={tab.id}
+            type="button"
             onClick={() => !isDisabled && onTabChange(tab.id)}
             disabled={isDisabled}
             aria-label={tab.ariaLabel ?? tab.label}
             className={cn(
-              'inline-flex items-center gap-1.5 font-mono uppercase transition-all',
-              sizeClasses,
-              'border border-b-0 border-black/15 -mb-px',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2',
-              isActive && [
-                'bg-white text-black font-semibold',
-                'shadow-[1px_-1px_0_0_rgba(0,0,0,0.06)]',
-                'border-b-white',
-              ],
-              !isActive &&
-                !isDisabled && [
-                  'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-                ],
-              isDisabled && ['cursor-not-allowed bg-gray-50 text-gray-300 opacity-50']
+              tabClass,
+              isActive && 'border-black font-bold text-black',
+              isDisabled && 'cursor-not-allowed text-black/25 hover:text-black/25'
             )}
           >
             {tab.icon}
-            <span>{size === 'compact' && tab.shortLabel ? tab.shortLabel : tab.label}</span>
+            <span>{isCompact && tab.shortLabel ? tab.shortLabel : tab.label}</span>
           </button>
         );
       })}

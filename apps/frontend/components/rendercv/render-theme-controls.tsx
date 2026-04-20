@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { RotateCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   RENDER_ALIGNMENT_OPTIONS,
   RENDER_BULLET_OPTIONS,
@@ -37,6 +35,18 @@ import {
   textToArray,
 } from './rendercv-controls-shared';
 
+/** Common `header.connections.separator` values used across bundled RenderCV themes. */
+const RENDER_HEADER_CONNECTION_SEPARATOR_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: '', label: 'None' },
+  { id: '|', label: 'Pipe (|)' },
+  { id: '•', label: 'Bullet (•)' },
+  { id: '·', label: 'Middle dot (·)' },
+  { id: '/', label: 'Slash (/)' },
+  { id: '—', label: 'Em dash (—)' },
+  { id: ' – ', label: 'Spaced en dash' },
+  { id: ' - ', label: 'Spaced hyphen' },
+];
+
 interface RenderThemeControlsProps {
   settings: RenderThemeSettings;
   onChange: (settings: RenderThemeSettings) => void;
@@ -51,14 +61,13 @@ type DesignGroupId =
   | 'sections-entries'
   | 'templates';
 
-const DESIGN_GROUPS: Array<{ id: DesignGroupId; label: string }> = [
-  { id: 'core', label: 'Core' },
-  { id: 'page-layout', label: 'Page & Layout' },
-  { id: 'header-connections', label: 'Header & Connections' },
-  { id: 'typography', label: 'Typography' },
-  { id: 'colors', label: 'Colors' },
-  { id: 'sections-entries', label: 'Sections & Entries' },
-  { id: 'templates', label: 'Templates / Advanced' },
+/** Collapsed navigation: layout / style / advanced (phase 3.11.1). */
+type DesignBucketId = 'layout' | 'style' | 'advanced';
+
+const DESIGN_BUCKETS: Array<{ id: DesignBucketId; label: string }> = [
+  { id: 'layout', label: 'Layout' },
+  { id: 'style', label: 'Style' },
+  { id: 'advanced', label: 'Advanced' },
 ];
 
 function setNestedValue(root: Record<string, unknown>, path: string[], value: unknown) {
@@ -86,12 +95,8 @@ function dimensionToMm(value: string, fallback: number): number {
   return fallback;
 }
 
-function titleForTheme(themeId: RenderThemeId) {
-  return RENDER_THEME_OPTIONS.find((option) => option.id === themeId)?.label ?? 'Theme';
-}
-
 export function RenderThemeControls({ settings, onChange }: RenderThemeControlsProps) {
-  const [activeGroup, setActiveGroup] = useState<DesignGroupId>('core');
+  const [activeBucket, setActiveBucket] = useState<DesignBucketId>('layout');
 
   const updateDesign = (
     path: string[],
@@ -108,51 +113,35 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
 
   return (
     <div className="space-y-2">
-      <div className="border border-black/15 bg-white px-2.5 py-2">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
-              Design
-            </p>
-            <p className="mt-0.5 text-[13px] text-gray-600">
-              Theme:{' '}
-              <span className="font-medium text-gray-900">{titleForTheme(settings.theme_id)}</span>
-            </p>
-          </div>
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">
-            <div className="min-w-[200px]">
-              <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-gray-600">
-                Theme
-              </p>
-              <RenderCvSelect
-                value={settings.theme_id}
-                options={RENDER_THEME_OPTIONS}
-                onChange={(value) =>
-                  onChange(switchActiveRenderTheme(settings, value as RenderThemeId))
-                }
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => onChange(resetActiveRenderThemeProfile(settings))}
-              size="xs"
-              className="gap-1.5"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset Theme Defaults
-            </Button>
-          </div>
+      <div className="flex h-7 items-center gap-3 border border-black/20 bg-white px-2">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-black/50">Theme</span>
+        <div className="min-w-[140px] flex-1">
+          <RenderCvSelect
+            value={settings.theme_id}
+            options={RENDER_THEME_OPTIONS}
+            onChange={(value) =>
+              onChange(switchActiveRenderTheme(settings, value as RenderThemeId))
+            }
+          />
         </div>
+        <button
+          type="button"
+          onClick={() => onChange(resetActiveRenderThemeProfile(settings))}
+          className="font-mono text-[11px] uppercase tracking-wider text-red-600 hover:underline"
+        >
+          Reset
+        </button>
       </div>
 
       <RenderCvQuickNav
-        items={DESIGN_GROUPS}
-        activeId={activeGroup}
-        onChange={(id) => setActiveGroup(id as DesignGroupId)}
+        items={DESIGN_BUCKETS}
+        activeId={activeBucket}
+        onChange={(id) => setActiveBucket(id as DesignBucketId)}
       />
 
-      {activeGroup === 'core' ? (
-        <RenderCvSection title="Core">
+      {activeBucket === 'layout' && (
+        <>
+          <RenderCvSection title="Core">
           <RenderCvRow label="Page Size">
             <RenderCvSelect
               value={settings.design.page?.size}
@@ -192,10 +181,8 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             />
           </RenderCvRow>
         </RenderCvSection>
-      ) : null}
 
-      {activeGroup === 'page-layout' ? (
-        <div className="space-y-3">
+          <div className="space-y-3">
           <RenderCvSection title="Page Margins">
             <RenderCvRow label="Top Margin">
               <RenderCvDimensionInput
@@ -293,11 +280,9 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
               />
             </RenderCvRow>
           </RenderCvSection>
-        </div>
-      ) : null}
+          </div>
 
-      {activeGroup === 'header-connections' ? (
-        <div className="space-y-3">
+          <div className="space-y-3">
           <RenderCvSection title="Header">
             <RenderCvRow label="Alignment">
               <RenderCvSelect
@@ -388,12 +373,30 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
                 }
               />
             </RenderCvRow>
-            <RenderCvRow label="Separator">
-              <RenderCvInput
-                value={settings.design.header?.connections?.separator}
-                onChange={(value) => updateDesign(['header', 'connections', 'separator'], value)}
-                placeholder="Leave empty for no separator"
-              />
+            <RenderCvRow
+              label="Separator"
+              description="Between contact items in the header (RenderCV `connections.separator`)."
+            >
+              {(() => {
+                const sep = settings.design.header?.connections?.separator ?? '';
+                const known = new Set(RENDER_HEADER_CONNECTION_SEPARATOR_OPTIONS.map((o) => o.id));
+                const options =
+                  sep && !known.has(sep)
+                    ? [
+                        ...RENDER_HEADER_CONNECTION_SEPARATOR_OPTIONS,
+                        { id: sep, label: `Current (${sep})` },
+                      ]
+                    : [...RENDER_HEADER_CONNECTION_SEPARATOR_OPTIONS];
+                return (
+                  <RenderCvSelect
+                    value={sep}
+                    options={options}
+                    onChange={(value) =>
+                      updateDesign(['header', 'connections', 'separator'], value)
+                    }
+                  />
+                );
+              })()}
             </RenderCvRow>
             <RenderCvRow label="Connection Gap">
               <RenderCvDimensionInput
@@ -404,11 +407,13 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
               />
             </RenderCvRow>
           </RenderCvSection>
-        </div>
-      ) : null}
+          </div>
+        </>
+      )}
 
-      {activeGroup === 'typography' ? (
-        <div className="space-y-3">
+      {activeBucket === 'style' && (
+        <>
+          <div className="space-y-3">
           <RenderCvSection title="Font Family">
             {[
               ['body', 'Body'],
@@ -505,9 +510,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             ))}
           </RenderCvSection>
         </div>
-      ) : null}
 
-      {activeGroup === 'colors' ? (
         <RenderCvSection title="Colors">
           {[
             ['body', 'Body'],
@@ -530,10 +533,8 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             </RenderCvRow>
           ))}
         </RenderCvSection>
-      ) : null}
 
-      {activeGroup === 'sections-entries' ? (
-        <div className="space-y-3">
+          <div className="space-y-3">
           <RenderCvSection title="Section Titles">
             <RenderCvRow label="Style">
               <RenderCvSelect
@@ -679,9 +680,10 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             </RenderCvRow>
           </RenderCvSection>
         </div>
-      ) : null}
+        </>
+      )}
 
-      {activeGroup === 'templates' ? (
+      {activeBucket === 'advanced' && (
         <div className="space-y-3">
           <RenderCvSection title="Templates">
             <RenderCvRow label="Footer" fieldHint={TEMPLATE_HINTS.footer}>
@@ -817,7 +819,7 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
             </RenderCvRow>
           </RenderCvSection>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

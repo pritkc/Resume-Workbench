@@ -2,17 +2,20 @@
 
 import React from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { PersonalInfo } from '@/components/dashboard/resume-component';
 import { useTranslations } from '@/lib/i18n';
-import { Plus, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { getEditableProfileLinks } from '@/lib/utils/rendercv-fields';
 
 interface PersonalInfoFormProps {
   data: PersonalInfo;
   onChange: (data: PersonalInfo) => void;
 }
+
+const fieldLabel = 'font-mono text-[10px] uppercase tracking-wider text-black/50';
+const inputClass =
+  'h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0';
 
 export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
@@ -141,141 +144,137 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
   };
 
   return (
-    <div className="space-y-2.5 border border-black/15 bg-white px-3 py-2.5">
-      <h3 className="mb-2 border-b border-black/10 pb-1.5 font-serif text-base font-bold text-gray-900">
+    <div className="entry-card-editor space-y-3 border border-black/20 bg-white">
+      <p className="panel-section-header !mt-0 !border-t-0 !pt-0">
         {t('builder.personalInfo')}
-      </h3>
-      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="name" className="text-[11px] font-medium text-gray-700">
-            {t('resume.personalInfo.name')}
-          </Label>
+      </p>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="space-y-0.5">
+          <span className={fieldLabel}>{t('resume.personalInfo.name')}</span>
           <Input
             id="name"
             value={data.name || ''}
             onChange={(e) => handleChange('name', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.name')}
-            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className={inputClass}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="headline" className="text-[11px] font-medium text-gray-700">
-            Headline
-          </Label>
+        <div className="space-y-0.5">
+          <span className={fieldLabel}>Headline</span>
           <Input
             id="headline"
             value={data.headline || data.title || ''}
             onChange={(e) => handleChange('headline', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.title')}
-            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className={inputClass}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="email" className="text-[11px] font-medium text-gray-700">
-            {t('resume.personalInfo.email')}
-          </Label>
+        <div className="space-y-0.5 sm:col-span-2">
+          <span className={fieldLabel}>{t('resume.personalInfo.location')}</span>
+          <Input
+            id="location"
+            value={data.location || ''}
+            onChange={(e) => handleChange('location', e.target.value)}
+            placeholder={t('builder.personalInfoForm.placeholders.location')}
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-0.5">
+          <span className={fieldLabel}>{t('resume.personalInfo.email')}</span>
           <Input
             id="email"
             type="email"
             value={data.email || ''}
             onChange={(e) => handleChange('email', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.email')}
-            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className={inputClass}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone" className="text-[11px] font-medium text-gray-700">
-            {t('resume.personalInfo.phone')}
-          </Label>
+        <div className="space-y-0.5">
+          <span className={fieldLabel}>{t('resume.personalInfo.phone')}</span>
           <Input
             id="phone"
             type="tel"
             value={data.phone || ''}
             onChange={(e) => handleChange('phone', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.phone')}
-            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className={inputClass}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="location" className="text-[11px] font-medium text-gray-700">
-            {t('resume.personalInfo.location')}
-          </Label>
-          <Input
-            id="location"
-            value={data.location || ''}
-            onChange={(e) => handleChange('location', e.target.value)}
-            placeholder={t('builder.personalInfoForm.placeholders.location')}
-            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
-        </div>
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="photo" className="text-[11px] font-medium text-gray-700">
-            Photo URL <span className="text-gray-400">({t('common.optional')})</span>
-          </Label>
+        <div className="space-y-0.5 sm:col-span-2">
+          <span className={fieldLabel}>Photo URL</span>
           <Input
             id="photo"
             value={data.photo || data.photoUrl || ''}
             onChange={(e) => handleChange('photo', e.target.value)}
-            placeholder="https://example.com/photo.jpg"
-            className="rounded-none border-black/15 bg-white focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+            placeholder="https://…"
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-0.5 sm:col-span-2">
+          <span className={fieldLabel}>Website</span>
+          <Input
+            id="website"
+            value={data.website || ''}
+            onChange={(e) => handleChange('website', e.target.value)}
+            placeholder="https://…"
+            className={inputClass}
           />
         </div>
       </div>
 
-      <div className="space-y-2 border-t border-black/10 pt-2.5">
-        <div className="flex items-center justify-between">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">
-            Profile Links
-          </h4>
-          <Button
-            variant="outline"
-            size="xs"
+      <div className="border-t border-black/10 pt-2">
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className={fieldLabel}>Connections</span>
+          <button
+            type="button"
             onClick={handleAddProfileLink}
-            className="rounded-none border-black/15"
+            className="font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
           >
-            <Plus className="mr-1 h-3 w-3" /> Add Link
-          </Button>
+            + Add link
+          </button>
         </div>
         {profileLinks.length === 0 ? (
-          <p className="text-[11px] text-gray-500">No profile links added yet.</p>
+          <p className="font-mono text-[10px] text-black/35">No extra links.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {profileLinks.map((item, index) => (
               <div
                 key={index}
-                className="space-y-2 border border-dashed border-black/15 bg-gray-50/50 p-2"
+                className="field-row flex min-h-[28px] items-center gap-1.5 border-b border-black/5 py-1 last:border-0"
               >
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <Input
-                    value={item.label || ''}
-                    onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
-                    placeholder="Portfolio"
-                    className="rounded-none border-black/15 bg-white"
-                  />
-                  <Input
-                    value={item.url || ''}
-                    onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
-                    placeholder="https://example.com"
-                    className="rounded-none border-black/15 bg-white"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('common.delete')}
-                    onClick={() => handleRemoveProfileLink(index)}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Input
+                  value={item.label || ''}
+                  onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
+                  placeholder="Label"
+                  className={`${inputClass} w-24 shrink-0 sm:w-28`}
+                />
+                <Input
+                  value={item.url || ''}
+                  onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
+                  placeholder="https://…"
+                  className={`${inputClass} min-w-0 flex-1`}
+                />
                 <Input
                   value={item.fontawesome_icon || item.fontAwesomeIcon || ''}
                   onChange={(e) =>
                     handleProfileLinkChange(index, 'fontawesome_icon', e.target.value)
                   }
-                  placeholder="linkedin-in or fa-brands fa-linkedin-in"
-                  className="rounded-none border-black/15 bg-white"
+                  placeholder="Icon (opt.)"
+                  title="Font Awesome icon id"
+                  className={`${inputClass} hidden w-28 shrink-0 sm:block`}
                 />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('common.delete')}
+                  onClick={() => handleRemoveProfileLink(index)}
+                  className="h-7 w-7 shrink-0 border border-black/20 text-red-600 hover:border-red-600 hover:bg-transparent"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ))}
           </div>

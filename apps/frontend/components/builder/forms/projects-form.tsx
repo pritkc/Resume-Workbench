@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,6 +19,12 @@ interface ProjectsFormProps {
   data: Project[];
   onChange: (data: Project[]) => void;
 }
+
+const fldLabel = 'block font-mono text-[10px] uppercase tracking-wider text-black/50';
+const inp =
+  'h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0';
+const addTextBtn =
+  'font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black';
 
 export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
@@ -118,131 +123,117 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          size="xs"
-          onClick={handleAdd}
-          className="rounded-none border-black/15 px-2.5 transition-colors hover:border-gray-900 hover:bg-gray-900 hover:text-white"
-        >
-          <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('builder.forms.projects.addProject')}
-        </Button>
-      </div>
-
-      <div className="space-y-3">
+    <div className="space-y-2">
+      <div className="space-y-2">
+        {data.length > 0 ? (
+          <p className="font-mono text-[9px] leading-snug text-black/40">
+            Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows)
+          </p>
+        ) : null}
         {data.map((item) => {
           const highlights = getProjectHighlights(item);
 
           return (
             <div
               key={item.id}
-              className="group relative border border-black/15 bg-white px-2.5 py-2"
+              className="group entry-card-editor relative border border-black/20 bg-white"
             >
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t('common.delete')}
-                className="absolute right-2 top-2 text-destructive opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                className="absolute right-1 top-1 h-7 w-7 border border-red-600/25 text-red-600 opacity-70 hover:bg-red-600/[0.06] group-hover:opacity-100"
                 onClick={() => handleRemove(item.id)}
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
 
-              <div className="mb-2.5 grid grid-cols-1 gap-2.5 pr-7 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-medium text-gray-700">
-                    {t('builder.forms.projects.fields.projectName')}
-                  </Label>
+              <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
+                <div>
+                  <span className={fldLabel}>{t('builder.forms.projects.fields.projectName')}</span>
                   <Input
                     value={item.name || ''}
                     onChange={(e) => handleFieldChange(item.id, 'name', e.target.value)}
                     placeholder={t('builder.forms.projects.placeholders.projectName')}
-                    className="rounded-none border-black/15 bg-white"
+                    className={`mt-0.5 ${inp}`}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-medium text-gray-700">
-                    {t('builder.genericItemForm.fields.date')}{' '}
-                    <span className="text-gray-400">({t('common.optional')})</span>
-                  </Label>
+                <div>
+                  <span className={fldLabel}>{t('builder.genericItemForm.fields.date')}</span>
                   <Input
                     value={getProjectDate(item)}
                     onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
                     placeholder={t('builder.forms.projects.placeholders.date')}
-                    className="rounded-none border-black/15 bg-white"
+                    className={`mt-0.5 ${inp}`}
                   />
                 </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-[11px] font-medium text-gray-700">
+                <div className="md:col-span-2">
+                  <span className={fldLabel}>
                     {t('builder.genericItemForm.fields.summaryOptional')}
-                  </Label>
+                  </span>
                   <Textarea
                     value={getProjectSummary(item)}
                     onChange={(e) => handleFieldChange(item.id, 'summary', e.target.value)}
                     placeholder={t('builder.forms.projects.placeholders.summary')}
-                    className="min-h-[56px] rounded-none border-black/15 bg-white text-[13px] text-gray-900"
+                    className="mt-0.5 min-h-[72px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-medium text-gray-700">
-                    <Github className="mr-1 inline h-3 w-3" />
-                    Repo Link <span className="text-gray-400">({t('common.optional')})</span>
-                  </Label>
+                <div>
+                  <span className={fldLabel}>
+                    <Github className="mr-1 inline h-3 w-3 align-text-bottom" />
+                    Repo
+                  </span>
                   <Input
                     value={item.github || ''}
                     onChange={(e) => handleFieldChange(item.id, 'github', e.target.value)}
                     placeholder="github.com/org/repo"
-                    className="rounded-none border-black/15 bg-white"
+                    className={`mt-0.5 ${inp}`}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-medium text-gray-700">
-                    <Globe className="mr-1 inline h-3 w-3" />
-                    Live Link <span className="text-gray-400">({t('common.optional')})</span>
-                  </Label>
+                <div>
+                  <span className={fldLabel}>
+                    <Globe className="mr-1 inline h-3 w-3 align-text-bottom" />
+                    Link
+                  </span>
                   <Input
                     value={item.website || ''}
                     onChange={(e) => handleFieldChange(item.id, 'website', e.target.value)}
                     placeholder="your-project.com"
-                    className="rounded-none border-black/15 bg-white"
+                    className={`mt-0.5 ${inp}`}
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-[11px] font-medium text-gray-700">
-                    {t('builder.genericItemForm.fields.highlights')}
-                  </Label>
-                  <Button
-                    variant="ghost"
-                    size="xs"
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className={fldLabel}>{t('builder.genericItemForm.fields.highlights')}</span>
+                  <button
+                    type="button"
                     onClick={() => handleAddHighlight(item.id)}
-                    className="px-2 text-[11px] text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                    className="shrink-0 font-mono text-[11px] text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
                   >
-                    <Plus className="mr-1 h-3 w-3" />{' '}
+                    <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
                     {t('builder.genericItemForm.actions.addPoint')}
-                  </Button>
+                  </button>
                 </div>
                 {highlights.map((highlight, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <div className="flex-1">
-                      <RichTextEditor
-                        value={highlight}
-                        onChange={(html) => handleHighlightChange(item.id, idx, html)}
-                        placeholder={t('builder.forms.projects.placeholders.highlight')}
-                        minHeight="48px"
-                      />
-                    </div>
+                  <div key={idx} className="group/hl relative mb-1.5 last:mb-0">
+                    <RichTextEditor
+                      value={highlight}
+                      onChange={(html) => handleHighlightChange(item.id, idx, html)}
+                      placeholder={t('builder.forms.projects.placeholders.highlight')}
+                      minHeight="36px"
+                      toolbarMode="none"
+                      className="[&_.ProseMirror]:pr-8"
+                    />
                     <Button
                       variant="ghost"
                       size="icon-sm"
                       aria-label={t('common.delete')}
                       onClick={() => handleRemoveHighlight(item.id, idx)}
-                      className="self-end text-muted-foreground hover:text-destructive"
+                      className="absolute right-1 top-1 z-10 h-7 w-7 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ))}
@@ -252,18 +243,14 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
         })}
 
         {data.length === 0 && (
-          <div className="border border-dashed border-black/20 bg-gray-50/80 px-3 py-3 text-center">
-            <p className="mb-2 text-[11px] text-gray-600">
+          <div className="border border-dashed border-black/25 bg-white px-2 py-3 text-center">
+            <p className="mb-1.5 font-mono text-[11px] text-black/45">
               {t('builder.genericItemForm.noEntries', { label: t('resume.sections.projects') })}
             </p>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={handleAdd}
-              className="rounded-none border-black/15"
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('builder.forms.projects.addFirstProject')}
-            </Button>
+            <button type="button" onClick={handleAdd} className={addTextBtn}>
+              <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
+              {t('builder.forms.projects.addFirstProject')}
+            </button>
           </div>
         )}
       </div>

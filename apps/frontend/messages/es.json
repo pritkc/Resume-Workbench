@@ -120,7 +120,9 @@
       "company": "Company",
       "location": "Location",
       "boldKeywords": "Bold keywords",
-      "boldKeywordsHelp": "One keyword per line. Empty means no automatic bolding.",
+      "boldKeywordsHelp": "Frases a resaltar en el CV (mín. 2 caracteres). Se guardan en metadatos y en negritas del PDF.",
+      "boldKeywordPlaceholder": "Añadir palabra clave…",
+      "addKeyword": "Añadir",
       "copyLlm": "Copy for LLM",
       "applyClipboard": "Apply clipboard",
       "copiedLlm": "Copied metadata + CV for external LLM.",
@@ -148,7 +150,7 @@
       "wordsChars": "{wordCount} palabras / {charCount} caracteres"
     },
     "additionalForm": {
-      "instructions": "Introduce elementos separados por saltos de línea (pulsa Enter para cada elemento).",
+      "instructions": "Un grupo por tarjeta: edita la etiqueta, añade etiquetas (Enter) y quita con ×.",
       "groupLabel": "Etiqueta",
       "groupLabelPlaceholder": "p. ej., Backend, ML, Infraestructura",
       "groupValues": "Valores",
@@ -205,17 +207,31 @@
     },
     "previewTabs": {
       "resume": "CURRÍCULUM",
-      "letters": "CARTA Y MENSAJE",
+      "utilities": "UTILIDADES",
+      "utilitiesShort": "UTIL",
       "coverLetter": "CARTA",
       "outreach": "MENSAJE",
       "jdMatch": "COINCIDENCIA JD",
-      "additionalQuestions": "PREGUNTAS ADICIONALES"
+      "additionalQuestions": "PREGUNTAS ADICIONALES",
+      "additionalQuestionsShort": "+QUESTIONS"
+    },
+    "utilities": {
+      "subTabLetters": "Carta y mensaje",
+      "subTabQuestions": "Preguntas de solicitud"
+    },
+    "tabPrerequisite": {
+      "jdMatchBody": "JD Match is available after you run a Tailor session with a job description.",
+      "jdMatchCta": "Go to tailor",
+      "additionalBody": "Open a tailored resume with job context, or finish tailoring from the Tailor page, to use additional questions.",
+      "additionalCta": "Go to tailor"
     },
     "additionalQuestions": {
       "disabledReason": "Se requiere contexto del puesto. Abre un currículum adaptado (o termina de adaptarlo en la página Tailor) para activar esta pestaña."
     },
     "lettersWorkspace": {
-      "hint": "Pega tu propio texto en cualquier momento o genera para rellenar ambos desde el currículum y el contexto del puesto."
+      "hint": "Pega tu propio texto en cualquier momento o genera para rellenar ambos desde el currículum y el contexto del puesto.",
+      "tailorHint": "Adapta este CV con la descripción del puesto para generar aquí la carta y el mensaje.",
+      "goToTailor": "Ir a adaptar"
     },
     "lettersPreview": {
       "coverLetterEmpty": "Aún no hay carta — pega texto o usa Generar arriba.",
@@ -340,7 +356,7 @@
         "location": "Ubicación",
         "years": "Fechas",
         "date": "Fecha",
-        "summaryOptional": "Resumen (opcional)",
+        "summaryOptional": "Resumen",
         "highlights": "Puntos destacados",
         "descriptionPoints": "Puntos de descripción"
       },
@@ -926,8 +942,8 @@
     "regenerate": "Regenerar",
     "copyToClipboard": "Copiar al Portapapeles",
     "editor": {
-      "placeholder": "Tu carta de presentación aparecerá aquí después de adaptar tu currículum con la generación de carta activada...",
-      "tip": "CONSEJO: Mantén la carta entre 95 y 165 palabras para aplicaciones concisas. Edita para personalizar."
+      "placeholder": "Pega o genera tras adaptar…",
+      "tip": "Unas 95–165 palabras; edita para personalizar."
     },
     "preview": {
       "defaultName": "Tu nombre",
@@ -947,8 +963,8 @@
     "copyToClipboard": "Copiar al Portapapeles",
     "copied": "¡Copiado!",
     "editor": {
-      "placeholder": "Tu mensaje de contacto en frío aparecerá aquí después de adaptar tu currículum con la generación de mensajes activada...",
-      "tip": "CONSEJO: Mantén el mensaje breve (50-95 palabras). Copia y pega en LinkedIn o email."
+      "placeholder": "Pega o genera tras adaptar…",
+      "tip": "Breve (50–95 palabras); copia a LinkedIn o email."
     },
     "preview": {
       "channels": {

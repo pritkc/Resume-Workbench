@@ -42,10 +42,10 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ value, onCha
         <button
           key={template.id}
           onClick={() => onChange(template.id)}
-          className={`group flex flex-col items-center p-3 border-2 transition-all ${
+          className={`group flex flex-col items-center border-2 p-2 transition-all ${
             value === template.id
-              ? 'border-blue-700 bg-white shadow-[3px_3px_0px_0px_#1D4ED8]'
-              : 'border-black bg-white hover:bg-[#F0F0E8] hover:shadow-[2px_2px_0px_0px_#000]'
+              ? 'border-black bg-white shadow-[3px_3px_0px_0px_#000]'
+              : 'border-black/25 bg-white hover:border-black hover:bg-[#F0F0E8] hover:shadow-[2px_2px_0px_0px_#000]'
           }`}
           title={templateLabels[template.id].description}
         >
@@ -56,8 +56,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ value, onCha
 
           {/* Template Name */}
           <span
-            className={`font-mono text-[10px] uppercase tracking-wider font-bold ${
-              value === template.id ? 'text-blue-700' : 'text-gray-700'
+            className={`font-mono text-[10px] font-bold uppercase tracking-wider ${
+              value === template.id ? 'text-black' : 'text-black/50'
             }`}
           >
             {templateLabels[template.id].name}
@@ -80,9 +80,9 @@ interface TemplateThumbnailProps {
 }
 
 export const TemplateThumbnail: React.FC<TemplateThumbnailProps> = ({ type, isActive }) => {
-  const lineColor = isActive ? 'bg-blue-700' : 'bg-gray-400';
-  const borderColor = isActive ? 'border-blue-700' : 'border-gray-400';
-  const accentColor = isActive ? 'bg-blue-600' : 'bg-blue-400';
+  const lineColor = isActive ? 'bg-black' : 'bg-black/35';
+  const borderColor = isActive ? 'border-black' : 'border-black/30';
+  const accentColor = isActive ? 'bg-black' : 'bg-black/25';
 
   if (type === 'swiss-single') {
     // Single column thumbnail

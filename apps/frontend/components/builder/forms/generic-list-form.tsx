@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/lib/i18n';
 
@@ -46,14 +45,14 @@ export const GenericListForm: React.FC<GenericListFormProps> = ({
   };
 
   return (
-    <div className="space-y-2">
-      <Label className="text-[11px] font-medium text-gray-700">{finalLabel}</Label>
+    <div>
+      <div className="panel-section-header">{finalLabel}</div>
       <Textarea
         value={formatItems(items)}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={finalPlaceholder}
-        className="min-h-[100px] rounded-none border-black/15 bg-white text-[13px] text-gray-900 focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+        className="min-h-[80px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm focus-visible:border-black focus-visible:ring-0"
       />
     </div>
   );

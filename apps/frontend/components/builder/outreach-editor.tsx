@@ -17,6 +17,8 @@ export interface OutreachEditorProps {
   isSaving: boolean;
   /** Additional class names */
   className?: string;
+  /** Icon-only actions with tooltips. */
+  actionStyle?: 'default' | 'icon';
 }
 
 export function OutreachEditor({
@@ -25,6 +27,7 @@ export function OutreachEditor({
   onSave,
   isSaving,
   className,
+  actionStyle = 'default',
 }: OutreachEditorProps) {
   const { t } = useTranslations();
   const [isCopied, setIsCopied] = React.useState(false);
@@ -45,57 +48,94 @@ export function OutreachEditor({
     }
   };
 
+  const iconActions = actionStyle === 'icon';
+
   return (
     <div className={cn('flex h-full flex-col', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white px-2.5 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white px-2 py-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <Mail className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
-          <h2 className="truncate text-[13px] font-semibold text-gray-900">
+          <Mail className="h-3.5 w-3.5 shrink-0 text-black/40" aria-hidden />
+          <h2 className="truncate font-mono text-[11px] font-semibold uppercase tracking-widest text-black">
             {t('outreach.title')}
           </h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-gray-500">
-            {t('builder.contentStats.wordsChars', { wordCount, charCount })}
-          </span>
-          <Button size="xs" variant="outline" onClick={onSave} disabled={isSaving}>
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {isSaving ? t('common.saving') : t('common.save')}
-          </Button>
-          <Button size="xs" onClick={handleCopy} disabled={!content}>
-            {isCopied ? (
-              <>
-                <Check className="w-4 h-4" />
-                {t('outreach.copied')}
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                {t('outreach.copy')}
-              </>
-            )}
-          </Button>
+        <div className="flex flex-wrap items-center gap-1">
+          {iconActions ? (
+            <>
+              <Button
+                size="icon-sm"
+                variant="builderOutline"
+                onClick={onSave}
+                disabled={isSaving}
+                aria-label={isSaving ? t('common.saving') : t('common.save')}
+                title={isSaving ? t('common.saving') : t('common.save')}
+                className="h-8 w-8 shrink-0 rounded-none"
+              >
+                {isSaving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="builderOutline"
+                onClick={handleCopy}
+                disabled={!content}
+                aria-label={isCopied ? t('outreach.copied') : t('outreach.copy')}
+                title={isCopied ? t('outreach.copied') : t('outreach.copy')}
+                className="h-8 w-8 shrink-0 rounded-none"
+              >
+                {isCopied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="xs" variant="builderOutline" onClick={onSave} disabled={isSaving}>
+                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                {isSaving ? t('common.saving') : t('common.save')}
+              </Button>
+              <Button size="xs" variant="builderOutline" onClick={handleCopy} disabled={!content}>
+                {isCopied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    {t('outreach.copied')}
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    {t('outreach.copy')}
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden p-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
         <textarea
           value={content}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t('outreach.editor.placeholder')}
           className={cn(
-            'h-full min-h-[200px] w-full p-2.5',
+            'min-h-[100px] w-full flex-1 p-2',
             'font-mono text-[13px] leading-relaxed',
-            'border border-black/15 bg-white',
-            'resize-none',
-            'focus:outline-none focus:ring-1 focus:ring-blue-700',
-            'placeholder:text-gray-400'
+            'border border-black/20 bg-white',
+            'resize-y',
+            'focus:border-black focus:outline-none focus:ring-0',
+            'placeholder:text-black/30'
           )}
-          aria-describedby="outreach-tip"
         />
-        <p id="outreach-tip" className="mt-1.5 text-[10px] leading-snug text-gray-500">
-          {t('outreach.editor.tip')}
-        </p>
+        <div className="mt-1 flex shrink-0 justify-end pt-1">
+          <span className="font-mono text-[10px] uppercase tracking-wide text-black/45">
+            {t('builder.contentStats.wordsChars', { wordCount, charCount })}
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -120,7 +120,9 @@
       "company": "Company",
       "location": "Location",
       "boldKeywords": "Bold keywords",
-      "boldKeywordsHelp": "One keyword per line. Empty means no automatic bolding.",
+      "boldKeywordsHelp": "Frases para destacar no currículo (mín. 2 caracteres). Salvas nos metadados e na lista de negrito do PDF.",
+      "boldKeywordPlaceholder": "Adicionar palavra-chave…",
+      "addKeyword": "Adicionar",
       "copyLlm": "Copy for LLM",
       "applyClipboard": "Apply clipboard",
       "copiedLlm": "Copied metadata + CV for external LLM.",
@@ -148,7 +150,7 @@
       "wordsChars": "{wordCount} palavras / {charCount} caracteres"
     },
     "additionalForm": {
-      "instructions": "Insira os itens separados por novas linhas (pressione Enter para cada item).",
+      "instructions": "Um grupo por cartão: edite o rótulo, adicione tags (Enter) e remova com ×.",
       "groupLabel": "Rótulo",
       "groupLabelPlaceholder": "ex.: Backend, ML, Infraestrutura",
       "groupValues": "Valores",
@@ -205,17 +207,31 @@
     },
     "previewTabs": {
       "resume": "CURRÍCULO",
-      "letters": "CARTA E MENSAGEM",
+      "utilities": "UTILITÁRIOS",
+      "utilitiesShort": "UTIL",
       "coverLetter": "CARTA DE APRESENTAÇÃO",
       "outreach": "MENSAGEM DE CONTATO",
       "jdMatch": "ANÁLISE DE VAGA",
-      "additionalQuestions": "PERGUNTAS EXTRAS"
+      "additionalQuestions": "PERGUNTAS EXTRAS",
+      "additionalQuestionsShort": "+QUESTIONS"
+    },
+    "utilities": {
+      "subTabLetters": "Carta e mensagem",
+      "subTabQuestions": "Perguntas da candidatura"
+    },
+    "tabPrerequisite": {
+      "jdMatchBody": "JD Match is available after you run a Tailor session with a job description.",
+      "jdMatchCta": "Go to tailor",
+      "additionalBody": "Open a tailored resume with job context, or finish tailoring from the Tailor page, to use additional questions.",
+      "additionalCta": "Go to tailor"
     },
     "additionalQuestions": {
       "disabledReason": "É necessário o contexto da vaga. Abra um currículo personalizado (ou conclua a personalização na página Tailor) para ativar esta aba."
     },
     "lettersWorkspace": {
-      "hint": "Cole seu texto a qualquer momento ou gere para preencher ambos com o currículo e o contexto da vaga."
+      "hint": "Cole seu texto a qualquer momento ou gere para preencher ambos com o currículo e o contexto da vaga.",
+      "tailorHint": "Personalize este currículo com a descrição da vaga para gerar carta e mensagem aqui.",
+      "goToTailor": "Ir ao Tailor"
     },
     "lettersPreview": {
       "coverLetterEmpty": "Ainda sem carta — cole texto ou use Gerar acima.",
@@ -340,7 +356,7 @@
         "location": "Localização",
         "years": "Período",
         "date": "Data",
-        "summaryOptional": "Resumo (Opcional)",
+        "summaryOptional": "Resumo",
         "highlights": "Destaques",
         "descriptionPoints": "Pontos de Descrição"
       },
@@ -927,8 +943,8 @@
     "copyToClipboard": "Copiar para Área de Transferência",
     "copied": "Copiado!",
     "editor": {
-      "placeholder": "Sua carta de apresentação aparecerá aqui após personalizar seu currículo com a geração de carta habilitada...",
-      "tip": "DICA: Mantenha a carta entre 95 e 165 palavras para candidaturas concisas. Edite conforme necessário para personalizar."
+      "placeholder": "Cole ou gere após personalizar…",
+      "tip": "Cerca de 95–165 palavras; edite para personalizar."
     },
     "preview": {
       "defaultName": "Seu Nome",
@@ -947,8 +963,8 @@
     "copyToClipboard": "Copiar para Área de Transferência",
     "copied": "Copiado!",
     "editor": {
-      "placeholder": "Sua mensagem de contato frio aparecerá aqui após personalizar seu currículo com a geração de mensagem habilitada...",
-      "tip": "DICA: Mantenha mensagens de contato breves (50-95 palavras). Copie e cole no LinkedIn ou email."
+      "placeholder": "Cole ou gere após personalizar…",
+      "tip": "Breve (50–95 palavras); copie para LinkedIn ou e-mail."
     },
     "preview": {
       "channels": {

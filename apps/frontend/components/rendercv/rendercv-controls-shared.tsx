@@ -19,9 +19,11 @@ export function textToArray(value: string): string[] {
 
 export function RenderCvSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border border-black/15 bg-white">
-      <div className="border-b border-black/10 bg-gray-50/80 px-2.5 py-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">{title}</p>
+    <section className="border border-black/20 bg-white">
+      <div className="border-b border-black/10 px-2 py-1">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black/50">
+          {title}
+        </p>
       </div>
       <div>{children}</div>
     </section>
@@ -38,24 +40,22 @@ export function RenderCvQuickNav({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="sticky top-0 z-10 border border-black/15 bg-white p-1">
-      <div className="flex flex-wrap gap-1">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onChange(item.id)}
-            className={cn(
-              'border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors',
-              item.id === activeId
-                ? 'border-gray-900 bg-gray-900 text-white'
-                : 'border-transparent bg-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900'
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+    <div className="sticky top-0 z-10 flex flex-wrap gap-0 border-b border-black/20 bg-white">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          onClick={() => onChange(item.id)}
+          className={cn(
+            '-mb-px inline-flex h-7 items-center border-b-2 border-transparent px-3 font-mono text-[11px] uppercase tracking-widest transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black',
+            item.id === activeId
+              ? 'border-black font-bold text-black'
+              : 'text-black/50 hover:text-black'
+          )}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -75,28 +75,33 @@ export function RenderCvRow({
 }) {
   const isCompact = density === 'compact';
 
+  const labelTitle = description && isCompact ? description : undefined;
+
   return (
     <div
       className={cn(
-        'grid border-b border-gray-200 last:border-b-0',
+        'grid border-b border-black/10 last:border-b-0',
         isCompact
-          ? 'gap-2 px-2.5 py-2 md:grid-cols-[150px_minmax(0,1fr)] md:items-start'
-          : 'gap-2.5 px-3 py-2.5 md:grid-cols-[170px_minmax(0,1fr)] md:items-center'
+          ? 'gap-2 px-2 py-1.5 md:grid-cols-[minmax(0,140px)_minmax(0,1fr)] md:items-center'
+          : 'gap-2 px-2.5 py-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center'
       )}
     >
-      <div>
-        <p className={cn('font-medium text-gray-700', isCompact ? 'text-[13px]' : 'text-sm')}>
+      <div title={labelTitle}>
+        <p
+          className={cn(
+            'font-mono uppercase tracking-wide text-black',
+            isCompact ? 'text-[11px]' : 'text-sm font-medium'
+          )}
+        >
           {label}
         </p>
-        {description ? (
-          <p className={cn('text-gray-500', isCompact ? 'mt-0.5 text-[11px]' : 'mt-1 text-xs')}>
-            {description}
-          </p>
+        {description && !isCompact ? (
+          <p className="mt-1 font-sans text-xs text-black/40">{description}</p>
         ) : null}
       </div>
       <div className={cn(isCompact ? 'space-y-1' : 'space-y-1.5')}>
         {children}
-        {fieldHint ? <p className="text-xs text-gray-500">{fieldHint}</p> : null}
+        {fieldHint ? <p className="font-sans text-xs text-black/40">{fieldHint}</p> : null}
       </div>
     </div>
   );
@@ -119,7 +124,7 @@ export function RenderCvInput({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="h-8 border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
+      className="h-7 rounded-none border border-black/30 bg-white px-2 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
     />
   );
 }
@@ -141,7 +146,7 @@ export function RenderCvTextarea({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="min-h-[64px] border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
+      className="min-h-[56px] rounded-none border border-black/30 bg-white px-2 py-1.5 font-sans text-sm focus-visible:border-black focus-visible:ring-0"
     />
   );
 }
@@ -157,31 +162,34 @@ export function RenderCvAutocompleteInput({
   options: readonly string[];
   placeholder?: string;
 }) {
+  const current = value ?? '';
+  const isPreset = current !== '' && options.includes(current);
+
   return (
-    <div className="space-y-2">
-      <Input
-        value={value ?? ''}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-8 border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
-      />
-      <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="flex flex-row items-center gap-1.5">
+      {!isPreset ? (
+        <Input
+          value={current}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="h-7 min-w-0 flex-1 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
+        />
+      ) : null}
+      <select
+        value={options.includes(current) ? current : ''}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          'h-7 min-w-0 rounded-none border border-black/30 bg-white px-2 font-mono text-[11px]',
+          isPreset ? 'w-full' : 'w-full min-w-[9rem] shrink-0 sm:w-auto'
+        )}
+      >
+        <option value="">—</option>
         {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            className={cn(
-              'border px-2 py-1.5 text-left text-[11px] transition',
-              value === option
-                ? 'border-violet-300 bg-violet-100 text-violet-900'
-                : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:text-black'
-            )}
-          >
+          <option key={option} value={option}>
             {option}
-          </button>
+          </option>
         ))}
-      </div>
+      </select>
     </div>
   );
 }
@@ -230,31 +238,26 @@ export function RenderCvColorInput({
   const pickerValue = rgbToHex(value) ?? '#000000';
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <label className="relative inline-flex h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-full border border-black bg-white">
-          <span
-            className="absolute inset-[3px] rounded-full"
-            style={{ backgroundColor: pickerValue }}
-          />
-          <input
-            type="color"
-            aria-label="Pick color"
-            value={pickerValue}
-            onChange={(event) => onChange(event.target.value)}
-            className="absolute inset-0 cursor-pointer opacity-0"
-          />
-        </label>
-        <Input
-          value={value ?? ''}
+    <div
+      className="flex flex-wrap items-center gap-2"
+      title="Supports hex, rgb(...), hsl(...), and named colors."
+    >
+      <label className="relative inline-flex h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-none border border-black/30 bg-white">
+        <span className="absolute inset-px" style={{ backgroundColor: pickerValue }} />
+        <input
+          type="color"
+          aria-label="Pick color"
+          value={pickerValue}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          className="h-8 min-w-[220px] flex-1 border-black/15 font-mono text-[13px] focus-visible:border-blue-700"
+          className="absolute inset-0 cursor-pointer opacity-0"
         />
-      </div>
-      <p className="text-[11px] text-gray-500">
-        Supports hex, rgb(...), hsl(...), and named colors.
-      </p>
+      </label>
+      <Input
+        value={value ?? ''}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-7 min-w-0 flex-1 rounded-none border border-black/30 font-mono text-xs focus-visible:border-black focus-visible:ring-0"
+      />
     </div>
   );
 }
@@ -328,7 +331,7 @@ export function RenderCvDimensionInput({
   const activeUnit = parsedValue.unit ?? draftUnit;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       <Input
         value={parsedValue.amount}
         onChange={(event) => {
@@ -336,30 +339,25 @@ export function RenderCvDimensionInput({
         }}
         placeholder={parsedPlaceholder.amount || placeholder}
         inputMode="decimal"
-        className="h-8 w-24 font-mono text-sm"
+        className="h-7 w-20 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
       />
-      <div className="flex flex-wrap gap-1">
+      <select
+        value={activeUnit}
+        onChange={(e) => {
+          const unit = e.target.value as RenderDimensionUnit;
+          setDraftUnit(unit);
+          if (parsedValue.amount) {
+            onChange(formatDimensionValue(parsedValue.amount, unit));
+          }
+        }}
+        className="unit-selector-select h-7 min-w-[3.5rem] rounded-none border border-black/30 bg-white px-1 font-mono text-[9px] uppercase focus:border-black"
+      >
         {RENDER_DIMENSION_UNITS.map((unit) => (
-          <button
-            key={unit}
-            type="button"
-            onClick={() => {
-              setDraftUnit(unit);
-              if (parsedValue.amount) {
-                onChange(formatDimensionValue(parsedValue.amount, unit));
-              }
-            }}
-            className={cn(
-              'border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition',
-              activeUnit === unit
-                ? 'border-violet-300 bg-violet-100 text-violet-900'
-                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-black'
-            )}
-          >
+          <option key={unit} value={unit}>
             {unit}
-          </button>
+          </option>
         ))}
-      </div>
+      </select>
     </div>
   );
 }
@@ -382,10 +380,10 @@ export function RenderCvBulletPicker({
           aria-pressed={value === option}
           onClick={() => onChange(option)}
           className={cn(
-            'flex h-7 w-7 items-center justify-center border text-sm transition',
+            'flex h-7 w-7 items-center justify-center border border-black/20 text-sm transition',
             value === option
-              ? 'border-violet-300 bg-violet-100 text-violet-900'
-              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:text-black'
+              ? 'border-black bg-black text-white'
+              : 'border-black/20 bg-white text-black/70 hover:border-black hover:text-black'
           )}
         >
           {option}
@@ -408,7 +406,7 @@ export function RenderCvSelect<T extends string>({
     <select
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
-      className="h-8 w-full border border-black/15 bg-white px-2.5 py-1.5 font-mono text-[13px]"
+      className="h-7 w-full rounded-none border border-black/30 bg-white px-2 font-mono text-sm focus:border-black"
     >
       {options.map((option) => (
         <option key={option.id} value={option.id}>
@@ -427,11 +425,12 @@ export function RenderCvToggle({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="inline-flex cursor-pointer items-center gap-2.5">
+    <label className="inline-flex cursor-pointer items-center gap-2">
       <span
-        className={`relative inline-flex h-5 w-10 items-center rounded-full border border-black transition ${
-          checked ? 'bg-blue-700' : 'bg-[#E5E5E0]'
-        }`}
+        className={cn(
+          'relative inline-flex h-4 w-8 shrink-0 items-center rounded-full border border-black transition-colors',
+          checked ? 'bg-black' : 'bg-black/20'
+        )}
       >
         <input
           type="checkbox"
@@ -440,12 +439,13 @@ export function RenderCvToggle({
           className="sr-only"
         />
         <span
-          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition ${
-            checked ? 'translate-x-5' : 'translate-x-1'
-          }`}
+          className={cn(
+            'inline-block h-3 w-3 transform rounded-full bg-white transition-transform',
+            checked ? 'translate-x-4' : 'translate-x-0.5'
+          )}
         />
       </span>
-      <span className="font-mono text-[10px] uppercase tracking-wider text-gray-500">
+      <span className="font-mono text-[10px] uppercase tracking-wider text-black/50">
         {checked ? 'On' : 'Off'}
       </span>
     </label>

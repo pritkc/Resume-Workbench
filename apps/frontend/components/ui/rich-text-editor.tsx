@@ -20,6 +20,8 @@ interface RichTextEditorProps {
   className?: string;
   /** Minimum height of the editor */
   minHeight?: string;
+  /** `full` toolbar, `hint` line, or `none` (editor only — use a section-level hint when needed). */
+  toolbarMode?: 'full' | 'hint' | 'none';
 }
 
 /**
@@ -36,6 +38,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   placeholder = 'Enter text...',
   className,
   minHeight = '60px',
+  toolbarMode = 'full',
 }) => {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -83,7 +86,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           'outline-none prose prose-sm max-w-none',
           'prose-strong:font-bold prose-em:italic prose-a:text-blue-700 prose-a:underline'
         ),
-        style: `min-height: calc(${minHeight} - 24px)`,
+        style:
+          toolbarMode === 'none'
+            ? `min-height: ${minHeight}`
+            : `min-height: calc(${minHeight} - 24px)`,
       },
       handleKeyDown: (view, event) => {
         // Allow Enter key to work (stopPropagation per coding standards)
@@ -138,7 +144,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   if (!isMounted) {
     return (
       <div className={cn('space-y-1', className)}>
-        <div className="flex items-center gap-1 p-1 border border-black bg-[#E5E5E0] h-9" />
+        {toolbarMode === 'full' ? (
+          <div className="flex h-9 items-center gap-1 border border-black bg-[#E5E5E0] p-1" />
+        ) : toolbarMode === 'hint' ? (
+          <p className="font-mono text-[9px] leading-tight text-black/40">
+            Bold / italic / underline: ⌘B · ⌘I · ⌘U · Link: ⌘K (Ctrl on Windows)
+          </p>
+        ) : null}
         <div
           className={cn(
             'w-full border border-black bg-white',
@@ -158,7 +170,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   return (
     <div className={cn('space-y-1', className)}>
-      <RichTextToolbar editor={editor} onLinkClick={handleLinkClick} />
+      {toolbarMode === 'full' ? (
+        <RichTextToolbar editor={editor} onLinkClick={handleLinkClick} />
+      ) : toolbarMode === 'hint' ? (
+        <p className="font-mono text-[9px] leading-tight text-black/40">
+          Bold / italic / underline: ⌘B · ⌘I · ⌘U · Link: ⌘K (Ctrl on Windows)
+        </p>
+      ) : null}
       <div
         className={cn(
           'w-full border border-black bg-white',

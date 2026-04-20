@@ -120,7 +120,9 @@
       "company": "Company",
       "location": "Location",
       "boldKeywords": "Bold keywords",
-      "boldKeywordsHelp": "One keyword per line. Empty means no automatic bolding.",
+      "boldKeywordsHelp": "Phrases to emphasize in the resume (min. 2 characters). Shown in metadata YAML and PDF bold-keyword list.",
+      "boldKeywordPlaceholder": "Add keyword…",
+      "addKeyword": "Add",
       "copyLlm": "Copy for LLM",
       "applyClipboard": "Apply clipboard",
       "applyClipboardEmpty": "No metadata or CV block found in clipboard.",
@@ -148,7 +150,7 @@
       "wordsChars": "{wordCount} words / {charCount} chars"
     },
     "additionalForm": {
-      "instructions": "Enter items separated by new lines (press Enter for each item).",
+      "instructions": "One skill group per card: edit the label, add tags (press Enter), remove with ×.",
       "groupLabel": "Label",
       "groupLabelPlaceholder": "e.g., Backend, ML, Infrastructure",
       "groupValues": "Values",
@@ -205,17 +207,31 @@
     },
     "previewTabs": {
       "resume": "RESUME",
-      "letters": "CL & OUTREACH",
+      "utilities": "UTILITIES",
+      "utilitiesShort": "UTIL",
       "coverLetter": "COVER LETTER",
       "outreach": "OUTREACH MAIL",
       "jdMatch": "JD MATCH",
-      "additionalQuestions": "ADDITIONAL QUESTIONS"
+      "additionalQuestions": "ADDITIONAL QUESTIONS",
+      "additionalQuestionsShort": "+QUESTIONS"
+    },
+    "utilities": {
+      "subTabLetters": "Cover letter & outreach",
+      "subTabQuestions": "Application questions"
+    },
+    "tabPrerequisite": {
+      "jdMatchBody": "JD Match is available after you run a Tailor session with a job description.",
+      "jdMatchCta": "Go to tailor",
+      "additionalBody": "Open a tailored resume with job context, or finish tailoring from the Tailor page, to use additional questions.",
+      "additionalCta": "Go to tailor"
     },
     "additionalQuestions": {
       "disabledReason": "Job context is required. Open a tailored resume (or finish tailoring from the Tailor page) to enable this tab."
     },
     "lettersWorkspace": {
-      "hint": "Paste your own copy anytime, or generate to fill both from your resume and job context."
+      "hint": "Paste your own copy anytime, or generate to fill both from your resume and job context.",
+      "tailorHint": "Tailor this resume with a job description to generate cover letter and outreach here.",
+      "goToTailor": "Go to tailor"
     },
     "lettersPreview": {
       "coverLetterEmpty": "No cover letter yet — paste text or use Generate above.",
@@ -340,7 +356,7 @@
         "location": "Location",
         "years": "Years",
         "date": "Date",
-        "summaryOptional": "Summary (Optional)",
+        "summaryOptional": "Summary",
         "highlights": "Highlights",
         "descriptionPoints": "Description Points"
       },
@@ -927,8 +943,8 @@
     "copyToClipboard": "Copy to Clipboard",
     "copied": "Copied!",
     "editor": {
-      "placeholder": "Your cover letter will appear here after tailoring your resume with cover letter generation enabled...",
-      "tip": "TIP: Keep this around 95-165 words for concise applications. Edit as needed to personalize."
+      "placeholder": "Paste or generate after tailoring…",
+      "tip": "Aim for ~95–165 words; edit to personalize."
     },
     "preview": {
       "defaultName": "Your Name",
@@ -947,8 +963,8 @@
     "copyToClipboard": "Copy to Clipboard",
     "copied": "Copied!",
     "editor": {
-      "placeholder": "Your cold outreach message will appear here after tailoring your resume with outreach message generation enabled...",
-      "tip": "TIP: Keep outreach messages brief (50-95 words). Copy and paste to LinkedIn or email."
+      "placeholder": "Paste or generate after tailoring…",
+      "tip": "Keep it brief (~50–95 words); copy to LinkedIn or email."
     },
     "preview": {
       "channels": {

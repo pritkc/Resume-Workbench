@@ -32,7 +32,11 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
     | 'outline'
     | 'secondary'
     | 'ghost'
-    | 'link';
+    | 'link'
+    /** Builder shell: single primary CTA (download) — black fill */
+    | 'builderCta'
+    /** Builder shell: save / secondary — monochrome outline */
+    | 'builderOutline';
   /**
    * Button size:
    * - `default`: Standard button (h-10)
@@ -55,8 +59,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'whitespace-nowrap text-sm font-medium font-mono uppercase tracking-wide',
       // Transitions
       'transition-all duration-150 ease-out',
-      // Focus state - sharp blue ring (not soft glow)
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+      variant === 'builderCta' || variant === 'builderOutline'
+        ? 'focus-visible:ring-black'
+        : 'focus-visible:ring-blue-700',
       // Disabled state
       'disabled:pointer-events-none disabled:opacity-50',
       // SVG icon sizing
@@ -149,6 +155,19 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         'border-none shadow-none',
         'underline-offset-4 hover:underline',
         'p-0 h-auto'
+      ),
+
+      builderCta: cn(
+        'border-2 border-black bg-black text-white',
+        'text-[11px] font-mono uppercase tracking-wider',
+        'shadow-[2px_2px_0_#000000]',
+        'hover:translate-x-px hover:translate-y-px hover:shadow-none'
+      ),
+
+      builderOutline: cn(
+        'border border-black bg-white text-black',
+        'text-[11px] font-mono uppercase tracking-wider',
+        'shadow-none hover:bg-black/[0.04]'
       ),
     };
 

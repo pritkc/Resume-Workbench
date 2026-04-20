@@ -72,74 +72,59 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   const variantStyles = {
     danger: {
-      icon: (
-        <div className="w-12 h-12 border-2 border-red-600 bg-red-50 flex items-center justify-center">
-          <span className="text-red-600 text-2xl font-bold">!</span>
-        </div>
-      ),
+      accent: 'border-l-4 border-l-red-600',
       buttonVariant: 'destructive' as const,
     },
     warning: {
-      icon: (
-        <div className="w-12 h-12 border-2 border-orange-500 bg-orange-50 flex items-center justify-center">
-          <span className="text-orange-500 text-2xl font-bold">!</span>
-        </div>
-      ),
+      accent: 'border-l-4 border-l-black/40',
       buttonVariant: 'warning' as const,
     },
     success: {
-      icon: (
-        <div className="w-12 h-12 border-2 border-green-700 bg-green-50 flex items-center justify-center">
-          <span className="text-green-700 text-2xl font-bold">&#10003;</span>
-        </div>
-      ),
+      accent: 'border-l-4 border-l-black/40',
       buttonVariant: 'success' as const,
     },
     default: {
-      icon: (
-        <div className="w-12 h-12 border-2 border-blue-700 bg-blue-50 flex items-center justify-center">
-          <span className="text-blue-700 text-2xl font-bold">?</span>
-        </div>
-      ),
+      accent: 'border-l-4 border-l-black/40',
       buttonVariant: 'default' as const,
     },
   };
 
-  const { icon, buttonVariant } = variantStyles[variant];
+  const { accent, buttonVariant } = variantStyles[variant];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] p-0 gap-0">
-        <DialogHeader className="p-6 pb-4">
-          <div className="flex items-start gap-4">
-            {icon}
-            <div className="flex-1">
-              <DialogTitle className="font-serif text-xl font-bold uppercase tracking-tight">
-                {title}
-              </DialogTitle>
-              <DialogDescription className="font-mono text-xs text-gray-600 mt-2">
-                {description}
-              </DialogDescription>
-            </div>
-          </div>
+      <DialogContent className="max-w-[320px] gap-0 border-2 border-black bg-[#F0F0E8] p-0 shadow-[4px_4px_0_#000] sm:max-w-[320px]">
+        <DialogHeader className={`p-4 pb-3 ${accent}`}>
+          <DialogTitle className="pr-8 font-mono text-sm font-semibold uppercase tracking-wide text-black">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="mt-1.5 font-sans text-xs leading-snug text-black/50">
+            {description}
+          </DialogDescription>
         </DialogHeader>
         {errorMessage && (
-          <div className="px-6 pb-4">
-            <div className="border-2 border-red-600 bg-red-50 p-3 font-mono text-xs text-red-700">
+          <div className="px-4 pb-3">
+            <div className="border border-red-600 bg-red-50/90 p-2 font-mono text-[11px] text-red-700">
               {errorMessage}
             </div>
           </div>
         )}
-        <DialogFooter className="p-4 bg-[#E5E5E0] border-t border-black flex-row justify-end gap-3">
+        <DialogFooter className="flex flex-row justify-end gap-2 border-t border-black/20 bg-white/80 p-3">
           {showCancelButton && (
-            <Button variant="outline" onClick={handleCancel} className="rounded-none border-black">
+            <Button
+              variant="builderOutline"
+              size="xs"
+              onClick={handleCancel}
+              className="shadow-none"
+            >
               {finalCancelLabel}
             </Button>
           )}
           <Button
             variant={buttonVariant}
+            size="xs"
             onClick={handleConfirm}
-            className="rounded-none"
+            className="shadow-none"
             disabled={confirmDisabled}
           >
             {finalConfirmLabel}

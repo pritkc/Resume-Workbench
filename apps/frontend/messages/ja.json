@@ -120,7 +120,9 @@
       "company": "Company",
       "location": "Location",
       "boldKeywords": "Bold keywords",
-      "boldKeywordsHelp": "One keyword per line. Empty means no automatic bolding.",
+      "boldKeywordsHelp": "履歴書で強調するフレーズ（2文字以上）。メタデータとPDFの太字設定に反映されます。",
+      "boldKeywordPlaceholder": "キーワードを追加…",
+      "addKeyword": "追加",
       "copyLlm": "Copy for LLM",
       "applyClipboard": "Apply clipboard",
       "copiedLlm": "Copied metadata + CV for external LLM.",
@@ -148,7 +150,7 @@
       "wordsChars": "{wordCount}語 / {charCount}文字"
     },
     "additionalForm": {
-      "instructions": "各項目を改行で区切って入力してください（1行につき1項目）。",
+      "instructions": "グループごとにカード：ラベルを編集し、タグは Enter で追加、× で削除。",
       "groupLabel": "ラベル",
       "groupLabelPlaceholder": "例: Backend、ML、Infrastructure",
       "groupValues": "値",
@@ -205,17 +207,31 @@
     },
     "previewTabs": {
       "resume": "履歴書",
-      "letters": "CL・連絡",
+      "utilities": "ユーティリティ",
+      "utilitiesShort": "UTIL",
       "coverLetter": "カバーレター",
       "outreach": "連絡メール",
       "jdMatch": "JD一致",
-      "additionalQuestions": "追加の質問"
+      "additionalQuestions": "追加の質問",
+      "additionalQuestionsShort": "+QUESTIONS"
+    },
+    "utilities": {
+      "subTabLetters": "カバーレターと連絡",
+      "subTabQuestions": "応募用の質問"
+    },
+    "tabPrerequisite": {
+      "jdMatchBody": "JD Match is available after you run a Tailor session with a job description.",
+      "jdMatchCta": "Go to tailor",
+      "additionalBody": "Open a tailored resume with job context, or finish tailoring from the Tailor page, to use additional questions.",
+      "additionalCta": "Go to tailor"
     },
     "additionalQuestions": {
       "disabledReason": "求人コンテキストが必要です。仕上げた職務向け履歴書を開くか、Tailor ページで調整を完了してください。"
     },
     "lettersWorkspace": {
-      "hint": "いつでも貼り付け可能です。生成すると履歴書と求人コンテキストから両方に反映されます。"
+      "hint": "いつでも貼り付け可能です。生成すると履歴書と求人コンテキストから両方に反映されます。",
+      "tailorHint": "求人票で履歴書を調整すると、ここでカバーレターと連絡文を生成できます。",
+      "goToTailor": "Tailor へ"
     },
     "lettersPreview": {
       "coverLetterEmpty": "カバーレターはまだありません — 貼り付けるか上の生成を使ってください。",
@@ -340,7 +356,7 @@
         "location": "場所",
         "years": "期間",
         "date": "日付",
-        "summaryOptional": "概要（任意）",
+        "summaryOptional": "概要",
         "highlights": "ハイライト",
         "descriptionPoints": "説明ポイント"
       },
@@ -926,8 +942,8 @@
     "regenerate": "再生成",
     "copyToClipboard": "クリップボードにコピー",
     "editor": {
-      "placeholder": "設定でカバーレター生成を有効にして履歴書をカスタマイズすると、ここに表示されます...",
-      "tip": "ヒント：簡潔な応募のため、95〜165語を目安に調整してください。必要に応じて編集してください。"
+      "placeholder": "調整後に貼り付けまたは生成…",
+      "tip": "目安 95〜165 語。必要に応じて編集。"
     },
     "preview": {
       "defaultName": "あなたの名前",
@@ -947,8 +963,8 @@
     "copyToClipboard": "クリップボードにコピー",
     "copied": "コピーしました！",
     "editor": {
-      "placeholder": "設定で外連絡メッセージ生成を有効にして履歴書をカスタマイズすると、ここに表示されます...",
-      "tip": "ヒント：外連絡メッセージは短く（50〜95語程度）まとめましょう。LinkedInやメールに貼り付けて使えます。"
+      "placeholder": "調整後に貼り付けまたは生成…",
+      "tip": "短く（50〜95 語程度）。LinkedIn やメールへ。"
     },
     "preview": {
       "channels": {

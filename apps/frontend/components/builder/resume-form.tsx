@@ -21,6 +21,9 @@ import {
   SectionMeta,
   SectionType,
   CustomSection,
+  Experience,
+  Education,
+  Project,
 } from '@/components/dashboard/resume-component';
 import { PersonalInfoForm } from './forms/personal-info-form';
 import { SummaryForm } from './forms/summary-form';
@@ -34,6 +37,35 @@ import { GenericItemForm } from './forms/generic-item-form';
 import { GenericListForm } from './forms/generic-list-form';
 import { AddSectionButton } from './add-section-dialog';
 import { DraggableSectionWrapper } from './draggable-section-wrapper';
+
+function CvSectionJumpNav({
+  sections,
+}: {
+  sections: Array<{ id: string; label: string }>;
+}) {
+  return (
+    <div className="sticky top-0 z-[12] -mx-1.5 mb-2 border-b border-black/15 bg-[#F0F0E8]/95 py-1.5 backdrop-blur-sm md:-mx-2">
+      <p className="sr-only">Jump to section</p>
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {sections.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() =>
+              document.getElementById(`cv-section-${id}`)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+              })
+            }
+            className="shrink-0 whitespace-nowrap rounded-none border border-black/15 bg-white/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-black/55 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] hover:border-black/25 hover:text-black"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 import {
   getSectionMeta,
   getAllSections,
@@ -42,6 +74,7 @@ import {
 } from '@/lib/utils/section-helpers';
 import {
   createDefaultAdditionalInfo,
+  normalizeAdditionalGroups,
   normalizeAdditionalInfo,
 } from '@/lib/utils/additional-groups';
 import { useTranslations } from '@/lib/i18n';
@@ -138,36 +171,74 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     handleSectionMetaUpdate(updatedSections);
   };
 
-  // Handler for moving section up
-  const handleMoveUp = (sectionId: string) => {
-    const sorted = [...allSections].sort((a, b) => a.order - b.order);
-    const index = sorted.findIndex((s) => s.id === sectionId);
-    if (index <= 0 || sorted[index - 1].id === 'personalInfo') return;
-
-    const current = sorted[index];
-    const above = sorted[index - 1];
-    const updatedSections = allSections.map((s) => {
-      if (s.id === current.id) return { ...s, order: above.order };
-      if (s.id === above.id) return { ...s, order: current.order };
-      return s;
-    });
-    handleSectionMetaUpdate(updatedSections);
+  const appendExperienceEntry = () => {
+    const data = resumeData.workExperience || [];
+    const newId = Math.max(0, ...data.map((d) => d.id)) + 1;
+    const next: Experience = {
+      id: newId,
+      position: '',
+      title: '',
+      company: '',
+      location: '',
+      start_date: '',
+      end_date: '',
+      date: '',
+      years: '',
+      summary: '',
+      description: [],
+      highlights: [],
+    };
+    onUpdate({ ...resumeData, workExperience: [...data, next] });
   };
 
-  // Handler for moving section down
-  const handleMoveDown = (sectionId: string) => {
-    const sorted = [...allSections].sort((a, b) => a.order - b.order);
-    const index = sorted.findIndex((s) => s.id === sectionId);
-    if (index < 0 || index >= sorted.length - 1) return;
+  const appendEducationEntry = () => {
+    const data = resumeData.education || [];
+    const newId = Math.max(0, ...data.map((d) => d.id)) + 1;
+    const next: Education = {
+      id: newId,
+      institution: '',
+      degree: '',
+      area: '',
+      location: '',
+      start_date: '',
+      end_date: '',
+      date: '',
+      years: '',
+      summary: '',
+      description: '',
+      highlights: [],
+    };
+    onUpdate({ ...resumeData, education: [...data, next] });
+  };
 
-    const current = sorted[index];
-    const below = sorted[index + 1];
-    const updatedSections = allSections.map((s) => {
-      if (s.id === current.id) return { ...s, order: below.order };
-      if (s.id === below.id) return { ...s, order: current.order };
-      return s;
-    });
-    handleSectionMetaUpdate(updatedSections);
+  const appendProjectEntry = () => {
+    const data = resumeData.personalProjects || [];
+    const newId = Math.max(0, ...data.map((d) => d.id)) + 1;
+    const next: Project = {
+      id: newId,
+      name: '',
+      summary: '',
+      role: '',
+      date: '',
+      years: '',
+      github: '',
+      website: '',
+      description: [],
+      highlights: [],
+    };
+    onUpdate({ ...resumeData, personalProjects: [...data, next] });
+  };
+
+  const appendSkillGroup = () => {
+    const base = normalizeAdditionalInfo(
+      resumeData.skills || resumeData.additional || createDefaultAdditionalInfo(),
+      {}
+    );
+    const groups = [
+      ...normalizeAdditionalGroups(base),
+      { label: t('builder.additionalForm.newGroupLabel'), values: [] as string[] },
+    ];
+    onUpdate({ ...resumeData, skills: normalizeAdditionalInfo({ ...base, groups }, {}) });
   };
 
   // Configure drag-and-drop sensors
@@ -215,8 +286,13 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     handleSectionMetaUpdate(updatedSections);
   };
 
+  const jumpSectionTargets = sortedAllSections.map((s) => ({
+    id: s.id,
+    label: s.displayName,
+  }));
+
   // Render default section forms
-  const renderDefaultSection = (section: SectionMeta, isFirst: boolean, isLast: boolean) => {
+  const renderDefaultSection = (section: SectionMeta) => {
     const isPersonalInfo = section.id === 'personalInfo';
 
     // Render content based on section key
@@ -271,6 +347,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
               onChange={(data) =>
                 onUpdate({ ...resumeData, skills: normalizeAdditionalInfo(data) })
               }
+              hideFooterAdd
             />
           );
 
@@ -279,24 +356,33 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
       }
     };
 
-    // PersonalInfo is special - render without wrapper
     if (isPersonalInfo) {
-      return renderContent();
+      return (
+        <div id={`cv-section-${section.id}`} className="scroll-mt-[4.5rem] pl-3">
+          {renderContent()}
+        </div>
+      );
     }
 
-    // Other default sections get SectionHeader with visibility/reorder controls
-    // The form components provide their own container styling
+    let addEntry: { label: string; onClick: () => void } | undefined;
+    if (section.key === 'workExperience') {
+      addEntry = { label: t('builder.forms.experience.addJob'), onClick: appendExperienceEntry };
+    } else if (section.key === 'education') {
+      addEntry = { label: t('builder.forms.education.addSchool'), onClick: appendEducationEntry };
+    } else if (section.key === 'personalProjects') {
+      addEntry = { label: t('builder.forms.projects.addProject'), onClick: appendProjectEntry };
+    } else if (section.key === 'skills') {
+      addEntry = { label: t('builder.additionalForm.addGroup'), onClick: appendSkillGroup };
+    }
+
     return (
       <SectionHeader
         section={section}
         onRename={(name) => handleRename(section.id, name)}
         onDelete={() => handleDelete(section.id)}
-        onMoveUp={() => handleMoveUp(section.id)}
-        onMoveDown={() => handleMoveDown(section.id)}
         onToggleVisibility={() => handleToggleVisibility(section.id)}
-        isFirst={isFirst}
-        isLast={isLast}
         canDelete={!section.isDefault}
+        addEntry={addEntry}
       >
         {renderContent()}
       </SectionHeader>
@@ -304,7 +390,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
   };
 
   // Render custom section forms
-  const renderCustomSection = (section: SectionMeta, isFirst: boolean, isLast: boolean) => {
+  const renderCustomSection = (section: SectionMeta) => {
     const customSection = resumeData.customSections?.[section.key];
 
     const updateCustomSection = (updates: Partial<CustomSection>) => {
@@ -369,11 +455,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
         section={section}
         onRename={(name) => handleRename(section.id, name)}
         onDelete={() => handleDelete(section.id)}
-        onMoveUp={() => handleMoveUp(section.id)}
-        onMoveDown={() => handleMoveDown(section.id)}
         onToggleVisibility={() => handleToggleVisibility(section.id)}
-        isFirst={isFirst}
-        isLast={isLast}
         canDelete={true}
       >
         {renderContent()}
@@ -381,22 +463,25 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     );
   };
 
-  const sectionRows = sortedAllSections.map((section, index) => {
-    const isFirst = index === 0 || section.id === 'personalInfo';
-    const isLast = index === sortedAllSections.length - 1;
+  const sectionRows = sortedAllSections.map((section) => {
     const isPersonalInfo = section.id === 'personalInfo';
     const sectionContent = section.isDefault
-      ? renderDefaultSection(section, isFirst, isLast)
-      : renderCustomSection(section, isFirst, isLast);
+      ? renderDefaultSection(section)
+      : renderCustomSection(section);
     return { section, isPersonalInfo, sectionContent };
   });
 
   if (!dndMounted) {
     return (
       <div className="space-y-3 pb-10">
+        <CvSectionJumpNav sections={jumpSectionTargets} />
         {sectionRows.map(({ section, isPersonalInfo, sectionContent }) => (
-          <div key={section.id} className="relative">
-            {isPersonalInfo ? sectionContent : <div className="pl-3">{sectionContent}</div>}
+          <div
+            key={section.id}
+            id={isPersonalInfo ? undefined : `cv-section-${section.id}`}
+            className={`relative scroll-mt-[4.5rem] ${isPersonalInfo ? '' : 'pl-3'}`}
+          >
+            {sectionContent}
           </div>
         ))}
         <AddSectionButton onAdd={handleAddSection} />
@@ -411,11 +496,18 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
         strategy={verticalListSortingStrategy}
       >
         <div className="space-y-3 pb-10">
-          {sectionRows.map(({ section, isPersonalInfo, sectionContent }) => (
-            <DraggableSectionWrapper key={section.id} id={section.id} disabled={isPersonalInfo}>
-              {sectionContent}
-            </DraggableSectionWrapper>
-          ))}
+          <CvSectionJumpNav sections={jumpSectionTargets} />
+          {sectionRows.map(({ section, isPersonalInfo, sectionContent }) =>
+            isPersonalInfo ? (
+              <div key={section.id} className="relative">
+                {sectionContent}
+              </div>
+            ) : (
+              <DraggableSectionWrapper key={section.id} id={section.id}>
+                {sectionContent}
+              </DraggableSectionWrapper>
+            )
+          )}
 
           <AddSectionButton onAdd={handleAddSection} />
         </div>

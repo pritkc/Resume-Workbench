@@ -88,37 +88,42 @@ export function RenderPreviewPanel({
   }, [draftRequest, error, hasFetchedResume, stale]);
 
   return (
-    <div className="space-y-2 p-2 md:p-2.5">
-      <div className="flex items-center justify-between gap-2 border border-black/15 bg-white px-2.5 py-1.5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">Preview</p>
-          <p className="mt-0.5 truncate text-[11px] text-gray-600">Same snapshot as PDF export.</p>
+    <div className="space-y-1.5 p-0 sm:p-1">
+      <div className="flex items-center justify-between gap-2 border-0 border-b border-black/10 bg-transparent px-1 py-1 sm:px-2">
+        <div className="min-w-0" title="Same snapshot as PDF export.">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black/50">
+            Preview
+          </p>
         </div>
         <Button
-          variant="outline"
+          variant="builderOutline"
           size="xs"
           onClick={() => void loadPreview()}
           disabled={(!resumeId && !draftRequest) || isLoading}
           aria-label="Refresh preview"
-          className="gap-1.5"
+          className="gap-1"
         >
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <RefreshCcw className="h-4 w-4" />
+            <RefreshCcw className="h-3.5 w-3.5" />
           )}
           <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
 
       {statusMessage && (
-        <div className="flex items-start gap-2 border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] text-amber-950">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {statusMessage}
+        <div className="flex items-start gap-1.5 border border-black/15 bg-black/[0.03] px-2 py-1 font-mono text-[10px] uppercase leading-snug tracking-wide text-black/70">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-black/40" />
+          <span>{statusMessage}</span>
         </div>
       )}
 
-      <ArtifactGallery artifacts={artifacts} showHeader={false} />
+      <ArtifactGallery
+        artifacts={artifacts}
+        showHeader={false}
+        emptyMessage="No preview yet. Save the resume or tap Refresh."
+      />
     </div>
   );
 }

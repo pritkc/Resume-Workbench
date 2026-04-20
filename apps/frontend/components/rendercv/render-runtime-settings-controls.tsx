@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,7 +9,6 @@ import {
 } from '@/lib/types/render-theme';
 import {
   RenderCvInput,
-  RenderCvQuickNav,
   RenderCvRow,
   RenderCvSection,
   RenderCvToggle,
@@ -31,8 +29,6 @@ export function RenderRuntimeSettingsControls({
   settings,
   onChange,
 }: RenderRuntimeSettingsControlsProps) {
-  const [activeGroup, setActiveGroup] = useState<'general'>('general');
-
   const updateRuntimeSetting = (path: string[], value: unknown) => {
     const nextRuntimeSettings = clone(settings.settings);
     let cursor: Record<string, unknown> = nextRuntimeSettings as Record<string, unknown>;
@@ -51,13 +47,17 @@ export function RenderRuntimeSettingsControls({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-col gap-2 border border-black/15 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">Runtime</p>
-          <p className="mt-0.5 text-[13px] text-gray-600">PDF title, date format, and defaults.</p>
-        </div>
+      <div
+        className="flex flex-col gap-1 border border-black/20 bg-white px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between"
+        title="PDF title, date format, and defaults for the RenderCV output."
+      >
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black/50">
+          Runtime
+        </p>
         <Button
-          variant="outline"
+          type="button"
+          variant="ghost"
+          size="xs"
           onClick={() =>
             onChange(
               normalizeRenderThemeSettings({
@@ -66,43 +66,38 @@ export function RenderRuntimeSettingsControls({
               })
             )
           }
-          size="xs"
-          className="gap-1.5"
+          className="h-7 gap-1 px-2 font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/25 underline-offset-2 hover:bg-transparent hover:text-black"
+          title="Restore all runtime settings to defaults."
         >
-          <RotateCcw className="h-4 w-4" />
-          Reset Settings
+          <RotateCcw className="h-3 w-3" />
+          Reset
         </Button>
       </div>
-
-      <RenderCvQuickNav
-        items={[{ id: 'general', label: 'General' }]}
-        activeId={activeGroup}
-        onChange={() => setActiveGroup('general')}
-      />
 
       <RenderCvSection title="General">
         <RenderCvRow
           label="Show Summary Heading"
           description="When section is enabled, hide the heading to save space."
+          density="compact"
         >
           <RenderCvToggle
             checked={Boolean(settings.settings.show_summary_heading)}
             onChange={(value) => updateRuntimeSetting(['show_summary_heading'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Current Date" description="Use `today` or an ISO date.">
+        <RenderCvRow label="Current Date" description="Use `today` or an ISO date." density="compact">
           <RenderCvInput
             value={settings.settings.current_date}
             onChange={(value) => updateRuntimeSetting(['current_date'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Bold Keywords" description="Comma-separated list.">
+        <RenderCvRow label="Bold Keywords" description="Comma-separated list." density="compact">
           <RenderCvInput
             value={arrayToText(settings.settings.bold_keywords)}
             onChange={(value) => updateRuntimeSetting(['bold_keywords'], textToArray(value))}
           />
         </RenderCvRow>
-        <RenderCvRow label="PDF Title" description="Supports RenderCV placeholders.">
+        <RenderCvRow label="PDF Title" description="Supports RenderCV placeholders." density="compact">
           <RenderCvInput
             value={settings.settings.pdf_title}
             onChange={(value) => updateRuntimeSetting(['pdf_title'], value)}

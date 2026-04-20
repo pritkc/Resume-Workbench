@@ -38,7 +38,12 @@ export const DraggableSectionWrapper: React.FC<DraggableSectionWrapperProps> = (
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="relative">
+    <div
+      ref={setNodeRef}
+      style={style}
+      id={disabled ? undefined : `cv-section-${id}`}
+      className="relative scroll-mt-[4.5rem]"
+    >
       {/* Drag Handle */}
       {!disabled && (
         <div
@@ -47,7 +52,7 @@ export const DraggableSectionWrapper: React.FC<DraggableSectionWrapperProps> = (
           className="absolute left-0 top-0 z-10 flex h-full w-3 items-start justify-center pt-2 cursor-grab active:cursor-grabbing"
           title="Drag to reorder"
         >
-          <GripVertical className="h-3.5 w-3.5 text-gray-300 transition-colors hover:text-gray-600" />
+          <GripVertical className="h-4 w-4 text-black/40 transition-colors hover:text-black/70" />
         </div>
       )}
 

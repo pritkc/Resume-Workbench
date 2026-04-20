@@ -3,26 +3,24 @@
 import React, { useState, useEffect, Suspense, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { ResumeForm } from './resume-form';
 import { RawYamlEditor } from './raw-yaml-editor';
 import { CvMetadataPanel } from './cv-metadata-panel';
-import { LettersWorkspace } from './letters-workspace';
 import { CoverLetterPreview } from './cover-letter-preview';
-import { OutreachPreview } from './outreach-preview';
+import { UtilitiesWorkspace } from './utilities-workspace';
+import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RetroTabs } from '@/components/ui/retro-tabs';
 import { ConfirmDialog, type ConfirmDialogProps } from '@/components/ui/confirm-dialog';
-import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import {
   Download,
   Save,
-  AlertTriangle,
   ArrowLeft,
   Columns2,
   Eye,
-  GripVertical,
   Pencil,
   RotateCcw,
   Undo2,
@@ -57,7 +55,6 @@ import {
   type ResumeDraftResponse,
 } from '@/lib/api/resume';
 import { JDComparisonView } from './jd-comparison-view';
-import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 import { RegenerateWizard } from './regenerate-wizard';
 import { useRegenerateWizard } from '@/hooks/use-regenerate-wizard';
 import { useTranslations } from '@/lib/i18n';
@@ -96,7 +93,7 @@ import {
   parseCvMetadataYaml,
 } from '@/lib/cv-metadata';
 
-type TabId = 'resume' | 'letters' | 'jd-match' | 'additional-questions';
+type TabId = 'resume' | 'utilities' | 'jd-match' | 'additional-questions';
 type EditorSection = 'cv' | 'design' | 'locale' | 'settings' | 'metadata';
 type EditorMode = 'visual' | 'raw';
 type PaneMode = 'editor' | 'split' | 'preview';
@@ -1679,21 +1676,19 @@ const ResumeBuilderContent = () => {
   const topLevelTabs = [
     { id: 'resume', label: t('builder.previewTabs.resume') },
     {
-      id: 'letters',
-      label: t('builder.previewTabs.letters'),
-      shortLabel: t('builder.previewTabs.letters'),
+      id: 'utilities',
+      label: t('builder.previewTabs.utilities'),
+      shortLabel: t('builder.previewTabs.utilitiesShort'),
+    },
+    {
+      id: 'additional-questions',
+      label: t('builder.previewTabs.additionalQuestions'),
+      shortLabel: t('builder.previewTabs.additionalQuestionsShort'),
     },
     {
       id: 'jd-match',
       label: t('builder.previewTabs.jdMatch'),
       shortLabel: t('builder.previewTabs.jdMatch'),
-      disabled: !jobDescription,
-    },
-    {
-      id: 'additional-questions',
-      label: t('builder.previewTabs.additionalQuestions'),
-      shortLabel: t('builder.previewTabs.additionalQuestions'),
-      disabled: !jobId,
     },
   ] satisfies Array<{
     id: TabId;
@@ -1749,25 +1744,27 @@ const ResumeBuilderContent = () => {
     }
   }, [resumeId, resumeTitleDraft, resumeTitle, showNotification, t]);
 
-  const toolbarIconButtonClass = 'text-gray-700';
+  const toolbarIconButtonClass =
+    'h-7 w-7 border border-black/30 bg-transparent text-black/60 hover:border-black hover:text-black';
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-[#F6F5EE] px-1.5 py-2 md:px-2 md:py-2">
-      <div className="flex h-full min-h-0 flex-col overflow-hidden border border-black bg-white shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
-        <div className="sticky top-0 z-30 border-b border-black bg-white/95 backdrop-blur-sm no-print">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1.5 md:px-3">
-            <div className="flex min-w-0 flex-1 items-start gap-2">
+    <div className="h-[100dvh] overflow-hidden bg-[#F0F0E8] p-0">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden border-0 bg-white shadow-none md:border md:border-black/15">
+        <div className="sticky top-0 z-30 border-b border-black bg-white no-print">
+          <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1.5 py-1 md:px-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 onClick={() => router.push('/dashboard')}
                 aria-label={t('nav.backToDashboard')}
                 title={t('nav.backToDashboard')}
+                className={toolbarIconButtonClass}
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
 
-              <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0">
                 {isEditingResumeTitle && resumeId ? (
                   <Input
                     ref={resumeTitleInputRef}
@@ -1785,7 +1782,7 @@ const ResumeBuilderContent = () => {
                       }
                     }}
                     disabled={isSavingResumeTitle}
-                    className="h-9 max-w-md font-serif text-base font-semibold"
+                    className="h-7 max-w-md rounded-none border border-black/30 font-mono text-sm font-bold uppercase focus-visible:border-black focus-visible:ring-0"
                     aria-label={t('builder.renameTitleInputLabel')}
                   />
                 ) : (
@@ -1795,46 +1792,40 @@ const ResumeBuilderContent = () => {
                     disabled={!resumeId}
                     title={resumeId ? t('builder.renameTitleHint') : undefined}
                     className={cn(
-                      'group flex max-w-full min-w-0 items-center gap-1.5 rounded-none text-left',
-                      resumeId && 'cursor-pointer hover:text-blue-800',
+                      'group flex max-w-full min-w-0 items-center gap-1 rounded-none text-left font-mono text-sm font-bold uppercase',
+                      resumeId && 'cursor-pointer hover:text-black/80',
                       !resumeId && 'cursor-default'
                     )}
                   >
-                    <span className="truncate font-serif text-lg font-bold leading-tight md:text-xl">
-                      {builderHeading}
-                    </span>
+                    <span className="truncate">{builderHeading}</span>
                     {resumeId ? (
                       <Pencil
-                        className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                        className="h-3 w-3 shrink-0 text-black/30 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
                         aria-hidden
                       />
                     ) : null}
                   </button>
                 )}
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-600">
-                  <span className="font-mono uppercase tracking-wide text-blue-700">
-                    {resumeId ? t('builder.editMode') : t('builder.createAndPreview')}
-                  </span>
+                <span className="font-mono text-[10px] uppercase tracking-wide text-black/50">
+                  {resumeId ? t('builder.editMode') : t('builder.createAndPreview')}
                   {resumeCode ? (
-                    <span className="font-mono text-gray-500">· {resumeCode}</span>
+                    <>
+                      {' · '}
+                      <span className="font-semibold text-black">{resumeCode}</span>
+                    </>
                   ) : null}
-                  {hasUnsavedChanges && (
-                    <span className="inline-flex items-center gap-1 text-amber-800">
-                      <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-                      {t('builder.unsavedDraft')}
-                    </span>
+                  {hasUnsavedChanges ? ` · ${t('builder.unsavedDraft')}` : ''}
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono text-[10px] text-black/60">
+                  {autosaveState === 'saving' && (
+                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
                   )}
-                  <span className="inline-flex items-center gap-1 font-mono text-gray-700">
-                    {autosaveState === 'saving' && (
-                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-                    )}
-                    {autosaveLabel}
-                  </span>
-                </div>
+                  {autosaveLabel}
+                </span>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1">
               {isDesktop ? (
                 <>
                   <Button
@@ -1939,12 +1930,17 @@ const ResumeBuilderContent = () => {
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="xs" onClick={handleSave} disabled={!resumeId || isSaving}>
+                  <Button
+                    variant="builderOutline"
+                    size="xs"
+                    onClick={handleSave}
+                    disabled={!resumeId || isSaving}
+                  >
                     <Save className="h-3.5 w-3.5" />
                     {isSaving ? t('common.saving') : t('common.save')}
                   </Button>
                   <Button
-                    variant="success"
+                    variant="builderCta"
                     size="xs"
                     onClick={handleDownload}
                     disabled={!resumeId || isDownloading}
@@ -1955,16 +1951,20 @@ const ResumeBuilderContent = () => {
                 </>
               )}
 
-              {activeTab === 'letters' && (
+              {activeTab === 'utilities' && (
                 <>
                   <Button
-                    variant="success"
-                    size="xs"
+                    variant="builderCta"
+                    size="icon-sm"
                     onClick={handleDownloadCoverLetter}
                     disabled={!resumeId || isDownloading || !coverLetter}
+                    aria-label={
+                      isDownloading ? t('common.generating') : t('common.download')
+                    }
+                    title={isDownloading ? t('common.generating') : t('common.download')}
+                    className={toolbarIconButtonClass}
                   >
                     <Download className="h-3.5 w-3.5" />
-                    {isDownloading ? t('common.generating') : t('common.download')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -1986,7 +1986,7 @@ const ResumeBuilderContent = () => {
             </div>
           </div>
 
-          <div className="border-t border-black/10 bg-white px-2 md:px-3">
+          <div className="bg-white px-1.5 md:px-2">
             <RetroTabs
               tabs={topLevelTabs}
               activeTab={activeTab}
@@ -1996,53 +1996,42 @@ const ResumeBuilderContent = () => {
           </div>
         </div>
 
-        <div ref={workspaceRef} className="flex flex-1 min-h-0 overflow-hidden bg-gray-200">
+        <div ref={workspaceRef} className="flex flex-1 min-h-0 overflow-hidden bg-[#E8E8E0]">
           {showEditorPane && (
             <div
               style={editorPaneWidth ? { width: editorPaneWidth } : undefined}
               className={cn(
-                'min-w-0 overflow-hidden bg-[#F6F5EE] no-print',
+                'min-w-0 overflow-hidden bg-[#F0F0E8] no-print',
                 isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
               )}
             >
-              <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-2 pb-3 pt-2 md:px-3">
-                <div className="mx-auto flex max-w-4xl flex-col gap-2">
+              <div className="editor-panel h-full min-h-0 overflow-y-auto overscroll-contain px-1.5 pb-2 pt-0.5 md:px-2 md:pt-1">
+                <div className="flex w-full max-w-none flex-col gap-1.5">
                   {activeTab === 'resume' && (
-                    <div className="sticky top-0 z-20 border-b border-black/15 bg-white/95 backdrop-blur-sm">
-                      <div className="flex flex-col gap-1.5 px-2 py-2 md:flex-row md:items-center md:justify-between md:px-2.5">
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-800">
-                            {editorMode === 'raw'
-                              ? 'RenderCV YAML'
-                              : editorSection === 'cv'
-                                ? 'Resume Content'
-                                : editorSection === 'design'
-                                  ? 'Theme Design'
-                                  : editorSection === 'locale'
-                                    ? 'Locale Copy'
-                                    : editorSection === 'settings'
-                                      ? 'Runtime Settings'
-                                      : 'CV metadata'}
-                          </p>
-                          <p className="mt-0.5 text-[11px] leading-snug text-gray-600">
-                            {editorMode === 'raw'
-                              ? 'Section-based YAML with validation.'
-                              : 'Visual editing for quick changes.'}
-                          </p>
+                    <div className="shrink-0 border-b border-black/15 bg-white">
+                      <div className="flex h-8 items-stretch">
+                        <div className="min-w-0 flex-1 overflow-x-auto">
+                          <RetroTabs
+                            tabs={resumeEditorTabs}
+                            activeTab={editorSection}
+                            onTabChange={(id) => setEditorSection(id as EditorSection)}
+                            size="compact"
+                            className="border-0"
+                          />
                         </div>
-                        <ToggleSwitch
-                          checked={editorMode === 'raw'}
-                          onCheckedChange={(checked) => void handleEditorModeChange(checked)}
-                          label="Raw YAML"
-                          density="compact"
-                        />
+                        <button
+                          type="button"
+                          aria-pressed={editorMode === 'raw'}
+                          onClick={() => void handleEditorModeChange(editorMode !== 'raw')}
+                          className={cn(
+                            'shrink-0 self-center border border-black/18 bg-white px-2.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-widest text-black/65 shadow-[0_1px_0_0_rgba(0,0,0,0.06)] transition-colors hover:border-black/28 hover:text-black',
+                            editorMode === 'raw' &&
+                              'border-black/40 bg-black/[0.04] font-semibold text-black'
+                          )}
+                        >
+                          YAML
+                        </button>
                       </div>
-                      <RetroTabs
-                        tabs={resumeEditorTabs}
-                        activeTab={editorSection}
-                        onTabChange={(id) => setEditorSection(id as EditorSection)}
-                        size="compact"
-                      />
                     </div>
                   )}
 
@@ -2105,8 +2094,8 @@ const ResumeBuilderContent = () => {
                     />
                   )}
 
-                  {activeTab === 'letters' && (
-                    <LettersWorkspace
+                  {activeTab === 'utilities' && (
+                    <UtilitiesWorkspace
                       coverLetter={coverLetter}
                       outreachMessage={outreachMessage}
                       onCoverLetterChange={setCoverLetter}
@@ -2118,10 +2107,51 @@ const ResumeBuilderContent = () => {
                       canGeneratePackage={Boolean(isTailoredResume && resumeId)}
                       isGenerating={isGeneratingAuxiliaryPackage}
                       onGeneratePackage={handleGenerateAuxiliaryPackage}
+                      resumeId={resumeId}
                     />
                   )}
 
-                  {activeTab === 'jd-match' && (
+                  {showAdditionalQuestionsInEditor && !jobId && (
+                    <div className="border border-black/15 bg-white px-2 py-2 font-sans text-sm leading-snug md:px-2.5">
+                      <p className="font-mono text-[11px] uppercase tracking-wide text-black/55">
+                        {t('builder.tabPrerequisite.additionalBody')}
+                      </p>
+                      <Link
+                        href="/tailor"
+                        className="mt-2 inline-flex font-mono text-[11px] uppercase tracking-wider text-black underline underline-offset-2 hover:text-black/70"
+                      >
+                        {t('builder.tabPrerequisite.additionalCta')}
+                      </Link>
+                    </div>
+                  )}
+
+                  {showAdditionalQuestionsInEditor && jobId && (
+                    <AdditionalQuestionsPanel
+                      title={t('builder.previewTabs.additionalQuestions')}
+                      resumeId={resumeId}
+                      jobId={jobId}
+                      applicationPackId={applicationPackId}
+                      generationRunId={null}
+                      disabled={false}
+                      disabledReason={t('builder.additionalQuestions.disabledReason')}
+                    />
+                  )}
+
+                  {activeTab === 'jd-match' && !jobDescription && (
+                    <div className="border border-black/20 bg-white p-3 font-sans text-sm leading-snug">
+                      <p className="font-mono text-[11px] uppercase tracking-wide text-black/60">
+                        {t('builder.tabPrerequisite.jdMatchBody')}
+                      </p>
+                      <Link
+                        href="/tailor"
+                        className="mt-2 inline-flex font-mono text-[11px] uppercase tracking-wider text-black underline underline-offset-2 hover:text-black/70"
+                      >
+                        {t('builder.tabPrerequisite.jdMatchCta')}
+                      </Link>
+                    </div>
+                  )}
+
+                  {activeTab === 'jd-match' && jobDescription && (
                     <div className="border border-black/15 bg-white text-[13px] leading-snug">
                       <section className="px-3 py-2">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
@@ -2167,17 +2197,6 @@ const ResumeBuilderContent = () => {
                     </div>
                   )}
 
-                  {showAdditionalQuestionsInEditor && (
-                    <AdditionalQuestionsPanel
-                      title={t('builder.previewTabs.additionalQuestions')}
-                      resumeId={resumeId}
-                      jobId={jobId}
-                      applicationPackId={applicationPackId}
-                      generationRunId={null}
-                      disabled={!jobId}
-                      disabledReason={t('builder.additionalQuestions.disabledReason')}
-                    />
-                  )}
                 </div>
               </div>
             </div>
@@ -2191,9 +2210,9 @@ const ResumeBuilderContent = () => {
               tabIndex={0}
               onMouseDown={handlePaneResizeStart}
               onKeyDown={handlePaneSeparatorKeyDown}
-              className="group flex w-3 shrink-0 cursor-col-resize items-center justify-center bg-[#D8D8D2] no-print"
+              className="group relative w-2 shrink-0 cursor-col-resize bg-transparent no-print"
             >
-              <GripVertical className="h-4 w-4 text-gray-500 transition group-hover:text-black" />
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-black/25 group-hover:bg-black/45" />
             </div>
           )}
 
@@ -2205,7 +2224,7 @@ const ResumeBuilderContent = () => {
                 isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
               )}
             >
-              <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
+              <div className="preview-panel-scroll h-full min-h-0 overflow-y-auto overscroll-contain px-1.5 md:px-2">
                 {activeTab === 'resume' && (
                   <RenderPreviewPanel
                     resumeId={resumeId}
@@ -2216,9 +2235,9 @@ const ResumeBuilderContent = () => {
                   />
                 )}
 
-                {activeTab === 'letters' && (
-                  <div className="grid min-h-0 flex-1 grid-cols-1 divide-y divide-black/10 md:grid-cols-2 md:divide-x md:divide-y-0">
-                    <div className="min-h-0 overflow-y-auto p-2 md:p-2.5">
+                {activeTab === 'utilities' && (
+                  <div className="flex min-h-0 flex-1 justify-center py-1.5 md:py-2">
+                    <div className="w-full max-w-[min(28rem,100%)] min-w-0 md:max-w-[min(32rem,96%)]">
                       {coverLetter && resumeData.personalInfo ? (
                         <CoverLetterPreview
                           content={coverLetter}
@@ -2226,20 +2245,27 @@ const ResumeBuilderContent = () => {
                           pageSize={themeSettings.page_size}
                         />
                       ) : (
-                        <p className="py-8 text-center text-[12px] text-gray-500">
-                          {t('builder.lettersPreview.coverLetterEmpty')}
-                        </p>
+                        <div
+                          className="min-h-[160px] flex-1 bg-transparent"
+                          role="status"
+                          aria-label={t('builder.lettersPreview.coverLetterEmpty')}
+                        />
                       )}
                     </div>
-                    <div className="min-h-0 overflow-y-auto p-2 md:p-2.5">
-                      {outreachMessage ? (
-                        <OutreachPreview content={outreachMessage} />
-                      ) : (
-                        <p className="py-8 text-center text-[12px] text-gray-500">
-                          {t('builder.lettersPreview.outreachEmpty')}
-                        </p>
-                      )}
-                    </div>
+                  </div>
+                )}
+
+                {showAdditionalQuestionsInPreview && jobId && (
+                  <div className="py-1.5 md:py-2">
+                    <AdditionalQuestionsPanel
+                      title={t('builder.previewTabs.additionalQuestions')}
+                      resumeId={resumeId}
+                      jobId={jobId}
+                      applicationPackId={applicationPackId}
+                      generationRunId={null}
+                      disabled={false}
+                      disabledReason={t('builder.additionalQuestions.disabledReason')}
+                    />
                   </div>
                 )}
 
@@ -2247,25 +2273,12 @@ const ResumeBuilderContent = () => {
                   <JDComparisonView jobDescription={jobDescription} resumeData={resumeData} />
                 )}
 
-                {showAdditionalQuestionsInPreview && (
-                  <div className="p-2 md:p-2.5">
-                    <AdditionalQuestionsPanel
-                      title={t('builder.previewTabs.additionalQuestions')}
-                      resumeId={resumeId}
-                      jobId={jobId}
-                      applicationPackId={applicationPackId}
-                      generationRunId={null}
-                      disabled={!jobId}
-                      disabledReason={t('builder.additionalQuestions.disabledReason')}
-                    />
-                  </div>
-                )}
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-black/10 bg-white/90 px-2 py-1 text-[11px] text-gray-600 no-print">
+        <div className="flex items-center justify-between border-t border-black/10 bg-white/90 px-1.5 py-1 text-[11px] text-gray-600 no-print md:px-2">
           <span className="flex items-center gap-1.5 font-medium text-gray-800">
             <Image
               src="/logo.svg"

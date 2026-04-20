@@ -120,7 +120,9 @@
       "company": "Company",
       "location": "Location",
       "boldKeywords": "Bold keywords",
-      "boldKeywordsHelp": "One keyword per line. Empty means no automatic bolding.",
+      "boldKeywordsHelp": "要在简历中加粗的短语（至少 2 个字符）。会写入元数据与 PDF 加粗列表。",
+      "boldKeywordPlaceholder": "添加关键词…",
+      "addKeyword": "添加",
       "copyLlm": "Copy for LLM",
       "applyClipboard": "Apply clipboard",
       "copiedLlm": "Copied metadata + CV for external LLM.",
@@ -148,7 +150,7 @@
       "wordsChars": "{wordCount} 词 / {charCount} 字符"
     },
     "additionalForm": {
-      "instructions": "每行输入一条内容（按 Enter 换行）。",
+      "instructions": "每组一张卡片：编辑标签，输入标签后按 Enter 添加，用 × 删除。",
       "groupLabel": "标签",
       "groupLabelPlaceholder": "例如：Backend、ML、Infrastructure",
       "groupValues": "内容",
@@ -205,17 +207,31 @@
     },
     "previewTabs": {
       "resume": "简历",
-      "letters": "求职信与外联",
+      "utilities": "工具",
+      "utilitiesShort": "工具",
       "coverLetter": "求职信",
       "outreach": "联系邮件",
       "jdMatch": "JD 匹配",
-      "additionalQuestions": "附加问题"
+      "additionalQuestions": "附加问题",
+      "additionalQuestionsShort": "+QUESTIONS"
+    },
+    "utilities": {
+      "subTabLetters": "求职信与外联",
+      "subTabQuestions": "申请问题"
+    },
+    "tabPrerequisite": {
+      "jdMatchBody": "JD Match is available after you run a Tailor session with a job description.",
+      "jdMatchCta": "Go to tailor",
+      "additionalBody": "Open a tailored resume with job context, or finish tailoring from the Tailor page, to use additional questions.",
+      "additionalCta": "Go to tailor"
     },
     "additionalQuestions": {
       "disabledReason": "需要职位上下文。请打开已针对职位调整的简历，或在 Tailor 页面完成调整后再使用此标签。"
     },
     "lettersWorkspace": {
-      "hint": "可随时粘贴正文，或使用上方生成按钮根据简历与职位上下文填充两侧。"
+      "hint": "可随时粘贴正文，或使用上方生成按钮根据简历与职位上下文填充两侧。",
+      "tailorHint": "请先用职位说明完成简历定制，然后可在此生成求职信与外联消息。",
+      "goToTailor": "前往定制"
     },
     "lettersPreview": {
       "coverLetterEmpty": "尚无求职信 — 粘贴正文或使用上方生成。",
@@ -340,7 +356,7 @@
         "location": "地点",
         "years": "时间",
         "date": "日期",
-        "summaryOptional": "摘要（可选）",
+        "summaryOptional": "摘要",
         "highlights": "亮点",
         "descriptionPoints": "描述要点"
       },
@@ -927,8 +943,8 @@
     "copyToClipboard": "复制到剪贴板",
     "copied": "已复制！",
     "editor": {
-      "placeholder": "启用求职信生成并完成一次简历定制后，求职信内容会显示在这里...",
-      "tip": "提示：建议控制在 95-165 词，更适合简洁申请；可根据需要进行个性化修改。"
+      "placeholder": "定制后可粘贴或生成…",
+      "tip": "约 95–165 词为宜，可按需修改。"
     },
     "preview": {
       "defaultName": "你的姓名",
@@ -947,8 +963,8 @@
     "copyToClipboard": "复制到剪贴板",
     "copied": "已复制！",
     "editor": {
-      "placeholder": "启用外联消息生成并完成一次简历定制后，外联消息会显示在这里...",
-      "tip": "提示：外联消息建议保持简短（50-95 词）。可复制后粘贴到 LinkedIn 或邮件中。"
+      "placeholder": "定制后可粘贴或生成…",
+      "tip": "保持简短（约 50–95 词），可复制到 LinkedIn 或邮件。"
     },
     "preview": {
       "channels": {

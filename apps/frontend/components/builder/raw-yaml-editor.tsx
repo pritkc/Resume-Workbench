@@ -1,20 +1,14 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AlertTriangle,
-  ClipboardPaste,
-  Copy,
-  Loader2,
-  LocateFixed,
-  RefreshCcw,
-} from 'lucide-react';
+import { AlertTriangle, Loader2, LocateFixed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   formatDraftValidationDetail,
   type DraftValidationDetail,
   type RawYamlSection,
 } from '@/lib/api/resume';
+import { cn } from '@/lib/utils';
 
 interface RawYamlEditorProps {
   section: RawYamlSection;
@@ -49,6 +43,9 @@ const SECTION_LABELS: Record<RawYamlSection, string> = {
   settings: 'Settings',
   metadata: 'Metadata',
 };
+
+const YAML_SOFT_CTA =
+  'h-6 rounded-none border border-black/18 bg-white px-2.5 text-[10px] font-mono font-medium uppercase tracking-wide text-black/72 shadow-[0_1px_0_0_rgba(0,0,0,0.06)] hover:border-black/30 hover:bg-black/[0.03] hover:text-black disabled:opacity-50';
 
 const LINE_HEIGHT_PX = 24;
 const EDITOR_PADDING_PX = 16;
@@ -355,70 +352,55 @@ export function RawYamlEditor({
       : null;
 
   return (
-    <div className="space-y-2">
-      <div className="border border-black/15 bg-white px-2.5 py-2">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
-              Raw YAML
-            </p>
-            <p className="mt-0.5 text-[13px] text-gray-600">{SECTION_DESCRIPTIONS[section]}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-gray-500">
-              <span>{statusLabel}</span>
-              <span>Ln {cursorPosition.line}</span>
-              <span>Col {cursorPosition.column}</span>
-              <span>{lines.length} lines</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <div className="space-y-1.5">
+      <div
+        className="mb-0.5 flex min-h-7 flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-sm border border-black/15 bg-white px-2 py-1 shadow-[0_1px_0_0_rgba(0,0,0,0.04)]"
+        title={SECTION_DESCRIPTIONS[section]}
+      >
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={onResync}
+            disabled={isLoading}
+            className={YAML_SOFT_CTA}
+          >
+            {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            Resync
+          </Button>
+          <Button variant="ghost" size="xs" onClick={onCopySection} className={YAML_SOFT_CTA}>
+            Copy Section
+          </Button>
+          <Button variant="ghost" size="xs" onClick={onCopyAll} className={YAML_SOFT_CTA}>
+            Copy Full YAML
+          </Button>
+          {onCopyLlmBundle ? (
             <Button
-              variant="outline"
+              type="button"
+              variant="ghost"
               size="xs"
-              onClick={onResync}
-              disabled={isLoading}
-              className="gap-1.5"
+              onClick={() => void onCopyLlmBundle()}
+              className={YAML_SOFT_CTA}
             >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCcw className="h-4 w-4" />
-              )}
-              Resync
+              {copyLlmLabel ?? 'Copy for LLM'}
             </Button>
-            <Button variant="outline" size="xs" onClick={onCopySection} className="gap-1.5">
-              <Copy className="h-4 w-4" />
-              Copy Section
+          ) : null}
+          {onApplyLlmClipboard ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => void onApplyLlmClipboard()}
+              className={YAML_SOFT_CTA}
+            >
+              {applyLlmLabel ?? 'Apply clipboard'}
             </Button>
-            <Button variant="outline" size="xs" onClick={onCopyAll} className="gap-1.5">
-              <Copy className="h-4 w-4" />
-              Copy Full YAML
-            </Button>
-            {onCopyLlmBundle ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={() => void onCopyLlmBundle()}
-                className="gap-1.5"
-              >
-                <Copy className="h-4 w-4" />
-                {copyLlmLabel ?? 'Copy for LLM'}
-              </Button>
-            ) : null}
-            {onApplyLlmClipboard ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={() => void onApplyLlmClipboard()}
-                className="gap-1.5"
-              >
-                <ClipboardPaste className="h-4 w-4" />
-                {applyLlmLabel ?? 'Apply clipboard'}
-              </Button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
+        <p className="shrink-0 font-mono text-[10px] text-black/40">
+          {statusLabel} · Ln {cursorPosition.line} · Col {cursorPosition.column} · {lines.length}{' '}
+          lines
+        </p>
       </div>
 
       {error && (
@@ -437,16 +419,21 @@ export function RawYamlEditor({
             </div>
             <div className="flex flex-wrap gap-2">
               {error.section && error.section !== section && onFocusErrorSection && (
-                <Button variant="outline" size="xs" onClick={onFocusErrorSection}>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={onFocusErrorSection}
+                  className={YAML_SOFT_CTA}
+                >
                   Open {SECTION_LABELS[error.section]}
                 </Button>
               )}
               {activeError?.line && (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="xs"
                   onClick={() => jumpToLine(activeError.line ?? 1, activeError.column ?? 1)}
-                  className="gap-1.5"
+                  className={cn(YAML_SOFT_CTA, 'gap-1.5')}
                 >
                   <LocateFixed className="h-4 w-4" />
                   Jump To Line
@@ -457,7 +444,7 @@ export function RawYamlEditor({
         </div>
       )}
 
-      <div className="overflow-hidden border border-black/15 bg-white shadow-sm">
+      <div className="overflow-hidden border border-black/15 bg-white">
         <div className="flex min-h-[min(52vh,420px)]">
           <div
             className="select-none overflow-hidden border-r border-black/10 bg-[#F4EFE2] py-2 pr-2 pl-1.5 font-mono text-[11px] leading-6 text-right text-slate-500"
