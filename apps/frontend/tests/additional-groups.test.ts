@@ -8,7 +8,7 @@ describe('additional group utils', () => {
   it('preserves label spaces while editing', () => {
     const [group] = normalizeAdditionalGroups(
       {
-        groups: [{ label: 'Machine Learning', values: [] }],
+        groups: [{ id: 'ml-1', label: 'Machine Learning', values: [] }],
       },
       { seedDefaultsIfEmpty: false }
     );
@@ -17,9 +17,20 @@ describe('additional group utils', () => {
     expect(getAdditionalGroupDisplayLabel(group)).toBe('Machine Learning');
   });
 
+  it('preserves trailing spaces through normalizeAdditionalGroups (autosave path)', () => {
+    const [group] = normalizeAdditionalGroups(
+      {
+        groups: [{ id: 'g1', label: 'Section Name ', values: [] }],
+      },
+      { seedDefaultsIfEmpty: false }
+    );
+    expect(group.label).toBe('Section Name ');
+  });
+
   it('keeps trailing spaces instead of snapping back to the default translated label', () => {
     const label = getAdditionalGroupDisplayLabel(
       {
+        id: 'technicalSkills',
         label: 'Technical Skills ',
         values: [],
       },

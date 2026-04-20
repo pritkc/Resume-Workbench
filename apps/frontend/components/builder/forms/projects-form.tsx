@@ -11,7 +11,7 @@ import { useTranslations } from '@/lib/i18n';
 import {
   buildProjectDescription,
   getProjectDate,
-  getProjectHighlights,
+  getProjectHighlightsEditor,
   getProjectSummary,
 } from '@/lib/utils/rendercv-fields';
 
@@ -87,7 +87,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
 
   const handleHighlightChange = (id: number, index: number, value: string) => {
     updateItem(id, (item) => {
-      const highlights = [...getProjectHighlights(item)];
+      const highlights = [...getProjectHighlightsEditor(item)];
       highlights[index] = value;
 
       return {
@@ -100,7 +100,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
 
   const handleAddHighlight = (id: number) => {
     updateItem(id, (item) => {
-      const highlights = [...getProjectHighlights(item), ''];
+      const highlights = [...getProjectHighlightsEditor(item), ''];
       return {
         ...item,
         highlights,
@@ -111,7 +111,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
 
   const handleRemoveHighlight = (id: number, index: number) => {
     updateItem(id, (item) => {
-      const highlights = [...getProjectHighlights(item)];
+      const highlights = [...getProjectHighlightsEditor(item)];
       highlights.splice(index, 1);
 
       return {
@@ -131,7 +131,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
           </p>
         ) : null}
         {data.map((item) => {
-          const highlights = getProjectHighlights(item);
+          const highlights = getProjectHighlightsEditor(item);
 
           return (
             <div

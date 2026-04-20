@@ -25,7 +25,7 @@ import {
 import {
   buildExperienceDescription,
   getExperienceExplicitDate,
-  getExperienceHighlights,
+  getExperienceHighlightsEditor,
   getExperiencePosition,
   getExperienceSummary,
 } from '@/lib/utils/rendercv-fields';
@@ -118,7 +118,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       }
 
       if (field === 'summary') {
-        const highlights = getExperienceHighlights(item);
+        const highlights = getExperienceHighlightsEditor(item);
         return {
           ...item,
           summary: value,
@@ -135,7 +135,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
   const handleHighlightChange = (id: number, index: number, value: string) => {
     updateItem(id, (item) => {
-      const highlights = [...getExperienceHighlights(item)];
+      const highlights = [...getExperienceHighlightsEditor(item)];
       highlights[index] = value;
 
       return {
@@ -148,7 +148,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
   const handleAddHighlight = (id: number) => {
     updateItem(id, (item) => {
-      const highlights = [...getExperienceHighlights(item), ''];
+      const highlights = [...getExperienceHighlightsEditor(item), ''];
       return {
         ...item,
         highlights,
@@ -159,7 +159,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
   const handleRemoveHighlight = (id: number, index: number) => {
     updateItem(id, (item) => {
-      const highlights = [...getExperienceHighlights(item)];
+      const highlights = [...getExperienceHighlightsEditor(item)];
       highlights.splice(index, 1);
 
       return {
@@ -198,7 +198,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                 Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows)
               </p>
               {data.map((item) => {
-                const highlights = getExperienceHighlights(item);
+                const highlights = getExperienceHighlightsEditor(item);
                 const summary = getExperienceSummary(item);
 
                 return (

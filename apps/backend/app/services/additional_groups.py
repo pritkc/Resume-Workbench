@@ -80,8 +80,8 @@ def coerce_string_list(value: Any) -> list[str]:
 def default_skill_groups() -> list[dict[str, Any]]:
     """Return the starter skills groups used for new/blank resumes."""
     return [
-        {"label": label, "values": []}
-        for _group_id, label in DEFAULT_SKILL_GROUP_SPECS
+        {"id": group_id, "label": label, "values": []}
+        for group_id, label in DEFAULT_SKILL_GROUP_SPECS
     ]
 
 
@@ -133,22 +133,29 @@ def _normalize_group_dict(
     *,
     index: int,
     existing_labels: set[str],
+    existing_ids: set[str],
 ) -> dict[str, Any]:
     if isinstance(raw_group, str):
         label = f"Additional {index + 1}"
         existing_labels.add(label.lower())
-        return {"label": label, "values": coerce_string_list(raw_group)}
+        group_id = generate_skill_group_id(existing_ids, label)
+        existing_ids.add(group_id)
+        return {"id": group_id, "label": label, "values": coerce_string_list(raw_group)}
 
     if not isinstance(raw_group, dict):
         label = f"Additional {index + 1}"
         existing_labels.add(label.lower())
-        return {"label": label, "values": coerce_string_list(raw_group)}
+        group_id = generate_skill_group_id(existing_ids, label)
+        existing_ids.add(group_id)
+        return {"id": group_id, "label": label, "values": coerce_string_list(raw_group)}
 
     raw_id = raw_group.get("id") or raw_group.get("key")
     raw_label = raw_group.get("label") or raw_group.get("title") or raw_group.get("name")
     label = ""
+    # Preserve the raw label string (including leading/trailing spaces) for UI
+    # round-trips; only use strip() to detect "empty" vs missing.
     if isinstance(raw_label, str) and raw_label.strip():
-        label = raw_label.strip()
+        label = raw_label
     elif isinstance(raw_id, str) and raw_id.strip():
         raw_id_val = raw_id.strip()
         if raw_id_val in DEFAULT_SKILL_GROUP_LABELS_BY_ID:
@@ -171,13 +178,24 @@ def _normalize_group_dict(
         else raw_group.get("content")
     )
 
-    return {"label": label, "values": values}
+    group_id = ""
+    raw_explicit_id = raw_group.get("id")
+    if isinstance(raw_explicit_id, str) and raw_explicit_id.strip():
+        group_id = raw_explicit_id.strip()
+    elif isinstance(raw_id, str) and raw_id.strip():
+        group_id = raw_id.strip()
+    if not group_id or group_id in existing_ids:
+        group_id = generate_skill_group_id(existing_ids, label)
+    existing_ids.add(group_id)
+
+    return {"id": group_id, "label": label, "values": values}
 
 
 def _groups_from_mapping(
     mapping: dict[str, Any],
     *,
     existing_labels: set[str],
+    existing_ids: set[str],
 ) -> list[dict[str, Any]]:
     if not mapping:
         return []
@@ -193,8 +211,10 @@ def _groups_from_mapping(
     if legacy_keys_present:
         for group_id, default_label in DEFAULT_SKILL_GROUP_SPECS:
             existing_labels.add(default_label.lower())
+            existing_ids.add(group_id)
             groups.append(
                 {
+                    "id": group_id,
                     "label": default_label,
                     "values": coerce_string_list(mapping.get(group_id)),
                 }
@@ -206,6 +226,7 @@ def _groups_from_mapping(
                 {"id": key, "label": prettify_skill_group_label(key), "values": mapping.get(key)},
                 index=len(groups),
                 existing_labels=existing_labels,
+                existing_ids=existing_ids,
             )
         )
 
@@ -219,13 +240,19 @@ def normalize_skill_groups(
 ) -> dict[str, Any]:
     """Normalize legacy and grouped skills payloads to `{'groups': [...]}`."""
     existing_labels: set[str] = set()
+    existing_ids: set[str] = set()
 
     if value is None:
         return default_skills_section() if seed_defaults_if_empty else {"groups": []}
 
     if isinstance(value, list):
         groups = [
-            _normalize_group_dict(raw_group, index=index, existing_labels=existing_labels)
+            _normalize_group_dict(
+                raw_group,
+                index=index,
+                existing_labels=existing_labels,
+                existing_ids=existing_ids,
+            )
             for index, raw_group in enumerate(value)
         ]
         if not groups and seed_defaults_if_empty:
@@ -236,7 +263,12 @@ def normalize_skill_groups(
         payload = value.get("skills") if isinstance(value.get("skills"), dict) else value
         if isinstance(payload.get("groups"), list):
             groups = [
-                _normalize_group_dict(raw_group, index=index, existing_labels=existing_labels)
+                _normalize_group_dict(
+                    raw_group,
+                    index=index,
+                    existing_labels=existing_labels,
+                    existing_ids=existing_ids,
+                )
                 for index, raw_group in enumerate(payload.get("groups") or [])
             ]
 
@@ -247,6 +279,7 @@ def normalize_skill_groups(
                     if key != "groups" and key not in {"sectionType", "text", "items", "strings", "values"}
                 },
                 existing_labels=existing_labels,
+                existing_ids=existing_ids,
             )
 
             existing_group_labels = {g["label"].lower() for g in groups}
@@ -260,7 +293,9 @@ def normalize_skill_groups(
                 groups = default_skill_groups()
             return {"groups": groups}
 
-        groups = _groups_from_mapping(payload, existing_labels=existing_labels)
+        groups = _groups_from_mapping(
+            payload, existing_labels=existing_labels, existing_ids=existing_ids
+        )
         if not groups and seed_defaults_if_empty:
             groups = default_skill_groups()
         return {"groups": groups}

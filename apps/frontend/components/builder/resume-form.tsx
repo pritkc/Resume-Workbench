@@ -74,6 +74,7 @@ import {
 } from '@/lib/utils/section-helpers';
 import {
   createDefaultAdditionalInfo,
+  newSkillGroupId,
   normalizeAdditionalGroups,
   normalizeAdditionalInfo,
 } from '@/lib/utils/additional-groups';
@@ -238,7 +239,11 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     );
     const groups = [
       ...normalizeAdditionalGroups(base),
-      { label: t('builder.additionalForm.newGroupLabel'), values: [] as string[] },
+      {
+        id: newSkillGroupId(),
+        label: t('builder.additionalForm.newGroupLabel'),
+        values: [] as string[],
+      },
     ];
     onUpdate({ ...resumeData, skills: normalizeAdditionalInfo({ ...base, groups }, {}) });
   };

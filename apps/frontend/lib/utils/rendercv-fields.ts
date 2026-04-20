@@ -270,6 +270,19 @@ export function getExperienceHighlights(experience?: Experience): string[] {
   return description;
 }
 
+/** Highlights for the form editor: preserves empty strings (e.g. new bullet rows). */
+export function getExperienceHighlightsEditor(experience?: Experience): string[] {
+  const raw = experience?.highlights;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map((h) => (h == null ? '' : String(h)));
+  }
+  if (Array.isArray(raw) && raw.length === 0) {
+    const derived = getExperienceHighlights(experience);
+    return derived.length > 0 ? derived : [];
+  }
+  return getExperienceHighlights(experience);
+}
+
 export function buildExperienceDescription(
   summary?: string | null,
   highlights?: Array<string | null | undefined>
@@ -315,6 +328,19 @@ export function getEducationHighlights(education?: Education): string[] {
   return descriptionLines;
 }
 
+/** Highlights for the form editor: preserves empty strings (e.g. new bullet rows). */
+export function getEducationHighlightsEditor(education?: Education): string[] {
+  const raw = education?.highlights;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map((h) => (h == null ? '' : String(h)));
+  }
+  if (Array.isArray(raw) && raw.length === 0) {
+    const derived = getEducationHighlights(education);
+    return derived.length > 0 ? derived : [];
+  }
+  return getEducationHighlights(education);
+}
+
 export function buildEducationDescription(
   summary?: string | null,
   highlights?: Array<string | null | undefined>
@@ -348,6 +374,19 @@ export function getProjectHighlights(project?: Project): string[] {
     return highlights;
   }
   return normalizeList(project?.description);
+}
+
+/** Highlights for the form editor: preserves empty strings (e.g. new bullet rows). */
+export function getProjectHighlightsEditor(project?: Project): string[] {
+  const raw = project?.highlights;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map((h) => (h == null ? '' : String(h)));
+  }
+  if (Array.isArray(raw) && raw.length === 0) {
+    const derived = getProjectHighlights(project);
+    return derived.length > 0 ? derived : [];
+  }
+  return getProjectHighlights(project);
 }
 
 export function buildProjectDescription(highlights?: Array<string | null | undefined>): string[] {

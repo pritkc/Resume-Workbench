@@ -43,6 +43,39 @@ _KNOWN_SECTION_KEYS = {
     "certifications",
     "awards",
 }
+
+# Default CV section `id` / `key` from frontend sectionMeta → RenderCV `sections` keys.
+_SECTION_META_ID_TO_RENDER_KEY: dict[str, str] = {
+    "summary": "summary",
+    "workExperience": "experience",
+    "education": "education",
+    "personalProjects": "projects",
+    "skills": "skills",
+}
+
+# Fallback append order when sectionMeta omits a populated default block.
+_DEFAULT_RENDERCV_SECTION_KEYS: tuple[str, ...] = (
+    "summary",
+    "experience",
+    "education",
+    "projects",
+    "skills",
+)
+
+
+def _section_meta_order_key(meta: dict[str, Any]) -> int:
+    raw = meta.get("order")
+    if isinstance(raw, bool):
+        return int(raw)
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        return int(raw)
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        if stripped.removeprefix("-").isdigit():
+            return int(stripped)
+    return 0
 _PROJECT_REPO_LABELS = {"repo", "repository", "github", "source", "code"}
 _PROJECT_LIVE_LABELS = {"live", "demo", "site", "website", "web"}
 
@@ -577,40 +610,86 @@ def resume_to_rendercv_payload(
     personal_info = resume_data.get("personalInfo") or {}
     skills_section = resume_data.get("skills") or resume_data.get("additional") or {}
     bold_keywords = _resolve_bold_keywords(theme_settings)
-    sections: dict[str, object] = {}
 
     summary_is_visible = _is_section_visible(resume_data.get("sectionMeta"), "summary")
     summary = _summary_section(resume_data.get("summary"))
-    if summary and summary_is_visible:
-        sections["summary"] = summary
-
     experience = _experience_entries(
         resume_data.get("workExperience") or [],
         bold_keywords=bold_keywords,
     )
-    if experience:
-        sections["experience"] = experience
-
     education = _education_entries(resume_data.get("education") or [])
-    if education:
-        sections["education"] = education
-
     projects = _project_entries(
         resume_data.get("personalProjects") or [],
         bold_keywords=bold_keywords,
     )
-    if projects:
-        sections["projects"] = projects
-
     skills = _skills_sections(skills_section)
-    if skills:
-        sections["skills"] = skills
 
-    for section_title, values in _custom_sections(
+    blocks: dict[str, Any] = {}
+    if summary and summary_is_visible:
+        blocks["summary"] = summary
+    if experience:
+        blocks["experience"] = experience
+    if education:
+        blocks["education"] = education
+    if projects:
+        blocks["projects"] = projects
+    if skills:
+        blocks["skills"] = skills
+
+    custom_sections_map = _custom_sections(
         resume_data.get("customSections") or {},
         resume_data.get("sectionMeta") or [],
-    ).items():
-        sections[section_title] = values
+    )
+
+    sections: dict[str, Any] = {}
+    section_meta_raw = resume_data.get("sectionMeta")
+
+    if isinstance(section_meta_raw, list) and section_meta_raw:
+        sorted_meta = sorted(
+            (m for m in section_meta_raw if isinstance(m, dict)),
+            key=_section_meta_order_key,
+        )
+        for meta in sorted_meta:
+            if not _coerce_bool(meta.get("isVisible"), default=True):
+                continue
+            sid_raw = str(meta.get("id") or meta.get("key") or "").strip()
+            sid = sid_raw or ""
+            if sid == "personalInfo" or not sid:
+                continue
+            is_default = bool(meta.get("isDefault", True))
+            if is_default:
+                render_key = _SECTION_META_ID_TO_RENDER_KEY.get(sid)
+                if render_key and render_key in blocks and render_key not in sections:
+                    sections[render_key] = blocks[render_key]
+            else:
+                title = _clean_text(str(meta.get("displayName") or "")) or sid
+                if title in custom_sections_map and title not in sections:
+                    sections[title] = custom_sections_map[title]
+
+        for render_key in _DEFAULT_RENDERCV_SECTION_KEYS:
+            if render_key in sections:
+                continue
+            if render_key == "summary" and not summary_is_visible:
+                continue
+            if render_key in blocks:
+                sections[render_key] = blocks[render_key]
+
+        for section_title, values in custom_sections_map.items():
+            if section_title not in sections:
+                sections[section_title] = values
+    else:
+        if summary and summary_is_visible:
+            sections["summary"] = summary
+        if experience:
+            sections["experience"] = experience
+        if education:
+            sections["education"] = education
+        if projects:
+            sections["projects"] = projects
+        if skills:
+            sections["skills"] = skills
+        for section_title, values in custom_sections_map.items():
+            sections[section_title] = values
 
     website = _website_link(personal_info)
     payload = {

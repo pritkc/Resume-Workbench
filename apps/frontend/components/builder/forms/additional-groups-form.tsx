@@ -5,11 +5,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { SkillGroup, SkillsSection } from '@/components/dashboard/resume-component';
-import {
-  getAdditionalGroupDisplayLabel,
-  normalizeAdditionalGroups,
-  normalizeAdditionalInfo,
-} from '@/lib/utils/additional-groups';
+import { newSkillGroupId, normalizeAdditionalGroups, normalizeAdditionalInfo } from '@/lib/utils/additional-groups';
 import { useTranslations } from '@/lib/i18n';
 import {
   DndContext,
@@ -57,7 +53,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
   const { t } = useTranslations();
   const listDndId = React.useId();
   const groups = React.useMemo(() => normalizeAdditionalGroups(data), [data]);
-  const [draftByIndex, setDraftByIndex] = React.useState<Record<number, string>>({});
+  const [draftByGroupId, setDraftByGroupId] = React.useState<Record<string, string>>({});
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -66,10 +62,10 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
     })
   );
 
-  const handleLabelChange = (index: number, label: string) => {
+  const handleLabelChange = (groupId: string, label: string) => {
     updateGroups(
-      groups.map((group, currentIndex) =>
-        currentIndex === index
+      groups.map((group) =>
+        group.id === groupId
           ? {
               ...group,
               label,
@@ -80,10 +76,10 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
     );
   };
 
-  const handleItemsReplace = (index: number, values: string[]) => {
+  const handleItemsReplace = (groupId: string, values: string[]) => {
     updateGroups(
-      groups.map((group, currentIndex) =>
-        currentIndex === index
+      groups.map((group) =>
+        group.id === groupId
           ? {
               ...group,
               values,
@@ -94,27 +90,27 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
     );
   };
 
-  const handleRemoveValue = (groupIndex: number, valueIndex: number) => {
-    const g = groups[groupIndex];
+  const handleRemoveValue = (groupId: string, valueIndex: number) => {
+    const g = groups.find((x) => x.id === groupId);
     if (!g) return;
     const next = [...(g.values || [])];
     next.splice(valueIndex, 1);
-    handleItemsReplace(groupIndex, next);
+    handleItemsReplace(groupId, next);
   };
 
-  const handleAddDraft = (groupIndex: number) => {
-    const raw = (draftByIndex[groupIndex] ?? '').trim();
+  const handleAddDraft = (groupId: string) => {
+    const raw = (draftByGroupId[groupId] ?? '').trim();
     if (!raw) return;
-    const g = groups[groupIndex];
+    const g = groups.find((x) => x.id === groupId);
     if (!g) return;
     const next = [...(g.values || []), raw];
-    handleItemsReplace(groupIndex, next);
-    setDraftByIndex((d) => ({ ...d, [groupIndex]: '' }));
+    handleItemsReplace(groupId, next);
+    setDraftByGroupId((d) => ({ ...d, [groupId]: '' }));
   };
 
-  const handleRemove = (index: number) => {
+  const handleRemove = (groupId: string) => {
     updateGroups(
-      groups.filter((_, currentIndex) => currentIndex !== index),
+      groups.filter((g) => g.id !== groupId),
       onChange
     );
   };
@@ -122,16 +118,9 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = Number(active.id);
-    const newIndex = Number(over.id);
-    if (
-      Number.isNaN(oldIndex) ||
-      Number.isNaN(newIndex) ||
-      oldIndex < 0 ||
-      newIndex < 0 ||
-      oldIndex >= groups.length ||
-      newIndex >= groups.length
-    ) {
+    const oldIndex = groups.findIndex((g) => g.id === active.id);
+    const newIndex = groups.findIndex((g) => g.id === over.id);
+    if (oldIndex < 0 || newIndex < 0 || oldIndex >= groups.length || newIndex >= groups.length) {
       return;
     }
     updateGroups(arrayMove(groups, oldIndex, newIndex), onChange);
@@ -146,22 +135,21 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={groups.map((_, index) => index)}
+          items={groups.map((g) => g.id)}
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-2">
-            {groups.map((group, index) => {
-              const displayLabel = getAdditionalGroupDisplayLabel(group, t);
+            {groups.map((group) => {
               const values = group.values ?? [];
 
               return (
-                <DraggableListItem key={`${index}-${displayLabel}`} id={index}>
+                <DraggableListItem key={group.id} id={group.id}>
                   <div className="group/skill entry-card-editor relative border border-black/20 bg-white">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => handleRemove(index)}
+                      onClick={() => handleRemove(group.id)}
                       aria-label={t('builder.additionalForm.removeGroup')}
                       className="absolute right-1 top-1 z-10 h-7 w-7 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/skill:opacity-100 group-focus-within/skill:opacity-100"
                     >
@@ -174,40 +162,44 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
                           {t('builder.additionalForm.groupLabel')}
                         </span>
                         <Input
-                          value={displayLabel}
-                          onChange={(event) => handleLabelChange(index, event.target.value)}
+                          value={group.label}
+                          onChange={(event) => handleLabelChange(group.id, event.target.value)}
                           placeholder={t('builder.additionalForm.groupLabelPlaceholder')}
                           className="mt-0.5 h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0"
                         />
                       </div>
                     </div>
 
-                    <div className="flex min-h-[28px] flex-wrap items-center gap-1">
-                      {values.map((val, vi) => (
-                        <span key={`${val}-${vi}`} className={chipClass}>
-                          <span className="max-w-[200px] truncate">{val}</span>
-                          <button
-                            type="button"
-                            className="ml-0.5 text-black/30 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
-                            aria-label={t('common.delete')}
-                            onClick={() => handleRemoveValue(index, vi)}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
+                    <div className="space-y-1">
+                      <div className="flex min-h-[24px] flex-wrap items-center gap-1">
+                        {values.map((val, vi) => (
+                          <span key={`${val}-${vi}`} className={chipClass}>
+                            <span className="max-w-[200px] truncate">{val}</span>
+                            <button
+                              type="button"
+                              className="ml-0.5 text-black/30 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                              aria-label={t('common.delete')}
+                              onClick={() => handleRemoveValue(group.id, vi)}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                       <input
                         type="text"
-                        value={draftByIndex[index] ?? ''}
-                        onChange={(e) => setDraftByIndex((d) => ({ ...d, [index]: e.target.value }))}
+                        value={draftByGroupId[group.id] ?? ''}
+                        onChange={(e) =>
+                          setDraftByGroupId((d) => ({ ...d, [group.id]: e.target.value }))
+                        }
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
-                            handleAddDraft(index);
+                            handleAddDraft(group.id);
                           }
                         }}
                         placeholder="+ tag"
-                        className="h-5 min-w-[4rem] flex-1 rounded-none border-0 border-b border-dashed border-black/20 bg-transparent px-1 font-mono text-[11px] placeholder:text-black/30 focus:border-black focus:outline-none sm:max-w-[140px] sm:flex-none"
+                        className="h-7 w-full min-w-0 rounded-none border border-black/20 bg-white px-2 font-mono text-sm text-black placeholder:text-black/35 focus:border-black focus:outline-none"
                       />
                     </div>
                   </div>
@@ -232,6 +224,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
               [
                 ...groups,
                 {
+                  id: newSkillGroupId(),
                   label: t('builder.additionalForm.newGroupLabel'),
                   values: [],
                 },

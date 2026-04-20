@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
+import type { UniqueIdentifier } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
 interface DraggableListItemProps {
-  id: number;
+  id: UniqueIdentifier;
   children: React.ReactNode;
 }
 

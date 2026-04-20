@@ -79,6 +79,22 @@ def _coerce_text(value: Any, joiner: str = " ") -> str:
     return joiner.join(_extract_text_fragments(value)).strip()
 
 
+def _coerce_skill_group_label(value: Any) -> str:
+    """Stringify a skills group label without trimming.
+
+    Leading/trailing spaces are meaningful while typing in the UI and must
+    round-trip through the API. ``_coerce_text`` strips edges and must not be
+    used here. Non-scalar payloads fall back to ``_coerce_text``.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return str(value)
+    return _coerce_text(value)
+
+
 def _coerce_optional_text(value: Any) -> str | None:
     """Coerce nested values into optional text."""
     if value is None:
@@ -119,6 +135,25 @@ def _coerce_string_list(value: Any) -> list[str]:
 
     coerced = _coerce_text(value)
     return [coerced] if coerced else []
+
+
+def _coerce_highlights_list(value: Any) -> list[str]:
+    """Coerce highlights / bullet lists; keeps '' entries for in-progress editor rows."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return _split_description_lines(value)
+    if isinstance(value, list):
+        out: list[str] = []
+        for entry in value:
+            if isinstance(entry, str):
+                out.append(entry)
+            else:
+                c = _coerce_text(entry)
+                out.append(c or "")
+        return out
+    c = _coerce_text(value)
+    return [c] if c else []
 
 
 def _ensure_absolute_url(value: Any) -> str | None:
@@ -362,7 +397,7 @@ class Experience(BaseModel):
         if legacy_highlights is None:
             highlights = _coerce_string_list(legacy_description)
         else:
-            highlights = _coerce_string_list(legacy_highlights)
+            highlights = _coerce_highlights_list(legacy_highlights)
             if legacy_description is None:
                 legacy_description = highlights
 
@@ -373,18 +408,20 @@ class Experience(BaseModel):
             highlights = legacy_description_list
 
         data["highlights"] = highlights
-        data["description"] = [summary, *highlights] if summary else highlights
+        data["description"] = [summary, *highlights] if summary else list(highlights)
         return data
 
     @field_validator("description", mode="before")
     @classmethod
     def _normalize_description(cls, value: Any) -> list[str]:
+        if isinstance(value, list):
+            return _coerce_highlights_list(value)
         return _coerce_string_list(value)
 
     @field_validator("highlights", mode="before")
     @classmethod
     def _normalize_highlights(cls, value: Any) -> list[str]:
-        return _coerce_string_list(value)
+        return _coerce_highlights_list(value)
 
     @field_validator("summary", mode="before")
     @classmethod
@@ -431,7 +468,7 @@ class Education(BaseModel):
 
         description = data.get("description")
         summary = _coerce_optional_text(data.get("summary"))
-        highlights = _coerce_string_list(data.get("highlights"))
+        highlights = _coerce_highlights_list(data.get("highlights"))
 
         if summary is None and description is not None:
             description_lines = _split_description_lines(_coerce_text(description, joiner="\n"))
@@ -459,7 +496,7 @@ class Education(BaseModel):
     @field_validator("highlights", mode="before")
     @classmethod
     def _normalize_highlights(cls, value: Any) -> list[str]:
-        return _coerce_string_list(value)
+        return _coerce_highlights_list(value)
 
 
 class Project(BaseModel):
@@ -498,7 +535,12 @@ class Project(BaseModel):
         data["date"] = date
         data["years"] = _coerce_text(data.get("years") or date)
 
-        highlights = _coerce_string_list(data.get("highlights", data.get("description")))
+        raw_hl = data.get("highlights")
+        raw_desc = data.get("description")
+        if raw_hl is not None:
+            highlights = _coerce_highlights_list(raw_hl)
+        else:
+            highlights = _coerce_highlights_list(raw_desc)
         data["highlights"] = highlights
         data["description"] = highlights
         return data
@@ -506,12 +548,12 @@ class Project(BaseModel):
     @field_validator("description", mode="before")
     @classmethod
     def _normalize_description(cls, value: Any) -> list[str]:
-        return _coerce_string_list(value)
+        return _coerce_highlights_list(value)
 
     @field_validator("highlights", mode="before")
     @classmethod
     def _normalize_highlights(cls, value: Any) -> list[str]:
-        return _coerce_string_list(value)
+        return _coerce_highlights_list(value)
 
     @field_validator("summary", mode="before")
     @classmethod
@@ -522,13 +564,14 @@ class Project(BaseModel):
 class SkillGroup(BaseModel):
     """Flexible label/value group inside the skills section."""
 
+    id: str = ""
     label: str = ""
     values: list[str] = Field(default_factory=list)
 
     @field_validator("label", mode="before")
     @classmethod
     def _normalize_label(cls, value: Any) -> str:
-        return _coerce_text(value)
+        return _coerce_skill_group_label(value)
 
     @field_validator("values", mode="before")
     @classmethod

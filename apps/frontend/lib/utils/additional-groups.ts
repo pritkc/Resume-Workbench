@@ -35,6 +35,21 @@ const DEFAULT_LABELS: Set<string> = new Set(
   DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => spec.label)
 );
 
+/** Matches backend `DEFAULT_SKILL_GROUP_SPECS` ids for stable keys. */
+const DEFAULT_GROUP_IDS_ORDERED = [
+  'technicalSkills',
+  'languages',
+  'certificationsTraining',
+  'awards',
+] as const;
+
+export function newSkillGroupId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `sg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 type SkillsSectionInput = SkillsSection | null | undefined;
 
 const LEGACY_ID_TO_LABEL: Record<string, string> = {
@@ -64,7 +79,8 @@ function toStringList(value: unknown): string[] {
 }
 
 export function createDefaultSkillGroups(): SkillGroup[] {
-  return DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec) => ({
+  return DEFAULT_ADDITIONAL_GROUP_SPECS.map((spec, i) => ({
+    id: DEFAULT_GROUP_IDS_ORDERED[i],
     label: spec.label,
     values: [],
   }));
@@ -103,6 +119,7 @@ function buildLegacyGroups(skills: SkillsSectionInput): SkillGroup[] {
       const rawItems = (skills as Record<string, unknown>)[legacyKey];
       if (rawItems !== undefined) {
         groups.push({
+          id: legacyKey,
           label: spec.label,
           values: toStringList(rawItems),
         });
@@ -144,9 +161,12 @@ export function normalizeAdditionalGroups(
       }
 
       const rawGroup = group as Partial<SkillGroup> & { id?: string; items?: unknown };
-      const rawLabel = typeof rawGroup.label === 'string' ? rawGroup.label.trim() : '';
+      // Never trim labels: trailing/leading spaces are valid while typing and
+      // must survive normalize → autosave → normalize (same rule as backend).
+      const rawLabel = typeof rawGroup.label === 'string' ? rawGroup.label : '';
       const rawId = typeof rawGroup.id === 'string' ? rawGroup.id.trim() : '';
       return {
+        id: rawId || undefined,
         label: resolveLabel(rawLabel, rawId),
         values: toStringList(rawGroup.values ?? rawGroup.items),
       };
@@ -154,6 +174,7 @@ export function normalizeAdditionalGroups(
 
   const normalized: SkillGroup[] = [];
   const seenLabels = new Set<string>();
+  const usedIds = new Set<string>();
 
   for (const source of sourceGroups) {
     if (!source) {
@@ -165,7 +186,22 @@ export function normalizeAdditionalGroups(
     if (seenLabels.has(labelKey)) continue;
     seenLabels.add(labelKey);
 
+    let id = typeof source.id === 'string' && source.id.trim() ? source.id.trim() : '';
+    if (!id) {
+      const trimmedForDefaultMatch = label.trim();
+      const di =
+        trimmedForDefaultMatch === ''
+          ? -1
+          : DEFAULT_ADDITIONAL_GROUP_SPECS.findIndex((s) => s.label === trimmedForDefaultMatch);
+      id = di >= 0 ? DEFAULT_GROUP_IDS_ORDERED[di] : newSkillGroupId();
+    }
+    while (usedIds.has(id)) {
+      id = newSkillGroupId();
+    }
+    usedIds.add(id);
+
     normalized.push({
+      id,
       label,
       values: source.values,
     });
@@ -277,12 +313,7 @@ export function prettifyGroupLabel(value: string): string {
 }
 
 export function buildRegenerateItemIdForGroup(group: SkillGroup): string {
-  const slug = group.label
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  return `additional_${slug || 'group'}`;
+  return `additional_${group.id}`;
 }
 
 export function normalizeResumeData(resumeData: ResumeData): ResumeData {

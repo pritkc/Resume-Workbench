@@ -25,7 +25,7 @@ import {
 import {
   buildEducationDescription,
   getEducationExplicitDate,
-  getEducationHighlights,
+  getEducationHighlightsEditor,
   getEducationSummary,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
@@ -117,7 +117,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
       }
 
       if (field === 'summary') {
-        const highlights = getEducationHighlights(item);
+        const highlights = getEducationHighlightsEditor(item);
         return {
           ...item,
           summary: value,
@@ -134,7 +134,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
 
   const handleHighlightChange = (id: number, index: number, value: string) => {
     updateItem(id, (item) => {
-      const highlights = [...getEducationHighlights(item)];
+      const highlights = [...getEducationHighlightsEditor(item)];
       highlights[index] = value;
 
       return {
@@ -147,7 +147,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
 
   const handleAddHighlight = (id: number) => {
     updateItem(id, (item) => {
-      const highlights = [...getEducationHighlights(item), ''];
+      const highlights = [...getEducationHighlightsEditor(item), ''];
       return {
         ...item,
         highlights,
@@ -158,7 +158,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
 
   const handleRemoveHighlight = (id: number, index: number) => {
     updateItem(id, (item) => {
-      const highlights = [...getEducationHighlights(item)];
+      const highlights = [...getEducationHighlightsEditor(item)];
       highlights.splice(index, 1);
 
       return {
@@ -194,7 +194,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
           >
             <div className="space-y-2">
               {data.map((item) => {
-                const highlights = getEducationHighlights(item);
+                const highlights = getEducationHighlightsEditor(item);
 
                 return (
                   <DraggableListItem key={item.id} id={item.id}>

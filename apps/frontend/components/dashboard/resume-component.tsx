@@ -87,6 +87,8 @@ export interface Project {
 }
 
 export interface SkillGroup {
+  /** Stable key for React / drag-and-drop; not shown in the PDF. */
+  id: string;
   label: string;
   values: string[];
 }
