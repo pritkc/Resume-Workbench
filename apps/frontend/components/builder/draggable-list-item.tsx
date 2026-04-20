@@ -5,6 +5,7 @@ import type { UniqueIdentifier } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
+import { SORTABLE_EASING, SORTABLE_TRANSITION_MS } from '@/lib/builder/drag-settings';
 
 interface DraggableListItemProps {
   id: UniqueIdentifier;
@@ -24,12 +25,16 @@ interface DraggableListItemProps {
 export const DraggableListItem: React.FC<DraggableListItemProps> = ({ id, children }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
+    transition: {
+      duration: SORTABLE_TRANSITION_MS,
+      easing: SORTABLE_EASING,
+    },
   });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: isDragging ? undefined : transition,
+    opacity: isDragging ? 0.55 : 1,
   };
 
   return (
@@ -37,7 +42,7 @@ export const DraggableListItem: React.FC<DraggableListItemProps> = ({ id, childr
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-0.5 top-0 z-10 flex h-full w-2.5 cursor-grab items-start justify-center pt-1 opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100"
+        className="absolute -left-0.5 top-0 z-10 flex h-full w-2.5 cursor-grab touch-none items-start justify-center pt-1 opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100"
         title="Drag to reorder"
       >
         <GripVertical className="h-4 w-4 text-black/40 transition-colors hover:text-black/70" />

@@ -150,7 +150,9 @@
       "wordsChars": "{wordCount}語 / {charCount}文字"
     },
     "additionalForm": {
-      "instructions": "グループごとにカード：ラベルを編集し、タグは Enter で追加、× で削除。",
+      "instructions": "グループごとにカード：ラベルを編集し、タグは Enter で追加、× で削除。左のつまみをドラッグして表示順を変えられます。",
+      "valuesReorderHint": "ドラッグで並べ替え",
+      "reorderGripTitle": "ドラッグして並べ替え",
       "groupLabel": "ラベル",
       "groupLabelPlaceholder": "例: Backend、ML、Infrastructure",
       "groupValues": "値",

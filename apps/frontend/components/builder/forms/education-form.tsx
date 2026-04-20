@@ -9,7 +9,6 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import {
   DndContext,
-  closestCenter,
   PointerSensor,
   KeyboardSensor,
   useSensor,
@@ -29,6 +28,7 @@ import {
   getEducationSummary,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
+import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface EducationFormProps {
   data: Education[];
@@ -46,7 +46,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
   const listDndId = React.useId();
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_LIST_PX } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -185,7 +185,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
         <DndContext
           id={listDndId}
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={resumeSortableCollision}
           onDragEnd={handleDragEnd}
         >
           <SortableContext

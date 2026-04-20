@@ -150,7 +150,9 @@
       "wordsChars": "{wordCount} palabras / {charCount} caracteres"
     },
     "additionalForm": {
-      "instructions": "Un grupo por tarjeta: edita la etiqueta, añade etiquetas (Enter) y quita con ×.",
+      "instructions": "Un grupo por tarjeta: edita la etiqueta, añade etiquetas (Enter) y quita con ×. Arrastra el asa para cambiar el orden en el CV.",
+      "valuesReorderHint": "Arrastra para reordenar",
+      "reorderGripTitle": "Arrastrar para reordenar",
       "groupLabel": "Etiqueta",
       "groupLabelPlaceholder": "p. ej., Backend, ML, Infraestructura",
       "groupValues": "Valores",

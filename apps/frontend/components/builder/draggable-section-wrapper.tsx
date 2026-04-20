@@ -4,6 +4,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
+import { SORTABLE_EASING, SORTABLE_TRANSITION_MS } from '@/lib/builder/drag-settings';
 
 interface DraggableSectionWrapperProps {
   id: string;
@@ -29,12 +30,16 @@ export const DraggableSectionWrapper: React.FC<DraggableSectionWrapperProps> = (
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     disabled,
+    transition: {
+      duration: SORTABLE_TRANSITION_MS,
+      easing: SORTABLE_EASING,
+    },
   });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: isDragging ? undefined : transition,
+    opacity: isDragging ? 0.55 : 1,
   };
 
   return (
@@ -49,7 +54,7 @@ export const DraggableSectionWrapper: React.FC<DraggableSectionWrapperProps> = (
         <div
           {...attributes}
           {...listeners}
-          className="absolute left-0 top-0 z-10 flex h-full w-3 items-start justify-center pt-2 cursor-grab active:cursor-grabbing"
+          className="absolute left-0 top-0 z-10 flex h-full w-3 touch-none items-start justify-center pt-2 cursor-grab active:cursor-grabbing"
           title="Drag to reorder"
         >
           <GripVertical className="h-4 w-4 text-black/40 transition-colors hover:text-black/70" />

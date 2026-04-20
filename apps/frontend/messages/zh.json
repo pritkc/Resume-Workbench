@@ -150,7 +150,9 @@
       "wordsChars": "{wordCount} 词 / {charCount} 字符"
     },
     "additionalForm": {
-      "instructions": "每组一张卡片：编辑标签，输入标签后按 Enter 添加，用 × 删除。",
+      "instructions": "每组一张卡片：编辑标签，输入标签后按 Enter 添加，用 × 删除。拖动左侧手柄可调整在简历中的显示顺序。",
+      "valuesReorderHint": "拖动手柄排序",
+      "reorderGripTitle": "拖动以排序",
       "groupLabel": "标签",
       "groupLabelPlaceholder": "例如：Backend、ML、Infrastructure",
       "groupValues": "内容",

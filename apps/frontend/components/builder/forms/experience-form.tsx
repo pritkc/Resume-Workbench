@@ -9,7 +9,6 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import {
   DndContext,
-  closestCenter,
   PointerSensor,
   KeyboardSensor,
   useSensor,
@@ -30,6 +29,8 @@ import {
   getExperienceSummary,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
+import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
+import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface ExperienceFormProps {
   data: Experience[];
@@ -47,7 +48,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
   const listDndId = React.useId();
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_LIST_PX } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -170,6 +171,19 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
     });
   };
 
+  const handleReorderHighlights = (id: number, from: number, to: number) => {
+    if (from === to) return;
+    updateItem(id, (item) => {
+      const highlights = [...getExperienceHighlightsEditor(item)];
+      const next = arrayMove(highlights, from, to);
+      return {
+        ...item,
+        highlights: next,
+        description: buildExperienceDescription(getExperienceSummary(item), next),
+      };
+    });
+  };
+
   return (
     <div className="space-y-2">
       {data.length === 0 ? (
@@ -186,7 +200,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
         <DndContext
           id={listDndId}
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={resumeSortableCollision}
           onDragEnd={handleDragEnd}
         >
           <SortableContext
@@ -195,7 +209,8 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
           >
             <div className="space-y-2">
               <p className="font-mono text-[9px] leading-snug text-black/40">
-                Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows)
+                Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on the left of each
+                bullet to reorder.
               </p>
               {data.map((item) => {
                 const highlights = getExperienceHighlightsEditor(item);
@@ -324,27 +339,15 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                             {t('builder.genericItemForm.actions.addPoint')}
                           </button>
                         </div>
-                        {highlights.map((highlight, idx) => (
-                          <div key={idx} className="group/hl relative mb-1.5 last:mb-0">
-                            <RichTextEditor
-                              value={highlight}
-                              onChange={(html) => handleHighlightChange(item.id, idx, html)}
-                              placeholder={t('builder.forms.experience.placeholders.highlight')}
-                              minHeight="36px"
-                              toolbarMode="none"
-                              className="[&_.ProseMirror]:pr-8"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={t('common.delete')}
-                              onClick={() => handleRemoveHighlight(item.id, idx)}
-                              className="absolute right-1 top-1 z-10 h-7 w-7 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
+                        <HighlightBulletsRichTextDnd
+                          scopeId={`xp-${item.id}`}
+                          highlights={highlights}
+                          onReorder={(from, to) => handleReorderHighlights(item.id, from, to)}
+                          onChangeLine={(idx, html) => handleHighlightChange(item.id, idx, html)}
+                          onRemoveLine={(idx) => handleRemoveHighlight(item.id, idx)}
+                          placeholder={t('builder.forms.experience.placeholders.highlight')}
+                          deleteAriaLabel={t('common.delete')}
+                        />
                       </div>
                     </div>
                   </DraggableListItem>

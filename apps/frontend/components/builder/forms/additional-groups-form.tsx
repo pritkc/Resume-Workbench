@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { SkillGroup, SkillsSection } from '@/components/dashboard/resume-component';
@@ -9,7 +9,6 @@ import { newSkillGroupId, normalizeAdditionalGroups, normalizeAdditionalInfo } f
 import { useTranslations } from '@/lib/i18n';
 import {
   DndContext,
-  closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -23,6 +22,8 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { DraggableListItem } from '../draggable-list-item';
+import { SkillGroupValuesDnd } from '../skill-group-values-dnd';
+import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface AdditionalGroupsFormProps {
   data: SkillsSection;
@@ -42,9 +43,6 @@ function updateGroups(groups: SkillGroup[], onChange: (data: SkillsSection) => v
   );
 }
 
-const chipClass =
-  'group inline-flex h-5 max-w-full items-center gap-0.5 border border-black/30 bg-white px-1.5 font-mono text-[11px] text-black hover:border-black';
-
 export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
   data,
   onChange,
@@ -56,7 +54,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
   const [draftByGroupId, setDraftByGroupId] = React.useState<Record<string, string>>({});
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_LIST_PX } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -126,12 +124,20 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
     updateGroups(arrayMove(groups, oldIndex, newIndex), onChange);
   };
 
+  const handleReorderValues = (groupId: string, from: number, to: number) => {
+    if (from === to) return;
+    const g = groups.find((x) => x.id === groupId);
+    if (!g) return;
+    const next = arrayMove([...(g.values || [])], from, to);
+    handleItemsReplace(groupId, next);
+  };
+
   return (
     <div className="space-y-2">
       <DndContext
         id={listDndId}
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={resumeSortableCollision}
         onDragEnd={handleDragEnd}
       >
         <SortableContext
@@ -171,21 +177,22 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <div className="flex min-h-[24px] flex-wrap items-center gap-1">
-                        {values.map((val, vi) => (
-                          <span key={`${val}-${vi}`} className={chipClass}>
-                            <span className="max-w-[200px] truncate">{val}</span>
-                            <button
-                              type="button"
-                              className="ml-0.5 text-black/30 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
-                              aria-label={t('common.delete')}
-                              onClick={() => handleRemoveValue(group.id, vi)}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
+                      <div className="mb-0.5 flex items-baseline justify-between gap-2">
+                        <span className="font-mono text-[10px] uppercase tracking-wider text-black/50">
+                          {t('builder.additionalForm.groupValues')}
+                        </span>
+                        <span className="max-w-[min(100%,14rem)] text-right font-mono text-[9px] leading-snug text-black/40">
+                          {t('builder.additionalForm.valuesReorderHint')}
+                        </span>
                       </div>
+                      <SkillGroupValuesDnd
+                        scopeId={group.id}
+                        values={values}
+                        onReorder={(from, to) => handleReorderValues(group.id, from, to)}
+                        onRemove={(vi) => handleRemoveValue(group.id, vi)}
+                        removeAriaLabel={t('common.delete')}
+                        gripTitle={t('builder.additionalForm.reorderGripTitle')}
+                      />
                       <input
                         type="text"
                         value={draftByGroupId[group.id] ?? ''}

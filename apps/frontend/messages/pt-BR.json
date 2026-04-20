@@ -150,7 +150,9 @@
       "wordsChars": "{wordCount} palavras / {charCount} caracteres"
     },
     "additionalForm": {
-      "instructions": "Um grupo por cartão: edite o rótulo, adicione tags (Enter) e remova com ×.",
+      "instructions": "Um grupo por cartão: edite o rótulo, adicione tags (Enter) e remova com ×. Arraste o ícone à esquerda para mudar a ordem no currículo.",
+      "valuesReorderHint": "Arraste para reordenar",
+      "reorderGripTitle": "Arraste para reordenar",
       "groupLabel": "Rótulo",
       "groupLabelPlaceholder": "ex.: Backend, ML, Infraestrutura",
       "groupValues": "Valores",

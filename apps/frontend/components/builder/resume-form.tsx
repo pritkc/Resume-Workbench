@@ -3,7 +3,6 @@
 import React, { useEffect, useId, useState } from 'react';
 import {
   DndContext,
-  closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -79,6 +78,7 @@ import {
   normalizeAdditionalInfo,
 } from '@/lib/utils/additional-groups';
 import { useTranslations } from '@/lib/i18n';
+import { DRAG_ACTIVATION_SECTION_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface ResumeFormProps {
   resumeData: ResumeData;
@@ -250,7 +250,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
 
   // Configure drag-and-drop sensors
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_SECTION_PX } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -508,7 +508,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     <DndContext
       id={sectionOrderDndId}
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={resumeSortableCollision}
       onDragEnd={handleDragEnd}
     >
       <SortableContext

@@ -3,17 +3,33 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Textarea } from '@/components/ui/textarea';
 import { Project } from '@/components/dashboard/resume-component';
 import { Plus, Trash2, Github, Globe } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import {
   buildProjectDescription,
   getProjectDate,
   getProjectHighlightsEditor,
   getProjectSummary,
 } from '@/lib/utils/rendercv-fields';
+import { DraggableListItem } from '../draggable-list-item';
+import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
+import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface ProjectsFormProps {
   data: Project[];
@@ -28,6 +44,23 @@ const addTextBtn =
 
 export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
+  const listDndId = React.useId();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_LIST_PX } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = data.findIndex((item) => item.id === active.id);
+    const newIndex = data.findIndex((item) => item.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onChange(arrayMove(data, oldIndex, newIndex));
+  };
 
   const updateItem = (id: number, updater: (item: Project) => Project) => {
     onChange(data.map((item) => (item.id === id ? updater(item) : item)));
@@ -122,33 +155,57 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
     });
   };
 
+  const handleReorderHighlights = (id: number, from: number, to: number) => {
+    if (from === to) return;
+    updateItem(id, (item) => {
+      const highlights = [...getProjectHighlightsEditor(item)];
+      const next = arrayMove(highlights, from, to);
+      return {
+        ...item,
+        highlights: next,
+        description: buildProjectDescription(next),
+      };
+    });
+  };
+
   return (
     <div className="space-y-2">
       <div className="space-y-2">
         {data.length > 0 ? (
           <p className="font-mono text-[9px] leading-snug text-black/40">
-            Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows)
+            Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on each bullet or project
+            card to reorder.
           </p>
         ) : null}
-        {data.map((item) => {
-          const highlights = getProjectHighlightsEditor(item);
-
-          return (
-            <div
-              key={item.id}
-              className="group entry-card-editor relative border border-black/20 bg-white"
+        {data.length > 0 ? (
+          <DndContext
+            id={listDndId}
+            sensors={sensors}
+            collisionDetection={resumeSortableCollision}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={data.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('common.delete')}
-                className="absolute right-1 top-1 h-7 w-7 border border-red-600/25 text-red-600 opacity-70 hover:bg-red-600/[0.06] group-hover:opacity-100"
-                onClick={() => handleRemove(item.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <div className="space-y-2">
+                {data.map((item) => {
+                  const highlights = getProjectHighlightsEditor(item);
 
-              <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
+                  return (
+                    <DraggableListItem key={item.id} id={item.id}>
+                      <div className="group entry-card-editor relative border border-black/20 bg-white">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={t('common.delete')}
+                          className="absolute right-1 top-1 h-7 w-7 border border-red-600/25 text-red-600 opacity-70 hover:bg-red-600/[0.06] group-hover:opacity-100"
+                          onClick={() => handleRemove(item.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+
+                        <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
                 <div>
                   <span className={fldLabel}>{t('builder.forms.projects.fields.projectName')}</span>
                   <Input
@@ -204,43 +261,38 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                 </div>
               </div>
 
-              <div>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className={fldLabel}>{t('builder.genericItemForm.fields.highlights')}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleAddHighlight(item.id)}
-                    className="shrink-0 font-mono text-[11px] text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
-                  >
-                    <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
-                    {t('builder.genericItemForm.actions.addPoint')}
-                  </button>
-                </div>
-                {highlights.map((highlight, idx) => (
-                  <div key={idx} className="group/hl relative mb-1.5 last:mb-0">
-                    <RichTextEditor
-                      value={highlight}
-                      onChange={(html) => handleHighlightChange(item.id, idx, html)}
-                      placeholder={t('builder.forms.projects.placeholders.highlight')}
-                      minHeight="36px"
-                      toolbarMode="none"
-                      className="[&_.ProseMirror]:pr-8"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('common.delete')}
-                      onClick={() => handleRemoveHighlight(item.id, idx)}
-                      className="absolute right-1 top-1 z-10 h-7 w-7 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
+                        <div>
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className={fldLabel}>
+                              {t('builder.genericItemForm.fields.highlights')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddHighlight(item.id)}
+                              className="shrink-0 font-mono text-[11px] text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
+                            >
+                              <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
+                              {t('builder.genericItemForm.actions.addPoint')}
+                            </button>
+                          </div>
+                          <HighlightBulletsRichTextDnd
+                            scopeId={`pr-${item.id}`}
+                            highlights={highlights}
+                            onReorder={(from, to) => handleReorderHighlights(item.id, from, to)}
+                            onChangeLine={(idx, html) => handleHighlightChange(item.id, idx, html)}
+                            onRemoveLine={(idx) => handleRemoveHighlight(item.id, idx)}
+                            placeholder={t('builder.forms.projects.placeholders.highlight')}
+                            deleteAriaLabel={t('common.delete')}
+                          />
+                        </div>
+                      </div>
+                    </DraggableListItem>
+                  );
+                })}
               </div>
-            </div>
-          );
-        })}
+            </SortableContext>
+          </DndContext>
+        ) : null}
 
         {data.length === 0 && (
           <div className="border border-dashed border-black/25 bg-white px-2 py-3 text-center">

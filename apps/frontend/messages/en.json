@@ -150,7 +150,9 @@
       "wordsChars": "{wordCount} words / {charCount} chars"
     },
     "additionalForm": {
-      "instructions": "One skill group per card: edit the label, add tags (press Enter), remove with ×.",
+      "instructions": "One skill group per card: edit the label, add tags (press Enter), remove with ×. Drag the grip beside a value to change the order shown on your resume.",
+      "valuesReorderHint": "Drag grip to reorder",
+      "reorderGripTitle": "Drag to reorder",
       "groupLabel": "Label",
       "groupLabelPlaceholder": "e.g., Backend, ML, Infrastructure",
       "groupValues": "Values",
