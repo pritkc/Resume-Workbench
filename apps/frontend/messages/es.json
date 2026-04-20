@@ -785,6 +785,7 @@
       "empty": "No se devolvieron prompts.",
       "promptCount": "{count} prompts",
       "catalogIndexTitle": "En esta página",
+      "jumpToPlaceholder": "Ir a…",
       "catalogIndexPipeline": "Pipeline",
       "catalogIndexSharedDiff": "Diff de CV compartido",
       "pipelineTitle": "Pipeline",

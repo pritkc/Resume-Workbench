@@ -49,7 +49,6 @@ import {
   Briefcase,
   Sparkles,
   Clock,
-  Globe,
   Trash2,
   AlertTriangle,
 } from 'lucide-react';
@@ -57,6 +56,7 @@ import { useLanguage } from '@/lib/context/language-context';
 import { useTranslations } from '@/lib/i18n';
 import type { SupportedLanguage } from '@/lib/api/config';
 import type { Locale } from '@/i18n/config';
+import { cn } from '@/lib/utils';
 
 type Status = 'idle' | 'loading' | 'saving' | 'saved' | 'error' | 'testing';
 
@@ -81,10 +81,14 @@ const CLIPROXY_PROVIDER_LABELS: Record<CLIProxyProviderFilter, string> = {
 /** Sentinel for models with missing / empty `owned_by` in `/v1/models`. */
 const CLIPROXY_OWNED_BY_EMPTY = '__owned_by_empty__';
 
-const SEGMENTED_BUTTON_BASE =
-  'border border-black font-mono transition-all duration-150 ease-out shadow-[2px_2px_0px_0px_#000000] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-50';
-const SEGMENTED_BUTTON_ACTIVE = 'bg-blue-700 text-white border-black hover:bg-blue-800';
-const SEGMENTED_BUTTON_INACTIVE = 'bg-white text-black hover:bg-[#E5E5E0]';
+/** Monochrome toggles — aligned with builder / Retro density. */
+const segmentBtn =
+  'border border-black/15 bg-white px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-black/60 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] transition-colors hover:border-black/25 hover:text-black disabled:cursor-not-allowed disabled:opacity-50';
+const segmentBtnOn = 'border-black/40 bg-black/[0.05] font-semibold text-black';
+
+const settingsLabelClass = 'font-mono text-[10px] uppercase tracking-wider text-black/50';
+const settingsInputClass =
+  'h-7 rounded-none border border-black/30 bg-white px-2 font-mono text-sm focus-visible:border-black focus-visible:ring-0';
 
 const unwrapCodeBlock = (value?: string | null): string | null => {
   if (!value) return null;
@@ -158,8 +162,6 @@ export default function SettingsPage() {
   // Danger Zone state
   const [showClearApiKeysDialog, setShowClearApiKeysDialog] = useState(false);
   const [showResetDatabaseDialog, setShowResetDatabaseDialog] = useState(false);
-  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [successMessage, setSuccessDialogMessage] = useState({ title: '', description: '' });
   const [isResetting, setIsResetting] = useState(false);
 
   // Language settings
@@ -172,6 +174,24 @@ export default function SettingsPage() {
     supportedLanguages,
     isLoading: languageLoading,
   } = useLanguage();
+
+  const uiLanguageOptions = useMemo(
+    () =>
+      supportedLanguages.map((lang) => ({
+        id: String(lang),
+        label: languageNames[lang] ?? String(lang),
+      })),
+    [supportedLanguages, languageNames]
+  );
+
+  const contentLanguageOptions = useMemo(
+    () =>
+      supportedLanguages.map((lang) => ({
+        id: String(lang),
+        label: languageNames[lang] ?? String(lang),
+      })),
+    [supportedLanguages, languageNames]
+  );
 
   // Translations
   const { t } = useTranslations();
@@ -716,11 +736,6 @@ export default function SettingsPage() {
       // Refresh status
       await refreshStatus();
       setError(null);
-      setSuccessDialogMessage({
-        title: t('common.success'),
-        description: t('common.keysCleared'),
-      });
-      setShowSuccessDialog(true);
     } catch (err) {
       console.error('Failed to clear API keys', err);
       setError(t('settings.errors.failedToClearApiKeys'));
@@ -749,11 +764,6 @@ export default function SettingsPage() {
       // Clear health check as context is lost
       setHealthCheck(null);
       setError(null);
-      setSuccessDialogMessage({
-        title: t('common.success'),
-        description: t('common.databaseReset'),
-      });
-      setShowSuccessDialog(true);
     } catch (err) {
       console.error('Failed to reset database', err);
       setError(t('settings.errors.failedToResetDatabase'));
@@ -774,48 +784,42 @@ export default function SettingsPage() {
     return t('settings.systemStatus.lastFetched.hoursAgo', { hours: Math.floor(diff / 3600) });
   };
 
-  const sectionCardClass =
-    'border border-black bg-white px-3 py-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]';
+  const sectionCardClass = 'entry-card-editor space-y-1.5';
 
   return (
-    <div
-      className="min-h-screen overflow-y-auto p-3 md:p-4"
-      style={{
-        backgroundImage:
-          'linear-gradient(rgba(29, 78, 216, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 78, 216, 0.05) 1px, transparent 1px)',
-        backgroundSize: '40px 40px',
-      }}
-    >
-      <div className="mx-auto w-full max-w-6xl border border-black bg-[#F0F0E8] shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
-        {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black bg-white px-4 py-3">
-          <div>
-            <h1 className="font-serif text-2xl font-bold tracking-tight uppercase">
+    <div className="min-h-screen overflow-y-auto bg-[#E8E8E0] p-2 md:p-3">
+      <div className="mx-auto w-full max-w-6xl border border-black/15 bg-[#F0F0E8] shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
+        {/* Header — builder-aligned shell */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/15 bg-white px-2 py-1.5 md:px-2.5">
+          <div className="min-w-0">
+            <h1 className="font-mono text-xs font-semibold uppercase tracking-widest text-black">
               {t('settings.title')}
             </h1>
-            <p className="mt-1 font-mono text-[11px] text-gray-500 uppercase tracking-[0.18em]">
-              {t('settings.subtitle')}
-            </p>
           </div>
           <Link href="/dashboard">
-            <Button variant="outline" size="xs">
-              <ArrowLeft className="w-4 h-4" />
-              {t('common.back')}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6 shrink-0 border border-black/30 p-0 text-black/60 hover:border-black hover:text-black"
+              aria-label={t('common.back')}
+              title={t('common.back')}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
             </Button>
           </Link>
         </div>
 
-        <div className="grid gap-4 p-4 md:p-5 xl:grid-cols-2 xl:items-start">
+        <div className="grid gap-1.5 p-2 md:p-2 xl:grid-cols-12 xl:items-start xl:gap-2">
           {/* API Key Not Configured Warning */}
           {!statusLoading && systemStatus && !systemStatus.llm_configured && (
-            <div className="border border-amber-500 bg-amber-50 px-3 py-2.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)] xl:col-span-2">
-              <div className="flex items-start gap-3">
-                <div className="w-3 h-3 bg-amber-500 mt-1 shrink-0"></div>
-                <div className="flex-1">
-                  <p className="font-mono text-xs font-bold uppercase tracking-wider text-amber-800">
+            <div className="border border-amber-500/60 bg-amber-50/90 px-2 py-1.5 xl:col-span-12">
+              <div className="flex items-start gap-1.5">
+                <div className="mt-0.5 h-2 w-2 shrink-0 bg-amber-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-amber-900">
                     {t('settings.setupRequired.title')}
                   </p>
-                  <p className="font-mono text-xs text-amber-700 mt-1">
+                  <p className="mt-0.5 font-mono text-[10px] leading-snug text-amber-800/90">
                     {t('settings.setupRequired.description')}
                   </p>
                 </div>
@@ -824,292 +828,219 @@ export default function SettingsPage() {
           )}
 
           {/* System Status Panel */}
-          <section className="space-y-3 xl:order-1">
-            <div className="flex items-center justify-between border-b border-black/10 pb-2">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4" />
-                  <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
-                    {t('settings.systemStatus.title')}
-                  </h2>
-                </div>
-                {lastFetched && (
-                  <span className="font-mono text-xs text-gray-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
+          <section className="space-y-1.5 xl:col-span-12">
+            <div className="flex items-center justify-between gap-2 border-b border-black/15 pb-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <Activity className="h-3.5 w-3.5 shrink-0 text-black/45" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
+                  {t('settings.systemStatus.title')}
+                </h2>
+                {lastFetched ? (
+                  <span className="hidden items-center gap-0.5 font-mono text-[9px] text-black/35 sm:inline-flex">
+                    <Clock className="h-3 w-3" />
                     {formatLastFetched()}
                   </span>
-                )}
+                ) : null}
               </div>
               <Button
-                variant="ghost"
-                size="sm"
+                variant="builderOutline"
+                size="icon-sm"
                 onClick={refreshStatus}
                 disabled={statusLoading}
-                className="gap-1 text-xs"
+                className="h-6 w-6 shrink-0 p-0"
+                aria-label={t('settings.systemStatus.refresh')}
+                title={t('settings.systemStatus.refresh')}
               >
-                <RefreshCw className={`w-3 h-3 ${statusLoading ? 'animate-spin' : ''}`} />
-                {t('settings.systemStatus.refresh')}
+                <RefreshCw className={`h-3.5 w-3.5 ${statusLoading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
 
             {statusLoading ? (
-              <div className="flex items-center justify-center border border-black bg-white px-3 py-8 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.08)]">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <div className="entry-card-editor flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-black/30" />
               </div>
             ) : !systemStatus ? (
-              <div className="flex flex-col items-center justify-center gap-3 border border-dashed border-red-300 bg-red-50 px-4 py-6">
-                <p className="font-mono text-xs text-red-600 uppercase">
+              <div className="flex flex-col items-center justify-center gap-2 border border-dashed border-red-300/80 bg-red-50/50 px-2 py-4">
+                <p className="font-mono text-[10px] font-semibold uppercase text-red-700">
                   {t('settings.systemStatus.unableToConnect')}
                 </p>
-                <p className="font-mono text-xs text-gray-600">
+                <p className="text-center font-mono text-[9px] text-black/50">
                   {t('settings.systemStatus.expectedAt', { apiUrl: API_URL })}
                 </p>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="builderOutline"
+                  size="icon-sm"
                   onClick={refreshStatus}
-                  className="gap-1 text-xs"
+                  className="h-6 w-6 p-0"
+                  aria-label={t('common.retry')}
+                  title={t('common.retry')}
                 >
-                  <RefreshCw className="w-3 h-3" />
-                  {t('common.retry')}
+                  <RefreshCw className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                {/* LLM Status */}
-                <div className={sectionCardClass}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Server className="w-4 h-4 text-gray-500" />
-                    <span className="font-mono text-[10px] uppercase text-gray-500">
-                      {t('settings.statusCards.llm')}
+              <div className="entry-card-editor">
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                    <div className="mb-0.5 flex items-center gap-1">
+                      <Server className="h-3 w-3 shrink-0 text-black/40" />
+                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                        {t('settings.statusCards.llm')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <LlmStatusIcon className={`h-3.5 w-3.5 shrink-0 ${llmStatusIndicator.iconClassName}`} />
+                      <span className="truncate font-mono text-[11px] font-semibold leading-tight">
+                        {llmStatusIndicator.label}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                    <div className="mb-0.5 flex items-center gap-1">
+                      <Database className="h-3 w-3 shrink-0 text-black/40" />
+                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                        {t('settings.statusCards.database')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                      <span className="font-mono text-[11px] font-semibold">
+                        {t('settings.statusValues.connected')}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                    <div className="mb-0.5 flex items-center gap-1">
+                      <FileText className="h-3 w-3 shrink-0 text-black/40" />
+                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                        {t('settings.statusCards.resumes')}
+                      </span>
+                    </div>
+                    <span className="font-mono text-lg font-bold leading-none">
+                      {systemStatus.database_stats.total_resumes}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <LlmStatusIcon className={`w-5 h-5 ${llmStatusIndicator.iconClassName}`} />
-                    <span className="font-mono text-sm font-bold">{llmStatusIndicator.label}</span>
-                  </div>
-                </div>
-
-                {/* Database Status */}
-                <div className={sectionCardClass}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Database className="w-4 h-4 text-gray-500" />
-                    <span className="font-mono text-[10px] uppercase text-gray-500">
-                      {t('settings.statusCards.database')}
+                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                    <div className="mb-0.5 flex items-center gap-1">
+                      <Briefcase className="h-3 w-3 shrink-0 text-black/40" />
+                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                        {t('settings.statusCards.jobs')}
+                      </span>
+                    </div>
+                    <span className="font-mono text-lg font-bold leading-none">
+                      {systemStatus.database_stats.total_jobs}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                    <span className="font-mono text-sm font-bold">
-                      {t('settings.statusValues.connected')}
+                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                    <div className="mb-0.5 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 shrink-0 text-black/40" />
+                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                        {t('settings.statusCards.improvements')}
+                      </span>
+                    </div>
+                    <span className="font-mono text-lg font-bold leading-none">
+                      {systemStatus.database_stats.total_improvements}
                     </span>
                   </div>
-                </div>
-
-                {/* Resumes Count */}
-                <div className={sectionCardClass}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-gray-500" />
-                    <span className="font-mono text-[10px] uppercase text-gray-500">
-                      {t('settings.statusCards.resumes')}
-                    </span>
-                  </div>
-                  <span className="font-mono text-xl font-bold">
-                    {systemStatus.database_stats.total_resumes}
-                  </span>
-                </div>
-
-                {/* Jobs Count */}
-                <div className={sectionCardClass}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Briefcase className="w-4 h-4 text-gray-500" />
-                    <span className="font-mono text-[10px] uppercase text-gray-500">
-                      {t('settings.statusCards.jobs')}
-                    </span>
-                  </div>
-                  <span className="font-mono text-xl font-bold">
-                    {systemStatus.database_stats.total_jobs}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Additional Stats Row */}
-            {systemStatus && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className={sectionCardClass}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="w-4 h-4 text-gray-500" />
-                    <span className="font-mono text-[10px] uppercase text-gray-500">
-                      {t('settings.statusCards.improvements')}
-                    </span>
-                  </div>
-                  <span className="font-mono text-xl font-bold">
-                    {systemStatus.database_stats.total_improvements}
-                  </span>
-                </div>
-                <div className={sectionCardClass}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-gray-500" />
-                    <span className="font-mono text-[10px] uppercase text-gray-500">
-                      {t('settings.statusCards.masterResume')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {systemStatus.has_active_resume ? (
-                      <>
-                        <CheckCircle2 className="w-5 h-5 text-green-600" />
-                        <span className="font-mono text-sm font-bold">
-                          {t('settings.statusValues.configured')}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-5 h-5 text-amber-500" />
-                        <span className="font-mono text-sm font-bold">
-                          {t('settings.statusValues.notSet')}
-                        </span>
-                      </>
-                    )}
+                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                    <div className="mb-0.5 flex items-center gap-1">
+                      <FileText className="h-3 w-3 shrink-0 text-black/40" />
+                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                        {t('settings.statusCards.masterResume')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {systemStatus.has_active_resume ? (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                          <span className="truncate font-mono text-[11px] font-semibold">
+                            {t('settings.statusValues.configured')}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                          <span className="truncate font-mono text-[11px] font-semibold">
+                            {t('settings.statusValues.notSet')}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
           </section>
 
-          <section className="space-y-3 xl:order-3">
-            <div className="flex items-center gap-2 border-b border-black/10 pb-2">
-              <Activity className="w-4 h-4" />
-              <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
-                LLM Observability
-              </h2>
-            </div>
-
-            <div className={`${sectionCardClass} py-3`}>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="max-w-2xl">
-                  <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Internal Debugger
-                  </p>
-                  <p className="mt-1 text-[13px] text-gray-700">
-                    Inspect request scopes, traces, previews, latency, token usage, and cost. Keep
-                    this page internal-only because prompt previews can contain resume and job data.
-                  </p>
-                </div>
-
-                <Link href="/llm-traces">
-                  <Button variant="outline" size="xs" className="gap-1.5">
-                    <Activity className="w-4 h-4" />
-                    Open Trace Viewer
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            <div className={`${sectionCardClass} py-3`}>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="max-w-2xl">
-                  <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Run Timing Analyzer
-                  </p>
-                  <p className="mt-1 text-[13px] text-gray-700">
-                    Open a dedicated page grouped by dashboard resume rows. Each resume shows
-                    company/role/location plus nested run and process timings with `N/A` fallback
-                    for historical runs without timing data.
-                  </p>
-                </div>
-
-                <Link href="/run-timing">
-                  <Button variant="outline" size="xs" className="gap-1.5">
-                    <Clock className="w-4 h-4" />
-                    Open Run Timing Analyzer
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </section>
-
-          {/* LLM Configuration */}
-          <section className="space-y-3 xl:order-5">
-            <div className="flex items-center gap-2 border-b border-black/10 pb-2">
-              <Key className="w-4 h-4" />
-              <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
+          {/* LLM Configuration — primary column on xl */}
+          <section className="space-y-1.5 xl:col-span-7">
+            <div className="flex items-center gap-1.5 border-b border-black/15 pb-1">
+              <Key className="h-3.5 w-3.5 shrink-0 text-black/45" />
+              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
                 {t('settings.llmConfigurationTitle')}
               </h2>
             </div>
 
-            <div className="grid gap-4">
+            <div className="grid gap-2">
               {/* AI Route Selection */}
               <div className={sectionCardClass}>
-                <Label>AI Route</Label>
-                <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-2">
+                <Label className={settingsLabelClass}>AI Route</Label>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5 md:grid-cols-2">
                   {AI_ROUTES.map((route) => (
                     <button
                       key={route}
+                      type="button"
                       onClick={() => setAiRoute(route)}
-                      className={`px-2.5 py-2 text-[11px] uppercase ${SEGMENTED_BUTTON_BASE} ${
-                        aiRoute === route ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE
-                      }`}
+                      className={cn(segmentBtn, aiRoute === route && segmentBtnOn)}
                     >
                       {route === 'cliproxyapi' ? 'CLIProxyAPI' : 'Direct API'}
                     </button>
                   ))}
                 </div>
-                <p className="mt-1 font-mono text-[11px] text-gray-500">
-                  {isCLIProxyRoute
-                    ? 'CLIProxyAPI route uses OpenAI-compatible transport with alias-based model routing.'
-                    : 'Direct provider API route (existing behavior).'}
-                </p>
               </div>
 
               {!isCLIProxyRoute ? (
                 <>
                   {/* Provider Selection */}
                   <div className={sectionCardClass}>
-                    <Label>{t('settings.providerLabel')}</Label>
-                    <div className="mt-2 grid grid-cols-3 gap-2 md:grid-cols-6">
+                    <Label className={settingsLabelClass}>{t('settings.providerLabel')}</Label>
+                    <div className="mt-1.5 grid grid-cols-3 gap-1.5 md:grid-cols-6">
                       {PROVIDERS.map((p) => (
                         <button
                           key={p}
+                          type="button"
                           onClick={() => handleProviderChange(p)}
-                          className={`px-2.5 py-2 text-[11px] uppercase ${SEGMENTED_BUTTON_BASE} ${
-                            provider === p ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE
-                          }`}
+                          className={cn(segmentBtn, provider === p && segmentBtnOn)}
                         >
                           {PROVIDER_INFO[p].name.split(' ')[0]}
                         </button>
                       ))}
                     </div>
-                    <p className="mt-1 font-mono text-[11px] text-gray-500">
-                      {t('settings.llmConfiguration.selectedProvider', {
-                        provider: providerInfo.name,
-                      })}
-                    </p>
                   </div>
 
                   {/* Model Input */}
                   <div className={sectionCardClass}>
-                    <Label htmlFor="model">{t('settings.llmConfiguration.modelLabel')}</Label>
+                    <Label htmlFor="model" className={settingsLabelClass}>
+                      {t('settings.llmConfiguration.modelLabel')}
+                    </Label>
                     <Input
                       id="model"
                       value={model}
                       onChange={(e) => setModel(e.target.value)}
                       placeholder={providerInfo.defaultModel}
-                      className="font-mono"
-                    />
-                    <p className="mt-1 font-mono text-[11px] text-gray-500">
-                      {t('settings.llmConfiguration.defaultModel', {
+                      className={settingsInputClass}
+                      title={t('settings.llmConfiguration.defaultModel', {
                         model: providerInfo.defaultModel,
                       })}
-                    </p>
+                    />
                   </div>
 
                   {/* API Key Input */}
                   <div className={sectionCardClass}>
-                    <Label htmlFor="apiKey">
+                    <Label htmlFor="apiKey" className={settingsLabelClass}>
                       {t('settings.llmConfiguration.apiKeyLabel')}{' '}
                       {!requiresApiKey && (
-                        <span className="text-gray-400">
+                        <span className="font-normal text-black/35">
                           {t('settings.llmConfiguration.apiKeyOptionalForOllama')}
                         </span>
                       )}
@@ -1124,29 +1055,29 @@ export default function SettingsPage() {
                           ? t('settings.llmConfiguration.apiKeyPlaceholder')
                           : t('settings.llmConfiguration.apiKeyNotRequiredPlaceholder')
                       }
-                      className="font-mono"
+                      className={settingsInputClass}
                       disabled={!requiresApiKey}
+                      title={
+                        requiresApiKey && hasStoredApiKey
+                          ? t('settings.llmConfiguration.leaveBlankToKeepExistingKey')
+                          : undefined
+                      }
                     />
-                    {requiresApiKey && hasStoredApiKey && !apiKey && (
-                      <p className="mt-1 font-mono text-[11px] text-gray-500">
-                        {t('settings.llmConfiguration.leaveBlankToKeepExistingKey')}
-                      </p>
-                    )}
                   </div>
 
                   {/* API Base URL (optional, for proxies/aggregators/custom endpoints) */}
                   <div className={sectionCardClass}>
-                    <Label htmlFor="apiBase">{t('settings.llmConfiguration.baseUrlLabel')}</Label>
+                    <Label htmlFor="apiBase" className={settingsLabelClass}>
+                      {t('settings.llmConfiguration.baseUrlLabel')}
+                    </Label>
                     <Input
                       id="apiBase"
                       value={apiBase}
                       onChange={(e) => setApiBase(e.target.value)}
                       placeholder={t('settings.llmConfiguration.baseUrlPlaceholder')}
-                      className="font-mono"
+                      className={settingsInputClass}
+                      title={t('settings.llmConfiguration.baseUrlDescription')}
                     />
-                    <p className="mt-1 font-mono text-[11px] text-gray-500">
-                      {t('settings.llmConfiguration.baseUrlDescription')}
-                    </p>
                   </div>
                 </>
               ) : (
@@ -1161,22 +1092,24 @@ export default function SettingsPage() {
                   )}
 
                   <div className={sectionCardClass}>
-                    <Label htmlFor="cliproxyBase">CLIProxy Base URL</Label>
+                    <Label htmlFor="cliproxyBase" className={settingsLabelClass}>
+                      CLIProxy Base URL
+                    </Label>
                     <Input
                       id="cliproxyBase"
                       value={cliproxyBaseUrl}
                       onChange={(e) => setCliProxyBaseUrl(e.target.value)}
                       placeholder="http://127.0.0.1:8317/v1"
-                      className="font-mono"
+                      className={settingsInputClass}
+                      title="OpenAI-compatible /v1"
                     />
-                    <p className="mt-1 font-mono text-[11px] text-gray-500">
-                      Use your local proxy endpoint (OpenAI-compatible `/v1`).
-                    </p>
                   </div>
 
                   <div className={sectionCardClass}>
-                    <Label htmlFor="cliproxyKey">CLIProxy Client API Key</Label>
-                    <div className="mt-2 flex flex-wrap items-stretch gap-2">
+                    <Label htmlFor="cliproxyKey" className={settingsLabelClass}>
+                      CLIProxy Client API Key
+                    </Label>
+                    <div className="mt-1.5 flex flex-wrap items-stretch gap-1.5">
                       <Input
                         id="cliproxyKey"
                         type={showCliProxyApiKey ? 'text' : 'password'}
@@ -1187,28 +1120,29 @@ export default function SettingsPage() {
                             ? '········ (saved — enter to replace)'
                             : 'sk-...'
                         }
-                        className="min-w-[12rem] flex-1 font-mono"
+                        className={cn(settingsInputClass, 'min-w-[12rem] flex-1')}
                         autoComplete="off"
                       />
                       <Button
                         type="button"
-                        variant="outline"
-                        size="xs"
-                        className="shrink-0"
+                        variant="builderOutline"
+                        size="icon-sm"
+                        className="h-6 w-6 shrink-0 p-0"
                         onClick={() => setShowCliProxyApiKey((v) => !v)}
                         title={showCliProxyApiKey ? 'Hide key' : 'Show key'}
+                        aria-label={showCliProxyApiKey ? 'Hide key' : 'Show key'}
                       >
                         {showCliProxyApiKey ? (
-                          <EyeOff className="h-4 w-4" />
+                          <EyeOff className="h-3.5 w-3.5" />
                         ) : (
-                          <Eye className="h-4 w-4" />
+                          <Eye className="h-3.5 w-3.5" />
                         )}
                       </Button>
                       <Button
                         type="button"
-                        variant="outline"
-                        size="xs"
-                        className="shrink-0"
+                        variant="builderOutline"
+                        size="icon-sm"
+                        className="h-6 w-6 shrink-0 p-0"
                         onClick={() => void refreshCLIProxyModels()}
                         disabled={
                           cliproxyModelsLoading ||
@@ -1216,21 +1150,15 @@ export default function SettingsPage() {
                           (!cliproxyApiKey.trim() && !hasStoredCLIProxyApiKey)
                         }
                         title="Reload models from CLIProxy"
+                        aria-label="Reload models from CLIProxy"
                       >
                         {cliproxyModelsLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <RefreshCw className="h-4 w-4" />
+                          <RefreshCw className="h-3.5 w-3.5" />
                         )}
                       </Button>
                     </div>
-                    {hasStoredCLIProxyApiKey && !cliproxyApiKey && (
-                      <p className="mt-1 font-mono text-[11px] text-gray-500">
-                        Key is stored on the server (masked in API responses). Enter a new value
-                        only to replace it, then Save. Show/hide applies to what you type; after
-                        save the API never returns the full key.
-                      </p>
-                    )}
                   </div>
 
                   <div className={sectionCardClass}>
@@ -1238,8 +1166,7 @@ export default function SettingsPage() {
                       options={cliproxyOwnedByOptions}
                       value={cliproxyOwnedByFilter}
                       onChange={(value) => setCliProxyOwnedByFilter(String(value))}
-                      label="CLIProxy owned_by (source)"
-                      description="Filter by parent / source from `/v1/models` when CLIProxy sets it."
+                      label="owned_by"
                       density="compact"
                     />
                   </div>
@@ -1252,7 +1179,6 @@ export default function SettingsPage() {
                         setCliProxyProviderFilter(value as CLIProxyProviderFilter)
                       }
                       label="CLIProxy Provider"
-                      description="Narrows the model list (Codex / Claude / Gemini / all). Catalog always loads from the proxy."
                       density="compact"
                     />
                   </div>
@@ -1269,35 +1195,37 @@ export default function SettingsPage() {
                         options={cliproxyModelOptions}
                         value={cliproxyModelAlias}
                         onChange={setCliProxyModelAlias}
-                        label="CLIProxy Model Alias"
-                        description="Models from `/v1/models` for the provider above (full list loaded once)."
+                        label="Model alias"
                         density="compact"
                       />
                     ) : (
                       <>
-                        <Label htmlFor="cliproxyModelAlias">CLIProxy Model Alias</Label>
+                        <Label htmlFor="cliproxyModelAlias" className={settingsLabelClass}>
+                          CLIProxy Model Alias
+                        </Label>
                         <Input
                           id="cliproxyModelAlias"
                           value={cliproxyModelAlias}
                           onChange={(e) => setCliProxyModelAlias(e.target.value)}
                           placeholder="codex-jd-fast"
-                          className="font-mono"
+                          className={settingsInputClass}
                         />
                       </>
                     )}
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-1.5 flex flex-wrap gap-1">
                       <Button
-                        variant="outline"
+                        variant="builderOutline"
                         size="xs"
                         onClick={refreshCLIProxyModels}
                         disabled={cliproxyModelsLoading}
+                        className="h-6 gap-1 px-2 text-[10px]"
                       >
                         {cliproxyModelsLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                          <RefreshCw className="w-4 h-4" />
+                          <RefreshCw className="h-3 w-3" />
                         )}
-                        Refresh Aliases
+                        Refresh
                       </Button>
                       <a
                         href={
@@ -1307,8 +1235,8 @@ export default function SettingsPage() {
                         target="_blank"
                         rel="noreferrer"
                       >
-                        <Button variant="outline" size="xs">
-                          Open CLIProxy Dashboard
+                        <Button variant="builderOutline" size="xs" className="h-6 px-2 text-[10px]">
+                          Dashboard
                         </Button>
                       </a>
                     </div>
@@ -1320,17 +1248,19 @@ export default function SettingsPage() {
                   </div>
 
                   <div className={sectionCardClass}>
-                    <Label htmlFor="cliproxyProfileName">Quick Profile Name</Label>
-                    <div className="mt-2 flex gap-2">
+                    <Label htmlFor="cliproxyProfileName" className={settingsLabelClass}>
+                      Quick Profile Name
+                    </Label>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
                       <Input
                         id="cliproxyProfileName"
                         value={cliproxyProfileName}
                         onChange={(e) => setCliProxyProfileName(e.target.value)}
                         placeholder="Codex Fast"
-                        className="font-mono"
+                        className={cn(settingsInputClass, 'min-w-0 flex-1')}
                       />
                       <Button
-                        variant="outline"
+                        variant="builderOutline"
                         size="xs"
                         onClick={handleSaveCLIProxyProfile}
                         disabled={!cliproxyProfileName.trim() || !cliproxyModelAlias.trim()}
@@ -1343,7 +1273,7 @@ export default function SettingsPage() {
                         {cliproxyQuickProfiles.map((profile) => (
                           <div key={profile.name} className="flex items-center gap-1">
                             <Button
-                              variant="outline"
+                              variant="builderOutline"
                               size="xs"
                               onClick={() => handleApplyCLIProxyProfile(profile)}
                             >
@@ -1365,36 +1295,40 @@ export default function SettingsPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2">
                 <Button
+                  variant="builderCta"
+                  size="xs"
                   onClick={handleSave}
                   disabled={status === 'saving' || status === 'loading'}
-                  className="flex-1"
+                  className="min-w-[7rem] flex-1"
                 >
                   {status === 'saving' ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : status === 'saved' ? (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
+                      <CheckCircle2 className="h-3.5 w-3.5" />
                       {t('common.success')}
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" />
+                      <Save className="h-3.5 w-3.5" />
                       {t('common.save')}
                     </>
                   )}
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="builderOutline"
+                  size="xs"
                   onClick={handleTestConnection}
                   disabled={status === 'testing' || status === 'saving'}
+                  className="min-w-[7rem] flex-1 sm:flex-none"
                 >
                   {status === 'testing' ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <>
-                      <Activity className="w-4 h-4" />
+                      <Activity className="h-3.5 w-3.5" />
                       {t('settings.llmConfiguration.testConnection')}
                     </>
                   )}
@@ -1419,19 +1353,19 @@ export default function SettingsPage() {
                       : 'border-red-300 bg-red-50'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="mb-1.5 flex items-center gap-1.5">
                     {healthCheck.healthy ? (
-                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
                     ) : (
-                      <XCircle className="w-5 h-5 text-red-500" />
+                      <XCircle className="h-4 w-4 text-red-500" />
                     )}
-                    <span className="font-mono text-sm font-bold">
+                    <span className="font-mono text-xs font-bold">
                       {healthCheck.healthy
                         ? t('settings.llmConfiguration.connectionSuccessful')
                         : t('settings.llmConfiguration.connectionFailed')}
                     </span>
                   </div>
-                  <p className="font-mono text-xs text-gray-600">
+                  <p className="font-mono text-[11px] text-black/55">
                     {t('settings.llmConfiguration.connectionDetails', {
                       provider: healthCheck.provider,
                       model: healthCheck.model,
@@ -1444,13 +1378,13 @@ export default function SettingsPage() {
                     <p className="font-mono text-xs text-amber-700 mt-1">{healthCheckWarning}</p>
                   )}
                   {healthDetailItems.length > 0 && (
-                    <div className="mt-3 space-y-3">
+                    <div className="mt-2 space-y-2">
                       {healthDetailItems.map((item) => (
                         <div key={item.key}>
-                          <p className="font-mono text-[10px] uppercase tracking-wider text-gray-600">
+                          <p className="font-mono text-[10px] uppercase tracking-wider text-black/45">
                             {item.label}
                           </p>
-                          <pre className="mt-1 whitespace-pre-wrap rounded-none border border-black bg-white p-3 text-xs text-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]">
+                          <pre className="mt-0.5 max-h-48 overflow-auto whitespace-pre-wrap rounded-none border border-black/20 bg-white p-2 font-mono text-[11px] text-black/80">
                             {item.value}
                           </pre>
                         </div>
@@ -1462,234 +1396,185 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Prompt Defaults Section */}
-          <section className="space-y-3 xl:order-2">
-            <div className="flex items-center gap-2 border-b border-black/10 pb-2">
-              <Sparkles className="w-4 h-4" />
-              <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
-                {t('settings.promptSettings.title')}
-              </h2>
-            </div>
+          {/* Prompt, locale, observability, danger — sidebar on xl */}
+          <div className="space-y-1.5 xl:col-span-5">
+            <section className="space-y-1.5">
+              <div className="flex items-center gap-1.5 border-b border-black/15 pb-1">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-black/45" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
+                  {t('settings.promptSettings.title')} · {t('settings.uiLanguage')}
+                </h2>
+              </div>
 
-            <div className={sectionCardClass}>
-              <p className="mb-3 text-[13px] text-gray-600">
-                Use this as the fallback tailoring intensity when the create-resume flow does not
-                already have a last-used choice saved.
-              </p>
-              <div className="pt-1">
+              <div className={sectionCardClass}>
                 <Dropdown
                   options={localizedPromptOptions}
                   value={defaultPromptId}
                   onChange={handlePromptConfigChange}
                   label={t('settings.promptSettings.title')}
-                  description="Fallback default for new tailoring runs."
                   disabled={promptConfigLoading}
                   density="compact"
                 />
-              </div>
-            </div>
-
-            <div className={`${sectionCardClass} py-3`}>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="max-w-2xl">
-                  <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-                    {t('settings.promptCatalog.settingsCardTitle')}
-                  </p>
-                  <p className="mt-1 text-[13px] text-gray-700">
-                    {t('settings.promptCatalog.settingsCardBody')}
-                  </p>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  <Dropdown
+                    options={uiLanguageOptions}
+                    value={String(uiLanguage)}
+                    onChange={(value) => setUiLanguage(value as Locale)}
+                    label={t('settings.uiLanguage')}
+                    disabled={languageLoading}
+                    density="compact"
+                  />
+                  <Dropdown
+                    options={contentLanguageOptions}
+                    value={String(contentLanguage)}
+                    onChange={(value) => void setContentLanguage(value as SupportedLanguage)}
+                    label={t('settings.contentLanguage')}
+                    disabled={languageLoading}
+                    density="compact"
+                  />
                 </div>
+                <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-black/10 pt-1.5">
+                  <label
+                    className="flex min-w-0 cursor-pointer items-center gap-1.5 font-mono text-[10px] text-black/75"
+                    title={t('settings.critiquePipeline.description')}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 shrink-0 accent-black"
+                      checked={critiqueEnabled}
+                      disabled={critiqueLoading}
+                      onChange={async (e) => {
+                        const next = e.target.checked;
+                        setCritiqueLoading(true);
+                        try {
+                          const r = await updateCritiqueConfig(next);
+                          setCritiqueEnabled(r.enabled);
+                        } catch {
+                          setCritiqueEnabled(!next);
+                        } finally {
+                          setCritiqueLoading(false);
+                        }
+                      }}
+                    />
+                    <span className="truncate">{t('settings.critiquePipeline.toggle')}</span>
+                  </label>
+                  <Link href="/settings/prompt-catalog">
+                    <Button variant="builderOutline" size="xs" className="h-6 gap-1 px-2 text-[10px]">
+                      <FileText className="h-3 w-3" />
+                      {t('settings.promptCatalog.openCatalog')}
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </section>
 
-                <Link href="/settings/prompt-catalog">
-                  <Button variant="outline" size="xs" className="gap-1.5">
-                    <FileText className="w-4 h-4" />
-                    {t('settings.promptCatalog.openCatalog')}
+            <section className="space-y-1.5">
+              <div className="flex items-center gap-1.5 border-b border-black/15 pb-1">
+                <Activity className="h-3.5 w-3.5 shrink-0 text-black/45" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
+                  LLM observability
+                </h2>
+              </div>
+              <div className="entry-card-editor flex flex-wrap gap-1">
+                <Link href="/llm-traces" className="min-w-0 flex-1 sm:flex-none">
+                  <Button
+                    variant="builderOutline"
+                    size="xs"
+                    className="h-6 w-full gap-1 px-2 text-[10px] sm:w-auto"
+                    title="Traces, latency, tokens — internal use only"
+                  >
+                    <Activity className="h-3 w-3 shrink-0" />
+                    Traces
+                  </Button>
+                </Link>
+                <Link href="/run-timing" className="min-w-0 flex-1 sm:flex-none">
+                  <Button
+                    variant="builderOutline"
+                    size="xs"
+                    className="h-6 w-full gap-1 px-2 text-[10px] sm:w-auto"
+                    title="Run timing by resume row"
+                  >
+                    <Clock className="h-3 w-3 shrink-0" />
+                    Run timing
                   </Button>
                 </Link>
               </div>
-            </div>
+            </section>
 
-            <div className={`${sectionCardClass} py-3`}>
-              <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-                {t('settings.critiquePipeline.title')}
-              </p>
-              <p className="mt-1 text-[13px] text-gray-700">
-                {t('settings.critiquePipeline.description')}
-              </p>
-              <label className="mt-3 flex cursor-pointer items-center gap-2 font-mono text-[13px] text-gray-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-blue-700"
-                  checked={critiqueEnabled}
-                  disabled={critiqueLoading}
-                  onChange={async (e) => {
-                    const next = e.target.checked;
-                    setCritiqueLoading(true);
-                    try {
-                      const r = await updateCritiqueConfig(next);
-                      setCritiqueEnabled(r.enabled);
-                    } catch {
-                      setCritiqueEnabled(!next);
-                    } finally {
-                      setCritiqueLoading(false);
-                    }
-                  }}
-                />
-                {t('settings.critiquePipeline.toggle')}
-              </label>
-            </div>
-          </section>
-
-          {/* Language Settings Section */}
-          <section className="space-y-3 xl:order-4">
-            <div className="flex items-center gap-2 border-b border-black/10 pb-2">
-              <Globe className="w-4 h-4" />
-              <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
-                {t('settings.uiLanguage')} & {t('settings.contentLanguage')}
-              </h2>
-            </div>
-
-            {/* UI Language */}
-            <div className="space-y-3">
-              <div>
-                <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
-                  {t('settings.uiLanguage')}
-                </h3>
-                <p className="mb-2 text-[13px] text-gray-600">
-                  {t('settings.uiLanguageDescription')}
-                </p>
+            <section className="space-y-1.5">
+              <div className="flex items-center gap-1.5 border-b border-red-200/80 pb-1">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-red-700">
+                  {t('settings.dangerZone')}
+                </h2>
               </div>
-
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {supportedLanguages.map((lang) => (
-                    <button
-                      key={`ui-${lang}`}
-                      onClick={() => setUiLanguage(lang as Locale)}
-                      disabled={languageLoading}
-                      className={`px-3 py-2 text-[11px] ${SEGMENTED_BUTTON_BASE} ${uiLanguage === lang ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE}`}
-                    >
-                      {languageNames[lang]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Content Language */}
-            <div className="space-y-3 border-t border-gray-200 pt-3">
-              <div>
-                <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
-                  {t('settings.contentLanguage')}
-                </h3>
-                <p className="mb-2 text-[13px] text-gray-600">
-                  {t('settings.contentLanguageDescription')}
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {supportedLanguages.map((lang) => (
-                    <button
-                      key={`content-${lang}`}
-                      onClick={() => setContentLanguage(lang as SupportedLanguage)}
-                      disabled={languageLoading}
-                      className={`px-3 py-2 text-[11px] ${SEGMENTED_BUTTON_BASE} ${contentLanguage === lang ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE}`}
-                    >
-                      {languageNames[lang]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Danger Zone */}
-          <section className="space-y-3 xl:order-6">
-            <div className="flex items-center gap-2 border-b border-red-200 pb-2">
-              <AlertTriangle className="w-4 h-4 text-red-600" />
-              <h2 className="font-mono text-sm font-bold uppercase tracking-wider text-red-600">
-                {t('settings.dangerZone')}
-              </h2>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              {/* Clear API Keys */}
-              <div className="border border-red-200 bg-red-50/50 px-4 py-3 space-y-3">
-                <div>
-                  <h3 className="font-bold text-sm text-red-900 mb-1">
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                <div className="flex flex-col gap-1 border border-red-200/70 bg-red-50/40 p-1.5">
+                  <p className="font-mono text-[9px] leading-snug text-red-900/90">
                     {t('settings.clearApiKeys')}
-                  </h3>
-                  <p className="text-[11px] text-red-700">
-                    {t('settings.clearApiKeysDescription')}
                   </p>
+                  <Button
+                    variant="builderOutline"
+                    size="xs"
+                    className="h-6 w-full gap-1 border-red-300/80 px-2 text-[10px] text-red-800 hover:bg-red-50/80"
+                    onClick={() => setShowClearApiKeysDialog(true)}
+                    disabled={isResetting}
+                    title={t('settings.clearApiKeysDescription')}
+                  >
+                    <Key className="h-3 w-3 shrink-0" />
+                    {t('settings.clearApiKeys')}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  className="w-full border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 hover:border-red-300"
-                  onClick={() => setShowClearApiKeysDialog(true)}
-                  disabled={isResetting}
-                >
-                  <Key className="w-4 h-4 mr-2" />
-                  {t('settings.clearApiKeys')}
-                </Button>
-              </div>
-
-              {/* Reset Database */}
-              <div className="border border-red-200 bg-red-50/50 px-4 py-3 space-y-3">
-                <div>
-                  <h3 className="font-bold text-sm text-red-900 mb-1">
+                <div className="flex flex-col gap-1 border border-red-200/70 bg-red-50/40 p-1.5">
+                  <p className="font-mono text-[9px] leading-snug text-red-900/90">
                     {t('settings.resetDatabase')}
-                  </h3>
-                  <p className="text-[11px] text-red-700">
-                    {t('settings.resetDatabaseDescription')}
                   </p>
+                  <Button
+                    variant="destructive"
+                    size="xs"
+                    className="h-6 w-full gap-1 rounded-none px-2 text-[10px]"
+                    onClick={() => setShowResetDatabaseDialog(true)}
+                    disabled={isResetting}
+                    title={t('settings.resetDatabaseDescription')}
+                  >
+                    <Trash2 className="h-3 w-3 shrink-0" />
+                    {t('settings.resetDatabase')}
+                  </Button>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="xs"
-                  className="w-full"
-                  onClick={() => setShowResetDatabaseDialog(true)}
-                  disabled={isResetting}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  {t('settings.resetDatabase')}
-                </Button>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-black bg-[#E5E5E0] px-3 py-1.5">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between border-t border-black/10 bg-white/90 px-2 py-1 text-[11px] text-black/60 no-print md:px-2.5">
+          <div className="flex items-center gap-1.5">
             <Image
               src="/logo.svg"
               alt="Resume Matcher"
-              width={20}
-              height={20}
-              className="h-4 w-4"
+              width={14}
+              height={14}
+              className="h-3.5 w-3.5 opacity-80"
             />
-            <span className="font-mono text-[10px] text-gray-500">
+            <span className="font-mono text-[10px] text-black/45">
               {getVersionString().toUpperCase()}
             </span>
           </div>
           <div className="flex items-center gap-2">
             {statusLoading ? (
               <>
-                <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
-                <span className="font-mono text-[10px] text-gray-500">
+                <Loader2 className="h-3 w-3 animate-spin text-black/40" />
+                <span className="font-mono text-[10px] text-black/45">
                   {t('settings.footer.status.checking')}
                 </span>
               </>
             ) : systemStatus ? (
               <>
                 <div
-                  className={`w-3 h-3 ${systemStatus.status === 'ready' ? 'bg-green-700' : 'bg-amber-500'}`}
-                ></div>
+                  className={`h-2 w-2 shrink-0 ${systemStatus.status === 'ready' ? 'bg-green-700' : 'bg-amber-500'}`}
+                />
                 <span
-                  className={`font-mono text-[10px] font-bold ${systemStatus.status === 'ready' ? 'text-green-700' : 'text-amber-600'}`}
+                  className={`font-mono text-[10px] font-semibold ${systemStatus.status === 'ready' ? 'text-green-800' : 'text-amber-700'}`}
                 >
                   {systemStatus.status === 'ready'
                     ? t('settings.footer.status.ready')
@@ -1697,7 +1582,7 @@ export default function SettingsPage() {
                 </span>
               </>
             ) : (
-              <span className="font-mono text-[10px] text-gray-500">
+              <span className="font-mono text-[10px] text-black/45">
                 {t('settings.footer.status.offline')}
               </span>
             )}
@@ -1723,17 +1608,6 @@ export default function SettingsPage() {
         confirmLabel={t('common.reset')}
         variant="danger"
         onConfirm={handleResetDatabase}
-      />
-
-      <ConfirmDialog
-        open={showSuccessDialog}
-        onOpenChange={setShowSuccessDialog}
-        title={successMessage.title}
-        description={successMessage.description}
-        confirmLabel={t('common.close')}
-        showCancelButton={false}
-        variant="success"
-        onConfirm={() => setShowSuccessDialog(false)}
       />
     </div>
   );

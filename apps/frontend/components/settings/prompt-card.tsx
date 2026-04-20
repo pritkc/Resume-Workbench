@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button';
 import { CopyCharBar } from '@/components/settings/prompt-field-chrome';
 
 const cardClass =
-  'rounded border border-black/15 bg-[#F4F4F0] p-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]';
+  'entry-card-editor border-black/20 bg-white';
 
 const textareaClass =
-  'mt-0.5 min-h-[min(380px,52vh)] w-full resize-y whitespace-pre-wrap border border-black/15 bg-white px-2 py-1.5 font-mono text-[11px] leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25';
+  'mt-0.5 min-h-[min(300px,44vh)] w-full resize-y whitespace-pre-wrap border border-black/15 bg-white px-1.5 py-1 font-mono text-[11px] leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25';
 
 export function PromptCard({
   entry,
@@ -98,73 +98,99 @@ export function PromptCard({
 
   return (
     <article id={domId} className={cardClass}>
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-black/10 pb-2">
-        <div className="min-w-0">
-          <span className="font-mono text-[13px] font-bold leading-tight text-gray-900">
-            {entry.label}
-          </span>
-          <span className="ml-1.5 font-mono text-[9px] uppercase text-gray-500">
-            {entry.step_name}
-          </span>
-          <p className="truncate font-mono text-[9px] text-gray-500">{entry.file_path}</p>
+      <div className="flex flex-wrap items-start justify-between gap-1 border-b border-black/10 pb-1.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
+            <span className="font-mono text-[12px] font-bold leading-tight text-gray-900">
+              {entry.label}
+            </span>
+            <span className="font-mono text-[8px] uppercase text-gray-500">{entry.step_name}</span>
+          </div>
+          <p className="truncate font-mono text-[8px] text-gray-500" title={entry.file_path}>
+            {entry.file_path}
+          </p>
+          <p className="mt-0.5 truncate font-mono text-[9px] leading-tight text-gray-700">
+            <span className="text-gray-500">{t('settings.promptCatalog.resolvedModel')}: </span>
+            {entry.model}
+            {entry.model_is_override ? (
+              <span className="ml-1 text-amber-900">
+                ({t('settings.promptCatalog.overrideActive')})
+              </span>
+            ) : null}
+          </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <p className="font-mono text-[9px] uppercase leading-none text-gray-500">
+        <div className="flex shrink-0 flex-col items-end gap-0.5">
+          <p className="font-mono text-[8px] uppercase leading-none text-gray-500">
             {entry.pipeline} · v{entry.version}
           </p>
           <Button
             type="button"
-            variant="outline"
+            variant="builderOutline"
             size="xs"
-            className="h-7 px-2 text-[10px]"
+            className="h-6 px-2 text-[9px]"
             onClick={() => onChangeModel(entry.step_name)}
           >
             {t('settings.promptCatalog.changeModel')}
           </Button>
         </div>
       </div>
-      <p className="mt-1.5 font-mono text-[10px] leading-tight text-gray-700">
-        <span className="text-gray-500">{t('settings.promptCatalog.resolvedModel')}: </span>
-        {entry.model}
-        {entry.model_is_override ? (
-          <span className="ml-1.5 text-amber-900">
-            ({t('settings.promptCatalog.overrideActive')})
-          </span>
-        ) : null}
-      </p>
 
       <details
-        className="mt-2 group"
+        className="mt-1.5 group"
         open={composerOpen}
         onToggle={(e) => setComposerOpen((e.target as HTMLDetailsElement).open)}
       >
-        <summary className="cursor-pointer font-mono text-[9px] font-bold uppercase tracking-wider text-blue-900 hover:text-blue-950">
+        <summary className="cursor-pointer font-mono text-[8px] font-bold uppercase tracking-wider text-black/55 hover:text-black">
           {t('settings.promptCatalog.composerSection')}
         </summary>
-        <div className="mt-2 space-y-2 border-t border-black/10 pt-2">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[9px] text-gray-600">
+        <div className="mt-1.5 space-y-1.5 border-t border-black/10 pt-1.5">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-[8px] text-gray-600">
             {composerActive ? (
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-950">
+              <span className="rounded bg-amber-100 px-1 py-0.5 text-amber-950">
                 {t('settings.promptCatalog.composerOverrideActive')}
               </span>
             ) : (
-              <span>{t('settings.promptCatalog.composerUsesShippedOrLegacy')}</span>
-            )}
-            {displayVariables.length > 0 ? (
-              <span className="min-w-0">
-                {t('settings.promptCatalog.variables')}:{' '}
-                {displayVariables.map((v) => (
-                  <code
-                    key={v.name}
-                    className="mr-0.5 inline-block rounded bg-white/80 px-0.5 text-[9px] text-gray-800"
-                    title={v.description || undefined}
-                  >
-                    ${v.name}
-                  </code>
-                ))}
+              <span
+                className="max-w-[min(100%,28rem)] truncate"
+                title={t('settings.promptCatalog.composerUsesShippedOrLegacy')}
+              >
+                {t('settings.promptCatalog.composerUsesShippedOrLegacy')}
               </span>
-            ) : null}
+            )}
           </div>
+          {displayVariables.length > 0 ? (
+            <div
+              className="border border-amber-700/35 bg-gradient-to-b from-amber-50 to-amber-50/40 px-2 py-2 shadow-[inset_4px_0_0_0_rgba(180,83,9,0.75)]"
+              role="region"
+              aria-label={t('settings.promptCatalog.variables')}
+            >
+              <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-amber-950">
+                {t('settings.promptCatalog.variables')}
+              </p>
+              <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+                {displayVariables.map((v) => {
+                  const desc = (v.description ?? '').trim();
+                  return (
+                    <li key={v.name} className="min-w-0 max-w-full">
+                      <div className="flex flex-col gap-1">
+                        <kbd
+                          className="inline-flex w-fit max-w-full items-center border-2 border-black/35 bg-white px-2.5 py-1.5 font-mono text-sm font-bold leading-none tracking-tight text-black shadow-[2px_2px_0_0_rgba(0,0,0,0.12)]"
+                          title={desc || `Template variable $${v.name}`}
+                        >
+                          <span className="text-amber-700">${v.name}</span>
+                        </kbd>
+                        {desc ? (
+                          <span className="max-w-[min(100%,20rem)] text-[10px] leading-snug text-black/65">
+                            {desc}
+                          </span>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
           {composerError ? (
             <p className="font-mono text-[10px] text-red-700">{composerError}</p>
           ) : null}
@@ -198,12 +224,12 @@ export function PromptCard({
               />
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1">
             <Button
               type="button"
               size="xs"
-              variant="default"
-              className="h-7 px-2 text-[10px]"
+              variant="builderCta"
+              className="h-6 px-2 text-[10px]"
               disabled={composerBusy}
               onClick={() => void handleSaveComposer()}
             >
@@ -212,8 +238,8 @@ export function PromptCard({
             <Button
               type="button"
               size="xs"
-              variant="outline"
-              className="h-7 px-2 text-[10px]"
+              variant="builderOutline"
+              className="h-6 px-2 text-[10px]"
               disabled={composerBusy}
               onClick={() => void handleResetComposer()}
             >

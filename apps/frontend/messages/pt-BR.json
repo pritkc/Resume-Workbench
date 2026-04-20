@@ -785,6 +785,7 @@
       "empty": "Nenhum prompt retornado.",
       "promptCount": "{count} prompts",
       "catalogIndexTitle": "Nesta página",
+      "jumpToPlaceholder": "Ir para…",
       "catalogIndexPipeline": "Pipeline",
       "catalogIndexSharedDiff": "Diff de currículo compartilhado",
       "pipelineTitle": "Pipeline",

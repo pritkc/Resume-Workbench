@@ -94,29 +94,40 @@ export function ModelPickerModal({
       aria-modal="true"
       aria-labelledby="model-picker-title"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded border border-black/20 bg-[#F4F4F0] p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.15)]">
-        <h2 id="model-picker-title" className="font-mono text-sm font-bold uppercase text-gray-900">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto border border-black/20 bg-[#F0F0E8] p-2 shadow-[0_4px_24px_rgba(0,0,0,0.12)]">
+        <h2
+          id="model-picker-title"
+          className="font-mono text-xs font-bold uppercase tracking-wide text-gray-900"
+        >
           {t('settings.promptCatalog.modelPickerTitle', { step: stepLabel })}
         </h2>
-        <p className="mt-2 font-mono text-[11px] text-gray-600">
-          {t('settings.promptCatalog.modelPickerResolved')}: {resolvedModel}
+        <p className="mt-1 font-mono text-[10px] leading-tight text-gray-600">
+          <span className="text-black/45">{t('settings.promptCatalog.modelPickerResolved')}:</span>{' '}
+          {resolvedModel}
         </p>
-        <p className="mt-1 font-mono text-[10px] text-gray-500">
-          {t('settings.promptCatalog.modelPickerAppDefault')}: {appDefaultModel}
+        <p className="mt-0.5 truncate font-mono text-[9px] text-gray-500" title={appDefaultModel}>
+          <span className="text-black/40">{t('settings.promptCatalog.modelPickerAppDefault')}:</span>{' '}
+          {appDefaultModel}
         </p>
         {cliproxyActive ? (
-          <p className="mt-2 font-mono text-[10px] leading-snug text-gray-600">
+          <p
+            className="mt-1 line-clamp-2 font-mono text-[8px] leading-snug text-gray-600"
+            title={t('settings.promptCatalog.modelPickerCliproxyHint')}
+          >
             {t('settings.promptCatalog.modelPickerCliproxyHint')}
           </p>
         ) : null}
 
         {cliproxyActive ? (
-          <div className="mt-3 space-y-2 rounded border border-black/10 bg-white/60 p-2">
+          <div className="mt-2 space-y-1 border border-black/10 bg-white/60 p-1.5">
             <div>
-              <p className="font-mono text-[9px] font-bold uppercase text-gray-600">
+              <p className="font-mono text-[8px] font-bold uppercase text-gray-600">
                 {t('settings.promptCatalog.modelPickerCliproxyModels')}
               </p>
-              <p className="mt-0.5 font-mono text-[8px] leading-snug text-gray-500">
+              <p
+                className="mt-0.5 line-clamp-2 font-mono text-[8px] leading-snug text-gray-500"
+                title={t('settings.promptCatalog.modelPickerCliproxyColumns')}
+              >
                 {t('settings.promptCatalog.modelPickerCliproxyColumns')}
               </p>
             </div>
@@ -148,9 +159,9 @@ export function ModelPickerModal({
                 </div>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="builderOutline"
                   size="xs"
-                  className="h-8"
+                  className="h-7 shrink-0 px-2 text-[10px]"
                   onClick={applyPick}
                 >
                   {t('settings.promptCatalog.modelPickerCliproxyInsert')}
@@ -164,8 +175,8 @@ export function ModelPickerModal({
           </div>
         ) : null}
 
-        <div className="mt-4 space-y-2">
-          <Label htmlFor="model-override" className="font-mono text-[10px] uppercase">
+        <div className="mt-2 space-y-1">
+          <Label htmlFor="model-override" className="font-mono text-[9px] uppercase text-black/55">
             {t('settings.promptCatalog.modelOverrideLabel')}
           </Label>
           <Input
@@ -173,16 +184,18 @@ export function ModelPickerModal({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="openai/gpt-4o or empty for default"
-            className="font-mono text-xs"
+            className="h-7 rounded-none border-black/30 font-mono text-[11px]"
           />
         </div>
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="outline" size="xs" onClick={onClose}>
+        <div className="mt-2 flex flex-wrap justify-end gap-1">
+          <Button type="button" variant="builderOutline" size="xs" className="h-6 px-2" onClick={onClose}>
             {t('settings.promptCatalog.cancel')}
           </Button>
           <Button
             type="button"
+            variant="builderCta"
             size="xs"
+            className="h-6 px-2"
             onClick={() => {
               const trimmed = value.trim();
               onApply(trimmed === '' ? null : trimmed);

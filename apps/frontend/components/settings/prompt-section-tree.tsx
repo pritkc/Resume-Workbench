@@ -5,7 +5,7 @@ import type { PromptCatalogPolicy, PromptCatalogSection } from '@/lib/api/config
 
 const POLICY_BADGE_CLASS: Record<PromptCatalogPolicy, string> = {
   system: 'border-black/20 bg-gray-100 text-gray-800',
-  user_editable_future: 'border-blue-600/30 bg-blue-50 text-blue-900',
+  user_editable_future: 'border-black/25 bg-black/[0.04] text-black/80',
   user_choice: 'border-amber-600/30 bg-amber-50 text-amber-950',
   runtime_injected: 'border-violet-600/30 bg-violet-50 text-violet-950',
 };

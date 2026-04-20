@@ -785,6 +785,7 @@
       "empty": "未返回任何提示。",
       "promptCount": "{count} 条提示",
       "catalogIndexTitle": "本页导航",
+      "jumpToPlaceholder": "跳转…",
       "catalogIndexPipeline": "流水线",
       "catalogIndexSharedDiff": "共享简历差分",
       "pipelineTitle": "流水线",

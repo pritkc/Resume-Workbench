@@ -33,15 +33,16 @@ export function CopyCharBar({
       <Button
         type="button"
         variant="ghost"
-        size="xs"
-        className="h-6 px-1.5 font-mono text-[9px]"
+        size="icon-sm"
+        className="h-5 w-5 shrink-0 p-0 font-mono text-[8px]"
         onClick={() => void copy()}
         title={t('settings.promptCatalog.copyField')}
+        aria-label={t('settings.promptCatalog.copyField')}
       >
         {copied ? (
-          <Check className="h-3.5 w-3.5 text-green-700" aria-hidden />
+          <Check className="h-3 w-3 text-green-700" aria-hidden />
         ) : (
-          <Clipboard className="h-3.5 w-3.5" aria-hidden />
+          <Clipboard className="h-3 w-3" aria-hidden />
         )}
       </Button>
     </div>

@@ -785,6 +785,7 @@
       "empty": "プロンプトがありません。",
       "promptCount": "プロンプト {count} 件",
       "catalogIndexTitle": "このページ",
+      "jumpToPlaceholder": "移動…",
       "catalogIndexPipeline": "パイプライン",
       "catalogIndexSharedDiff": "共有の差分ルール",
       "pipelineTitle": "パイプライン",

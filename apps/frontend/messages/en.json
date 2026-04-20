@@ -785,6 +785,7 @@
       "empty": "No prompts returned.",
       "promptCount": "{count} prompts",
       "catalogIndexTitle": "On this page",
+      "jumpToPlaceholder": "Jump to…",
       "catalogIndexPipeline": "Pipeline",
       "catalogIndexSharedDiff": "Shared resume-diff",
       "pipelineTitle": "Pipeline",
