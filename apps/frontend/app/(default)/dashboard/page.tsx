@@ -217,7 +217,7 @@ function ResumeRowActions({
 }
 
 export default function DashboardPage() {
-  const { t, locale } = useTranslations();
+  const { t } = useTranslations();
   const router = useRouter();
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('loading');
@@ -255,8 +255,7 @@ export default function DashboardPage() {
     [t]
   );
 
-  const dateLocale =
-    locale === 'es' ? 'es-ES' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
+  const dateLocale = 'en-US';
 
   const formatShortDate = useCallback(
     (value: string): string => {

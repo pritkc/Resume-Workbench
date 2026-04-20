@@ -261,8 +261,8 @@ class TestLanguageConfig:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ui_language"] == "en"
-        assert data["content_language"] == "es"
-        assert "en" in data["supported_languages"]
+        assert data["content_language"] == "en"
+        assert data["supported_languages"] == ["en"]
 
     @patch("app.routers.config._save_config")
     @patch("app.routers.config._load_config")

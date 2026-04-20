@@ -83,7 +83,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
     await fulfillJson(route, {
       content_language: "en",
       ui_language: "en",
-      supported_languages: ["en", "es"],
+      supported_languages: ["en"],
     });
   });
 

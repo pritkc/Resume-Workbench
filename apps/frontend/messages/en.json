@@ -668,6 +668,7 @@
     "contentLanguageDescription": "Language for generated content (resumes, cover letters)",
     "uiLanguage": "UI Language",
     "uiLanguageDescription": "Language for the user interface",
+    "appEnglishOnly": "The app and AI-assisted copy are English only.",
     "theme": "Theme",
     "themeDescription": "Choose your preferred color theme",
     "lightMode": "Light",

@@ -52,10 +52,7 @@ import {
   Trash2,
   AlertTriangle,
 } from 'lucide-react';
-import { useLanguage } from '@/lib/context/language-context';
 import { useTranslations } from '@/lib/i18n';
-import type { SupportedLanguage } from '@/lib/api/config';
-import type { Locale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 
 type Status = 'idle' | 'loading' | 'saving' | 'saved' | 'error' | 'testing';
@@ -163,35 +160,6 @@ export default function SettingsPage() {
   const [showClearApiKeysDialog, setShowClearApiKeysDialog] = useState(false);
   const [showResetDatabaseDialog, setShowResetDatabaseDialog] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-
-  // Language settings
-  const {
-    contentLanguage,
-    uiLanguage,
-    setContentLanguage,
-    setUiLanguage,
-    languageNames,
-    supportedLanguages,
-    isLoading: languageLoading,
-  } = useLanguage();
-
-  const uiLanguageOptions = useMemo(
-    () =>
-      supportedLanguages.map((lang) => ({
-        id: String(lang),
-        label: languageNames[lang] ?? String(lang),
-      })),
-    [supportedLanguages, languageNames]
-  );
-
-  const contentLanguageOptions = useMemo(
-    () =>
-      supportedLanguages.map((lang) => ({
-        id: String(lang),
-        label: languageNames[lang] ?? String(lang),
-      })),
-    [supportedLanguages, languageNames]
-  );
 
   // Translations
   const { t } = useTranslations();
@@ -1402,7 +1370,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-1.5 border-b border-black/15 pb-1">
                 <Sparkles className="h-3.5 w-3.5 shrink-0 text-black/45" />
                 <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
-                  {t('settings.promptSettings.title')} · {t('settings.uiLanguage')}
+                  {t('settings.promptSettings.title')}
                 </h2>
               </div>
 
@@ -1415,24 +1383,9 @@ export default function SettingsPage() {
                   disabled={promptConfigLoading}
                   density="compact"
                 />
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  <Dropdown
-                    options={uiLanguageOptions}
-                    value={String(uiLanguage)}
-                    onChange={(value) => setUiLanguage(value as Locale)}
-                    label={t('settings.uiLanguage')}
-                    disabled={languageLoading}
-                    density="compact"
-                  />
-                  <Dropdown
-                    options={contentLanguageOptions}
-                    value={String(contentLanguage)}
-                    onChange={(value) => void setContentLanguage(value as SupportedLanguage)}
-                    label={t('settings.contentLanguage')}
-                    disabled={languageLoading}
-                    density="compact"
-                  />
-                </div>
+                <p className="font-mono text-[10px] leading-snug text-black/45">
+                  {t('settings.appEnglishOnly')}
+                </p>
                 <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-black/10 pt-1.5">
                   <label
                     className="flex min-w-0 cursor-pointer items-center gap-1.5 font-mono text-[10px] text-black/75"

@@ -38,7 +38,7 @@ async function installPromptCatalogMocks(
     await fulfillJson(route, {
       content_language: "en",
       ui_language: "en",
-      supported_languages: ["en", "es"],
+      supported_languages: ["en"],
     });
   });
 
