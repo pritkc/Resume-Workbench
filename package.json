@@ -1,7 +1,8 @@
 {
-  "name": "resume-matcher",
+  "name": "resume-workbench",
   "version": "1.0.0",
-  "description": "<div align=\"center\">",
+  "private": true,
+  "description": "Resume Workbench — root Playwright E2E tooling; application code lives in apps/. See README.md.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -9,18 +10,9 @@
   "scripts": {
     "test:e2e": "E2E_FRONTEND_URL=http://127.0.0.1:3100 playwright test --project=chromium"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/srbhr/Resume-Matcher.git"
-  },
-  "keywords": [],
-  "author": "",
+  "keywords": ["resume", "playwright", "e2e"],
   "license": "ISC",
   "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/srbhr/Resume-Matcher/issues"
-  },
-  "homepage": "https://github.com/srbhr/Resume-Matcher#readme",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@types/node": "^25.5.0"

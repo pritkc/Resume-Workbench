@@ -1,6 +1,6 @@
 ---
 name: backend-dev
-description: Backend development agent for FastAPI, Pydantic, TinyDB, and LiteLLM. Creates endpoints, schemas, services, and database operations with proper error handling and type hints.
+description: Backend development agent for FastAPI, Pydantic, SQLAlchemy/Alembic/Postgres, and LiteLLM. Creates endpoints, schemas, services, and database operations with proper error handling and type hints.
 argument-hint: Backend task to complete (e.g., "add a new API endpoint for templates", "fix the resume parser")
 model: Claude Opus 4.5 (copilot)
 ---
@@ -27,7 +27,7 @@ You are a backend development agent for Resume Matcher. You write FastAPI endpoi
 apps/backend/app/
 ├── main.py          # FastAPI app entry, CORS, router includes
 ├── config.py        # Pydantic BaseSettings
-├── database.py      # TinyDB wrapper
+├── database.py      # Compatibility façade over SQLAlchemy repositories
 ├── llm.py           # LiteLLM wrapper
 ├── routers/         # API endpoint handlers
 ├── services/        # Business logic

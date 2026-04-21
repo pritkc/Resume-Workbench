@@ -20,9 +20,9 @@ If the refactored flow keeps fighting correctness, we simplify it or roll pieces
 
 Primary code paths involved:
 
-- [`apps/backend/app/services/tailoring/orchestration.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/orchestration.py#L30)
-- [`apps/backend/app/services/tailoring/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/models.py#L20)
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py#L258)
+- [`apps/backend/app/services/tailoring/orchestration.py`](apps/backend/app/services/tailoring/orchestration.py#L30)
+- [`apps/backend/app/services/tailoring/models.py`](apps/backend/app/services/tailoring/models.py#L20)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py#L258)
 
 ### 1. One canonical schema, aligned to backend RenderCV-ready resume data
 
@@ -30,8 +30,8 @@ The backend `ResumeData` shape is the source of truth. We will accept legacy ali
 
 Primary schema and render references:
 
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L715)
-- [`apps/backend/app/rendering/rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/rendering/rendercv_adapter.py#L481)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L715)
+- [`apps/backend/app/rendering/rendercv_adapter.py`](apps/backend/app/rendering/rendercv_adapter.py#L481)
 
 ### 2. Prefer straightforward system stages over many micro-fix helpers
 
@@ -52,8 +52,8 @@ The model must tell us exactly what changed by stable field path, and the backen
 
 Relevant existing change-path schema:
 
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L1332)
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L863)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L1332)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L863)
 
 ### 4. We must isolate subsystem work on the UI
 
@@ -74,8 +74,8 @@ That is the only way to know which layer actually did the work.
 
 Current contract and preservation references:
 
-- [`apps/backend/app/services/tailoring/contracts.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/contracts.py#L79)
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py#L143)
+- [`apps/backend/app/services/tailoring/contracts.py`](apps/backend/app/services/tailoring/contracts.py#L79)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py#L143)
 
 ### 6. JD location wins when present
 
@@ -83,8 +83,8 @@ If the JD provides a location and we successfully extract it, the final tailored
 
 Current conflict point:
 
-- [`apps/backend/app/services/tailoring/analysis.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/analysis.py#L131)
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py#L46)
+- [`apps/backend/app/services/tailoring/analysis.py`](apps/backend/app/services/tailoring/analysis.py#L131)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py#L46)
 
 ## Confirmed Current Failures
 
@@ -92,27 +92,27 @@ Current conflict point:
 
 The refactored tailoring payload still uses shared `Experience` and `Project` models:
 
-- [`apps/backend/app/services/tailoring/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/models.py#L29)
+- [`apps/backend/app/services/tailoring/models.py`](apps/backend/app/services/tailoring/models.py#L29)
 
 Those shared models still treat `highlights` as an active compatibility field:
 
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L336)
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L480)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L336)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L480)
 
 That means a response containing new `description` plus stale `highlights` gets collapsed back to the old bullet list during:
 
-- [`apps/backend/app/services/tailoring/orchestration.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/orchestration.py#L85)
+- [`apps/backend/app/services/tailoring/orchestration.py`](apps/backend/app/services/tailoring/orchestration.py#L85)
 
 ### 2. Downstream diff/render logic still prefers legacy fields
 
 Diffing reads `highlights` before `description`:
 
-- [`apps/backend/app/services/tailoring/diffing.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/diffing.py#L186)
+- [`apps/backend/app/services/tailoring/diffing.py`](apps/backend/app/services/tailoring/diffing.py#L186)
 
 RenderCV still reads `highlights` preferentially in multiple places:
 
-- [`apps/backend/app/rendering/rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/rendering/rendercv_adapter.py#L359)
-- [`apps/backend/app/rendering/rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/rendering/rendercv_adapter.py#L401)
+- [`apps/backend/app/rendering/rendercv_adapter.py`](apps/backend/app/rendering/rendercv_adapter.py#L359)
+- [`apps/backend/app/rendering/rendercv_adapter.py`](apps/backend/app/rendering/rendercv_adapter.py#L401)
 
 So even after the first bad collapse, the rest of the system keeps reinforcing the wrong field.
 
@@ -120,16 +120,16 @@ So even after the first bad collapse, the rest of the system keeps reinforcing t
 
 `skills` is present, but the contract is too soft. It says the section is an object and may regroup, but it does not give the model an explicit editable shape with path-level expectations the same way descriptions do.
 
-- [`apps/backend/app/services/tailoring/contracts.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/contracts.py#L88)
-- [`apps/backend/app/services/tailoring/prompting.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/prompting.py#L54)
-- [`apps/backend/app/prompts/templates.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/prompts/templates.py#L151)
+- [`apps/backend/app/services/tailoring/contracts.py`](apps/backend/app/services/tailoring/contracts.py#L88)
+- [`apps/backend/app/services/tailoring/prompting.py`](apps/backend/app/services/tailoring/prompting.py#L54)
+- [`apps/backend/app/prompts/tailoring_blocks.py`](apps/backend/app/prompts/tailoring_blocks.py) (tailoring prompt assembly; former `templates.py` monolith was split)
 
 ### 4. Location updates are blocked by personal-info preservation
 
 The prompt intentionally excludes `personalInfo`, but the backend later restores the entire original personal-info block wholesale:
 
-- [`apps/backend/app/services/tailoring/prompting.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/prompting.py#L54)
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py#L46)
+- [`apps/backend/app/services/tailoring/prompting.py`](apps/backend/app/services/tailoring/prompting.py#L54)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py#L46)
 
 That means even when JD extraction finds a better target location, the final tailored resume cannot reflect it.
 
@@ -137,8 +137,8 @@ That means even when JD extraction finds a better target location, the final tai
 
 Local cleanup still edits text after the model stage:
 
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py#L225)
-- [`apps/backend/app/services/refiner.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/refiner.py#L208)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py#L225)
+- [`apps/backend/app/services/refiner.py`](apps/backend/app/services/refiner.py#L208)
 
 Those edits can make a run look active even when the real LLM rewrite was lost.
 
@@ -146,7 +146,7 @@ Those edits can make a run look active even when the real LLM rewrite was lost.
 
 We do have metric detection:
 
-- [`apps/backend/app/services/tailoring/verification.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/verification.py#L11)
+- [`apps/backend/app/services/tailoring/verification.py`](apps/backend/app/services/tailoring/verification.py#L11)
 
 But it only emits warnings after the fact. It does not isolate:
 
@@ -172,7 +172,7 @@ The tailoring and render pipeline should operate on the normalized `ResumeData` 
 
 Reference:
 
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L715)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L715)
 
 ### Canonical editable fields for tailoring
 
@@ -212,8 +212,8 @@ We should normalize these once and never rely on them downstream:
 
 Primary normalization references:
 
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L300)
-- [`apps/backend/app/rendering/rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/rendering/rendercv_adapter.py#L850)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L300)
+- [`apps/backend/app/rendering/rendercv_adapter.py`](apps/backend/app/rendering/rendercv_adapter.py#L850)
 
 ## Technical Repair Flow
 
@@ -232,8 +232,8 @@ These models must not include `highlights` as an editable or prompt-visible fiel
 
 This directly removes the main collapse point caused by shared normalization:
 
-- [`apps/backend/app/services/tailoring/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/models.py#L29)
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L336)
+- [`apps/backend/app/services/tailoring/models.py`](apps/backend/app/services/tailoring/models.py#L29)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L336)
 
 #### 2. If needed, temporarily bias preview/confirm to the simpler stable path
 
@@ -241,9 +241,9 @@ If the refactored schema still causes ambiguity during rollout, temporarily keep
 
 Relevant preview/confirm flow:
 
-- [`apps/backend/app/routers/resumes.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/routers/resumes.py#L1661)
-- [`apps/backend/app/routers/resumes.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/routers/resumes.py#L1824)
-- [`apps/backend/app/routers/application_packs.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/routers/application_packs.py#L33)
+- [`apps/backend/app/routers/resumes.py`](apps/backend/app/routers/resumes.py#L1661)
+- [`apps/backend/app/routers/resumes.py`](apps/backend/app/routers/resumes.py#L1824)
+- [`apps/backend/app/routers/application_packs.py`](apps/backend/app/routers/application_packs.py#L33)
 
 ### Phase B — Unify naming conventions once and for all
 
@@ -272,12 +272,12 @@ This should be a deliberate mass cleanup across:
 
 Primary files to align:
 
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py)
-- [`apps/backend/app/services/tailoring/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/models.py)
-- [`apps/backend/app/services/tailoring/contracts.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/contracts.py)
-- [`apps/backend/app/services/tailoring/diffing.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/diffing.py)
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py)
-- [`apps/backend/app/rendering/rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/rendering/rendercv_adapter.py)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py)
+- [`apps/backend/app/services/tailoring/models.py`](apps/backend/app/services/tailoring/models.py)
+- [`apps/backend/app/services/tailoring/contracts.py`](apps/backend/app/services/tailoring/contracts.py)
+- [`apps/backend/app/services/tailoring/diffing.py`](apps/backend/app/services/tailoring/diffing.py)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py)
+- [`apps/backend/app/rendering/rendercv_adapter.py`](apps/backend/app/rendering/rendercv_adapter.py)
 
 #### 5. Make `highlights` derived-only
 
@@ -297,7 +297,7 @@ Rules:
 
 Use the existing path-based change schema as the center of the new contract:
 
-- [`apps/backend/app/schemas/models.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/schemas/models.py#L1332)
+- [`apps/backend/app/schemas/models.py`](apps/backend/app/schemas/models.py#L1332)
 
 The v2 response contract should require:
 
@@ -347,7 +347,7 @@ The response contract should tell the model that `skills.groups[*].label` and `s
 
 Current weak contract reference:
 
-- [`apps/backend/app/services/tailoring/contracts.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/contracts.py#L88)
+- [`apps/backend/app/services/tailoring/contracts.py`](apps/backend/app/services/tailoring/contracts.py#L88)
 
 #### 10. Preserve skill truthfulness without blocking valid regrouping
 
@@ -387,8 +387,8 @@ This should happen after preserving the rest of `personalInfo`, not before.
 
 Relevant code points:
 
-- [`apps/backend/app/services/tailoring/analysis.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/analysis.py#L131)
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py#L46)
+- [`apps/backend/app/services/tailoring/analysis.py`](apps/backend/app/services/tailoring/analysis.py#L131)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py#L46)
 
 #### 13. Store the location source for UI clarity
 
@@ -429,7 +429,7 @@ For every accepted or rejected text change, detect and store numeric claims such
 
 We already detect some of this in verification:
 
-- [`apps/backend/app/services/tailoring/verification.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/verification.py#L11)
+- [`apps/backend/app/services/tailoring/verification.py`](apps/backend/app/services/tailoring/verification.py#L11)
 
 Phase 3.2 should move this from a late warning into a first-class accounting stream:
 
@@ -459,8 +459,8 @@ The adapter should read canonical finalized resume data first and only use legac
 
 Current ambiguity points:
 
-- [`apps/backend/app/rendering/rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/rendering/rendercv_adapter.py#L359)
-- [`apps/backend/app/rendering/rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/rendering/rendercv_adapter.py#L401)
+- [`apps/backend/app/rendering/rendercv_adapter.py`](apps/backend/app/rendering/rendercv_adapter.py#L359)
+- [`apps/backend/app/rendering/rendercv_adapter.py`](apps/backend/app/rendering/rendercv_adapter.py#L401)
 
 #### 18. Add a pre-render consistency assertion
 
@@ -478,7 +478,7 @@ If `remove_ai_phrases()` stays, its edits must be tracked separately from LLM ed
 
 Current cleanup entry point:
 
-- [`apps/backend/app/services/tailoring/preservation.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/app/services/tailoring/preservation.py#L225)
+- [`apps/backend/app/services/tailoring/preservation.py`](apps/backend/app/services/tailoring/preservation.py#L225)
 
 #### 20. Cleanup should operate only after manifest accounting
 
@@ -505,7 +505,7 @@ Add tests proving:
 
 Best homes:
 
-- [`apps/backend/tests/service/test_improver.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/tests/service/test_improver.py)
+- [`apps/backend/tests/service/test_improver.py`](apps/backend/tests/service/test_improver.py)
 - new `apps/backend/tests/unit/test_tailoring_models.py`
 
 #### 2. Prompt contract tests
@@ -519,7 +519,7 @@ Add tests proving:
 
 Relevant existing prompt tests:
 
-- [`apps/backend/tests/service/test_improver.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/tests/service/test_improver.py#L89)
+- [`apps/backend/tests/service/test_improver.py`](apps/backend/tests/service/test_improver.py#L89)
 
 #### 3. Change-manifest validation tests
 
@@ -547,7 +547,7 @@ Add tests proving:
 
 Existing file to extend:
 
-- [`apps/backend/tests/unit/test_resume_diff.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/tests/unit/test_resume_diff.py)
+- [`apps/backend/tests/unit/test_resume_diff.py`](apps/backend/tests/unit/test_resume_diff.py)
 
 #### 5. Location override tests
 
@@ -580,7 +580,7 @@ Assert that:
 
 Relevant existing integration suite:
 
-- [`apps/backend/tests/integration/test_application_packs_api.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/tests/integration/test_application_packs_api.py)
+- [`apps/backend/tests/integration/test_application_packs_api.py`](apps/backend/tests/integration/test_application_packs_api.py)
 
 #### 7. Confirm pipeline persistence test
 
@@ -593,7 +593,7 @@ Assert that preview-to-confirm round-trip preserves:
 
 Relevant existing flow:
 
-- [`apps/backend/tests/integration/test_application_packs_api.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/tests/integration/test_application_packs_api.py#L270)
+- [`apps/backend/tests/integration/test_application_packs_api.py`](apps/backend/tests/integration/test_application_packs_api.py#L270)
 
 #### 8. Render consistency test
 
@@ -606,8 +606,8 @@ Assert that the finalized canonical payload and RenderCV input are text-identica
 
 Relevant render test suites:
 
-- [`apps/backend/tests/unit/test_rendercv_adapter.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/tests/unit/test_rendercv_adapter.py)
-- [`apps/backend/tests/unit/test_rendercv_engine.py`](/Users/pritchakalasiya/Development/resume-workk/apps/backend/tests/unit/test_rendercv_engine.py)
+- [`apps/backend/tests/unit/test_rendercv_adapter.py`](apps/backend/tests/unit/test_rendercv_adapter.py)
+- [`apps/backend/tests/unit/test_rendercv_engine.py`](apps/backend/tests/unit/test_rendercv_engine.py)
 
 #### 9. Regression test for the exact PayPal failure shape
 

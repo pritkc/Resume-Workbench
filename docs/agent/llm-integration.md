@@ -8,7 +8,8 @@
 |------|----------------|
 | `apps/backend/app/llm.py` | LiteLLM router, health checks, retries, JSON extraction, trace persistence |
 | `apps/backend/app/config.py` | runtime settings, API-key fallback, trace/cost knobs |
-| `apps/backend/app/prompts/templates.py` | core parse/tailor/cover-letter/outreach prompts plus job metadata extraction |
+| `apps/backend/app/prompts/*.py` | split prompt modules (`parse_resume`, `extract_jd_intel`, `tailoring_blocks`, `cover_letter`, `enrichment`, …) — see [llm-prompt-inventory.md](llm-prompt-inventory.md) |
+| `apps/backend/app/prompts/__init__.py` | re-exports, valid steps, optional `prompt_overrides/` |
 | `apps/backend/app/prompts/enrichment.py` | enrichment and regenerate prompts |
 | `apps/backend/app/prompts/refinement.py` | older refinement prompt plus local cleanup constants; not part of the active tailoring runtime |
 
@@ -103,9 +104,10 @@ Top-level flows attach request context with `llm_trace_scope()`. See [llm-observ
 
 Only the resume-tailoring strategy is currently runtime-configurable:
 
-- `nudge`
-- `keywords`
 - `full`
+- `lite`
+
+(Defined in `IMPROVE_PROMPT_OPTIONS` in `app/prompts/_constants.py`.)
 
 Selection precedence:
 

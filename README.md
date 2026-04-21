@@ -1,153 +1,62 @@
 # Resume Workbench
 
-This repository is the active project root for the resume builder work.
+**Resume Workbench** is a local-first web app for building, tailoring, and packaging resumes and cover letters with LLM assistance—grounded in structured data, **RenderCV**-driven PDFs, and a full **FastAPI + PostgreSQL** backend.
 
-## Layout
+This repository is **our fork**: it inherits ideas and code lineage from the open-source [**Resume Matcher**](https://github.com/srbhr/Resume-Matcher) project, but the product direction, storage model (Postgres), rendering stack, and UX here are **Workbench-specific**.
 
-- `apps/`
-  - active application code copied into the root repo
-- `tests/`
-  - project test coverage
-- `docs/plans/`
-  - phase-by-phase architecture and execution plans
-- `docs/research/`
-  - comparison notes and supporting research
-- `reference/`
-  - local upstream/source repos kept for analysis and benchmarking
-  - intentionally not tracked by this root git repo
+## What’s inside
 
-## Planning Docs
+| Area | Role |
+|------|------|
+| [`apps/frontend`](apps/frontend) | Next.js UI — dashboard, builder, tailor, settings, LLM traces |
+| [`apps/backend`](apps/backend) | FastAPI API — parsing, tailoring, application packs, artifacts, LiteLLM |
+| [`docs/agent`](docs/agent) | **Handbook for contributors and coding agents** (architecture, APIs, prompts) |
+| [`tests`](tests) | Playwright E2E (run from repo root) |
 
-- `docs/plans/resume-plan.md`
-- `docs/plans/resume-plan-phase2.md`
-- `docs/plans/resume-plan-phase3.md`
-- `docs/plans/resume-plan-phase4.md`
-- `docs/plans/phase-5.md`
-- `docs/plans/phase-6.md`
-- `docs/plans/phase-6-checklist.md`
-- `docs/plans/phase-6-global-test-cases.md`
+## Quick start
 
-## Working Approach
-
-- Run `git status`, `git add`, `git commit`, and future implementation work from this root repo.
-- Treat `reference/` as local source material only, not as part of this repo's history.
-- Build on the Resume-Matcher foundation in the root codebase, with RenderCV integrated as the renderer and the planning docs as the source of truth.
-
-## Running The App
-
-### Frontend
-
-Development mode from [apps/frontend](/Users/pritchakalasiya/Development/resume-workk/apps/frontend):
+Full install (Postgres, `uv`, env files, AI provider) is in **[SETUP.md](SETUP.md)**.
 
 ```bash
-cd /Users/pritchakalasiya/Development/resume-workk/apps/frontend
-npm run dev
-```
-
-- Serves the Next.js app on `http://localhost:3000`
-- Use this during active UI work because source edits are picked up automatically
-
-Production-style run from [apps/frontend](/Users/pritchakalasiya/Development/resume-workk/apps/frontend):
-
-```bash
-cd /Users/pritchakalasiya/Development/resume-workk/apps/frontend
-npm run build
-npm run start
-```
-
-- Use this when you want to verify the production bundle
-- `npm run start` serves the last built `.next` output, so source changes will not appear until you run `npm run build` again
-
-### Backend
-
-Development mode from [apps/backend](/Users/pritchakalasiya/Development/resume-workk/apps/backend):
-
-```bash
-cd /Users/pritchakalasiya/Development/resume-workk/apps/backend
+docker compose up -d postgres
+cd apps/backend && cp .env.example .env && uv sync && uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-- Serves the FastAPI app on `http://127.0.0.1:8000`
-- Frontend rewrites `/api/*` to this backend by default
-- Requires `DATABASE_URL` in `apps/backend/.env`; for local development, start Postgres with `docker compose up -d postgres` and run `uv run alembic upgrade head`
-
-## Setup Docs
-
-Primary setup instructions now live in [SETUP.md](SETUP.md).
-
-For subscription/OAuth-based CLIProxy flow (no paid provider API keys in Resume Matcher), use:
-- `Configuring Your AI Provider → Option C: CLIProxyAPI Route` in [SETUP.md](SETUP.md)
-- execution log and validated commands in [docs/plans/phase-3.6.3-installation-walkthrough.md](docs/plans/phase-3.6.3-installation-walkthrough.md)
-
-## Recommended Workflow After Major Changes
-
-For most day-to-day work:
-
-1. Run the backend in reload mode:
-   ```bash
-   cd /Users/pritchakalasiya/Development/resume-workk/apps/backend
-   uv run uvicorn app.main:app --reload --port 8000
-   ```
-2. Run the frontend in dev mode:
-   ```bash
-   cd /Users/pritchakalasiya/Development/resume-workk/apps/frontend
-   npm run dev
-   ```
-3. Hard refresh the browser after major frontend UI changes:
-   - Chrome on macOS: `Cmd + Shift + R`
-
-For a full production-style verification after major frontend work:
-
-1. Stop any existing frontend server
-2. Rebuild from [apps/frontend](/Users/pritchakalasiya/Development/resume-workk/apps/frontend):
-   ```bash
-   cd /Users/pritchakalasiya/Development/resume-workk/apps/frontend
-   npm run build
-   ```
-3. Start the built app:
-   ```bash
-   npm run start
-   ```
-
-Important:
-
-- If you use `npm run start`, a plain restart is not enough after code changes. You must run `npm run build` first.
-- If the UI still looks old after a restart, the first thing to check is whether you are running `dev` or `start`.
-
-## Checking And Killing Existing Processes
-
-Check whether something is already listening on the frontend or backend ports:
-
 ```bash
-lsof -nP -iTCP:3000 -sTCP:LISTEN
-lsof -nP -iTCP:8000 -sTCP:LISTEN
+cd apps/frontend && npm install && npm run dev
 ```
 
-If a stale process is still using one of those ports, stop it cleanly:
+- App: [http://localhost:3000](http://localhost:3000)  
+- API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-```bash
-pkill -f "next dev|next start"
-pkill -f "uvicorn app.main:app"
-```
+Configure an AI provider under **Settings** before running tailoring flows.
 
-If you want to target the exact process using a port:
+**Optional:** subscription/OAuth routing via CLIProxy is documented under *Option C* in [SETUP.md](SETUP.md).
 
-```bash
-lsof -ti tcp:3000 | xargs kill
-lsof -ti tcp:8000 | xargs kill
-```
+## Contributing & automation
 
-Use `kill -9` only if a process refuses to stop normally.
+- **Human contributors:** follow [SETUP.md](SETUP.md) and [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) (Workbench stack under `apps/`; ignore legacy Streamlit sections).
+- **Coding agents:** start with [docs/agent/README.md](docs/agent/README.md) and [docs/agent/quickstart.md](docs/agent/quickstart.md).
 
-## Quick Troubleshooting
+Root E2E: `npm run test:e2e` (see [package.json](package.json)).
 
-- Frontend changes not visible:
-  - Make sure the frontend is running from [apps/frontend](/Users/pritchakalasiya/Development/resume-workk/apps/frontend)
-  - If using `npm run start`, rebuild with `npm run build`
-  - Hard refresh the page
-- API calls failing from the frontend:
-  - Confirm the backend is running on `127.0.0.1:8000`
-  - Confirm the frontend is running on `localhost:3000`
-- Ports already in use:
-  - Run the `lsof` commands above
-  - Kill the old process, then restart the app
+## Acknowledgments & credits
+
+We build on and gratefully acknowledge:
+
+| Project / community | Role |
+|---------------------|------|
+| [**Resume Matcher**](https://github.com/srbhr/Resume-Matcher) | Original open-source resume–JD matching app; conceptual and code lineage for this fork |
+| [**RenderCV**](https://github.com/rendercv/rendercv) | Resume PDF / Typst / YAML rendering pipeline used end-to-end here |
+| [**LiteLLM**](https://github.com/BerriAI/litellm) | Multi-provider LLM routing in the backend |
+| [**CLIProxyAPI**](https://github.com/router-for-me/CLIProxyAPI) (optional) | Local OpenAI-compatible proxy for subscription / OAuth-style access |
+| [**Next.js**](https://nextjs.org/) & [**React**](https://react.dev/) | Frontend framework |
+| [**FastAPI**](https://fastapi.tiangolo.com/), [**SQLAlchemy**](https://www.sqlalchemy.org/), [**Alembic**](https://alembic.sqlalchemy.org/), [**PostgreSQL**](https://www.postgresql.org/) | API and persistence |
+| [**MarkItDown**](https://github.com/microsoft/markitdown) (via dependencies) | Document → markdown for uploads |
+
+Workbench-specific design and product choices are **not** endorsed by or affiliated with upstream projects unless stated otherwise.
+
+---
+
+*Resume Workbench — ship tailored applications without losing the thread.*

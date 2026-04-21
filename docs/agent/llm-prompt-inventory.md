@@ -2,126 +2,72 @@
 
 > Current prompt surfaces and the safest refactor seams for the next prompt pass.
 
-## Runtime-Configurable Prompt IDs
+The monolithic `app/prompts/templates.py` from older upstream revisions **has been removed**. Prompt text and constants live in **focused modules** under `apps/backend/app/prompts/`. Re-exports and the override mechanism are in `apps/backend/app/prompts/__init__.py`.
 
-Only resume tailoring currently exposes prompt IDs:
+## Runtime-Configurable Prompt IDs (tailoring)
 
-| Prompt ID | Meaning | Source |
-|-----------|---------|--------|
-| `nudge` | minimal edits | `IMPROVE_STRATEGY_GUIDANCE["nudge"]` |
-| `keywords` | keyword-forward tailoring | `IMPROVE_STRATEGY_GUIDANCE["keywords"]` |
-| `full` | broader rewrite within truthfulness rules | `IMPROVE_STRATEGY_GUIDANCE["full"]` |
+Tailoring exposes **`full`** and **`lite`** modes (see `IMPROVE_PROMPT_OPTIONS` in `apps/backend/app/prompts/_constants.py`). Strategy text is folded via **`TAILORING_MODE_STRATEGY`** in `apps/backend/app/prompts/tailoring_blocks.py`.
 
 Selection precedence in `apps/backend/app/routers/resumes.py`:
 
 1. request payload `prompt_id`
 2. `generation_defaults.prompt_id`
 3. `default_prompt_id`
-4. `DEFAULT_IMPROVE_PROMPT_ID`
+4. `DEFAULT_IMPROVE_PROMPT_ID` (`_constants.py`)
 
-## Prompt Modules
+## Prompt modules (by file)
 
-### `apps/backend/app/prompts/templates.py`
+| Module | Role |
+|--------|------|
+| `_constants.py` | `IMPROVE_PROMPT_OPTIONS`, `DEFAULT_IMPROVE_PROMPT_ID`, `PROMPT_VERSIONS`, language names |
+| `_schema.py` | Shared JSON schema fragments for prompts |
+| `_prompt_loader.py` | Loading / composition helpers |
+| `parse_resume.py` | `PARSE_RESUME_PROMPT` — resume upload parsing |
+| `extract_jd_intel.py` | JD keyword / intelligence extraction (`EXTRACT_*`) |
+| `tailoring_blocks.py` | Tailoring system/user shells, `IMPROVE_RESUME_PROMPT`, `TAILORING_MODE_STRATEGY`, contracts |
+| `tailor_resume_full.py` / `tailor_resume_lite.py` | Step modules for tailoring operations |
+| `tailoring_catalog.py` | Catalog metadata for tailoring |
+| `cover_letter.py` | Cover letter + outreach system prompts |
+| `answer_questions.py` | Application-question prompts |
+| `enrichment.py` | Enrichment / regenerate prompts |
+| `refinement.py` | Older refinement helpers; not the active tailoring path |
+| `critique_resume.py`, `rewrite_resume.py` | Critique / rewrite flows |
+| `_rules/*.py` | Shared rules blocks (JD intel, resume diff, critique) |
 
-| Prompt or constant | Used by | LLM operation |
-|--------------------|---------|---------------|
-| `PARSE_RESUME_PROMPT` | `services/parser.py` | `resume_parse_json` |
-| `EXTRACT_KEYWORDS_PROMPT` | `services/tailoring/analysis.py` | `job_extract_keywords` (also extracts core title, company, location) |
-| `IMPROVE_RESUME_PROMPT` | `services/tailoring/prompting.py` | `resume_generate_full` |
-| `IMPROVE_STRATEGY_GUIDANCE` | `services/tailoring/prompting.py` | folded into `resume_generate_full` |
-| `CRITICAL_TRUTHFULNESS_RULES` | `services/tailoring/prompting.py` | folded into `resume_generate_full` |
-| `COVER_LETTER_PROMPT` | `services/cover_letter.py` | `cover_letter_generate` |
-| `OUTREACH_MESSAGE_PROMPT` | `services/cover_letter.py` | `outreach_generate` |
+### Representative constants → call sites
 
-### `apps/backend/app/prompts/enrichment.py`
-
-| Prompt or constant | Used by | LLM operation |
-|--------------------|---------|---------------|
-| `ANALYZE_RESUME_PROMPT` | `routers/enrichment.py` | `enrichment_analyze_resume`, `enrichment_reanalyze_resume` |
-| `ENHANCE_DESCRIPTION_PROMPT` | `routers/enrichment.py` | `enrichment_generate_description` |
-| `REGENERATE_ITEM_PROMPT` | `routers/enrichment.py` | `enrichment_regenerate_item` |
-| `REGENERATE_ADDITIONAL_GROUP_PROMPT` | `routers/enrichment.py` | `enrichment_regenerate_additional_group` |
-
-### `apps/backend/app/prompts/refinement.py`
-
-| Prompt or constant | Used by | LLM operation |
-|--------------------|---------|---------------|
-| `KEYWORD_INJECTION_PROMPT` | `services/refiner.py` | retained for experiments only, not used in the active tailoring path |
-| `AI_PHRASE_BLACKLIST` | `services/refiner.py` | local-only, no LLM call |
-| `AI_PHRASE_REPLACEMENTS` | `services/refiner.py` | local-only, no LLM call |
+| Area | Constants / entry | Used by | LLM operation (typical) |
+|------|---------------------|---------|-------------------------|
+| Parse | `PARSE_RESUME_PROMPT` | `services/parser.py` | `resume_parse_json` |
+| JD | `EXTRACT_KEYWORDS_PROMPT`, JD intelligence blocks | `services/tailoring/analysis.py` | keyword / intel extraction |
+| Tailor | `IMPROVE_RESUME_PROMPT`, tailoring blocks | `services/tailoring/prompting.py` | `resume_generate_full` |
+| Cover / outreach | `COVER_LETTER_SYSTEM_PROMPT`, etc. | `services/cover_letter.py` | `cover_letter_generate`, `outreach_generate` |
+| Enrichment | prompts in `enrichment.py` | `routers/enrichment.py` | enrichment operations |
+| Refinement | `KEYWORD_INJECTION_PROMPT` (legacy) | `services/refiner.py` | experiments only |
 
 ## Tailoring Call Sequence
 
 ### Application-pack preview / direct improve
 
-1. `job_extract_keywords`
-   - prompt: `EXTRACT_KEYWORDS_PROMPT`
-2. `resume_generate_full`
-   - prompt: `IMPROVE_RESUME_PROMPT`
-   - strategy text injected from `IMPROVE_STRATEGY_GUIDANCE[prompt_id]`
-   - prompt also receives compact `job_analysis`, supported JD keywords from the source resume, a trimmed JD excerpt, the typed tailoring resume payload, and a JSON `response_contract`
-   - prompt explicitly excludes `personalInfo` and `sectionMeta`
-3. local post-processing:
-   - preserve personal info, dates, additional items, and custom sections
-   - rebuild `sectionMeta` locally from source state
-   - remove unsupported additions and AI-style phrasing locally
-   - compute local warnings with `verify_generated_resume_result(...)`
-   - compute preview diffs locally with `calculate_resume_diff(...)`
-4. auxiliary generation:
-   - local title derivation from extracted job metadata
-   - optional `cover_letter_generate` with compact `job_target` + trimmed JD excerpt + `CandidatePromptProfile`
-   - optional `outreach_generate` with the same compact auxiliary payload shape
+1. Keyword / JD intelligence extraction as needed
+2. `resume_generate_full` with compact tailoring payload + response contract (`personalInfo` / `sectionMeta` excluded from LLM contract)
+3. Local post-processing: preserve fields, rebuild `sectionMeta`, verification, diff
+4. Optional auxiliary generation: title, cover letter, outreach with compact profiles
 
 ## Config Surfaces
 
-`/api/v1/config/prompts`
+`/api/v1/config/prompts` — default tailor `prompt_id` and Settings selector.
 
-- stores the global default tailor `prompt_id`
-- drives the Settings page prompt selector
-
-`/api/v1/config/generation-defaults`
-
-- stores the last-used tailor `prompt_id`
-- also stores `include_cover_letter` and `include_outreach_message`
-- consumed by the Tailor page as the create-pack default state
+`/api/v1/config/generation-defaults` — last-used tailor options and cover/outreach flags.
 
 ## What Is Not Configurable Yet
 
-- parse prompt
-- keyword extraction prompt
-- refinement prompt (inactive in the current tailoring path)
-- cover-letter prompt
-- outreach prompt
-- enrichment and regenerate prompts
-- health-check prompts in `app/llm.py`
-
-## Important Runtime Metadata
-
-Current prompt-related metadata is not centralized, but several calls already persist useful context:
-
-- tailor calls attach `prompt_id` in `metadata`
-- cover/outreach calls attach prompt-payload size hints such as trimmed JD chars and compact candidate-profile chars
-- application-pack preview/confirm store `prompt_id` in `generation_runs`
-- job preview state stores `preview_prompt_id`
+Many non-tailoring prompts (parse, enrichment, cover, outreach) are code-defined; versioning is tracked in `PROMPT_VERSIONS` where applicable.
 
 ## Refactor Seams
 
-The safest next-step split is:
+Same as before: centralize prompt selection, explicit prompt descriptors, and richer `metadata` on `llm_calls`.
 
-1. prompt definitions
-   - move pure prompt text and option metadata behind a clearer module boundary
-2. prompt selection
-   - centralize `prompt_id` resolution so routers do not own precedence rules
-3. prompt execution descriptors
-   - define prompt name, operation name, output kind, and system prompt together
-4. prompt observability
-   - make prompt version/name explicit in `metadata`, not just `prompt_id`
+## Observability
 
-## Current Pain Points To Fix Carefully
-
-- system prompts are still inline in callers instead of living next to template strings
-- prompt constants and operation names are spread across services and routers
-- only tailoring has a first-class prompt registry
-- prompt versioning is implicit, not explicit
-- enrichment uses router-level LLM calls without top-level trace scopes
-- `services/refiner.py` still contains an older keyword-injection prompt that is no longer part of the active tailoring runtime
+Persisted rows use the `llm_calls` SQL table (`LLMCall` in `app/db/models.py`), surfaced at `/llm-traces` on the frontend.

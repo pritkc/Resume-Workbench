@@ -1399,7 +1399,7 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
 
     # Build response
     raw_resume = RawResume(
-        id=None,  # TinyDB doesn't have numeric IDs like SQL
+        id=None,  # Omit DB id when constructing an in-memory model instance
         content=resume["content"],
         content_type=resume["content_type"],
         created_at=resume["created_at"],
@@ -2244,11 +2244,24 @@ async def improve_resume_confirm_endpoint(
         _raise_improve_error("confirm", stage, e, detail)
 
 
-@router.post("/improve", response_model=ImproveResumeResponse)
+@router.post(
+    "/improve",
+    response_model=ImproveResumeResponse,
+    deprecated=True,
+    summary="Tailor resume in one shot (legacy)",
+    description=(
+        "Prefer `POST /api/v1/application-packs/preview` then "
+        "`POST /api/v1/application-packs/confirm` for the supported application-pack flow "
+        "(diff review, preview hashes, and pack linkage). This endpoint remains for "
+        "backward compatibility and scripts that create a tailored resume in a single call."
+    ),
+)
 async def improve_resume_endpoint(
     request: ImproveResumeRequest,
 ) -> ImproveResumeResponse:
     """Improve/tailor a resume for a specific job description.
+
+    **Deprecated in OpenAPI:** use the application-pack preview/confirm pipeline instead.
 
     Uses LLM to analyze the job and generate an optimized resume version
     with improvement suggestions.

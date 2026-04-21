@@ -10,7 +10,7 @@ description: |
 
 ## Architecture
 
-- **Backend**: FastAPI + Python 3.13+, TinyDB, LiteLLM
+- **Backend**: FastAPI + Python 3.13+, SQLAlchemy/Alembic/Postgres, LiteLLM
 - **Frontend**: Next.js 16 + React 19, Tailwind CSS v4, Swiss International Style
 - **API**: REST endpoints at `/api/v1/*`
 

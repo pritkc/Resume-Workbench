@@ -20,22 +20,22 @@ Run the bundled scripts for common searches:
 
 ```bash
 # Find functions/methods
-.agents/skills/codebase-navigator/scripts/search.sh functions <pattern>
+.github/skills/codebase-navigator/scripts/search.sh functions <pattern>
 
 # Find React components
-.agents/skills/codebase-navigator/scripts/search.sh components <pattern>
+.github/skills/codebase-navigator/scripts/search.sh components <pattern>
 
 # Find API endpoints
-.agents/skills/codebase-navigator/scripts/search.sh endpoints
+.github/skills/codebase-navigator/scripts/search.sh endpoints
 
 # Trace an API flow end-to-end
-.agents/skills/codebase-navigator/scripts/trace.sh api-flow <endpoint>
+.github/skills/codebase-navigator/scripts/trace.sh api-flow <endpoint>
 
 # Trace a data field from backend to UI
-.agents/skills/codebase-navigator/scripts/trace.sh data-flow <field_name>
+.github/skills/codebase-navigator/scripts/trace.sh data-flow <field_name>
 
 # Find component hierarchy
-.agents/skills/codebase-navigator/scripts/trace.sh component-tree <ComponentName>
+.github/skills/codebase-navigator/scripts/trace.sh component-tree <ComponentName>
 ```
 
 ### Direct ripgrep patterns
@@ -74,7 +74,7 @@ apps/
 ├── backend/app/
 │   ├── main.py              # FastAPI entry, CORS, routers
 │   ├── config.py            # Pydantic settings from env
-│   ├── database.py          # TinyDB wrapper
+│   ├── database.py          # DB façade over repositories
 │   ├── llm.py               # LiteLLM wrapper
 │   ├── routers/             # API endpoints
 │   ├── services/            # Business logic
@@ -93,23 +93,23 @@ apps/
 
 ### "Where is X defined?"
 ```bash
-.agents/skills/codebase-navigator/scripts/search.sh functions my_function
-.agents/skills/codebase-navigator/scripts/search.sh components MyComponent
-.agents/skills/codebase-navigator/scripts/search.sh classes MyClass
-.agents/skills/codebase-navigator/scripts/search.sh types MyType
+.github/skills/codebase-navigator/scripts/search.sh functions my_function
+.github/skills/codebase-navigator/scripts/search.sh components MyComponent
+.github/skills/codebase-navigator/scripts/search.sh classes MyClass
+.github/skills/codebase-navigator/scripts/search.sh types MyType
 ```
 
 ### "What calls X?"
 ```bash
-.agents/skills/codebase-navigator/scripts/search.sh usage my_function
-.agents/skills/codebase-navigator/scripts/search.sh deps my_file.py
+.github/skills/codebase-navigator/scripts/search.sh usage my_function
+.github/skills/codebase-navigator/scripts/search.sh deps my_file.py
 ```
 
 ### "How does data flow for feature X?"
 ```bash
-.agents/skills/codebase-navigator/scripts/trace.sh api-flow resumes
-.agents/skills/codebase-navigator/scripts/trace.sh data-flow personalInfo
-.agents/skills/codebase-navigator/scripts/trace.sh component-tree ResumeEditor
+.github/skills/codebase-navigator/scripts/trace.sh api-flow resumes
+.github/skills/codebase-navigator/scripts/trace.sh data-flow personalInfo
+.github/skills/codebase-navigator/scripts/trace.sh component-tree ResumeEditor
 ```
 
 ## Key Entry Points
@@ -118,8 +118,8 @@ apps/
 |------|------|
 | Backend startup | `apps/backend/app/main.py` |
 | Frontend pages | `apps/frontend/app/` |
-| API client | `apps/frontend/lib/api.ts` or `lib/api-client.ts` |
-| Design tokens | `apps/frontend/app/globals.css` |
+| API client | `apps/frontend/lib/api/` |
+| Design tokens | `apps/frontend/app/(default)/css/globals.css` |
 | Resume schemas | `apps/backend/app/schemas/` |
 | LLM prompts | `apps/backend/app/prompts/` |
 

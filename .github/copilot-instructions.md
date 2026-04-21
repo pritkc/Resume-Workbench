@@ -111,21 +111,21 @@ All project documentation is located in the `docs/agent/` folder:
 |----------|-------------|
 | [custom-sections.md](docs/agent/features/custom-sections.md) | Dynamic resume sections |
 | [i18n.md](docs/agent/features/i18n.md) | Internationalization overview |
-| [i18n-preparation.md](docs/agent/features/i18n-preparation.md) | Detailed i18n plan |
+| [i18n-preparation.md](docs/agent/features/i18n-preparation.md) | Archived i18n notes (see `i18n.md`) |
 
 ---
 
 ## Skills (AI Agent Patterns)
 
-Reusable patterns and guidelines for AI agents located in `.claude/skills/` and `.agents/skills/`:
+Reusable patterns and guidelines for AI agents: **Cursor** often loads `.claude/skills/`; **GitHub Copilot** uses `.github/skills/` — keep wording in sync.
 
 | Skill | Description |
 |-------|-------------|
-| [codebase-navigator](/.agents/skills/codebase-navigator/SKILL.md) | Code search with ripgrep scripts (**use FIRST**) |
-| [backend-dev](/.agents/skills/backend-dev/SKILL.md) | FastAPI development patterns |
-| [frontend-dev](/.agents/skills/frontend-dev/SKILL.md) | Next.js + Swiss style patterns |
-| [ui-review](/.agents/skills/ui-review/SKILL.md) | Swiss style compliance checker |
-| [code-review](/.agents/skills/code-review/SKILL.md) | Code review guidelines |
+| [codebase-navigator](.github/skills/codebase-navigator/SKILL.md) | Code search with ripgrep scripts (**use FIRST**) |
+| [backend-dev](.github/skills/backend-dev/SKILL.md) | FastAPI development patterns |
+| [frontend-dev](.github/skills/frontend-dev/SKILL.md) | Next.js + Swiss style patterns |
+| [ui-review](.github/skills/ui-review/SKILL.md) | Swiss style compliance checker |
+| [code-review](.github/skills/code-review/SKILL.md) | Code review guidelines |
 | [navigator](/.claude/skills/navigator/SKILL.md) | Quick codebase orientation |
 | [tailwind-patterns](/.claude/skills/tailwind-pattern/SKILL.md) | Tailwind CSS component patterns + Swiss style overrides |
 | [fastapi](/.claude/skills/fastapi/SKILL.md) | FastAPI patterns, JWT auth, Pydantic v2, async SQLAlchemy |
@@ -144,27 +144,27 @@ Reusable patterns and guidelines for AI agents located in `.claude/skills/` and 
 
 ## Codebase Search Scripts
 
-Search scripts using ripgrep (`.agents/skills/codebase-navigator/scripts/`):
+Search scripts using ripgrep (`.github/skills/codebase-navigator/scripts/`):
 
 ```bash
 # Find functions, classes, components
-.agents/skills/codebase-navigator/scripts/search.sh functions <pattern>
-.agents/skills/codebase-navigator/scripts/search.sh classes <pattern>
-.agents/skills/codebase-navigator/scripts/search.sh components <pattern>
+.github/skills/codebase-navigator/scripts/search.sh functions <pattern>
+.github/skills/codebase-navigator/scripts/search.sh classes <pattern>
+.github/skills/codebase-navigator/scripts/search.sh components <pattern>
 
 # Find API endpoints and routes
-.agents/skills/codebase-navigator/scripts/search.sh endpoints
-.agents/skills/codebase-navigator/scripts/search.sh api-routes
+.github/skills/codebase-navigator/scripts/search.sh endpoints
+.github/skills/codebase-navigator/scripts/search.sh api-routes
 
 # Find types, schemas, imports
-.agents/skills/codebase-navigator/scripts/search.sh types <pattern>
-.agents/skills/codebase-navigator/scripts/search.sh schema <pattern>
-.agents/skills/codebase-navigator/scripts/search.sh imports <module>
+.github/skills/codebase-navigator/scripts/search.sh types <pattern>
+.github/skills/codebase-navigator/scripts/search.sh schema <pattern>
+.github/skills/codebase-navigator/scripts/search.sh imports <module>
 
 # Trace flows
-.agents/skills/codebase-navigator/scripts/trace.sh api-flow <endpoint>
-.agents/skills/codebase-navigator/scripts/trace.sh component-tree <name>
-.agents/skills/codebase-navigator/scripts/trace.sh data-flow <field>
+.github/skills/codebase-navigator/scripts/trace.sh api-flow <endpoint>
+.github/skills/codebase-navigator/scripts/trace.sh component-tree <name>
+.github/skills/codebase-navigator/scripts/trace.sh data-flow <field>
 
 # More: exports, hooks, todos, deps, tree, files, usage, config
 ```
@@ -179,12 +179,12 @@ A lean FastAPI application with multi-provider AI support. See **[architecture/b
 
 - `app/main.py` - FastAPI entry point with CORS and router setup
 - `app/config.py` - Pydantic settings loaded from environment
-- `app/database.py` - TinyDB wrapper for JSON storage
+- `app/database.py` - Compatibility façade over SQLAlchemy repositories (dict-style API for routers)
 - `app/llm.py` - LiteLLM wrapper with JSON mode support
 - `app/routers/` - API endpoints (health, config, resumes, jobs)
 - `app/services/` - Business logic (parser, improver)
 - `app/schemas/` - Pydantic models
-- `app/prompts/` - LLM prompt templates
+- `app/prompts/` - LLM prompt modules (`app/db/` holds SQL models)
 
 ### Frontend (`apps/frontend/`)
 

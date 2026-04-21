@@ -1,7 +1,7 @@
 ---
 name: backend-dev
 description: |
-  Backend development skill for Resume Matcher. Handles FastAPI endpoints, Pydantic schemas, TinyDB operations, LiteLLM integration, and Python service logic. Use when creating or modifying backend code.
+  Backend development skill for Resume Matcher. Handles FastAPI endpoints, Pydantic schemas, SQLAlchemy/Postgres persistence, LiteLLM integration, and Python service logic. Use when creating or modifying backend code.
 ---
 
 # Backend Development
@@ -29,12 +29,12 @@ description: |
 apps/backend/app/
 ├── main.py          # FastAPI app, CORS, lifespan, routers
 ├── config.py        # Pydantic BaseSettings from env
-├── database.py      # TinyDB wrapper (JSON file storage)
+├── database.py      # Compatibility façade over SQLAlchemy repositories
 ├── llm.py           # LiteLLM wrapper (multi-provider)
 ├── routers/         # API endpoint handlers
 ├── services/        # Business logic layer
 ├── schemas/         # Pydantic request/response models
-└── prompts/         # LLM prompt templates (Jinja2)
+└── prompts/         # LLM prompt modules (split Python files)
 ```
 
 ## Patterns

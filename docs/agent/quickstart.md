@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Node.js compatible with the frontend's Next.js 16 setup
+- Node.js compatible with the frontend's Next.js 16.x setup (see `apps/frontend/package.json`)
 - Python 3.13+
 - [`uv`](https://docs.astral.sh/uv/)
 - Docker, for the local Postgres setup
@@ -33,8 +33,10 @@ npm install
 
 ## Environment Files
 
+**Canonical backend template:** `apps/backend/.env.example` (copy to `apps/backend/.env`). A duplicate `.env.sample` is not maintained—avoid drift by using `.env.example` only.
+
 ```bash
-cp apps/backend/.env.sample apps/backend/.env
+cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.sample apps/frontend/.env.local
 ```
 
@@ -50,7 +52,7 @@ uv run alembic upgrade head
 
 Notes:
 
-- `DATABASE_URL` must point at Postgres. `apps/backend/.env.sample` already uses the default local Docker connection string.
+- `DATABASE_URL` must point at Postgres. `apps/backend/.env.example` already uses the default local Docker connection string.
 - Alembic migrations are still the canonical schema history for SQL-backed environments.
 
 ## Run The App

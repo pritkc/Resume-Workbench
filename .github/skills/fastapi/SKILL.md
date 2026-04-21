@@ -46,7 +46,7 @@ Production-tested patterns for FastAPI with Pydantic v2.
 - **`copy.deepcopy()`** for mutable defaults
 - **Log errors server-side**, generic messages to clients
 - **API keys** via `api_key=` parameter, not `os.environ`
-- Project uses **TinyDB** (JSON file storage), not SQLAlchemy
+- Project uses **SQLAlchemy 2 + Postgres** (see `app/db/`); `database.py` is a façade, not a document store
 
 ## Common Error Fixes
 

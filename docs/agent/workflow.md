@@ -30,11 +30,17 @@ cd apps/backend
 uv run pytest
 ```
 
-E2E:
+E2E (from **repo root**; uses Playwright in `tests/`):
 
 ```bash
 npm run test:e2e
 ```
+
+Repo scripts (see root `package.json` and `Makefile`):
+
+- `scripts/cliproxy-health.sh` — health check for local CLIProxy (see `make cliproxy-health`)
+- `scripts/sync-upstream-references.sh` — sync reference metadata when maintaining fork parity
+- `scripts/capture-builder-section-screenshots.cjs` — optional screenshot capture for builder QA
 
 ## Changes That Should Always Be Called Out
 

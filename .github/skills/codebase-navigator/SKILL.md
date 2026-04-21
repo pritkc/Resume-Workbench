@@ -101,7 +101,7 @@ apps/
 ├── backend/app/
 │   ├── main.py              # FastAPI entry, CORS, routers
 │   ├── config.py            # Pydantic settings from env
-│   ├── database.py          # TinyDB wrapper
+│   ├── database.py          # DB façade over repositories
 │   ├── llm.py               # LiteLLM wrapper (multi-provider AI)
 │   ├── routers/             # API endpoint handlers
 │   ├── services/            # Business logic layer
@@ -122,8 +122,8 @@ apps/
 |------|------|
 | Backend startup | `apps/backend/app/main.py` |
 | Frontend pages | `apps/frontend/app/` |
-| API client | `apps/frontend/lib/api.ts` or `lib/api-client.ts` |
-| Design tokens | `apps/frontend/app/globals.css` |
+| API client | `apps/frontend/lib/api/` |
+| Design tokens | `apps/frontend/app/(default)/css/globals.css` |
 | Resume schemas | `apps/backend/app/schemas/` |
 | LLM prompts | `apps/backend/app/prompts/` |
 

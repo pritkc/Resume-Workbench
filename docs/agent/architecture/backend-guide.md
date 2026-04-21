@@ -8,7 +8,7 @@
 
 Touch:
 
-- `apps/backend/app/prompts/templates.py`
+- `apps/backend/app/prompts/tailoring_blocks.py`, `tailor_resume_full.py`, `parse_resume.py`, `extract_jd_intel.py`, `cover_letter.py`, and related modules (see `app/prompts/__init__.py`)
 - `apps/backend/app/prompts/enrichment.py`
 - `apps/backend/app/prompts/refinement.py` if you are changing the older inactive refinement prompt or local cleanup constants
 - `apps/backend/app/services/tailoring/*`
@@ -74,7 +74,7 @@ Touch:
 - `apps/backend/app/services/cover_letter.py`
 - `apps/backend/app/services/message_profiles.py`
 - `apps/backend/app/services/prompt_utils.py`
-- `apps/backend/app/prompts/templates.py`
+- `apps/backend/app/prompts/cover_letter.py` (system prompts for cover + outreach)
 
 Important current behavior:
 

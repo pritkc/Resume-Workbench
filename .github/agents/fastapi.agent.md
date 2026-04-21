@@ -47,7 +47,7 @@ You are a FastAPI expert agent. You write production-tested patterns for FastAPI
 - **`copy.deepcopy()`** for mutable defaults
 - **Log errors server-side**, generic messages to clients
 - **API keys** via `api_key=` parameter, not `os.environ`
-- Project uses TinyDB, not SQLAlchemy
+- Project uses **SQLAlchemy 2 + Postgres** for persistence; `database.py` is a façade over repositories
 
 ## Reference
 

@@ -16,8 +16,8 @@ Use ripgrep (`rg`) for fast code search. Fallback to `grep -rn` if rg is unavail
 Run these from the repo root:
 
 ```bash
-.agents/skills/codebase-navigator/scripts/search.sh <command> [pattern]
-.agents/skills/codebase-navigator/scripts/trace.sh <command> [args]
+.github/skills/codebase-navigator/scripts/search.sh <command> [pattern]
+.github/skills/codebase-navigator/scripts/trace.sh <command> [args]
 ```
 
 ### Direct Search Patterns

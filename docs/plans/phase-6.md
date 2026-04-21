@@ -1,5 +1,7 @@
 # Phase 6: Final Design Checkpoint
 
+> **Status:** Design-time checkpoint document. Storage and rendering decisions here were written before some migrations landed—cross-check [phase-6-checklist.md](phase-6-checklist.md) and the code under `apps/backend/app/db/` for what is actually shipped.
+
 ## Purpose
 
 This is the final design checkpoint before implementation starts.

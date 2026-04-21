@@ -58,8 +58,12 @@ POST /api/v1/application-packs/confirm
 
 ## Direct Improve
 
+> **Product note:** Prefer **`POST /api/v1/application-packs/preview`** then **`POST /api/v1/application-packs/confirm`** for the main tailored-resume flow (diff review, hashes, pack records).
+>
+> **`POST /api/v1/resumes/improve`** is marked **`deprecated`** in OpenAPI. It remains for backward compatibility and one-shot tooling; behavior mirrors tailoring + persistence patterns used in the pack flows.
+
 ```text
-POST /api/v1/resumes/improve
+POST /api/v1/resumes/improve   # deprecated: see OpenAPI /docs
 ├── fetch resume + job
 ├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve")
 ├── extract_job_keywords() -> LLM

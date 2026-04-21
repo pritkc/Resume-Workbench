@@ -1,3 +1,7 @@
+---
+status: archive
+---
+
 # Historical Note: Adding Resume Templates
 
 This file described the older frontend JSX/CSS resume template system.

@@ -14,7 +14,6 @@ dependencies = [
     "pyyaml==6.0.3",
     "rendercv[full]==2.8",
     "sqlalchemy==2.0.44",
-    "tinydb==4.8.2",
     "litellm==1.81.8",
     "markitdown[docx]==0.1.4",
     "pdfminer.six==20260107",

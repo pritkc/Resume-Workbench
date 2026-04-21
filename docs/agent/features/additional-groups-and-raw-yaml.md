@@ -2,6 +2,10 @@
 
 > Two important editor systems now sit on top of the RenderCV normalization pipeline.
 
+## Deprecation note (frontend helpers)
+
+`apps/frontend/lib/utils/additional-groups.ts` may expose **legacy helpers** marked `@deprecated` (for example label-to-id bridging). Prefer the **label-based** additional-group APIs when adding new UI. Removal is **not scheduled** until all call sites migrate—grep for `@deprecated` in that file when touching the builder.
+
 ## Additional Groups
 
 The canonical additional-info shape is:

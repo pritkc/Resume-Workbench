@@ -3,6 +3,8 @@
 Performance optimization guide for Resume Matcher. Based on Vercel's react-best-practices.
 Focus: CRITICAL and HIGH impact issues only.
 
+**Stack check:** Align recommendations with the installed **Next.js** version in `apps/frontend/package.json` (currently the **16.x** line with React 19). App Router + Turbopack dev (`next dev --turbopack`) are in use.
+
 ---
 
 ## 1. ELIMINATING WATERFALLS (CRITICAL)

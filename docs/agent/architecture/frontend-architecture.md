@@ -10,13 +10,16 @@ apps/frontend/app/(default)/
 ├── builder/
 ├── llm-traces/
 ├── resumes/[id]/
+├── run-timing/
 ├── settings/
+│   └── prompt-catalog/
 └── tailor/
 ```
 
-Other live route:
+Other live routes:
 
 - `app/print/cover-letter/[id]` for Playwright cover-letter PDF generation
+- `app/print/resumes/[id]` for print/PDF-related flows where present
 
 ## Current Product Surfaces
 
@@ -59,6 +62,14 @@ Other live route:
 ### `/llm-traces`
 
 - internal observability page for `llm_calls`
+
+### `/run-timing`
+
+- development/diagnostics surface for pipeline timing (when enabled in the build)
+
+### `/settings/prompt-catalog`
+
+- prompt catalog builder / inspection UI (backed by backend prompt-catalog routes)
 
 ## Important Component Areas
 

@@ -1,8 +1,10 @@
-# Resume Matcher Setup Guide
+# Resume Workbench — setup guide
 
 **[English](SETUP.md)** | [Español](SETUP.es.md) | [简体中文](SETUP.zh-CN.md) | [日本語](SETUP.ja.md)
 
-Welcome! This guide will walk you through setting up Resume Matcher on your local machine. Whether you're a developer looking to contribute or someone who wants to run the application locally, this guide has you covered.
+Welcome. This guide walks through running **Resume Workbench** locally: Next.js frontend, FastAPI backend, PostgreSQL, and (optionally) your choice of LLM provider or a local proxy.
+
+> **Note:** This fork’s install path differs from legacy upstream [**Resume Matcher**](https://github.com/srbhr/Resume-Matcher) Streamlit-oriented docs you may find online—follow this file and [`README.md`](README.md) for the Workbench `apps/` stack.
 
 ---
 
@@ -43,7 +45,7 @@ Before you begin, make sure you have the following installed on your system:
 
 ### Installing uv (Python Package Manager)
 
-Resume Matcher uses `uv` for fast, reliable Python dependency management. Install it with:
+Resume Workbench uses `uv` for Python dependency management. Install it with:
 
 ```bash
 # macOS/Linux
@@ -63,9 +65,9 @@ pip install uv
 If you're familiar with development tools and want to get running quickly:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/srbhr/Resume-Matcher.git
-cd Resume-Matcher
+# 1. Clone this repository (your fork or local mirror)
+git clone <repository-url>
+cd <repository-folder>
 
 # 2. Start Postgres and the backend (Terminal 1)
 docker compose up -d postgres
@@ -94,8 +96,8 @@ Open your browser to **[http://localhost:3000](http://localhost:3000)** and you'
 First, get the code on your machine:
 
 ```bash
-git clone https://github.com/srbhr/Resume-Matcher.git
-cd Resume-Matcher
+git clone <repository-url>
+cd <repository-folder>
 ```
 
 ### 2. Backend Setup
@@ -213,13 +215,13 @@ You should see:
 - Local:        http://localhost:3000
 ```
 
-Open **[http://localhost:3000](http://localhost:3000)** in your browser. You should see the Resume Matcher dashboard!
+Open **[http://localhost:3000](http://localhost:3000)** in your browser. You should see the Resume Workbench dashboard!
 
 ---
 
 ## Configuring Your AI Provider
 
-Resume Matcher supports multiple AI providers. You can configure your provider through the Settings page in the app, or by editing the backend `.env` file.
+Resume Workbench supports multiple AI providers. You can configure your provider through the Settings page in the app, or by editing the backend `.env` file.
 
 ### Option A: Cloud Providers
 
@@ -280,7 +282,7 @@ Use this when you want one local OpenAI-compatible endpoint and fast alias-based
 
 This path is meant for **subscription quota** (ChatGPT/Codex, Claude Code, Gemini CLI, Qwen, iFlow, Antigravity, Kimi, Amp, etc.) via [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) and the bundled [Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center). You log in through **OAuth / auth flows** or the Management UI so usage counts against **your plans**, not ad-hoc **API keys from provider developer consoles**. We do **not** optimize `config.template.yaml` for those dashboard API keys; you can still add them from upstream `config.example.yaml` if you ever need a relay or OpenRouter.
 
-Resume Matcher only needs your **local proxy** `api-keys` value and never your ChatGPT/Claude/Google console secrets.
+Resume Workbench only needs your **local proxy** `api-keys` value and never your ChatGPT/Claude/Google console secrets.
 
 **Upstream references (refresh locally with `./scripts/sync-upstream-references.sh`):**
 
@@ -296,7 +298,7 @@ Resume Matcher only needs your **local proxy** `api-keys` value and never your C
 #### Quick Clarification
 
 - `api-keys` in `infra/cliproxyapi/config.yaml` is your **local proxy** Bearer token for `/v1/...`.
-- Resume Matcher uses that exact value as **CLIProxy Client API Key**.
+- Resume Workbench uses that exact value as **CLIProxy Client API Key**.
 - It is **not** an OpenAI / Anthropic / Google API key.
 - Do **not** use `remote-management.secret-key` as `CLIPROXY_API_KEY`; you will get `401` on `/v1/models`.
 - **Management Key** on `/management.html` is `remote-management.secret-key` (plaintext you chose before the server hashes it).
@@ -326,7 +328,7 @@ This creates `infra/cliproxyapi/config.yaml` from `config.template.yaml` if it d
 Start from the template and set:
 
 - `remote-management.secret-key` — **Management Key** for `/management.html` (pick a strong local secret).
-- `api-keys` — first entry must match what you will use as **CLIProxy Client API Key** in Resume Matcher.
+- `api-keys` — first entry must match what you will use as **CLIProxy Client API Key** in Resume Workbench.
 
 Recommended shape (see `infra/cliproxyapi/config.template.yaml` for the full commented option set; `host: ""` binds all interfaces for Docker):
 
@@ -417,7 +419,7 @@ make cliproxy-logs
 Field mapping:
 
 - **Management Key** = `remote-management.secret-key` in `infra/cliproxyapi/config.yaml`.
-- **CLIProxy Client API Key** in Resume Matcher = first value under `api-keys`.
+- **CLIProxy Client API Key** in Resume Workbench = first value under `api-keys`.
 - After first start, CLIProxy may rewrite `secret-key` to a hash in the file. Keep using the **original plaintext** you set until you rotate it.
 
 If Management login fails:
@@ -480,10 +482,10 @@ Flags are defined in `reference/CLIProxyAPI/cmd/server/main.go` after `./scripts
 #### 6b) Trying multiple models
 
 1. After OAuth, open **System** in the Management UI and fetch `**/v1/models`** (grouped view), or run `make cliproxy-health` with `CLIPROXY_API_KEY` set.
-2. In Resume Matcher **Settings**, click **Refresh Aliases** and pick models exposed by your sessions.
+2. In Resume Workbench **Settings**, click **Refresh Aliases** and pick models exposed by your sessions.
 3. To add **short aliases** or extra client-visible names for OAuth-backed models, edit `oauth-model-alias` in `config.yaml` (see upstream `config.example.yaml` and comments in `config.template.yaml`), then restart the container.
 
-#### 7) Start Resume Matcher services
+#### 7) Start Resume Workbench services
 
 In `apps/backend/.env`, ensure:
 
@@ -509,7 +511,7 @@ npm install
 npm run dev
 ```
 
-#### 8) Configure Resume Matcher -> Settings
+#### 8) Configure Resume Workbench -> Settings
 
 Open [http://localhost:3000/settings](http://localhost:3000/settings) and set:
 
@@ -549,7 +551,7 @@ Then run one full generation from Dashboard to confirm end-to-end behavior.
 
 ## Docker Deployment
 
-Prefer containerized deployment? Resume Matcher includes Docker support.
+Prefer containerized deployment? Resume Workbench includes Docker support.
 
 ### Quick Start with Docker Compose
 
@@ -696,8 +698,8 @@ uv sync --group dev
 # Run tests
 uv run pytest
 
-# Check if database needs reset (stored as JSON files)
-ls -la data/
+# Schema revision (Postgres)
+uv run alembic current
 ```
 
 ### Frontend Commands
@@ -726,18 +728,30 @@ npm run dev -- -p 3001
 
 ### Database Management
 
-Resume Matcher uses TinyDB (JSON file storage). All data is in `apps/backend/data/`:
+Resume Workbench persists application data in **PostgreSQL** (via SQLAlchemy + Alembic). Local development typically uses Docker:
 
 ```bash
-# View database files
-ls apps/backend/data/
+# Start Postgres (from repo root)
+docker compose up -d postgres
 
-# Backup your data
-cp -r apps/backend/data apps/backend/data-backup
-
-# Reset everything (start fresh)
-rm -rf apps/backend/data
+# Apply schema (from apps/backend)
+cd apps/backend
+uv run alembic upgrade head
 ```
+
+**Connection string:** set `DATABASE_URL` in `apps/backend/.env` (see `apps/backend/.env.example`). The default in that file matches the `postgres` service in `docker-compose.yml`.
+
+**Backup / restore (examples):**
+
+```bash
+# Backup (adjust user/db/container name to match your .env)
+docker exec -t resume-matcher-postgres pg_dump -U resume_matcher resume_matcher > backup.sql
+
+# Or copy the Docker volume data directory only if you know what you are doing
+docker volume inspect resume-workk_postgres-data
+```
+
+**Artifacts and RenderCV work dirs** (YAML/PDF intermediates) still live under `apps/backend/data/` by default (`ARTIFACT_DIR`, `RENDERCV_WORK_DIR`) — that is **not** the primary database.
 
 ---
 
@@ -836,7 +850,7 @@ make cliproxy-health
 
 - `host: ""` or `host: "0.0.0.0"` so the host can reach port `8317` from Docker
 - `remote-management.allow-remote: true` if you open the Management UI from the host browser
-- `api-keys` matching **CLIProxy Client API Key** in Resume Matcher (not `remote-management.secret-key`)
+- `api-keys` matching **CLIProxy Client API Key** in Resume Workbench (not `remote-management.secret-key`)
 
 1. **401 / cannot connect** to Management API from a non-localhost URL: enable `allow-remote` and use the plaintext management key (see [Management Center troubleshooting](https://github.com/router-for-me/Cli-Proxy-API-Management-Center#troubleshooting)).
 2. After the server stays up, add OAuth sessions via **Management UI → OAuth** (recommended) or CLI login:
@@ -852,21 +866,23 @@ docker exec -it cli-proxy-api /CLIProxyAPI/CLIProxyAPI -config /CLIProxyAPI/conf
 ## Project Structure Overview
 
 ```
-Resume-Matcher/
+resume-workbench/   # or your local clone name
 ├── apps/
 │   ├── backend/                 # Python FastAPI backend
 │   │   ├── app/
 │   │   │   ├── main.py          # Application entry point
 │   │   │   ├── config.py        # Environment configuration
-│   │   │   ├── database.py      # TinyDB wrapper
+│   │   │   ├── database.py      # DB façade over SQLAlchemy repositories
+│   │   │   ├── db/              # SQLAlchemy models + repositories
 │   │   │   ├── llm.py           # AI provider integration
 │   │   │   ├── routers/         # API endpoints
 │   │   │   ├── services/        # Business logic
 │   │   │   ├── schemas/         # Data models
-│   │   │   └── prompts/         # LLM prompt templates
-│   │   ├── data/                # Database storage (auto-created)
-│   │   ├── .env.example         # Environment template
-│   │   └── pyproject.toml       # Python dependencies
+│   │   │   └── prompts/         # LLM prompt modules (split files)
+│   │   ├── alembic/             # Schema migrations
+│   │   ├── data/                # Artifacts + RenderCV work dirs (not the SQL DB)
+│   │   ├── .env.example         # Environment template (canonical)
+│   │   └── pyproject.toml       # Python dependencies (use `uv sync`)
 │   │
 │   └── frontend/                # Next.js React frontend
 │       ├── app/                 # Pages (dashboard, builder, etc.)
@@ -883,24 +899,20 @@ Resume-Matcher/
 
 ---
 
-## Getting Help
+## Getting help
 
-Stuck? Here are your options:
+- **This project:** use your **repository’s issue tracker** for bugs and feature requests for Resume Workbench.
+- **Deep dives:** [docs/agent/](docs/agent/) — backend guide, APIs, prompts, and UI design references.
+- **Upstream Resume Matcher:** the [original project](https://github.com/srbhr/Resume-Matcher) has its own [Discord](https://dsc.gg/resume-matcher) and community; useful for lineage questions, not a substitute for Workbench-specific behavior.
 
-- **Discord Community:** [dsc.gg/resume-matcher](https://dsc.gg/resume-matcher) - Active community for questions and discussions
-- **GitHub Issues:** [Open an issue](https://github.com/srbhr/Resume-Matcher/issues) for bugs or feature requests
-- **Documentation:** Check the [docs/agent/](docs/agent/) folder for detailed guides
+### Useful documentation
 
-### Useful Documentation
-
-
-| Document                                                             | Description                                  |
-| -------------------------------------------------------------------- | -------------------------------------------- |
-| [backend-guide.md](docs/agent/architecture/backend-guide.md)         | Backend architecture and API details         |
-| [frontend-workflow.md](docs/agent/architecture/frontend-workflow.md) | User flow and component architecture         |
-| [style-guide.md](docs/agent/design/style-guide.md)                   | UI design system (Swiss International Style) |
-
+| Document | Description |
+| -------- | ----------- |
+| [backend-guide.md](docs/agent/architecture/backend-guide.md) | Backend architecture and where to change code |
+| [frontend-workflow.md](docs/agent/architecture/frontend-workflow.md) | User flow and major routes |
+| [style-guide.md](docs/agent/design/style-guide.md) | Swiss International Style UI |
 
 ---
 
-Happy resume building! If you find Resume Matcher helpful, consider [starring the repo](https://github.com/srbhr/Resume-Matcher) and [joining our Discord](https://dsc.gg/resume-matcher).
+Happy shipping. Credits and third-party acknowledgments are summarized in [README.md](README.md).

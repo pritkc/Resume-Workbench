@@ -37,12 +37,12 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 
 ### General Rules
 
-- Python 3.11+
+- Python 3.13+ (see `apps/backend/pyproject.toml` / `.python-version`)
 - 4-space indents
 - Type hints on ALL functions
 - Async functions for I/O operations (database, LLM calls)
 - Pydantic models for all request/response schemas
-- Prompts go in `app/prompts/templates.py`
+- Prompt text and constants live in **`app/prompts/*.py`** (split modules). See [llm-prompt-inventory.md](llm-prompt-inventory.md) and `app/prompts/__init__.py` for re-exports and overrides (`prompt_overrides/`).
 
 ### Error Handling
 

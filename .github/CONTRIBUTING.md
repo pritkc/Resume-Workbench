@@ -32,6 +32,12 @@ Please try to create bug reports that are:
 
 Please test your changes before submitting the PR.
 
+## Resume Workbench / this repository layout
+
+The maintained application lives under **`apps/backend/`** (FastAPI, **`uv sync`**, **Postgres + Alembic**) and **`apps/frontend/`** (Next.js). Use **[SETUP.md](../SETUP.md)** and **[docs/agent/quickstart.md](../docs/agent/quickstart.md)** as the canonical setup path.
+
+The **“Development”** section below still contains **legacy upstream** Streamlit / `pip install -r requirements.txt` instructions from the original Resume Matcher project. Do **not** follow that path for the `apps/` stack unless you are intentionally working on archived material.
+
 ## Good First Issues
 
 We have a list of `help wanted` and `good first issue` that contains small features and bugs with a relatively limited scope. Nevertheless, this is a great place to get started, gain experience, and get familiar with our contribution process.
