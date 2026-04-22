@@ -8,15 +8,16 @@ import {
   getEducationDate,
   getEducationHighlights,
   getEducationSummary,
+  RESUME_TECH_STACK_LABEL,
   getExperienceDate,
   getExperienceHighlights,
   getExperiencePosition,
-  getExperienceSummary,
+  getExperienceTechStack,
   getExtraContactEntries,
   getPersonalHeadline,
   getProjectDate,
   getProjectHighlights,
-  getProjectSummary,
+  getProjectTechStack,
 } from '@/lib/utils/rendercv-fields';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
@@ -152,9 +153,10 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
                     <span>{exp.company}</span>
                     {exp.location && <span>{exp.location}</span>}
                   </div>
-                  {getExperienceSummary(exp) && (
+                  {getExperienceTechStack(exp) && (
                     <p className={baseStyles['resume-text-sm']}>
-                      <SafeHtml html={getExperienceSummary(exp)} />
+                      <span className="font-semibold">{RESUME_TECH_STACK_LABEL} </span>
+                      <SafeHtml html={getExperienceTechStack(exp)} />
                     </p>
                   )}
                   {getExperienceHighlights(exp).length > 0 && (
@@ -237,12 +239,11 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
                       </span>
                     )}
                   </div>
-                  {getProjectSummary(project) && (
-                    <div
-                      className={`${baseStyles['resume-row']} ${baseStyles['resume-item-subtitle']}`}
-                    >
-                      <span>{getProjectSummary(project)}</span>
-                    </div>
+                  {getProjectTechStack(project) && (
+                    <p className={baseStyles['resume-text-sm']}>
+                      <span className="font-semibold">{RESUME_TECH_STACK_LABEL} </span>
+                      <span>{getProjectTechStack(project)}</span>
+                    </p>
                   )}
                   {getProjectHighlights(project).length > 0 && (
                     <ul

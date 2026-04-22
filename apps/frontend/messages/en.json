@@ -382,7 +382,8 @@
         "fields": {
           "jobTitle": "Job Title",
           "position": "Position",
-          "company": "Company"
+          "company": "Company",
+          "techStackOptional": "Tech stack (optional)"
         },
         "placeholders": {
           "jobTitle": "Senior Developer",
@@ -392,6 +393,7 @@
           "years": "Jan 2020 - Present",
           "date": "Jan 2020 - Present",
           "summary": "Short overview of the role...",
+          "techStack": "e.g. Python, FastAPI, PostgreSQL, AWS — comma or line separated",
           "highlight": "Describe your achievement...",
           "description": "Describe your achievement..."
         }
@@ -424,6 +426,7 @@
         "fields": {
           "projectName": "Project Name",
           "role": "Role",
+          "techStackOptional": "Tech stack (optional)",
           "summary": "Summary",
           "website": "Website"
         },
@@ -432,6 +435,7 @@
           "role": "Creator",
           "years": "Mar 2023",
           "date": "Mar 2023",
+          "techStack": "e.g. Python, FastAPI, PostgreSQL — comma or line separated",
           "summary": "One-line project overview...",
           "highlight": "Project detail...",
           "github": "github.com/username/project",
@@ -907,6 +911,9 @@
       "website": "Website",
       "linkedin": "LinkedIn",
       "github": "GitHub"
+    },
+    "experience": {
+      "techStackLabel": "Tech stack:"
     },
     "sections": {
       "personalInfo": "Personal Info",

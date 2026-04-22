@@ -470,21 +470,29 @@ def _experience_entries(
     *,
     bold_keywords: list[str],
 ) -> list[dict[str, Any]]:
-    return [
-        {
-            "company": item.get("company") or "Company",
-            "position": item.get("position") or item.get("title") or "Role",
-            **_entry_date_fields(item),
-            "location": _clean_text(item.get("location")),
-            "summary": _clean_text(item.get("summary")),
-            "highlights": [
-                _bold_keywords_in_bullet(point, bold_keywords)
-                for point in (item.get("description") or item.get("highlights") or [])
-                if point
-            ],
-        }
-        for item in entries
-    ]
+    rows: list[dict[str, Any]] = []
+    for item in entries:
+        stack = _clean_text(
+            item.get("summary") or item.get("tech_stacks") or item.get("techStack")
+        )
+        bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
+        while stack and bullets and _clean_text(bullets[0]) == stack:
+            bullets = bullets[1:]
+        rows.append(
+            {
+                "company": item.get("company") or "Company",
+                "position": item.get("position") or item.get("title") or "Role",
+                **_entry_date_fields(item),
+                "location": _clean_text(item.get("location")),
+                "summary": stack,
+                "highlights": [
+                    _bold_keywords_in_bullet(point, bold_keywords)
+                    for point in bullets
+                    if point
+                ],
+            }
+        )
+    return rows
 
 
 def _education_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -523,16 +531,22 @@ def _project_entries(
             link_tokens.append(f"\\[[live]({website})\\]")
         if link_tokens:
             name = f"{name} | {' '.join(link_tokens)}"
+        stack = _clean_text(
+            item.get("tech_stacks")
+            or item.get("techStack")
+            or item.get("summary")
+            or item.get("role")
+        )
+        bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
+        while stack and bullets and _clean_text(bullets[0]) == stack:
+            bullets = bullets[1:]
         project_rows.append(
             {
                 "name": name,
                 "date": _clean_text(item.get("date") or item.get("years")),
-                "summary": _clean_text(item.get("summary") or item.get("role")),
-                "highlights": [
-                    _bold_keywords_in_bullet(point, bold_keywords)
-                    for point in (item.get("description") or item.get("highlights") or [])
-                    if point
-                ],
+                "tech_stacks": stack,
+                "summary": stack,
+                "highlights": [_bold_keywords_in_bullet(point, bold_keywords) for point in bullets if point],
             }
         )
     return project_rows
@@ -1139,12 +1153,13 @@ def rendercv_cv_to_resume_data(
                 name = legacy_name
             if legacy_website:
                 website = _ensure_absolute_url(legacy_website)
+        stack = _clean_text(item.get("tech_stacks") or item.get("summary"))
         projects.append(
             {
                 "id": index,
                 "name": name or "",
-                "summary": _clean_text(item.get("summary")),
-                "role": _clean_text(item.get("summary")) or "",
+                "summary": stack,
+                "role": _clean_text(item.get("role")) or stack or "",
                 "date": _clean_text(item.get("date")) or "",
                 "years": _clean_text(item.get("date")) or "",
                 "github": github,

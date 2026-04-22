@@ -12,11 +12,11 @@ import {
   getExperienceDate,
   getExperienceHighlights,
   getExperiencePosition,
-  getExperienceSummary,
+  getExperienceTechStack,
   getPersonalHeadline,
   getProjectDate,
   getProjectHighlights,
-  getProjectSummary,
+  getProjectTechStack,
 } from '@/lib/utils/rendercv-fields';
 import { JDDisplay } from './jd-display';
 import { HighlightedResumeView } from './highlighted-resume-view';
@@ -51,13 +51,13 @@ export function JDComparisonView({ jobDescription, resumeData }: JDComparisonVie
     resumeData.workExperience?.forEach((exp) => {
       const position = getExperiencePosition(exp);
       const date = getExperienceDate(exp);
-      const summary = getExperienceSummary(exp);
+      const techStack = getExperienceTechStack(exp);
 
       if (position) parts.push(position);
       if (exp.company) parts.push(exp.company);
       if (exp.location) parts.push(exp.location);
       if (date) parts.push(date);
-      if (summary) parts.push(summary);
+      if (techStack) parts.push(techStack);
       getExperienceHighlights(exp).forEach((d) => parts.push(d));
     });
 
@@ -76,10 +76,10 @@ export function JDComparisonView({ jobDescription, resumeData }: JDComparisonVie
 
     resumeData.personalProjects?.forEach((proj) => {
       if (proj.name) parts.push(proj.name);
-      const summary = getProjectSummary(proj);
+      const techStack = getProjectTechStack(proj);
       const date = getProjectDate(proj);
 
-      if (summary) parts.push(summary);
+      if (techStack) parts.push(techStack);
       if (date) parts.push(date);
       getProjectHighlights(proj).forEach((d) => parts.push(d));
     });

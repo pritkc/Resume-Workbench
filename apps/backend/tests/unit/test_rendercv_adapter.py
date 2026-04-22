@@ -9,6 +9,66 @@ from app.rendering.rendercv_adapter import (
     resume_to_rendercv_payload,
 )
 from app.rendering.theme_profiles import RenderThemeSettings
+from app.schemas import ResumeData, normalize_resume_data
+
+
+def test_experience_highlights_drop_duplicate_tech_stack_row() -> None:
+    data = normalize_resume_data(
+        {
+            "workExperience": [
+                {
+                    "id": 1,
+                    "position": "Engineer",
+                    "company": "Co",
+                    "summary": "Python, AWS",
+                    "highlights": ["Python, AWS", "Shipped APIs"],
+                }
+            ]
+        }
+    )
+    exp = ResumeData.model_validate(data).workExperience[0]
+    assert exp.summary == "Python, AWS"
+    assert exp.highlights == ["Shipped APIs"]
+
+
+def test_project_highlights_drop_duplicate_tech_stack_row() -> None:
+    data = normalize_resume_data(
+        {
+            "personalProjects": [
+                {
+                    "id": 1,
+                    "name": "Demo",
+                    "summary": "Rust, WASM",
+                    "highlights": ["Rust, WASM", "Shipped CLI"],
+                }
+            ]
+        }
+    )
+    proj = ResumeData.model_validate(data).personalProjects[0]
+    assert proj.summary == "Rust, WASM"
+    assert proj.highlights == ["Shipped CLI"]
+
+
+def test_rendercv_experience_bullets_omit_stack_when_description_prefixed() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Eng",
+                "company": "Acme",
+                "summary": "Go, gRPC",
+                "description": ["Go, gRPC", "Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    assert payload["cv"]["sections"]["experience"][0]["summary"] == "Go, gRPC"
+    assert payload["cv"]["sections"]["experience"][0]["highlights"] == ["Built APIs"]
 
 
 def test_rendercv_adapter_supports_classic_and_moderncv(sample_resume: dict) -> None:
@@ -442,6 +502,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
     assert payload["cv"]["sections"]["projects"][0] == {
         "name": "OpenAPI Generator",
         "date": "Mar 2021 - Present",
+        "tech_stacks": "Open-source API tooling project.",
         "summary": "Open-source API tooling project.",
         "highlights": ["500+ GitHub stars", "Used by 30+ engineering teams"],
     }

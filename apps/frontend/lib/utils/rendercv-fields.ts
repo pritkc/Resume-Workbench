@@ -28,6 +28,18 @@ function cleanText(value?: string | null): string {
   return value?.trim() || '';
 }
 
+/** Collapse simple HTML to plain text for comparing rich-text summary vs bullets. */
+function plainTextFromRich(html: string): string {
+  const t = cleanText(html);
+  if (!t) return '';
+  return cleanText(t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
+}
+
+/** Shown before work/project tech stack lines on resume templates (builder uses i18n). */
+export const RESUME_TECH_STACK_LABEL = 'Tech stack:';
+/** @deprecated Use RESUME_TECH_STACK_LABEL */
+export const EXPERIENCE_TECH_STACK_LABEL = RESUME_TECH_STACK_LABEL;
+
 function canonicalNetworkLabel(value: string): string {
   const cleaned = cleanText(value);
   const normalized = cleaned.toLowerCase();
@@ -251,13 +263,38 @@ export function getExperienceExplicitDate(experience?: Experience): string {
 }
 
 export function getExperienceSummary(experience?: Experience): string {
-  return cleanText(experience?.summary);
+  return cleanText(experience?.summary ?? experience?.techStack);
+}
+
+/** Per-role tech stack (stored as `summary` on the wire; optional `techStack` for newer payloads). */
+export function getExperienceTechStack(experience?: Experience): string {
+  return getExperienceSummary(experience);
+}
+
+function stripLeadingTechStackDuplicates(
+  stack: string,
+  highlights: string[],
+  richStack: boolean
+): string[] {
+  if (!highlights.length) return highlights;
+  const stackPlain = richStack ? plainTextFromRich(stack) : cleanText(stack);
+  if (!stackPlain) return highlights;
+  const out = [...highlights];
+  while (out.length) {
+    const head = richStack ? plainTextFromRich(out[0]) : cleanText(out[0]);
+    if (!head || head !== stackPlain) break;
+    out.shift();
+  }
+  return out;
 }
 
 export function getExperienceHighlights(experience?: Experience): string[] {
+  const stackRaw = experience?.summary ?? experience?.techStack;
+  const richStack = Boolean(stackRaw && /<[^>]+>/.test(stackRaw));
+
   const highlights = normalizeList(experience?.highlights);
   if (highlights.length > 0) {
-    return highlights;
+    return stripLeadingTechStackDuplicates(cleanText(stackRaw || ''), highlights, richStack);
   }
 
   const description = normalizeList(experience?.description);
@@ -267,14 +304,17 @@ export function getExperienceHighlights(experience?: Experience): string[] {
     return description.slice(1);
   }
 
-  return description;
+  return stripLeadingTechStackDuplicates(summary, description, richStack);
 }
 
 /** Highlights for the form editor: preserves empty strings (e.g. new bullet rows). */
 export function getExperienceHighlightsEditor(experience?: Experience): string[] {
   const raw = experience?.highlights;
   if (Array.isArray(raw) && raw.length > 0) {
-    return raw.map((h) => (h == null ? '' : String(h)));
+    const stackRaw = experience?.summary ?? experience?.techStack;
+    const richStack = Boolean(stackRaw && /<[^>]+>/.test(String(stackRaw)));
+    const mapped = raw.map((h) => (h == null ? '' : String(h)));
+    return stripLeadingTechStackDuplicates(cleanText(String(stackRaw || '')), mapped, richStack);
   }
   if (Array.isArray(raw) && raw.length === 0) {
     const derived = getExperienceHighlights(experience);
@@ -361,26 +401,41 @@ export function getEducationCredential(education?: Education): string {
 }
 
 export function getProjectSummary(project?: Project): string {
-  return cleanText(project?.summary || project?.role);
+  return getProjectTechStack(project);
+}
+
+/** Tech stack / tooling line for a project (stored as `summary`; optional `techStack`). */
+export function getProjectTechStack(project?: Project): string {
+  return cleanText(project?.summary ?? project?.techStack ?? project?.role);
 }
 
 export function getProjectDate(project?: Project): string {
   return cleanText(project?.date || project?.years);
 }
 
+function projectStackRawForStrip(project?: Project): string {
+  return String(project?.summary ?? project?.techStack ?? project?.role ?? '');
+}
+
 export function getProjectHighlights(project?: Project): string[] {
+  const stackRaw = projectStackRawForStrip(project);
+  const richStack = Boolean(stackRaw && /<[^>]+>/.test(stackRaw));
+
   const highlights = normalizeList(project?.highlights);
   if (highlights.length > 0) {
-    return highlights;
+    return stripLeadingTechStackDuplicates(stackRaw, highlights, richStack);
   }
-  return normalizeList(project?.description);
+  return stripLeadingTechStackDuplicates(stackRaw, normalizeList(project?.description), richStack);
 }
 
 /** Highlights for the form editor: preserves empty strings (e.g. new bullet rows). */
 export function getProjectHighlightsEditor(project?: Project): string[] {
   const raw = project?.highlights;
   if (Array.isArray(raw) && raw.length > 0) {
-    return raw.map((h) => (h == null ? '' : String(h)));
+    const stackRaw = projectStackRawForStrip(project);
+    const richStack = Boolean(stackRaw && /<[^>]+>/.test(stackRaw));
+    const mapped = raw.map((h) => (h == null ? '' : String(h)));
+    return stripLeadingTechStackDuplicates(stackRaw, mapped, richStack);
   }
   if (Array.isArray(raw) && raw.length === 0) {
     const derived = getProjectHighlights(project);

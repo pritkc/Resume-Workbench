@@ -81,7 +81,7 @@ def build_response_contract(
         "workExperience": TailoringSectionContract(
             type="array",
             entry_count=0,
-            editable_fields=["summary", "description"],
+            editable_fields=["tech_stacks", "description"],
             immutable_fields=["id", "position", "title", "company", "location", "start_date", "end_date", "date", "years"],
         ),
         "personalProjects": TailoringSectionContract(
@@ -132,8 +132,8 @@ def build_response_contract(
     sections["workExperience"] = TailoringSectionContract(
         type="array",
         entry_count=len(work_entries),
-        immutable_fields=_immutable_fields(work_keys, {"summary", "description"}),
-        editable_fields=["summary", "description"],
+        immutable_fields=_immutable_fields(work_keys, {"tech_stacks", "description"}),
+        editable_fields=["tech_stacks", "description"],
     )
 
     project_entries = resume_payload.personalProjects
@@ -183,6 +183,7 @@ def build_response_contract(
         experience_entries=[e.company for e in work_entries],
         experience_bullet_counts=[len(e.description) for e in work_entries],
         experience_positions=[e.position or e.title for e in work_entries],
+        experience_tech_stacks=[e.tech_stacks or "" for e in work_entries],
         project_entries=[e.name for e in project_entries],
         project_bullet_counts=[len(e.description) for e in project_entries],
         project_tech_stacks=[e.tech_stacks or "" for e in project_entries],

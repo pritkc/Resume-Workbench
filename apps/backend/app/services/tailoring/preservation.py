@@ -356,6 +356,11 @@ def apply_compact_diff(
                 if isinstance(ts, str):
                     entry["summary"] = ts.strip() or None
 
+            if diff_key == "experience" and "tech_stacks" in entry_diff:
+                ts = entry_diff["tech_stacks"]
+                if isinstance(ts, str):
+                    entry["summary"] = ts.strip() or None
+
             bullets_diff_raw = entry_diff.get("bullets")
             if bullets_diff_raw is None:
                 bullets_diff_raw = entry_diff.get("description")

@@ -481,8 +481,10 @@ export const TEMPLATE_HINTS = {
   one_line_entry: 'Placeholders: LABEL, DETAILS.',
   education_entry:
     'Placeholders: INSTITUTION, AREA, DEGREE, DEGREE_WITH_AREA, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
-  normal_entry: 'Used for Projects. Placeholders: NAME, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
-  experience_entry: 'Placeholders: COMPANY, POSITION, SUMMARY, HIGHLIGHTS, LOCATION, DATE.',
+  normal_entry:
+    'Used for Projects. Placeholders: NAME, TECH_STACKS (or SUMMARY), HIGHLIGHTS, LOCATION, DATE.',
+  experience_entry:
+    'Placeholders: COMPANY, POSITION, TECH_STACKS (or SUMMARY), HIGHLIGHTS, LOCATION, DATE.',
   publication_entry: 'Placeholders: TITLE, AUTHORS, SUMMARY, DOI, URL, JOURNAL, DATE.',
 } as const;
 

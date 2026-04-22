@@ -113,6 +113,45 @@ def _split_description_lines(value: str) -> list[str]:
     return items
 
 
+def _work_entry_tech_stack_text(data: dict[str, Any]) -> str | None:
+    """Coalesce per-role tech stack from legacy and LLM-facing keys."""
+    return _coerce_optional_text(
+        data.get("summary")
+        or data.get("techStack")
+        or data.get("tech_stack")
+        or data.get("tech_stacks")
+    )
+
+
+def _project_tech_stack_text(data: dict[str, Any]) -> str | None:
+    """Coalesce per-project tech stack from legacy and LLM-facing keys."""
+    return _coerce_optional_text(
+        data.get("techStack")
+        or data.get("tech_stack")
+        or data.get("tech_stacks")
+        or data.get("summary")
+        or data.get("role")
+    )
+
+
+def _strip_leading_duplicate_stack_line(
+    stack: str | None, highlights: list[str]
+) -> list[str]:
+    """Remove leading highlight rows that duplicate the tech-stack line (LLM/form noise)."""
+    if not stack or not highlights:
+        return highlights
+    needle = stack.strip()
+    if not needle:
+        return highlights
+    result = list(highlights)
+    while result:
+        head = _coerce_text(result[0]).strip()
+        if not head or head != needle:
+            break
+        result.pop(0)
+    return result
+
+
 def _coerce_string_list(value: Any) -> list[str]:
     """Coerce nested/string values into a list of strings."""
     if value is None:
@@ -389,7 +428,9 @@ class Experience(BaseModel):
         data["date"] = date
         data["years"] = _coerce_text(data.get("years") or date)
 
-        summary = _coerce_optional_text(data.get("summary"))
+        summary = _work_entry_tech_stack_text(data)
+        for legacy_key in ("techStack", "tech_stack", "tech_stacks"):
+            data.pop(legacy_key, None)
         data["summary"] = summary
 
         legacy_description = data.get("description")
@@ -406,6 +447,8 @@ class Experience(BaseModel):
             highlights = legacy_description_list[1:]
         elif legacy_highlights is None and legacy_description_list:
             highlights = legacy_description_list
+
+        highlights = _strip_leading_duplicate_stack_line(summary, highlights)
 
         data["highlights"] = highlights
         data["description"] = [summary, *highlights] if summary else list(highlights)
@@ -521,15 +564,12 @@ class Project(BaseModel):
 
         data = copy.deepcopy(value)
 
-        # Accept 'tech_stacks' from the LLM-facing tailoring layer as alias for 'summary'
-        if "tech_stacks" in data and "summary" not in data:
-            data["summary"] = data.pop("tech_stacks")
-        elif "tech_stacks" in data:
-            data.pop("tech_stacks")
+        stack = _project_tech_stack_text(data)
+        for legacy_key in ("techStack", "tech_stack", "tech_stacks"):
+            data.pop(legacy_key, None)
 
-        summary = _coerce_optional_text(data.get("summary") or data.get("role"))
-        data["summary"] = summary
-        data["role"] = _coerce_text(data.get("role") or summary)
+        data["summary"] = stack
+        data["role"] = _coerce_text(data.get("role") or stack)
 
         date = _coerce_text(data.get("date") or data.get("years"))
         data["date"] = date
@@ -541,6 +581,7 @@ class Project(BaseModel):
             highlights = _coerce_highlights_list(raw_hl)
         else:
             highlights = _coerce_highlights_list(raw_desc)
+        highlights = _strip_leading_duplicate_stack_line(stack, highlights)
         data["highlights"] = highlights
         data["description"] = highlights
         return data

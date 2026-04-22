@@ -75,6 +75,7 @@ interface ProcessedResume {
     id: number;
     name?: string;
     summary?: string | null;
+    techStack?: string | null;
     role?: string;
     date?: string;
     years?: string;

@@ -15,10 +15,10 @@ import {
   getExperienceDate,
   getExperienceHighlights,
   getExperiencePosition,
-  getExperienceSummary,
+  getExperienceTechStack,
   getProjectDate,
   getProjectHighlights,
-  getProjectSummary,
+  getProjectTechStack,
 } from '@/lib/utils/rendercv-fields';
 import { FileUser, Briefcase, GraduationCap, FolderKanban, Wrench } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
@@ -76,9 +76,12 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
                 {getExperienceDate(exp) && (
                   <div className="mb-1 text-xs text-gray-500">{getExperienceDate(exp)}</div>
                 )}
-                {getExperienceSummary(exp) && (
+                {getExperienceTechStack(exp) && (
                   <div className="mb-2 text-sm text-gray-700">
-                    <HighlightedText text={getExperienceSummary(exp)} keywords={keywords} />
+                    <span className="font-semibold text-gray-800">
+                      {t('resume.experience.techStackLabel')}{' '}
+                    </span>
+                    <HighlightedText text={getExperienceTechStack(exp)} keywords={keywords} />
                   </div>
                 )}
                 {getExperienceHighlights(exp).length > 0 && (
@@ -145,16 +148,17 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
               <div key={proj.id} className="mb-4 last:mb-0">
                 <div className="font-semibold text-gray-900">
                   <HighlightedText text={proj.name || ''} keywords={keywords} />
-                  {getProjectSummary(proj) && (
-                    <span className="text-gray-600 font-normal">
-                      {' '}
-                      {t('builder.jdMatch.roleSeparator')}{' '}
-                      <HighlightedText text={getProjectSummary(proj)} keywords={keywords} />
-                    </span>
-                  )}
                 </div>
                 {getProjectDate(proj) && (
                   <div className="mb-1 text-xs text-gray-500">{getProjectDate(proj)}</div>
+                )}
+                {getProjectTechStack(proj) && (
+                  <div className="mb-2 text-sm text-gray-700">
+                    <span className="font-semibold text-gray-800">
+                      {t('resume.experience.techStackLabel')}{' '}
+                    </span>
+                    <HighlightedText text={getProjectTechStack(proj)} keywords={keywords} />
+                  </div>
                 )}
                 {getProjectHighlights(proj).length > 0 && (
                   <ul className="list-disc list-inside space-y-1 text-sm">

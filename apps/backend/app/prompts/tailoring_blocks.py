@@ -26,9 +26,9 @@ WRITING STANDARDS:
 - Short stints get proportionally scoped bullets
 
 ATS OPTIMIZATION:
-- Weave keywords throughout: summary, bullets, skills, project descriptions
+- Weave keywords throughout: profile summary, per-role tech stack lines, bullets, skills, project descriptions
 - Use exact keyword forms from the job intelligence (e.g., "Spring Boot" not "Spring framework", "Kubernetes" not "K8s")
-- Place the highest-priority keywords early in bullets and in the summary
+- Place the highest-priority keywords early in bullets and in the profile summary
 - Never stuff keywords or write hollow ATS-bait sentences — every keyword sits in a meaningful, natural context"""
 
 TAILORING_MODE_STRATEGY = {

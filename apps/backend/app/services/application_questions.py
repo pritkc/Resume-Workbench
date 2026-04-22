@@ -75,7 +75,13 @@ def _resume_context_payload(resume_data: dict[str, Any]) -> dict[str, Any]:
 
     experience = []
     for entry in normalized.workExperience[:4]:
-        bullets = [item for item in (entry.highlights or entry.description) if item][:3]
+        bullet_source = list(entry.highlights or [])
+        if not bullet_source and entry.description:
+            stack = (entry.summary or "").strip()
+            bullet_source = list(entry.description)
+            if stack and bullet_source and str(bullet_source[0]).strip() == stack:
+                bullet_source = bullet_source[1:]
+        bullets = [item for item in bullet_source if item][:3]
         experience.append(
             {
                 "title": _truncate_text(entry.position or entry.title, 80),

@@ -312,13 +312,13 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
                       <div className="mb-2">
                         <span className={fldLabel}>
-                          {t('builder.genericItemForm.fields.summaryOptional')}
+                          {t('builder.forms.experience.fields.techStackOptional')}
                         </span>
                         <div className="mt-0.5">
                           <RichTextEditor
                             value={summary}
                             onChange={(html) => handleTextFieldChange(item.id, 'summary', html)}
-                            placeholder={t('builder.forms.experience.placeholders.summary')}
+                            placeholder={t('builder.forms.experience.placeholders.techStack')}
                             minHeight="40px"
                             toolbarMode="none"
                           />

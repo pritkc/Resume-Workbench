@@ -557,6 +557,14 @@ def _extract_all_text_cached(data_json: str) -> str:
         if isinstance(exp, dict):
             parts.append(str(exp.get("title", "")))
             parts.append(str(exp.get("company", "")))
+            parts.append(
+                str(
+                    exp.get("summary")
+                    or exp.get("tech_stacks")
+                    or exp.get("techStack")
+                    or ""
+                )
+            )
             desc = exp.get("description", [])
             if isinstance(desc, list):
                 parts.extend(str(d) for d in desc)
@@ -573,7 +581,15 @@ def _extract_all_text_cached(data_json: str) -> str:
     for proj in data.get("personalProjects", []):
         if isinstance(proj, dict):
             parts.append(str(proj.get("name", "")))
-            parts.append(str(proj.get("role", "")))
+            parts.append(
+                str(
+                    proj.get("summary")
+                    or proj.get("tech_stacks")
+                    or proj.get("techStack")
+                    or proj.get("role")
+                    or ""
+                )
+            )
             desc = proj.get("description", [])
             if isinstance(desc, list):
                 parts.extend(str(d) for d in desc)

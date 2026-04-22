@@ -83,7 +83,7 @@ import {
   getExperienceHighlights,
   getExperiencePosition,
   getProjectHighlights,
-  getProjectSummary,
+  getProjectTechStack,
 } from '@/lib/utils/rendercv-fields';
 import type { RegenerateItemInput } from '@/lib/api/enrichment';
 import {
@@ -811,7 +811,7 @@ const ResumeBuilderContent = () => {
       item_id: `proj_${idx}`,
       item_type: 'project' as const,
       title: proj.name ?? '',
-      subtitle: getProjectSummary(proj) || undefined,
+      subtitle: getProjectTechStack(proj) || undefined,
       current_content: getProjectHighlights(proj),
     }));
   }, [resumeData.personalProjects]);

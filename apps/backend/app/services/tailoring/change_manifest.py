@@ -15,6 +15,7 @@ _METRIC_RE = re.compile(r"\$?\b\d+(?:\.\d+)?(?:[kKmMbBxX%])?\b")
 _ALLOWED_PATH_PATTERNS = (
     re.compile(r"^summary$"),
     re.compile(r"^workExperience\[\d+\]\.summary$"),
+    re.compile(r"^workExperience\[\d+\]\.tech_stacks$"),
     re.compile(r"^workExperience\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^personalProjects\[\d+\]\.(?:summary|tech_stacks)$"),
     re.compile(r"^personalProjects\[\d+\]\.description(\[\d+\])?$"),
@@ -42,9 +43,12 @@ def _description_list(entry: Any) -> list[str]:
     if not isinstance(entry, dict):
         return []
     description = _text_list(entry.get("description"))
-    if description:
-        return description
-    return _text_list(entry.get("highlights"))
+    if not description:
+        description = _text_list(entry.get("highlights"))
+    stack = _clean_text(entry.get("summary") or entry.get("tech_stacks"))
+    while stack and description and _clean_text(description[0]) == stack:
+        description = description[1:]
+    return description
 
 
 def _append_summary_change(
@@ -182,7 +186,7 @@ def build_change_manifest(
             if not isinstance(original_entry, dict) or not isinstance(updated_entry, dict):
                 continue
             base_path = f"{section_key}[{index}]"
-            # personalProjects uses 'tech_stacks' in LLM payloads (mapped back to 'summary')
+            # Work + projects: per-entry tooling line (stored as summary on resume JSON).
             orig_summary = original_entry.get("summary") or original_entry.get("tech_stacks")
             updated_summary = updated_entry.get("summary") or updated_entry.get("tech_stacks")
             _append_summary_change(
@@ -190,7 +194,15 @@ def build_change_manifest(
                 path=f"{base_path}.summary",
                 original=orig_summary,
                 updated=updated_summary,
-                reason="Updated section summary for job alignment.",
+                reason=(
+                    "Updated role tech stack for job alignment."
+                    if section_key == "workExperience"
+                    else (
+                        "Updated project tech stack for job alignment."
+                        if section_key == "personalProjects"
+                        else "Updated section summary for job alignment."
+                    )
+                ),
             )
             _append_list_changes(
                 changes,

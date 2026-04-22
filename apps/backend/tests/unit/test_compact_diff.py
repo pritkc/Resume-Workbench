@@ -143,11 +143,11 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, diff)
         assert result["personalProjects"][0]["summary"] == "Python, Click, observability"
 
-    def test_project_tech_stacks_not_applied_to_experience(self, base_resume):
-        diff = {"experience": {"0": {"tech_stacks": "should be ignored", "bullets": {"0": "Bullet"}}}}
+    def test_experience_tech_stacks_applied_with_bullets(self, base_resume):
+        diff = {"experience": {"0": {"tech_stacks": "Python, FastAPI", "bullets": {"0": "Bullet"}}}}
         result = apply_compact_diff(base_resume, diff)
         assert result["workExperience"][0]["description"][0] == "Bullet"
-        assert result["workExperience"][0].get("summary") is None
+        assert result["workExperience"][0].get("summary") == "Python, FastAPI"
 
     def test_skills_regroup_applied(self, base_resume):
         new_skills = [

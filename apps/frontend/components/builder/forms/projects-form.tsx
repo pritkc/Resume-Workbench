@@ -25,7 +25,7 @@ import {
   buildProjectDescription,
   getProjectDate,
   getProjectHighlightsEditor,
-  getProjectSummary,
+  getProjectTechStack,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
 import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
@@ -226,12 +226,12 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                 </div>
                 <div className="md:col-span-2">
                   <span className={fldLabel}>
-                    {t('builder.genericItemForm.fields.summaryOptional')}
+                    {t('builder.forms.projects.fields.techStackOptional')}
                   </span>
                   <Textarea
-                    value={getProjectSummary(item)}
+                    value={getProjectTechStack(item)}
                     onChange={(e) => handleFieldChange(item.id, 'summary', e.target.value)}
-                    placeholder={t('builder.forms.projects.placeholders.summary')}
+                    placeholder={t('builder.forms.projects.placeholders.techStack')}
                     className="mt-0.5 min-h-[72px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"
                   />
                 </div>

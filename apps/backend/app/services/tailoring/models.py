@@ -63,7 +63,10 @@ def _coerce_bullet_list(value: Any) -> list[str]:
 
 
 class TailoringExperience(BaseModel):
-    """Canonical work entry sent to and read from the LLM."""
+    """Canonical work entry sent to and read from the LLM.
+
+    ``tech_stacks`` is the per-role tooling line (stored as ``summary`` on ResumeData).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -76,7 +79,7 @@ class TailoringExperience(BaseModel):
     end_date: str | None = None
     date: str = ""
     years: str = ""
-    summary: str | None = None
+    tech_stacks: str | None = None
     description: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -88,6 +91,13 @@ class TailoringExperience(BaseModel):
         if "description" not in data and "highlights" in data:
             data["description"] = copy.deepcopy(data.get("highlights"))
         data.pop("highlights", None)
+        if "tech_stacks" not in data:
+            if "summary" in data:
+                data["tech_stacks"] = data.pop("summary")
+            elif "techStack" in data:
+                data["tech_stacks"] = data.pop("techStack")
+            elif "tech_stack" in data:
+                data["tech_stacks"] = data.pop("tech_stack")
         return data
 
     @field_validator("position", "title", "company", "date", "years", mode="before")
@@ -95,7 +105,7 @@ class TailoringExperience(BaseModel):
     def _normalize_text(cls, value: Any) -> str:
         return _coerce_text(value)
 
-    @field_validator("location", "start_date", "end_date", "summary", mode="before")
+    @field_validator("location", "start_date", "end_date", "tech_stacks", mode="before")
     @classmethod
     def _normalize_optional_text(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
@@ -105,6 +115,12 @@ class TailoringExperience(BaseModel):
     def _normalize_description(cls, value: Any) -> list[str]:
         return _coerce_bullet_list(value)
 
+    def to_resume_entry_dict(self) -> dict[str, Any]:
+        """Map tailoring shape back to stored resume JSON (tech_stacks → summary)."""
+        data = self.model_dump()
+        data["summary"] = data.pop("tech_stacks", None)
+        return data
+
     @classmethod
     def from_resume_entry(cls, entry: dict[str, Any]) -> "TailoringExperience":
         position = _coerce_text(entry.get("position") or entry.get("title"))
@@ -113,11 +129,16 @@ class TailoringExperience(BaseModel):
         end_date = _coerce_optional_text(entry.get("end_date") or entry.get("endDate"))
         date = _coerce_text(entry.get("date") or entry.get("years") or _compose_date_range(start_date, end_date))
         years = _coerce_text(entry.get("years") or date)
-        summary = _coerce_optional_text(entry.get("summary"))
+        tech_stacks = _coerce_optional_text(
+            entry.get("summary")
+            or entry.get("tech_stacks")
+            or entry.get("techStack")
+            or entry.get("tech_stack")
+        )
         description = _coerce_bullet_list(entry.get("description"))
         if not description:
             description = _coerce_bullet_list(entry.get("highlights"))
-        if summary and description and description[0] == summary:
+        while tech_stacks and description and description[0] == tech_stacks:
             description = description[1:]
         return cls(
             id=int(entry.get("id") or 0),
@@ -129,7 +150,7 @@ class TailoringExperience(BaseModel):
             end_date=end_date,
             date=date,
             years=years,
-            summary=summary,
+            tech_stacks=tech_stacks,
             description=description,
         )
 
@@ -476,6 +497,7 @@ class TailoringResponseContract(BaseModel):
     experience_entries: list[str] = Field(default_factory=list)
     experience_bullet_counts: list[int] = Field(default_factory=list)
     experience_positions: list[str] = Field(default_factory=list)
+    experience_tech_stacks: list[str] = Field(default_factory=list)
     project_entries: list[str] = Field(default_factory=list)
     project_bullet_counts: list[int] = Field(default_factory=list)
     project_tech_stacks: list[str] = Field(default_factory=list)
@@ -491,6 +513,7 @@ class TailoringResponseContract(BaseModel):
             out["experience"] = {
                 "entries": self.experience_entries,
                 "positions": self.experience_positions,
+                "tech_stacks": self.experience_tech_stacks,
                 "bullet_counts": self.experience_bullet_counts,
             }
 
