@@ -14,7 +14,7 @@ This folder is the working map for agents operating in the current `resume-workk
 - Cover-letter and outreach prompts use **compact candidate-profile payloads**, not the full stored resume JSON.
 - LLM calls are persisted to the **`llm_calls`** table and surfaced at **`/llm-traces`**.
 - **`additional.groups`** and raw RenderCV YAML editing are live features.
-- **Prompts** live under `apps/backend/app/prompts/` as **multiple modules** (the old `templates.py` monolith is gone). See [llm-prompt-inventory.md](llm-prompt-inventory.md).
+- **Prompts:** shipped copy under `apps/backend/app/prompts/text/` (`.txt`); loaders and `build_messages` in `apps/backend/app/prompts/*.py`. See [llm-prompt-inventory.md](llm-prompt-inventory.md) and `apps/backend/app/prompts/text/README.md`.
 - **End-to-end backend flow:** [architecture/backend-orchestration-flow.md](architecture/backend-orchestration-flow.md) (repo root `orchastration.md` is a stub that points here).
 
 ## Start here

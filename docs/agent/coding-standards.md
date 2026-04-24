@@ -42,7 +42,7 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 - Type hints on ALL functions
 - Async functions for I/O operations (database, LLM calls)
 - Pydantic models for all request/response schemas
-- Prompt text and constants live in **`app/prompts/*.py`** (split modules). See [llm-prompt-inventory.md](llm-prompt-inventory.md) and `app/prompts/__init__.py` for re-exports and overrides (`prompt_overrides/`).
+- Shipped prompt **bodies** live in **`app/prompts/text/*.txt`**; **`app/prompts/*.py`** holds step wiring (`build_messages`, `VARIABLES`). See [llm-prompt-inventory.md](llm-prompt-inventory.md), `app/prompts/text/README.md`, and `app/prompts/__init__.py` for overrides (`prompt_overrides/`).
 
 ### Error Handling
 

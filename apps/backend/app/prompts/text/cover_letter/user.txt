@@ -1,0 +1,44 @@
+Generate both outputs in one pass using the same context:
+1) a cover letter
+2) a short outreach message
+
+IMPORTANT:
+- Return plain text only using this exact wrapper format:
+<<COVER_LETTER>>
+[cover letter body]
+<<END_COVER_LETTER>>
+<<OUTREACH_MESSAGE>>
+[outreach message body]
+<<END_OUTREACH_MESSAGE>>
+- Do NOT use markdown, JSON, or any extra commentary outside those wrappers
+- Do NOT use em dash ("—") anywhere in either message
+
+JOB TARGET (JSON):
+$job_target
+
+JOB DESCRIPTION EXCERPT:
+$job_description
+
+CANDIDATE PROFILE (JSON):
+$resume_profile
+
+COVER LETTER REQUIREMENTS:
+- 95-165 words, 3 tight paragraphs (4 only for a genuine pivot)
+- Human, direct, specific, no template voice, no hype
+- Anchor paragraph 1 in one concrete JD detail
+- Paragraph 2 includes 1-2 profile-grounded facts only (no invented metrics/facts)
+- Paragraph 3 ends with a clean, neutral closing
+- Plain text body only (no letterhead, markdown, signature block)
+
+OUTREACH MESSAGE REQUIREMENTS:
+- 50-95 words, 3-4 short sentences
+- Peer-professional tone: concise, confident, not salesy
+- Start with one concrete role/company anchor from JD
+- Include one strongest relevant credential from profile
+- End with one low-friction ask
+- Plain text only (no subject line, no signature block, no markdown)
+
+FACTS:
+- Use only information from provided JSON/context
+- Do not invent names, metrics, employers, dates, or credentials
+- If recipient name is unknown, do not invent one

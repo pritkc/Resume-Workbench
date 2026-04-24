@@ -1,0 +1,5 @@
+TAILORED RESUME (first pass, JSON):
+$tailor_resume_full_output
+
+JOB DESCRIPTION INTELLIGENCE:
+$extract_jd_intel_output

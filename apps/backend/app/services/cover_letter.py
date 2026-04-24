@@ -7,8 +7,8 @@ from typing import Any
 
 from app.config import get_step_llm_config
 from app.llm import complete
-from app.prompts import PROMPT_VERSIONS, get_language_name
-from app.prompts.cover_letter import COMBINED_MESSAGES_SYSTEM_PROMPT, COVER_LETTER_OUTREACH_PROMPT
+from app.prompts import PROMPT_VERSIONS
+from app.prompts.cover_letter import build_messages as cover_letter_build_messages
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -637,18 +637,17 @@ async def generate_cover_letter_and_outreach(
     language: str = "en",
 ) -> tuple[str, str]:
     """Generate cover letter and outreach message together in one LLM call."""
-    output_language = get_language_name(language)
+    del language
     prompt_inputs = _build_message_prompt_inputs(resume_data, job_description)
-    prompt = COVER_LETTER_OUTREACH_PROMPT.format(
+    system, user = cover_letter_build_messages(
         job_target=prompt_inputs["job_target"],
         job_description=prompt_inputs["job_description"],
         resume_profile=prompt_inputs["resume_profile"],
-        output_language=output_language,
     )
     content = await asyncio.wait_for(
         complete(
-            prompt=prompt,
-            system_prompt=COMBINED_MESSAGES_SYSTEM_PROMPT,
+            prompt=user,
+            system_prompt=system,
             config=get_step_llm_config("cover_letter"),
             max_tokens=COMBINED_MESSAGE_MAX_TOKENS,
             retries=2,

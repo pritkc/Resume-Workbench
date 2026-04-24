@@ -69,7 +69,6 @@ async def generate_tailored_resume(
     original_resume: str,
     job_description: str,
     job_keywords: dict[str, Any],
-    language: str = "en",
     prompt_id: str | None = None,
     original_resume_data: dict[str, Any] | None = None,
     cleanup_source_data: dict[str, Any] | None = None,
@@ -88,7 +87,6 @@ async def generate_tailored_resume(
     )
     prompt_context = build_prompt_context(
         prompt_id=resolved_prompt_id,
-        language=language,
         jd_intelligence=jd_intelligence,
         response_contract=response_contract,
         resume_payload=prompt_resume_data,
@@ -102,7 +100,7 @@ async def generate_tailored_resume(
     critique_analysis: dict[str, object] | None = None
     if resolved_prompt_id == "full" and get_enable_critique():
         draft_json = json.dumps(result, ensure_ascii=True)
-        jd_json = prompt_context.job_intelligence_json
+        jd_json = prompt_context.extract_jd_intel_output_json
         c_sys, c_user = build_critique_messages(draft_json, jd_json)
         critique_raw = await complete_json(
             prompt=c_user,
@@ -119,9 +117,9 @@ async def generate_tailored_resume(
         critique_s = json.dumps(critique_raw, ensure_ascii=True)
         r_sys, r_user = build_rewrite_messages(
             original_resume=prompt_context.original_resume_json,
-            draft_resume=draft_json,
-            critique=critique_s,
-            jd_intelligence=jd_json,
+            tailor_resume_full_output=draft_json,
+            critique_resume_output=critique_s,
+            extract_jd_intel_output=jd_json,
             response_contract=prompt_context.response_contract_json,
         )
         result = await complete_json(
@@ -231,7 +229,6 @@ async def improve_resume(
     original_resume: str,
     job_description: str,
     job_keywords: dict[str, Any],
-    language: str = "en",
     prompt_id: str | None = None,
     original_resume_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -241,7 +238,6 @@ async def improve_resume(
         original_resume=original_resume,
         job_description=job_description,
         job_keywords=job_keywords,
-        language=language,
         prompt_id=prompt_id,
         original_resume_data=original_resume_data,
         cleanup_source_data=original_resume_data,

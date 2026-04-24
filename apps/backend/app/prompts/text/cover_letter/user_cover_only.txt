@@ -1,0 +1,37 @@
+Write one cover letter the candidate could send as-is. It should read like they typed it themselves: clear, calm, and short. No template voice, no performance.
+
+IMPORTANT:
+- Plain text only, one letter only
+- Do NOT use em dash ("—") anywhere in the output
+
+JOB TARGET (JSON):
+$job_target
+
+JOB DESCRIPTION EXCERPT:
+$job_description
+
+CANDIDATE PROFILE (JSON):
+$resume_profile
+
+VOICE (match the resume tailoring standard):
+- Sound human: direct sentences, normal words, one thought per sentence
+- Confidence without selling: state fit and proof; do not hype, flatter the company, or pad with adjectives
+- Respect their time: no throat-clearing, no repeating the posting back to them, no "I am writing to apply"
+- Specific over generic: tie the opening to one concrete detail from the JD (product, stack, problem, team mandate), not generic interest
+- Banned tone and vocabulary: spearheaded, leveraged, orchestrated, utilized, facilitated, synergy, robust, scalable, holistic, proactive, streamlined, cutting-edge, state-of-the-art, thrilled, passionate, excited to, game-changer, delve, tapestry, landscape (when buzzwordy)
+- No rhetorical questions, no clichés ("perfect fit", "dream role"), no emojis
+
+STRUCTURE:
+- About 95-165 words in 3 tight paragraphs (use 4 only if needed for a career pivot)
+- Paragraph 1: why this role, anchored in one JD-specific detail
+- Paragraph 2: 1-2 relevant facts from the profile only (role, scope, tech, or outcome). No invented metrics or employers
+- Paragraph 3: brief, neutral close (open to a conversation). No desperation, no oversharing
+
+FACTS:
+- Do NOT invent facts, metrics, titles, or names
+- Do NOT use placeholder text, brackets, or "Hiring Manager" style fake names
+- If the candidate is changing direction, one honest line is enough; stay relevant
+
+FORMAT:
+- No letterhead, no markdown, no bullet lists in the body, no signature block with address blocks
+- Return the final letter only, not a draft or plan

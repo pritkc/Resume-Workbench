@@ -102,8 +102,8 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         ),
         PromptCatalogSection(
             id="tailoring_rt_job_intel",
-            label="{job_intelligence}",
-            content="JSON from JD analysis (role, keywords, themes, etc.).",
+            label="{extract_jd_intel_output}",
+            content="JSON from extract_jd_intel (role, keywords, themes, etc.).",
             policy="runtime_injected",
         ),
         PromptCatalogSection(
@@ -118,40 +118,34 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
             content="JSON contract describing allowed response shape for this resume.",
             policy="runtime_injected",
         ),
-        PromptCatalogSection(
-            id="tailoring_rt_language",
-            label="{output_language}",
-            content="Human-readable language name from the user's content-language setting.",
-            policy="runtime_injected",
-        ),
     ]
 
     return [
         PromptCatalogSection(
-            id="tailoring_contract_block",
-            label="Contract block (calibrated)",
-            note="Output schema and JSON rules. Change rarely — requires tests.",
-            policy="system",
-            children=contract_children,
-        ),
-        PromptCatalogSection(
             id="tailoring_craft_block",
-            label="Craft block (experimental)",
-            note="Voice, ATS, writing quality rules. Safe to iterate.",
+            label="Craft block (role, voice, ATS, tailoring approach)",
+            note="Narrative instructions and writing standards. Shipped: apps/backend/app/prompts/text/fragments/tailoring_craft.txt",
             policy="user_editable_future",
             children=craft_children,
         ),
         PromptCatalogSection(
             id="tailoring_mode_strategies",
             label="Mode strategies",
-            note="One mode strategy is selected per run.",
+            note="One mode strategy is selected per run. Shipped: text/fragments/tailoring_mode_full.txt and tailoring_mode_lite.txt",
             policy="user_editable_future",
             children=mode_children,
         ),
         PromptCatalogSection(
+            id="tailoring_contract_block",
+            label="Resume diff output (strict JSON schema)",
+            note="Keys and shapes only. Shipped: apps/backend/app/prompts/text/fragments/resume_diff_output.txt — change rarely; requires tests.",
+            policy="system",
+            children=contract_children,
+        ),
+        PromptCatalogSection(
             id="tailoring_user_message",
             label="User message template",
-            note="Template with runtime slots. Structure shared across runs.",
+            note="Template with runtime slots. Shipped: apps/backend/app/prompts/text/fragments/tailoring_user_shell.txt",
             policy="user_editable_future",
             children=[
                 PromptCatalogSection(

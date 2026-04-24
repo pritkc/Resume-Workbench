@@ -23,9 +23,8 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class TailoringPromptContext:
     prompt_id: str
-    output_language: str
     response_contract_json: str
-    job_intelligence_json: str
+    extract_jd_intel_output_json: str
     original_resume_json: str
     retry_hint: str
     system_prompt: str
@@ -37,9 +36,8 @@ def assemble_tailoring_system_prompt(mode: str) -> str:
     mod = get_prompt("tailor_resume_full" if mode == "full" else "tailor_resume_lite")
     system, _ = mod.build_messages(
         original_resume="{}",
-        job_intelligence="{}",
+        extract_jd_intel_output="{}",
         response_contract="{}",
-        output_language="English",
     )
     return system
 
@@ -47,17 +45,15 @@ def assemble_tailoring_system_prompt(mode: str) -> str:
 def render_tailoring_user_prompt(
     *,
     mode_id: str,
-    job_intelligence_json: str,
+    extract_jd_intel_output_json: str,
     original_resume_json: str,
     response_contract_json: str,
-    output_language: str,
 ) -> str:
     mod = get_prompt("tailor_resume_full" if mode_id == "full" else "tailor_resume_lite")
     _, user = mod.build_messages(
         original_resume=original_resume_json,
-        job_intelligence=job_intelligence_json,
+        extract_jd_intel_output=extract_jd_intel_output_json,
         response_contract=response_contract_json,
-        output_language=output_language,
     )
     return user
 
@@ -89,16 +85,12 @@ def _resolve_mode(prompt_id: str | None) -> str:
 def build_prompt_context(
     *,
     prompt_id: str | None,
-    language: str,
     jd_intelligence: JDIntelligence,
     response_contract: TailoringResponseContract,
     resume_payload: TailoringResumePayload | None,
     original_resume_markdown: str,
 ) -> TailoringPromptContext:
-    from app.prompts._constants import get_language_name
-
     selected_mode = _resolve_mode(prompt_id)
-    output_language = get_language_name(language)
 
     resume_input = (
         json.dumps(resume_payload.model_dump(), separators=(",", ":"), ensure_ascii=True)
@@ -115,16 +107,14 @@ def build_prompt_context(
     mod = get_prompt("tailor_resume_full" if selected_mode == "full" else "tailor_resume_lite")
     system_prompt, user_prompt = mod.build_messages(
         original_resume=resume_input,
-        job_intelligence=job_json,
+        extract_jd_intel_output=job_json,
         response_contract=response_contract_json,
-        output_language=output_language,
     )
 
     return TailoringPromptContext(
         prompt_id=selected_mode,
-        output_language=output_language,
         response_contract_json=response_contract_json,
-        job_intelligence_json=job_json,
+        extract_jd_intel_output_json=job_json,
         original_resume_json=resume_input,
         retry_hint=build_tailoring_retry_hint(response_contract),
         system_prompt=system_prompt,

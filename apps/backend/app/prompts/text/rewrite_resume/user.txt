@@ -1,0 +1,15 @@
+
+ORIGINAL RESUME:
+$original_resume
+
+DRAFT RESUME (first pass):
+$tailor_resume_full_output
+
+CRITIQUE (JSON):
+$critique_resume_output
+
+JOB DESCRIPTION INTELLIGENCE:
+$extract_jd_intel_output
+
+RESPONSE CONTRACT:
+$response_contract

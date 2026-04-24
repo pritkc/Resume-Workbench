@@ -1,5 +1,7 @@
 # Phase 3.7.6 — Easier Prompt Management (“Composer”)
 
+> **Note (Phase 3.12.2):** Default prompt **prose** for pipeline steps now lives under `apps/backend/app/prompts/text/` as `.txt` files. Composer (`prompt_overrides/*.composer.json`), per-step overrides, and the two-scroll UI are unchanged.
+
 **Status:** Draft — implementation plan  
 **Depends on:** Phase 3.7.5 (prompt modularization, catalog API, manager UI) — **complete**  
 **Conceptual spec:** [`prompt-two-scrolls-architecture.md`](./prompt-two-scrolls-architecture.md)  

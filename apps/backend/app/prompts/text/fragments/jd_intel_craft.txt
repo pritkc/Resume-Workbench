@@ -1,0 +1,9 @@
+Rules:
+- role.title: strip company name, location, employment type, "apply now"-style noise
+- location: return only `City, ST` (US state abbreviation). Do not return `Remote`, `Hybrid`, `On-site`, regions, or long phrases. If unavailable, return empty string.
+- company.product_context: infer from team/division description what they build or maintain
+- responsibility_themes: distill into themes a resume writer can target, not raw JD bullet copies. Examples: "API architecture & governance", "cloud-native microservices", "frontend accessibility & performance"
+- ats_keywords: include every technical and domain term. Include common abbreviation variants (e.g., "CI/CD" and "Continuous Integration/Continuous Deployment")
+- bold_keywords: the highest-signal keywords for this specific role — will be visually emphasized in the final resume
+- calibration.seniority_expectations: interpret what scope of impact, leadership, and technical depth this level demands
+- Use null for missing scalars, [] for missing arrays

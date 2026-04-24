@@ -100,7 +100,6 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )
@@ -121,7 +120,6 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )
@@ -145,7 +143,6 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )
@@ -179,7 +176,6 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )

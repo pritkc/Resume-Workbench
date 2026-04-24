@@ -8,7 +8,7 @@
 
 Touch:
 
-- `apps/backend/app/prompts/tailoring_blocks.py`, `tailor_resume_full.py`, `parse_resume.py`, `extract_jd_intel.py`, `cover_letter.py`, and related modules (see `app/prompts/__init__.py`)
+- `apps/backend/app/prompts/text/` (shipped `.txt` prompts), `tailoring_blocks.py`, `tailor_resume_full.py`, `parse_resume.py`, `extract_jd_intel.py`, `cover_letter.py`, and related modules (see `app/prompts/__init__.py`)
 - `apps/backend/app/prompts/enrichment.py`
 - `apps/backend/app/prompts/refinement.py` if you are changing the older inactive refinement prompt or local cleanup constants
 - `apps/backend/app/services/tailoring/*`

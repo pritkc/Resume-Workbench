@@ -409,6 +409,10 @@ export interface PromptManagerEntry {
   label: string;
   version: string;
   file_path: string;
+  /** Repo paths where shipped system prompt copy is authored (read in order). */
+  system_prompt_files?: string[];
+  /** Repo path where the shipped user / data template lives. */
+  user_prompt_file?: string;
   pipeline: PromptPipeline;
   pipeline_order: number;
   receives_from: string[];
@@ -450,6 +454,8 @@ export interface PromptComposerResponse {
 export interface SharedRuleEntry {
   name: string;
   label: string;
+  /** Shipped rules module in the repo. */
+  rules_source_file?: string;
   rules: string;
   rules_is_override: boolean;
   rules_default: string;
@@ -466,6 +472,11 @@ export interface PromptCatalogResponse {
   prompts: PromptCatalogEntry[];
   entries?: PromptManagerEntry[];
   shared_rules?: SharedRuleEntry[];
+}
+
+export interface MasterResumePreviewResponse {
+  serialized_original_resume: string;
+  truncated: boolean;
 }
 
 export interface CritiqueConfig {
@@ -524,6 +535,20 @@ export async function fetchPromptCatalog(): Promise<PromptCatalogResponse> {
     throw new Error(`Failed to load prompt catalog (status ${res.status}).`);
   }
 
+  return res.json();
+}
+
+export async function fetchMasterResumePreview(): Promise<MasterResumePreviewResponse> {
+  const res = await apiFetch('/config/prompts/catalog/master-resume-preview', {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to load master resume preview (status ${res.status}).`
+    );
+  }
   return res.json();
 }
 

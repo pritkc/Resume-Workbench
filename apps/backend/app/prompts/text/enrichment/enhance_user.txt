@@ -1,0 +1,21 @@
+ADD new bullet points to this resume item using the candidate's additional context. Do NOT rewrite existing bullets.
+
+Generate ALL output in English.
+
+ITEM: {item_type} — {title} at {subtitle}
+CURRENT BULLETS (keep as-is):
+{current_description}
+
+CANDIDATE CONTEXT:
+{answers}
+
+OUTPUT (JSON only):
+{{"additional_bullets":["New bullet 1","New bullet 2"]}}
+
+RULES:
+- 2-4 new bullets only — no replacements, no repeats of existing content
+- Action verbs: Led, Built, Designed, Implemented, Optimized
+- Include metrics/numbers only when candidate provided them — never invent
+- Mention specific technologies and tools from the answers
+- Past tense for past roles, present for current
+- Concise (1-2 lines each), specific, no buzzwords

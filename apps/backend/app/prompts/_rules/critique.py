@@ -1,24 +1,11 @@
-"""Critique step output schema."""
+"""Critique step output schema.
 
-CRITIQUE_RULES = """
-OUTPUT FORMAT:
-- Valid JSON only — no markdown, no commentary
-
-REQUIRED KEYS:
-{
-  "overall_assessment": "Brief impression of fit for this role",
-  "red_flags": [
-    { "location": "experience.0.bullets.2", "issue": "...", "severity": "high|medium|low" }
-  ],
-  "missed_keywords": [
-    { "keyword": "Kubernetes", "suggestion": "Where to add it" }
-  ],
-  "weak_bullets": [
-    { "location": "experience.1.bullets.0", "current": "...", "issue": "..." }
-  ],
-  "suggestions": ["Actionable suggestion 1"]
-}
+Shipped body: ``text/fragments/critique_rules.txt``.
 """
+
+from app.prompts._text_prompts import read_shipped_txt
+
+CRITIQUE_RULES = read_shipped_txt("fragments/critique_rules.txt")
 
 RULES_NAME = "critique"
 RULES_LABEL = "Critique Output"

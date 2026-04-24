@@ -37,6 +37,7 @@ from app.schemas import (
     LanguageConfigResponse,
     ModelOverridesRequest,
     ModelOverridesResponse,
+    MasterResumePreviewResponse,
     PromptConfigRequest,
     PromptConfigResponse,
     PromptCatalogEntry,
@@ -82,6 +83,7 @@ from app.routers.prompt_catalog_builder import (
     build_prompt_manager_entries,
     build_shared_rule_entries,
 )
+from app.services.tailoring.master_resume_preview import capped_master_resume_preview_text
 from app.config import (
     get_api_keys_from_config,
     save_api_keys_to_config,
@@ -252,9 +254,9 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("tailoring_user"),
             system_prompt="\n\n".join(
                 [
-                    TAILORING_CONTRACT_BLOCK,
                     TAILORING_CRAFT_BLOCK,
                     TAILORING_MODE_STRATEGY["full"],
+                    TAILORING_CONTRACT_BLOCK,
                 ]
             ),
             user_prompt=TAILORING_USER_SHELL,
@@ -280,6 +282,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_analyze"),
             system_prompt=ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
             user_prompt=ANALYZE_RESUME_PROMPT,
+            notes="Shipped: text/enrichment/analyze_system.txt, text/enrichment/analyze_user.txt (str.format: resume_json).",
         ),
         PromptCatalogEntry(
             id="enrichment_enhance",
@@ -287,6 +290,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_enhance"),
             system_prompt=ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
             user_prompt=ENHANCE_DESCRIPTION_PROMPT,
+            notes="Shipped: text/enrichment/enhance_system.txt, text/enrichment/enhance_user.txt (str.format).",
         ),
         PromptCatalogEntry(
             id="enrichment_regenerate_item",
@@ -294,6 +298,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_regenerate_item"),
             system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
             user_prompt=REGENERATE_ITEM_PROMPT,
+            notes="Shipped: text/enrichment/regenerate_system.txt, text/enrichment/regenerate_item_user.txt (str.format).",
         ),
         PromptCatalogEntry(
             id="enrichment_regenerate_group",
@@ -301,6 +306,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_regenerate_group"),
             system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
             user_prompt=REGENERATE_ADDITIONAL_GROUP_PROMPT,
+            notes="Shipped: text/enrichment/regenerate_system.txt, text/enrichment/regenerate_group_user.txt (str.format).",
         ),
     ]
 
@@ -795,6 +801,12 @@ async def update_prompt_config(
 async def get_prompt_catalog() -> PromptCatalogResponse:
     """Return read-only catalog of prompt templates currently used by LLM operations."""
     return _get_prompt_catalog_response()
+
+
+@router.get("/prompts/catalog/master-resume-preview", response_model=MasterResumePreviewResponse)
+async def get_master_resume_preview() -> MasterResumePreviewResponse:
+    text, truncated = capped_master_resume_preview_text(db)
+    return MasterResumePreviewResponse(serialized_original_resume=text, truncated=truncated)
 
 
 @router.get("/critique", response_model=CritiqueConfigResponse)

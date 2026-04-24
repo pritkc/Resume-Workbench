@@ -1559,7 +1559,15 @@ class PromptManagerEntry(BaseModel):
     step_name: str
     label: str
     version: str
-    file_path: str
+    file_path: str = Field(description="Primary step module (assembly, overrides, and step-local copy).")
+    system_prompt_files: list[str] = Field(
+        default_factory=list,
+        description="Repo paths where shipped system prompt text is authored (read in order).",
+    )
+    user_prompt_file: str = Field(
+        default="",
+        description="Repo path where the shipped user / data template is authored.",
+    )
     pipeline: Literal["full", "lite", "standalone"]
     pipeline_order: int
     receives_from: list[str]
@@ -1589,6 +1597,7 @@ class SharedRuleEntry(BaseModel):
 
     name: str
     label: str
+    rules_source_file: str = Field(default="", description="Repo path of the shipped default rules module.")
     rules: str
     rules_is_override: bool
     rules_default: str
@@ -1673,6 +1682,13 @@ class PromptCatalogEntry(BaseModel):
     user_prompt: str | None = None
     notes: str | None = None
     sections: list[PromptCatalogSection] | None = None
+
+
+class MasterResumePreviewResponse(BaseModel):
+    """Serialized master resume as used for tailoring `$original_resume` (size-capped)."""
+
+    serialized_original_resume: str = ""
+    truncated: bool = False
 
 
 class PromptCatalogResponse(BaseModel):

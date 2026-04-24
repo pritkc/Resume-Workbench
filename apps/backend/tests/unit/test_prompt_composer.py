@@ -42,11 +42,10 @@ def test_tailor_build_messages_fills_template() -> None:
     mod = get_prompt("tailor_resume_full")
     _, user = mod.build_messages(
         original_resume="{}",
-        job_intelligence="{}",
+        extract_jd_intel_output="{}",
         response_contract="{}",
-        output_language="English",
     )
-    assert "$job_intelligence" not in user
+    assert "$extract_jd_intel_output" not in user
     assert "MODE: full" in user
 
 

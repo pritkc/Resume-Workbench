@@ -1028,7 +1028,6 @@ async def _generate_tailored_resume_data(
     resume: dict[str, Any],
     job: dict[str, Any],
     job_keywords: dict[str, Any],
-    language: str,
     prompt_id: str,
     stage_state: dict[str, str] | None = None,
 ) -> Any:
@@ -1040,7 +1039,6 @@ async def _generate_tailored_resume_data(
         original_resume=resume["content"],
         job_description=job["content"],
         job_keywords=job_keywords,
-        language=language,
         prompt_id=prompt_id,
         original_resume_data=original_resume_data,
         cleanup_source_data=cleanup_source_data,
@@ -1643,7 +1641,6 @@ async def improve_resume_preview_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    language = get_content_language()
     prompt_id = _resolve_prompt_id(request.prompt_id)
     request_id = str(uuid4())
 
@@ -1660,7 +1657,6 @@ async def improve_resume_preview_endpoint(
                     request=request,
                     resume=resume,
                     job=job,
-                    language=language,
                     prompt_id=prompt_id,
                     request_id=request_id,
                     theme_settings=_resolve_request_theme_settings(
@@ -1690,7 +1686,6 @@ async def _improve_preview_flow(
     request: ImproveResumeRequest,
     resume: dict[str, Any],
     job: dict[str, Any],
-    language: str,
     prompt_id: str,
     request_id: str,
     theme_settings: RenderThemeProfile,
@@ -1738,7 +1733,6 @@ async def _improve_preview_flow(
             resume=resume,
             job=job,
             job_keywords=job_keywords,
-            language=language,
             prompt_id=prompt_id,
             stage_state=stage_state,
         )
@@ -2279,7 +2273,6 @@ async def improve_resume_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    language = get_content_language()
     stage_state = {"stage": "load_job_keywords"}
     detail = "Failed to improve resume. Please try again."
     request_id = str(uuid4())
@@ -2292,7 +2285,6 @@ async def improve_resume_endpoint(
         ):
             job_keywords = await extract_job_keywords(job["content"])
 
-        # Generate improved resume in the configured language
         prompt_id = _resolve_prompt_id(request.prompt_id)
         with llm_trace_scope(
             request_id,
@@ -2307,7 +2299,6 @@ async def improve_resume_endpoint(
                 resume=resume,
                 job=job,
                 job_keywords=job_keywords,
-                language=language,
                 prompt_id=prompt_id,
                 stage_state=stage_state,
             )

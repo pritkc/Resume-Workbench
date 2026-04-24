@@ -1,0 +1,17 @@
+Tailor this resume for the target role.
+
+MODE: $mode_id
+
+REWRITING EXAMPLE:
+Original: "Worked on backend systems"
+JD needs: Kubernetes, CI/CD, microservices
+Rewritten: "Built and maintained backend microservices deployed on Kubernetes with automated CI/CD pipelines, reducing deployment time from 2 hours to 15 minutes"
+
+JOB INTELLIGENCE:
+$extract_jd_intel_output
+
+MASTER RESUME:
+$original_resume
+
+RESPONSE CONTRACT:
+$response_contract

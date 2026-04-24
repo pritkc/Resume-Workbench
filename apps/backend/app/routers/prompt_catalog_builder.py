@@ -19,6 +19,29 @@ from app.prompts._rules import resume_diff as resume_diff_mod
 from app.schemas.models import PromptComposerResponse, PromptManagerEntry, PromptVariable, SharedRuleEntry
 
 
+def _repo_prompt_path(file_path_attr: str) -> str:
+    """Map module FILE_PATH like ``prompts/foo.py`` to a repo-root path for editors."""
+    rel = str(file_path_attr).removeprefix("prompts/")
+    return f"apps/backend/app/prompts/{rel}"
+
+
+def _step_prompt_source_paths(mod: ModuleType) -> tuple[list[str], str]:
+    """Shipped system/user authoring paths (composer overrides are separate)."""
+    raw_sys = getattr(mod, "SYSTEM_PROMPT_FILES", None)
+    raw_user = getattr(mod, "USER_PROMPT_FILE", None)
+    if isinstance(raw_sys, (list, tuple)) and len(raw_sys) > 0:
+        system_files = [str(p) for p in raw_sys]
+    else:
+        fp = str(getattr(mod, "FILE_PATH", ""))
+        system_files = [_repo_prompt_path(fp)] if fp else []
+    if isinstance(raw_user, str) and raw_user.strip():
+        user_file = raw_user.strip()
+    else:
+        fp = str(getattr(mod, "FILE_PATH", ""))
+        user_file = _repo_prompt_path(fp) if fp else ""
+    return system_files, user_file
+
+
 def _pipeline_value(mod: ModuleType) -> str:
     raw = getattr(mod, "PIPELINE", "standalone")
     if raw in ("full", "lite", "standalone"):
@@ -38,9 +61,8 @@ def _probe_system_message(step_name: str) -> str:
     if step_name in ("tailor_resume_full", "tailor_resume_lite"):
         s, _ = mod.build_messages(
             original_resume="{}",
-            job_intelligence="{}",
+            extract_jd_intel_output="{}",
             response_contract="{}",
-            output_language="English",
         )
         return s
     if step_name == "critique_resume":
@@ -49,9 +71,9 @@ def _probe_system_message(step_name: str) -> str:
     if step_name == "rewrite_resume":
         s, _ = mod.build_messages(
             original_resume="{}",
-            draft_resume="{}",
-            critique="{}",
-            jd_intelligence="{}",
+            tailor_resume_full_output="{}",
+            critique_resume_output="{}",
+            extract_jd_intel_output="{}",
             response_contract="{}",
         )
         return s
@@ -60,7 +82,6 @@ def _probe_system_message(step_name: str) -> str:
             job_target="{}",
             job_description="probe",
             resume_profile="{}",
-            output_language="English",
         )
         return s
     if step_name == "answer_questions":
@@ -175,6 +196,7 @@ def build_prompt_manager_entries() -> list[PromptManagerEntry]:
         user_ship = _user_template_shipped(mod)
         user_res = _resolved_user_template(name, mod)
         sys_res = _probe_system_message(name)
+        system_prompt_files, user_prompt_file = _step_prompt_source_paths(mod)
 
         out.append(
             PromptManagerEntry(
@@ -182,6 +204,8 @@ def build_prompt_manager_entries() -> list[PromptManagerEntry]:
                 label=str(getattr(mod, "STEP_LABEL", name)),
                 version=str(getattr(mod, "STEP_VERSION", "")),
                 file_path=str(getattr(mod, "FILE_PATH", f"prompts/{name}.py")),
+                system_prompt_files=system_prompt_files,
+                user_prompt_file=user_prompt_file,
                 pipeline=_pipeline_value(mod),
                 pipeline_order=int(getattr(mod, "PIPELINE_ORDER", 0)),
                 receives_from=list(getattr(mod, "RECEIVES_FROM", [])),
@@ -213,6 +237,7 @@ def build_shared_rule_entries() -> list[SharedRuleEntry]:
         SharedRuleEntry(
             name=resume_diff_mod.RULES_NAME,
             label=resume_diff_mod.RULES_LABEL,
+            rules_source_file="apps/backend/app/prompts/text/fragments/resume_diff_output.txt",
             rules=load_shared_rules_override("resume_diff") or resume_diff_mod.RESUME_DIFF_RULES,
             rules_is_override=has_shared_rules_override("resume_diff"),
             rules_default=resume_diff_mod.RESUME_DIFF_RULES,

@@ -32,6 +32,8 @@ apps/backend/app/
 └── services/
 ```
 
+Shipped LLM prompt **bodies** live under `prompts/text/` (`.txt` files); `prompts/*.py` wires `build_messages` and overrides.
+
 ## Router Surface
 
 | Router | Purpose |

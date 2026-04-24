@@ -197,7 +197,7 @@ function clampPaneRatio(value: number): number {
 
 const ResumeBuilderContent = () => {
   const { t } = useTranslations();
-  const { uiLanguage, contentLanguage } = useLanguage();
+  const { uiLanguage } = useLanguage();
   const [notificationDialog, setNotificationDialog] = useState<{
     title: string;
     description: string;
@@ -734,7 +734,6 @@ const ResumeBuilderContent = () => {
   // AI Regenerate wizard
   const regenerateWizard = useRegenerateWizard({
     resumeId: resumeId || '',
-    outputLanguage: contentLanguage,
     onSuccess: async () => {
       // Reload resume data after applying changes
       if (!resumeId) {
@@ -1951,9 +1950,7 @@ const ResumeBuilderContent = () => {
                     size="icon-sm"
                     onClick={handleDownloadCoverLetter}
                     disabled={!resumeId || isDownloading || !coverLetter}
-                    aria-label={
-                      isDownloading ? t('common.generating') : t('common.download')
-                    }
+                    aria-label={isDownloading ? t('common.generating') : t('common.download')}
                     title={isDownloading ? t('common.generating') : t('common.download')}
                     className={toolbarIconButtonClass}
                   >
@@ -2189,7 +2186,6 @@ const ResumeBuilderContent = () => {
                       </section>
                     </div>
                   )}
-
                 </div>
               </div>
             </div>
@@ -2265,7 +2261,6 @@ const ResumeBuilderContent = () => {
                 {activeTab === 'jd-match' && jobDescription && (
                   <JDComparisonView jobDescription={jobDescription} resumeData={resumeData} />
                 )}
-
               </div>
             </div>
           )}

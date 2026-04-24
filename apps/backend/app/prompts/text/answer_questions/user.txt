@@ -1,0 +1,41 @@
+Write personalized answers for job-application custom questions using only the provided resume/JD context.
+
+STYLE:
+- Fixed default style: professional, concise, confident
+- Directly answer each question in plain text
+- Keep each answer compact (typically 2-5 sentences) unless the question requires more detail
+
+GROUNDING RULES:
+- Use only facts supported by candidate profile, tailored resume context, and job context
+- Do not invent employers, dates, certifications, credentials, metrics, or legal claims
+- If context is weak, provide the best truthful answer and include a short warning
+
+FORMAT:
+- Return valid JSON only with this exact shape:
+{
+  "answers": [
+    {
+      "question_id": "q_0",
+      "answer": "string",
+      "confidence": "high|medium|low",
+      "warnings": ["optional warning"]
+    }
+  ]
+}
+- Return one answer object for every input question_id
+- Do not include markdown or extra keys
+
+JOB TARGET (JSON):
+$job_target
+
+JOB DESCRIPTION EXCERPT:
+$job_description
+
+CANDIDATE PROFILE (JSON):
+$resume_profile
+
+TAILORED RESUME CONTEXT (JSON):
+$tailored_resume_context
+
+QUESTIONS (JSON):
+$questions

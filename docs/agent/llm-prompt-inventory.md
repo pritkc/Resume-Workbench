@@ -2,11 +2,13 @@
 
 > Current prompt surfaces and the safest refactor seams for the next prompt pass.
 
-The monolithic `app/prompts/templates.py` from older upstream revisions **has been removed**. Prompt text and constants live in **focused modules** under `apps/backend/app/prompts/`. Re-exports and the override mechanism are in `apps/backend/app/prompts/__init__.py`.
+The monolithic `app/prompts/templates.py` from older upstream revisions **has been removed**. **Shipped prompt bodies** for pipeline steps live under **`apps/backend/app/prompts/text/`** (`.txt` files and `fragments/`). Thin Python modules under `apps/backend/app/prompts/` load them via `_text_prompts.read_shipped_txt` and still expose `build_messages`, `STEP_NAME`, `VARIABLES`, etc. Re-exports and the override mechanism are in `apps/backend/app/prompts/__init__.py`.
+
+**Human / agent entrypoint:** `apps/backend/app/prompts/text/README.md` and `text/index.yaml` (step list must match `VALID_STEPS`).
 
 ## Runtime-Configurable Prompt IDs (tailoring)
 
-Tailoring exposes **`full`** and **`lite`** modes (see `IMPROVE_PROMPT_OPTIONS` in `apps/backend/app/prompts/_constants.py`). Strategy text is folded via **`TAILORING_MODE_STRATEGY`** in `apps/backend/app/prompts/tailoring_blocks.py`.
+Tailoring exposes **`full`** and **`lite`** modes (see `IMPROVE_PROMPT_OPTIONS` in `apps/backend/app/prompts/_constants.py`). Strategy text is loaded into **`TAILORING_MODE_STRATEGY`** in `apps/backend/app/prompts/tailoring_blocks.py` from `text/fragments/tailoring_mode_*.txt`.
 
 Selection precedence in `apps/backend/app/routers/resumes.py`:
 
@@ -21,7 +23,8 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 |--------|------|
 | `_constants.py` | `IMPROVE_PROMPT_OPTIONS`, `DEFAULT_IMPROVE_PROMPT_ID`, `PROMPT_VERSIONS`, language names |
 | `_schema.py` | Shared JSON schema fragments for prompts |
-| `_prompt_loader.py` | Loading / composition helpers |
+| `_text_prompts.py` | Load shipped UTF-8 `.txt` from `text/` (BOM strip, newline normalize) |
+| `_prompt_loader.py` | Composer overrides; `string.Template` user rendering |
 | `parse_resume.py` | `PARSE_RESUME_PROMPT` — resume upload parsing |
 | `extract_jd_intel.py` | JD keyword / intelligence extraction (`EXTRACT_*`) |
 | `tailoring_blocks.py` | Tailoring system/user shells, `IMPROVE_RESUME_PROMPT`, `TAILORING_MODE_STRATEGY`, contracts |
@@ -29,10 +32,11 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | `tailoring_catalog.py` | Catalog metadata for tailoring |
 | `cover_letter.py` | Cover letter + outreach system prompts |
 | `answer_questions.py` | Application-question prompts |
-| `enrichment.py` | Enrichment / regenerate prompts |
+| `enrichment.py` | Loads enrichment / regenerate user + system strings from `text/enrichment/*.txt`; callers use `str.format` on user templates |
 | `refinement.py` | Older refinement helpers; not the active tailoring path |
 | `critique_resume.py`, `rewrite_resume.py` | Critique / rewrite flows |
-| `_rules/*.py` | Shared rules blocks (JD intel, resume diff, critique) |
+| `_rules/*.py` | Shared rule **metadata** + loaders; default bodies read from `text/fragments/*.txt` |
+| `text/` | **Shipped** prompt `.txt` files (see `text/README.md`) |
 
 ### Representative constants → call sites
 
@@ -59,6 +63,19 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 `/api/v1/config/prompts` — default tailor `prompt_id` and Settings selector.
 
 `/api/v1/config/generation-defaults` — last-used tailor options and cover/outreach flags.
+
+`/api/v1/config/prompts/catalog/master-resume-preview` — JSON body `{ "serialized_original_resume": string, "truncated": boolean }`: the same compact JSON (or markdown fallback) the tailoring user prompt uses for `$original_resume`, capped at **256 KiB** with `truncated: true` when cut. Resolution rule is implemented in `app/services/tailoring/master_resume_preview.py` (active resume, else first resume without `parent_id`, else first listed row).
+
+## User-message placeholders (tailoring pipeline)
+
+Shipped **user** templates under `text/` use Python `string.Template` with `$names`. LLM-step outputs use the **`{step_name}_output`** pattern in code and docs, for example:
+
+- **`$extract_jd_intel_output`** — JD intelligence JSON passed into tailor / critique / rewrite user shells (replacing older names such as `job_intelligence` / `jd_intelligence` in templates).
+- **`$tailor_resume_full_output`** — tailored diff JSON fed into critique and rewrite after the full tailor step.
+- **`$critique_resume_output`** — critique JSON for rewrite.
+- **`$original_resume`** and **`$response_contract`** — built from the master resume and response contract (not renamed in this phase).
+
+**`output_language`** is not passed through templates or `build_messages`; English-only instructions live in shipped prose where needed.
 
 ## What Is Not Configurable Yet
 

@@ -26,14 +26,12 @@ def test_assemble_light_contains_light_touch() -> None:
 def test_render_user_prompt_fills_slots() -> None:
     text = render_tailoring_user_prompt(
         mode_id="full",
-        job_intelligence_json="{}",
+        extract_jd_intel_output_json="{}",
         original_resume_json="{}",
         response_contract_json="{}",
-        output_language="English",
     )
     assert "MODE: full" in text
-    assert "$job_intelligence" not in text
-    assert "English" in text
+    assert "$extract_jd_intel_output" not in text
 
 
 def test_tailoring_response_contract_extensions() -> None:
@@ -47,7 +45,6 @@ def test_build_prompt_context_resolves_unknown_to_default() -> None:
     rc = build_response_contract(payload, prompt_id="full")
     ctx = build_prompt_context(
         prompt_id="not_a_real_mode",
-        language="en",
         jd_intelligence=jd,
         response_contract=rc,
         resume_payload=payload,

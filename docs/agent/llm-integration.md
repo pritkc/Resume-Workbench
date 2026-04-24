@@ -8,7 +8,8 @@
 |------|----------------|
 | `apps/backend/app/llm.py` | LiteLLM router, health checks, retries, JSON extraction, trace persistence |
 | `apps/backend/app/config.py` | runtime settings, API-key fallback, trace/cost knobs |
-| `apps/backend/app/prompts/*.py` | split prompt modules (`parse_resume`, `extract_jd_intel`, `tailoring_blocks`, `cover_letter`, `enrichment`, …) — see [llm-prompt-inventory.md](llm-prompt-inventory.md) |
+| `apps/backend/app/prompts/text/` | **Shipped** `.txt` prompt bodies + `fragments/` — see `text/README.md` |
+| `apps/backend/app/prompts/*.py` | Step modules (`build_messages`, …) — see [llm-prompt-inventory.md](llm-prompt-inventory.md) |
 | `apps/backend/app/prompts/__init__.py` | re-exports, valid steps, optional `prompt_overrides/` |
 | `apps/backend/app/prompts/enrichment.py` | enrichment and regenerate prompts |
 | `apps/backend/app/prompts/refinement.py` | older refinement prompt plus local cleanup constants; not part of the active tailoring runtime |
@@ -136,7 +137,7 @@ Notably, the active runtime no longer does:
 
 ## Current Guidance For New LLM Work
 
-- Put reusable prompt text in `app/prompts/`.
+- Put reusable shipped prompt text in `app/prompts/text/` (and shared fragments there); keep Python thin.
 - Use `complete_json()` for structured outputs and `complete()` for plain text.
 - Keep prompt payloads compact and typed. Do not pass full stored resume blobs to text-generation prompts unless there is a strong reason.
 - Always set a stable `operation` name.

@@ -14,9 +14,8 @@ def test_full_system_message_matches_tailor_resume_full_module() -> None:
     mod = get_prompt("tailor_resume_full")
     new, _ = mod.build_messages(
         original_resume="{}",
-        job_intelligence="{}",
+        extract_jd_intel_output="{}",
         response_contract="{}",
-        output_language="English",
     )
     assert old == new
 
@@ -26,9 +25,8 @@ def test_lite_system_message_matches_tailor_resume_lite_module() -> None:
     mod = get_prompt("tailor_resume_lite")
     new, _ = mod.build_messages(
         original_resume="{}",
-        job_intelligence="{}",
+        extract_jd_intel_output="{}",
         response_contract="{}",
-        output_language="English",
     )
     assert old == new
 
@@ -36,16 +34,14 @@ def test_lite_system_message_matches_tailor_resume_lite_module() -> None:
 def test_full_user_message_matches_module() -> None:
     old = Template(TAILORING_USER_SHELL).substitute(
         mode_id="full",
-        job_intelligence="{}",
+        extract_jd_intel_output="{}",
         original_resume="{}",
         response_contract="{}",
-        output_language="English",
     )
     mod = get_prompt("tailor_resume_full")
     _, new = mod.build_messages(
         original_resume="{}",
-        job_intelligence="{}",
+        extract_jd_intel_output="{}",
         response_contract="{}",
-        output_language="English",
     )
     assert old == new

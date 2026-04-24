@@ -1,0 +1,19 @@
+Rewrite this resume group based on user feedback.
+
+Generate ALL output in English.
+
+GROUP: {group_label}
+CURRENT VALUES: {current_values}
+
+USER FEEDBACK:
+{user_instruction}
+
+OUTPUT (JSON only):
+{{"group_label":"Updated label","new_values":["Value 1","Value 2"],"change_summary":"Brief explanation"}}
+
+RULES:
+- Concise, resume-friendly values
+- May rename label if feedback requests clearer grouping
+- Only include values from CURRENT VALUES or explicitly from USER FEEDBACK — never invent facts or certifications
+- Preserve overall item set unless user explicitly asks to remove/regroup
+- Order by relevance per feedback

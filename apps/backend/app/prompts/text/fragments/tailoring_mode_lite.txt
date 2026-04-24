@@ -1,0 +1,8 @@
+TAILORING MODE: Light touch (conservative alignment)
+- Improve wording and weave in a few high-priority keywords. Keep the original voice nearly intact.
+- Do NOT change job titles. Do NOT add scope, platform, or domain qualifiers to titles.
+- Only touch bullets that clearly benefit from adjustment. Preserve all others exactly as-is.
+- Do NOT replace bullets with new content. Only refine existing text.
+- Skills: minor reordering for relevance is OK. Do not restructure or rename groups.
+- If in doubt about whether a bullet needs changing, leave it unchanged.
+- Omit unchanged entries from the output.
