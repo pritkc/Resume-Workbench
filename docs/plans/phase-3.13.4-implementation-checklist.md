@@ -22,7 +22,7 @@
 | `critique` (rewrite `user.txt` + Python) | `critique_resume_output` | Critique step is `critique_resume`. |
 | `original_resume` | **Keep** `original_resume` | Master / serialized resume input (not `{step}_output`). Optional later rename to `master_resume_json` — **out of scope** unless you expand this checklist. |
 | `response_contract` | **Keep** `response_contract` | Built in code, not an LLM step output; name already clear. |
-| `mode_id` | **Keep** | Literal full/lite, not LLM-derived. |
+| `mode_id` | **Removed from user template** | Full vs lite use separate shipped user shells; routing stays in Python (`render_tailoring_user_prompt` / `get_prompt`). |
 
 **Remove entirely:** `output_language` from `string.Template` user templates, `VARIABLES`, `build_messages` signatures, `TailoringPromptContext`, services, routers, tests, and `prompt_catalog_builder` probes.
 
@@ -30,7 +30,7 @@
 
 ## A — Shipped text and prompt modules
 
-- [x] **`text/fragments/tailoring_user_shell.txt`:** Replace `$job_intelligence` → `$extract_jd_intel_output`; remove `$output_language` line (stakeholder edits English instruction in prose if needed).
+- [x] **`text/fragments/tailoring_user_shell_full.txt` / `tailoring_user_shell_lite.txt`:** (was single `tailoring_user_shell.txt`.) `$extract_jd_intel_output`; no `$output_language`; no `$mode_id` — separate shells per mode.
 - [x] **`text/critique_resume/user.txt`:** `$draft_resume` → `$tailor_resume_full_output`; `$jd_intelligence` → `$extract_jd_intel_output`.
 - [x] **`text/rewrite_resume/user.txt`:** `$draft_resume` → `$tailor_resume_full_output`; `$jd_intelligence` → `$extract_jd_intel_output`; `$critique` → `$critique_resume_output`.
 - [x] **`apps/backend/app/prompts/tailor_resume_full.py`** and **`tailor_resume_lite.py`:** `VARIABLES`, `build_messages` params, `render_user_template` kwargs aligned; drop `output_language`.

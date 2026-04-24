@@ -1,7 +1,5 @@
 Tailor this resume for the target role.
 
-MODE: $mode_id
-
 REWRITING EXAMPLE:
 Original: "Worked on backend systems"
 JD needs: Kubernetes, CI/CD, microservices

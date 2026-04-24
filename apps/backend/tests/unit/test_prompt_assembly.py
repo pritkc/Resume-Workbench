@@ -30,7 +30,8 @@ def test_render_user_prompt_fills_slots() -> None:
         original_resume_json="{}",
         response_contract_json="{}",
     )
-    assert "MODE: full" in text
+    assert "Tailor this resume for the target role." in text
+    assert "MODE:" not in text
     assert "$extract_jd_intel_output" not in text
 
 

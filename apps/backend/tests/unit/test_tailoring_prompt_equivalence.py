@@ -3,7 +3,7 @@
 from string import Template
 
 from app.prompts import get_prompt
-from app.prompts.tailoring_blocks import TAILORING_USER_SHELL
+from app.prompts.tailoring_blocks import TAILORING_USER_SHELL_FULL, TAILORING_USER_SHELL_LITE
 from app.services.tailoring.prompting import (
     assemble_tailoring_system_prompt,
 )
@@ -32,13 +32,27 @@ def test_lite_system_message_matches_tailor_resume_lite_module() -> None:
 
 
 def test_full_user_message_matches_module() -> None:
-    old = Template(TAILORING_USER_SHELL).substitute(
-        mode_id="full",
+    old = Template(TAILORING_USER_SHELL_FULL).substitute(
         extract_jd_intel_output="{}",
         original_resume="{}",
         response_contract="{}",
     )
     mod = get_prompt("tailor_resume_full")
+    _, new = mod.build_messages(
+        original_resume="{}",
+        extract_jd_intel_output="{}",
+        response_contract="{}",
+    )
+    assert old == new
+
+
+def test_lite_user_message_matches_module() -> None:
+    old = Template(TAILORING_USER_SHELL_LITE).substitute(
+        extract_jd_intel_output="{}",
+        original_resume="{}",
+        response_contract="{}",
+    )
+    mod = get_prompt("tailor_resume_lite")
     _, new = mod.build_messages(
         original_resume="{}",
         extract_jd_intel_output="{}",

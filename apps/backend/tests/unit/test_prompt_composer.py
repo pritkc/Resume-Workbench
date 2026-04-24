@@ -46,7 +46,7 @@ def test_tailor_build_messages_fills_template() -> None:
         response_contract="{}",
     )
     assert "$extract_jd_intel_output" not in user
-    assert "MODE: full" in user
+    assert "Tailor this resume for the target role." in user
 
 
 def test_composer_override_takes_precedence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

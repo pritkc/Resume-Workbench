@@ -36,6 +36,8 @@ from app.prompts.tailoring_blocks import (
     TAILORING_MODE_STRATEGY,
     TAILORING_SYSTEM_PROMPT,
     TAILORING_USER_SHELL,
+    TAILORING_USER_SHELL_FULL,
+    TAILORING_USER_SHELL_LITE,
 )
 
 VALID_STEPS = frozenset(
@@ -168,6 +170,8 @@ __all__ = [
     "TAILORING_MODE_STRATEGY",
     "TAILORING_SYSTEM_PROMPT",
     "TAILORING_USER_SHELL",
+    "TAILORING_USER_SHELL_FULL",
+    "TAILORING_USER_SHELL_LITE",
     "VALID_STEPS",
     "delete_composer_override",
     "delete_override",

@@ -6,7 +6,7 @@
 
 | Path | Purpose |
 |------|---------|
-| `fragments/` | Shared blocks: resume diff JSON contract, JD intel contract/craft, critique schema, tailoring craft/modes/user shell |
+| `fragments/` | Shared blocks: resume diff JSON contract, JD intel contract/craft, critique schema, tailoring craft/modes, separate full/lite user shells |
 | `{step_id}/` | Per-step `system.txt` / `user.txt` where the full message is not only composed fragments (e.g. `parse_resume/`, `critique_resume/instructions.txt`) |
 | `index.yaml` | Machine-readable list of step ids and enrichment asset names |
 | `enrichment/` | Resume enrichment prompts (`app/routers/enrichment.py`). **User** templates use Python **`str.format`** with `{field}` placeholders; JSON examples in those files use `{{` / `}}` so braces survive `.format()`. |

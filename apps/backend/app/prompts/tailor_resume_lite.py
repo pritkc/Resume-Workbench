@@ -5,7 +5,7 @@ from app.prompts._rules.resume_diff import RESUME_DIFF_RULES, RULES_NAME
 from app.prompts.tailoring_blocks import (
     TAILORING_CRAFT_BLOCK,
     TAILORING_MODE_STRATEGY,
-    TAILORING_USER_SHELL,
+    TAILORING_USER_SHELL_LITE,
 )
 
 STEP_NAME = "tailor_resume_lite"
@@ -18,7 +18,7 @@ SYSTEM_PROMPT_FILES = (
     "apps/backend/app/prompts/text/fragments/resume_diff_output.txt",
     "apps/backend/app/prompts/tailor_resume_lite.py",
 )
-USER_PROMPT_FILE = "apps/backend/app/prompts/text/fragments/tailoring_user_shell.txt"
+USER_PROMPT_FILE = "apps/backend/app/prompts/text/fragments/tailoring_user_shell_lite.txt"
 PIPELINE = "lite"
 PIPELINE_ORDER = 2
 RECEIVES_FROM = ["extract_jd_intel"]
@@ -27,11 +27,10 @@ FEEDS_INTO: list[str] = []
 INSTRUCTIONS = TAILORING_CRAFT_BLOCK + "\n\n" + TAILORING_MODE_STRATEGY["lite"]
 RULES = RESUME_DIFF_RULES
 RULES_SOURCE = RULES_NAME
-USER_TEMPLATE = TAILORING_USER_SHELL
+USER_TEMPLATE = TAILORING_USER_SHELL_LITE
 DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip() + "\n\n" + RULES.strip()
 VARIABLES = {
-    "mode_id": "full | lite",
     "extract_jd_intel_output": "JSON from extract_jd_intel step",
     "original_resume": "Structured resume JSON or markdown",
     "response_contract": "Allowed response shape for this resume",
@@ -51,7 +50,6 @@ def build_messages(
     if comp:
         return comp["system"], render_user_template(
             comp["user"],
-            mode_id="lite",
             extract_jd_intel_output=extract_jd_intel_output,
             original_resume=original_resume,
             response_contract=response_contract,
@@ -66,7 +64,6 @@ def build_messages(
     system = instructions.strip() + "\n\n" + rules.strip()
     user = render_user_template(
         USER_TEMPLATE,
-        mode_id="lite",
         extract_jd_intel_output=extract_jd_intel_output,
         original_resume=original_resume,
         response_contract=response_contract,

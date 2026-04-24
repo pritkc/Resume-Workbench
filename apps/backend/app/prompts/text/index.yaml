@@ -16,7 +16,8 @@ fragments:
   - tailoring_craft
   - tailoring_mode_full
   - tailoring_mode_lite
-  - tailoring_user_shell
+  - tailoring_user_shell_full
+  - tailoring_user_shell_lite
 enrichment:
   - analyze_system
   - analyze_user

@@ -75,7 +75,7 @@ from app.prompts.tailoring_blocks import (
     TAILORING_CONTRACT_BLOCK,
     TAILORING_CRAFT_BLOCK,
     TAILORING_MODE_STRATEGY,
-    TAILORING_USER_SHELL,
+    TAILORING_USER_SHELL_FULL,
 )
 from app.prompts.tailoring_catalog import build_resume_tailoring_catalog_sections
 from app.routers.prompt_catalog_builder import (
@@ -259,7 +259,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
                     TAILORING_CONTRACT_BLOCK,
                 ]
             ),
-            user_prompt=TAILORING_USER_SHELL,
+            user_prompt=TAILORING_USER_SHELL_FULL,
             sections=build_resume_tailoring_catalog_sections(),
         ),
         PromptCatalogEntry(

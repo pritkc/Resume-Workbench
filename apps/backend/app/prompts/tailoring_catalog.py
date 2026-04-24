@@ -8,7 +8,8 @@ from app.prompts.tailoring_blocks import (
     TAILORING_CONTRACT_BLOCK,
     TAILORING_CRAFT_BLOCK,
     TAILORING_MODE_STRATEGY,
-    TAILORING_USER_SHELL,
+    TAILORING_USER_SHELL_FULL,
+    TAILORING_USER_SHELL_LITE,
 )
 from app.schemas.models import PromptCatalogSection
 
@@ -95,12 +96,6 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
 
     runtime_children = [
         PromptCatalogSection(
-            id="tailoring_rt_mode_id",
-            label="{mode_id}",
-            content="Tailoring intensity key: full | lite.",
-            policy="runtime_injected",
-        ),
-        PromptCatalogSection(
             id="tailoring_rt_job_intel",
             label="{extract_jd_intel_output}",
             content="JSON from extract_jd_intel (role, keywords, themes, etc.).",
@@ -144,14 +139,20 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         ),
         PromptCatalogSection(
             id="tailoring_user_message",
-            label="User message template",
-            note="Template with runtime slots. Shipped: apps/backend/app/prompts/text/fragments/tailoring_user_shell.txt",
+            label="User message templates",
+            note="Full vs lite use different shipped shells. Full: text/fragments/tailoring_user_shell_full.txt · Lite: tailoring_user_shell_lite.txt",
             policy="user_editable_future",
             children=[
                 PromptCatalogSection(
-                    id="tailoring_user_template",
-                    label="User shell template",
-                    content=TAILORING_USER_SHELL,
+                    id="tailoring_user_template_full",
+                    label="User shell (full tailor)",
+                    content=TAILORING_USER_SHELL_FULL,
+                    policy="user_editable_future",
+                ),
+                PromptCatalogSection(
+                    id="tailoring_user_template_lite",
+                    label="User shell (lite tailor)",
+                    content=TAILORING_USER_SHELL_LITE,
                     policy="user_editable_future",
                 ),
                 PromptCatalogSection(
