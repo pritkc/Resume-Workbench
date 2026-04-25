@@ -17,6 +17,16 @@ const textareaClass =
 const shippedPreClass =
   'whitespace-pre-wrap break-words rounded-md border border-slate-100 bg-slate-50/80 p-2.5 font-mono text-[11px] leading-relaxed text-slate-700';
 
+function formatJsonForCatalogPre(text: string): string {
+  const t = text.trim();
+  if (!t) return text;
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
+}
+
 type ComposerTab = 'system' | 'user';
 
 export function PromptCard({
@@ -26,6 +36,8 @@ export function PromptCard({
   anchorId,
   masterResumePreview,
   masterResumePreviewError,
+  responseContractPreview,
+  responseContractPreviewError,
   t,
 }: {
   entry: PromptManagerEntry;
@@ -34,6 +46,11 @@ export function PromptCard({
   anchorId?: string;
   masterResumePreview?: { text: string; truncated: boolean } | null;
   masterResumePreviewError?: boolean;
+  responseContractPreview?: {
+    full: { text: string; truncated: boolean };
+    lite: { text: string; truncated: boolean };
+  } | null;
+  responseContractPreviewError?: boolean;
   t: (key: string, params?: Record<string, string | number>) => string;
 }): React.ReactElement {
   const sysResolved = entry.system_resolved ?? '';
@@ -232,6 +249,70 @@ export function PromptCard({
                         {t('settings.promptCatalog.masterResumePreviewEmpty')}
                       </p>
                     )}
+                  </div>
+                </details>
+              ) : null}
+              {displayVariables.some((v) => v.name === 'response_contract') ? (
+                <details className="mt-2 border-t border-slate-100/80 pt-2">
+                  <summary className="cursor-pointer list-none text-[10px] font-medium uppercase tracking-wide text-slate-400 marker:hidden [&::-webkit-details-marker]:hidden">
+                    <span className="hover:text-slate-600">
+                      {t('settings.promptCatalog.responseContractPreviewTitle')}
+                    </span>
+                  </summary>
+                  <div className="mt-1.5 space-y-2">
+                    <p className="m-0 text-[11px] leading-snug text-slate-500">
+                      {t('settings.promptCatalog.responseContractPreviewIntro')}
+                    </p>
+                    {responseContractPreviewError === true ? (
+                      <p className="text-[11px] text-amber-800">
+                        {t('settings.promptCatalog.responseContractPreviewUnavailable')}
+                      </p>
+                    ) : responseContractPreview ? (
+                      <>
+                        <div>
+                          <p className="mb-1 mt-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                            {t('settings.promptCatalog.responseContractPreviewFullMode')}
+                          </p>
+                          {responseContractPreview.full.text.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">
+                              {t('settings.promptCatalog.masterResumePreviewEmpty')}
+                            </p>
+                          ) : (
+                            <>
+                              {responseContractPreview.full.truncated ? (
+                                <p className="mb-1 text-[11px] text-amber-800">
+                                  {t('settings.promptCatalog.masterResumePreviewTruncated')}
+                                </p>
+                              ) : null}
+                              <pre className={shippedPreClass}>
+                                {formatJsonForCatalogPre(responseContractPreview.full.text)}
+                              </pre>
+                            </>
+                          )}
+                        </div>
+                        <div>
+                          <p className="mb-1 mt-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                            {t('settings.promptCatalog.responseContractPreviewLiteMode')}
+                          </p>
+                          {responseContractPreview.lite.text.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">
+                              {t('settings.promptCatalog.masterResumePreviewEmpty')}
+                            </p>
+                          ) : (
+                            <>
+                              {responseContractPreview.lite.truncated ? (
+                                <p className="mb-1 text-[11px] text-amber-800">
+                                  {t('settings.promptCatalog.masterResumePreviewTruncated')}
+                                </p>
+                              ) : null}
+                              <pre className={shippedPreClass}>
+                                {formatJsonForCatalogPre(responseContractPreview.lite.text)}
+                              </pre>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </details>
               ) : null}

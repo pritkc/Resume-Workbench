@@ -9,6 +9,7 @@ import {
   fetchModelOverrides,
   fetchMasterResumePreview,
   fetchPromptCatalog,
+  fetchResponseContractPreview,
   updateModelOverrides,
   type LLMConfig,
   type PromptManagerEntry,
@@ -45,6 +46,11 @@ export default function PromptCatalogPage(): React.ReactElement {
     truncated: boolean;
   } | null>(null);
   const [masterResumePreviewError, setMasterResumePreviewError] = useState(false);
+  const [responseContractPreview, setResponseContractPreview] = useState<{
+    full: { text: string; truncated: boolean };
+    lite: { text: string; truncated: boolean };
+  } | null>(null);
+  const [responseContractPreviewError, setResponseContractPreviewError] = useState(false);
 
   const loadAll = useCallback(async () => {
     const [catalog, overrides, llm] = await Promise.all([
@@ -57,16 +63,29 @@ export default function PromptCatalogPage(): React.ReactElement {
     setModelOverrides(overrides.overrides || {});
     setLlmConfig(llm);
     setDefaultModelLabel(`${llm.provider}/${llm.model}`);
-    try {
-      const m = await fetchMasterResumePreview();
+    const [mRes, rcRes] = await Promise.allSettled([
+      fetchMasterResumePreview(),
+      fetchResponseContractPreview(),
+    ]);
+    if (mRes.status === 'fulfilled') {
       setMasterResumePreview({
-        text: m.serialized_original_resume,
-        truncated: m.truncated,
+        text: mRes.value.serialized_original_resume,
+        truncated: mRes.value.truncated,
       });
       setMasterResumePreviewError(false);
-    } catch {
+    } else {
       setMasterResumePreview(null);
       setMasterResumePreviewError(true);
+    }
+    if (rcRes.status === 'fulfilled') {
+      setResponseContractPreview({
+        full: { text: rcRes.value.full.serialized, truncated: rcRes.value.full.truncated },
+        lite: { text: rcRes.value.lite.serialized, truncated: rcRes.value.lite.truncated },
+      });
+      setResponseContractPreviewError(false);
+    } else {
+      setResponseContractPreview(null);
+      setResponseContractPreviewError(true);
     }
   }, []);
 
@@ -83,6 +102,8 @@ export default function PromptCatalogPage(): React.ReactElement {
           setSharedRules([]);
           setMasterResumePreview(null);
           setMasterResumePreviewError(false);
+          setResponseContractPreview(null);
+          setResponseContractPreviewError(false);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -257,6 +278,8 @@ export default function PromptCatalogPage(): React.ReactElement {
                           onComposerSaved={loadAll}
                           masterResumePreview={masterResumePreview}
                           masterResumePreviewError={masterResumePreviewError}
+                          responseContractPreview={responseContractPreview}
+                          responseContractPreviewError={responseContractPreviewError}
                           t={t}
                         />
                       ))}

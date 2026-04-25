@@ -379,6 +379,18 @@ class TestPromptCatalog:
         assert data["serialized_original_resume"] == '{"k":1}'
         assert data["truncated"] is False
 
+    @patch("app.routers.config.response_contract_catalog_previews")
+    async def test_get_response_contract_preview(self, mock_rc, client):
+        mock_rc.return_value = (('{"mode":"full"}', False), ('{"mode":"lite"}', True))
+        async with client:
+            resp = await client.get("/api/v1/config/prompts/catalog/response-contract-preview")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["full"]["serialized"] == '{"mode":"full"}'
+        assert data["full"]["truncated"] is False
+        assert data["lite"]["serialized"] == '{"mode":"lite"}'
+        assert data["lite"]["truncated"] is True
+
 
 class TestPromptComposer:
     """GET/PUT/DELETE /api/v1/config/prompts/{step}/composer"""

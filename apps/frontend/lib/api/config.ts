@@ -479,6 +479,16 @@ export interface MasterResumePreviewResponse {
   truncated: boolean;
 }
 
+export interface ResponseContractModePreview {
+  serialized: string;
+  truncated: boolean;
+}
+
+export interface ResponseContractPreviewResponse {
+  full: ResponseContractModePreview;
+  lite: ResponseContractModePreview;
+}
+
 export interface CritiqueConfig {
   enabled: boolean;
 }
@@ -547,6 +557,20 @@ export async function fetchMasterResumePreview(): Promise<MasterResumePreviewRes
     throw new Error(
       (data as { detail?: string }).detail ||
         `Failed to load master resume preview (status ${res.status}).`
+    );
+  }
+  return res.json();
+}
+
+export async function fetchResponseContractPreview(): Promise<ResponseContractPreviewResponse> {
+  const res = await apiFetch('/config/prompts/catalog/response-contract-preview', {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to load response contract preview (status ${res.status}).`
     );
   }
   return res.json();

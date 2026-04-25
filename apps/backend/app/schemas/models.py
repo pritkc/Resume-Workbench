@@ -1691,6 +1691,20 @@ class MasterResumePreviewResponse(BaseModel):
     truncated: bool = False
 
 
+class ResponseContractModePreview(BaseModel):
+    """One mode's ``$response_contract`` JSON as passed to the model (size-capped)."""
+
+    serialized: str = ""
+    truncated: bool = False
+
+
+class ResponseContractPreviewResponse(BaseModel):
+    """Full vs lite response-contract JSON for the catalog (same master resume as tailoring)."""
+
+    full: ResponseContractModePreview = Field(default_factory=ResponseContractModePreview)
+    lite: ResponseContractModePreview = Field(default_factory=ResponseContractModePreview)
+
+
 class PromptCatalogResponse(BaseModel):
     """Response containing all configured prompt templates used by LLM operations."""
 

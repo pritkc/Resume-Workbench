@@ -38,6 +38,8 @@ from app.schemas import (
     ModelOverridesRequest,
     ModelOverridesResponse,
     MasterResumePreviewResponse,
+    ResponseContractModePreview,
+    ResponseContractPreviewResponse,
     PromptConfigRequest,
     PromptConfigResponse,
     PromptCatalogEntry,
@@ -83,7 +85,10 @@ from app.routers.prompt_catalog_builder import (
     build_prompt_manager_entries,
     build_shared_rule_entries,
 )
-from app.services.tailoring.master_resume_preview import capped_master_resume_preview_text
+from app.services.tailoring.master_resume_preview import (
+    capped_master_resume_preview_text,
+    response_contract_catalog_previews,
+)
 from app.config import (
     get_api_keys_from_config,
     save_api_keys_to_config,
@@ -807,6 +812,15 @@ async def get_prompt_catalog() -> PromptCatalogResponse:
 async def get_master_resume_preview() -> MasterResumePreviewResponse:
     text, truncated = capped_master_resume_preview_text(db)
     return MasterResumePreviewResponse(serialized_original_resume=text, truncated=truncated)
+
+
+@router.get("/prompts/catalog/response-contract-preview", response_model=ResponseContractPreviewResponse)
+async def get_response_contract_preview() -> ResponseContractPreviewResponse:
+    (full_text, full_trunc), (lite_text, lite_trunc) = response_contract_catalog_previews(db)
+    return ResponseContractPreviewResponse(
+        full=ResponseContractModePreview(serialized=full_text, truncated=full_trunc),
+        lite=ResponseContractModePreview(serialized=lite_text, truncated=lite_trunc),
+    )
 
 
 @router.get("/critique", response_model=CritiqueConfigResponse)

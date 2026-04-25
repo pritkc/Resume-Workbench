@@ -26,6 +26,8 @@ Common tailoring-related names (LLM outputs use the **`step_name_output`** style
 
 **Master resume for catalog preview:** `GET /api/v1/config/prompts/catalog/master-resume-preview` serializes the same `original_resume` string tailoring would use for the **active** resume if one is set; otherwise the **first resume in list order with no `parent_id`**; otherwise the **first resume** returned by `list_resumes`. Payload is capped at **256 KiB** with a `truncated` flag.
 
+**Response contract for catalog preview:** `GET /api/v1/config/prompts/catalog/response-contract-preview` returns the same compact JSON as `$response_contract` for **full** and **lite** (`build_response_contract` → `to_prompt_dict`), using the same master resume row as above. Each mode string is capped at **256 KiB** with its own `truncated` flag.
+
 Encoding: **UTF-8**. Files are normalized to Unix newlines on load.
 
 ## Agent index

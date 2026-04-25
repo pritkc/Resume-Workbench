@@ -9,6 +9,7 @@ import pytest
 from app.services.tailoring.master_resume_preview import (
     capped_master_resume_preview_text,
     resolve_master_resume_row,
+    response_contract_catalog_previews,
     serialize_original_resume_for_tailoring,
 )
 
@@ -61,6 +62,25 @@ def test_serialize_prefers_compact_processed_data(sample_resume: dict) -> None:
 def test_serialize_falls_back_to_original_markdown() -> None:
     resume = {"processed_data": {}, "original_markdown": "# hi", "content": "c"}
     assert serialize_original_resume_for_tailoring(resume) == "# hi"
+
+
+def test_response_contract_previews_empty_when_no_resume() -> None:
+    db = MagicMock()
+    db.get_active_resume.return_value = None
+    db.list_resumes.return_value = []
+    (full_t, full_trunc), (lite_t, lite_trunc) = response_contract_catalog_previews(db)
+    assert full_t == "" and lite_t == ""
+    assert full_trunc is False and lite_trunc is False
+
+
+def test_response_contract_previews_full_and_lite_modes(sample_resume: dict) -> None:
+    db = MagicMock()
+    db.get_active_resume.return_value = {"processed_data": sample_resume}
+    (full_t, full_trunc), (lite_t, lite_trunc) = response_contract_catalog_previews(db)
+    assert full_trunc is False and lite_trunc is False
+    assert '"mode":"full"' in full_t
+    assert '"mode":"lite"' in lite_t
+    assert "output_keys" in full_t
 
 
 def test_capped_preview_truncates_large_payload(monkeypatch: pytest.MonkeyPatch) -> None:
