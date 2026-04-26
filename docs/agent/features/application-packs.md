@@ -78,8 +78,7 @@ The preview pipeline currently touches these LLM operations:
 
 - `job_extract_keywords`
 - `resume_generate_full`
-- optional `cover_letter_generate`
-- optional `outreach_generate`
+- optional `cover_letter_outreach_generate` (one LLM call returns both cover letter and outreach)
 
 The auxiliary text prompts do not receive the full stored resume JSON anymore. They receive:
 

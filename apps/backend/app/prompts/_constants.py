@@ -9,8 +9,6 @@ PROMPT_VERSIONS = {
     "jd_intelligence_user": "v2.1",
     "parse_resume": "v2.2",
     "extract_keywords": "v2.0",
-    "cover_letter": "v2.0",
-    "outreach": "v2.0",
     "cover_letter_outreach": "v1.0",
     "application_questions_generate": "v1.0",
     "critique_resume": "v1.0",

@@ -1,4 +1,4 @@
-"""Prompts: cover letter, outreach, and combined generation."""
+"""Cover letter + outreach: one shipped system/user pair; one LLM call at runtime."""
 
 from app.prompts._constants import PROMPT_VERSIONS
 from app.prompts._text_prompts import read_shipped_txt
@@ -14,14 +14,8 @@ PIPELINE_ORDER = 10
 RECEIVES_FROM: list[str] = []
 FEEDS_INTO: list[str] = []
 
-COVER_LETTER_PROMPT = read_shipped_txt("cover_letter/user_cover_only.txt")
-OUTREACH_MESSAGE_PROMPT = read_shipped_txt("cover_letter/user_outreach_only.txt")
-
-COVER_LETTER_OUTREACH_PROMPT = read_shipped_txt("cover_letter/user.txt")
-
-COVER_LETTER_SYSTEM_PROMPT = read_shipped_txt("cover_letter/system_cover_only.txt")
-OUTREACH_SYSTEM_PROMPT = read_shipped_txt("cover_letter/system_outreach_only.txt")
 COMBINED_MESSAGES_SYSTEM_PROMPT = read_shipped_txt("cover_letter/system.txt")
+COVER_LETTER_OUTREACH_PROMPT = read_shipped_txt("cover_letter/user.txt")
 
 INSTRUCTIONS = COMBINED_MESSAGES_SYSTEM_PROMPT
 RULES = ""

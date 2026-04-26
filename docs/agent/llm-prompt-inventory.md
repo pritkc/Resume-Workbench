@@ -45,7 +45,7 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | Parse | `PARSE_RESUME_PROMPT` | `services/parser.py` | `resume_parse_json` |
 | JD | `EXTRACT_KEYWORDS_PROMPT`, JD intelligence blocks | `services/tailoring/analysis.py` | keyword / intel extraction |
 | Tailor | `IMPROVE_RESUME_PROMPT`, tailoring blocks | `services/tailoring/prompting.py` | `resume_generate_full` |
-| Cover / outreach | `COVER_LETTER_SYSTEM_PROMPT`, etc. | `services/cover_letter.py` | `cover_letter_generate`, `outreach_generate` |
+| Cover + outreach (single call) | `COMBINED_MESSAGES_SYSTEM_PROMPT`, `COVER_LETTER_OUTREACH_PROMPT` | `services/cover_letter.py` | `cover_letter_outreach_generate` |
 | Enrichment | prompts in `enrichment.py` | `routers/enrichment.py` | enrichment operations |
 | Refinement | `KEYWORD_INJECTION_PROMPT` (legacy) | `services/refiner.py` | experiments only |
 

@@ -80,14 +80,13 @@ If content storage is disabled, previews will be empty even though call metadata
 3. inspect:
    - `job_extract_keywords`
    - `resume_generate_full`
-   - optional `cover_letter_generate`
-   - optional `outreach_generate`
+   - optional `cover_letter_outreach_generate` (cover letter + outreach in one call)
 
 Historical traces from older runs may still show:
 
 - `resume_generate_diffs`
 - `resume_refine_keyword_injection`
-- text-generation rows for `outreach_generate` / `cover_letter_generate` that were marked successful even with `finish_reason=length` before the truncation-safe `complete()` fix
+- older text-generation rows (legacy operation names) that were marked successful even with `finish_reason=length` before the truncation-safe `complete()` fix
 
 ### Prompt-specific regressions
 

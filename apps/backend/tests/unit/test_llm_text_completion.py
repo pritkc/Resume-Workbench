@@ -54,7 +54,7 @@ async def test_complete_retries_when_text_response_hits_length_limit(
         prompt="Write an outreach message.",
         max_tokens=256,
         retries=1,
-        operation="outreach_generate",
+        operation="cover_letter_outreach_generate",
         retry_hint="Return one complete outreach message. Do not stop mid-sentence.",
     )
 
@@ -102,7 +102,7 @@ async def test_complete_raises_instead_of_returning_truncated_text(
             prompt="Write a cover letter.",
             max_tokens=256,
             retries=1,
-            operation="cover_letter_generate",
+            operation="cover_letter_outreach_generate",
             retry_hint="Return one complete cover letter.",
             retry_max_tokens=384,
         )
