@@ -5,7 +5,11 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { SkillGroup, SkillsSection } from '@/components/dashboard/resume-component';
-import { newSkillGroupId, normalizeAdditionalGroups, normalizeAdditionalInfo } from '@/lib/utils/additional-groups';
+import {
+  newSkillGroupId,
+  normalizeAdditionalGroups,
+  normalizeAdditionalInfo,
+} from '@/lib/utils/additional-groups';
 import { useTranslations } from '@/lib/i18n';
 import {
   DndContext,
@@ -140,10 +144,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
         collisionDetection={resumeSortableCollision}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext
-          items={groups.map((g) => g.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={groups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {groups.map((group) => {
               const values = group.values ?? [];
@@ -168,6 +169,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
                           {t('builder.additionalForm.groupLabel')}
                         </span>
                         <Input
+                          pasteMode="plainTextSingleParagraph"
                           value={group.label}
                           onChange={(event) => handleLabelChange(group.id, event.target.value)}
                           placeholder={t('builder.additionalForm.groupLabelPlaceholder')}
@@ -219,7 +221,9 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
 
       {groups.length === 0 && (
         <div className="border border-dashed border-black/25 bg-white px-2 py-3 text-center">
-          <p className="font-mono text-[11px] text-black/50">{t('builder.additionalForm.emptyState')}</p>
+          <p className="font-mono text-[11px] text-black/50">
+            {t('builder.additionalForm.emptyState')}
+          </p>
         </div>
       )}
 

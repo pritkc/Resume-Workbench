@@ -149,6 +149,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
         <div className="space-y-0.5">
           <span className={fieldLabel}>{t('resume.personalInfo.name')}</span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             id="name"
             value={data.name || ''}
             onChange={(e) => handleChange('name', e.target.value)}
@@ -159,6 +160,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
         <div className="space-y-0.5">
           <span className={fieldLabel}>Headline</span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             id="headline"
             value={data.headline || data.title || ''}
             onChange={(e) => handleChange('headline', e.target.value)}
@@ -169,6 +171,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
         <div className="space-y-0.5 sm:col-span-2">
           <span className={fieldLabel}>{t('resume.personalInfo.location')}</span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             id="location"
             value={data.location || ''}
             onChange={(e) => handleChange('location', e.target.value)}
@@ -179,6 +182,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
         <div className="space-y-0.5">
           <span className={fieldLabel}>{t('resume.personalInfo.email')}</span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             id="email"
             type="email"
             value={data.email || ''}
@@ -190,6 +194,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
         <div className="space-y-0.5">
           <span className={fieldLabel}>{t('resume.personalInfo.phone')}</span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             id="phone"
             type="tel"
             value={data.phone || ''}
@@ -201,6 +206,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
         <div className="space-y-0.5 sm:col-span-2">
           <span className={fieldLabel}>Photo URL</span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             id="photo"
             value={data.photo || data.photoUrl || ''}
             onChange={(e) => handleChange('photo', e.target.value)}
@@ -211,6 +217,7 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
         <div className="space-y-0.5 sm:col-span-2">
           <span className={fieldLabel}>Website</span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             id="website"
             value={data.website || ''}
             onChange={(e) => handleChange('website', e.target.value)}
@@ -241,18 +248,21 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
                 className="field-row flex min-h-[28px] items-center gap-1.5 border-b border-black/5 py-1 last:border-0"
               >
                 <Input
+                  pasteMode="plainTextSingleParagraph"
                   value={item.label || ''}
                   onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
                   placeholder="Label"
                   className={`${inputClass} w-24 shrink-0 sm:w-28`}
                 />
                 <Input
+                  pasteMode="plainTextSingleParagraph"
                   value={item.url || ''}
                   onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
                   placeholder="https://…"
                   className={`${inputClass} min-w-0 flex-1`}
                 />
                 <Input
+                  pasteMode="plainTextSingleParagraph"
                   value={item.fontawesome_icon || item.fontAwesomeIcon || ''}
                   onChange={(e) =>
                     handleProfileLinkChange(index, 'fontawesome_icon', e.target.value)

@@ -1,7 +1,11 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { handlePasteWithMode, type PasteMode } from '@/lib/paste-plain-text';
 
-export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+  /** Paste handling: YAML wrapped lines → one line; ignores rich clipboard HTML when not native. */
+  pasteMode?: PasteMode;
+};
 
 /**
  * Swiss International Style Input Component
@@ -12,7 +16,26 @@ export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
  * - Focus ring in Hyper Blue
  */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, pasteMode = 'native', onPaste, onChange, value, ...rest }, ref) => {
+    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+      if (pasteMode !== 'native') {
+        handlePasteWithMode(
+          e,
+          pasteMode,
+          () => String(value ?? e.currentTarget.value),
+          (next) => {
+            onChange?.({
+              target: { ...e.currentTarget, value: next },
+              currentTarget: e.currentTarget,
+            } as React.ChangeEvent<HTMLInputElement>);
+          }
+        );
+        onPaste?.(e);
+        return;
+      }
+      onPaste?.(e);
+    };
+
     return (
       <input
         type={type}
@@ -25,7 +48,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className
         )}
         ref={ref}
-        {...props}
+        {...rest}
+        {...(value !== undefined ? { value } : {})}
+        onChange={onChange}
+        onPaste={handlePaste}
       />
     );
   }

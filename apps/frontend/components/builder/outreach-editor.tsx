@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Save, Loader2, Copy, Check, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
+import { handlePasteWithMode } from '@/lib/paste-plain-text';
 
 export interface OutreachEditorProps {
   /** Outreach message content */
@@ -86,17 +87,17 @@ export function OutreachEditor({
                 title={isCopied ? t('outreach.copied') : t('outreach.copy')}
                 className="h-8 w-8 shrink-0 rounded-none"
               >
-                {isCopied ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
+                {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </Button>
             </>
           ) : (
             <>
               <Button size="xs" variant="builderOutline" onClick={onSave} disabled={isSaving}>
-                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                {isSaving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 {isSaving ? t('common.saving') : t('common.save')}
               </Button>
               <Button size="xs" variant="builderOutline" onClick={handleCopy} disabled={!content}>
@@ -121,6 +122,7 @@ export function OutreachEditor({
         <textarea
           value={content}
           onChange={(e) => onChange(e.target.value)}
+          onPaste={(e) => handlePasteWithMode(e, 'plainTextMultiline', () => content, onChange)}
           placeholder={t('outreach.editor.placeholder')}
           className={cn(
             'min-h-[100px] w-full flex-1 p-2',

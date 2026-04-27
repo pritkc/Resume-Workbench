@@ -19,9 +19,7 @@ interface CvMetadataPanelProps {
 }
 
 function normalizeBoldKeywords(list: string[]): string[] {
-  const next = list
-    .map((s) => s.trim())
-    .filter((s) => s.length >= 2);
+  const next = list.map((s) => s.trim()).filter((s) => s.length >= 2);
   next.sort((a, b) => b.length - a.length);
   return next;
 }
@@ -113,6 +111,7 @@ export function CvMetadataPanel({ metadataYaml, themeSettings, onChange }: CvMet
             {t('builder.metadata.role')}
           </span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             value={parsed.role}
             onChange={(e) => push({ role: e.target.value })}
             className="h-7 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
@@ -124,6 +123,7 @@ export function CvMetadataPanel({ metadataYaml, themeSettings, onChange }: CvMet
             {t('builder.metadata.company')}
           </span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             value={parsed.company}
             onChange={(e) => push({ company: e.target.value })}
             className="h-7 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
@@ -135,6 +135,7 @@ export function CvMetadataPanel({ metadataYaml, themeSettings, onChange }: CvMet
             {t('builder.metadata.location')}
           </span>
           <Input
+            pasteMode="plainTextSingleParagraph"
             value={parsed.location}
             onChange={(e) => push({ location: e.target.value })}
             className="h-7 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
@@ -172,6 +173,7 @@ export function CvMetadataPanel({ metadataYaml, themeSettings, onChange }: CvMet
         ) : null}
         <div className="flex gap-1">
           <Input
+            pasteMode="plainTextSingleParagraph"
             value={draftKeyword}
             onChange={(e) => setDraftKeyword(e.target.value)}
             onKeyDown={(e) => {

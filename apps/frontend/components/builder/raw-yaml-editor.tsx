@@ -258,6 +258,19 @@ export function RawYamlEditor({
     });
   };
 
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const raw = event.clipboardData?.getData('text/plain');
+    if (raw == null || raw === '') {
+      return;
+    }
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const next = value.slice(0, start) + raw + value.slice(end);
+    applyValueWithSelection(next, start + raw.length, start + raw.length);
+  };
+
   const jumpToLine = (lineNumber: number, columnNumber = 1) => {
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -529,6 +542,7 @@ export function RawYamlEditor({
               aria-label={`${SECTION_LABELS[section]} raw YAML editor`}
               value={value}
               onChange={handleTextAreaChange}
+              onPaste={handlePaste}
               onScroll={handleScroll}
               onKeyDown={handleKeyDown}
               onSelect={syncCursorPosition}

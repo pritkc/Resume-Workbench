@@ -39,6 +39,7 @@ export const GenericTextForm: React.FC<GenericTextFormProps> = ({
     <div className="space-y-2">
       <Label className="text-[11px] font-medium text-gray-700">{finalLabel}</Label>
       <Textarea
+        pasteMode="plainTextMultiline"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}

@@ -215,6 +215,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                             {t('builder.forms.education.fields.institution')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.institution || ''}
                             onChange={(e) =>
                               handleFieldChange(item.id, 'institution', e.target.value)
@@ -228,6 +229,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                             {t('builder.forms.education.fields.degree')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.degree || ''}
                             onChange={(e) => handleFieldChange(item.id, 'degree', e.target.value)}
                             placeholder={t('builder.forms.education.placeholders.degree')}
@@ -239,6 +241,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                             {t('builder.forms.education.fields.area')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.area || ''}
                             onChange={(e) => handleFieldChange(item.id, 'area', e.target.value)}
                             placeholder={t('builder.forms.education.placeholders.area')}
@@ -250,6 +253,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                             {t('builder.genericItemForm.fields.location')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.location || ''}
                             onChange={(e) => handleFieldChange(item.id, 'location', e.target.value)}
                             placeholder={t('builder.forms.education.placeholders.location')}
@@ -259,6 +263,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                         <div>
                           <span className={fldLabel}>Start Date</span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.start_date || ''}
                             onChange={(e) =>
                               handleFieldChange(item.id, 'start_date', e.target.value)
@@ -270,6 +275,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                         <div>
                           <span className={fldLabel}>End Date</span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.end_date || ''}
                             onChange={(e) => handleFieldChange(item.id, 'end_date', e.target.value)}
                             placeholder="2018 or present"
@@ -281,6 +287,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                             {t('builder.genericItemForm.fields.date')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={getEducationExplicitDate(item)}
                             onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
                             placeholder={t('builder.forms.education.placeholders.date')}
@@ -300,6 +307,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                           {t('builder.genericItemForm.fields.summaryOptional')}
                         </span>
                         <Textarea
+                          pasteMode="plainTextMultiline"
                           value={getEducationSummary(item)}
                           onChange={(e) => handleFieldChange(item.id, 'summary', e.target.value)}
                           className="mt-0.5 min-h-[44px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"
@@ -325,6 +333,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                         {highlights.map((highlight, idx) => (
                           <div key={idx} className="mb-1.5 flex gap-1.5 last:mb-0">
                             <Textarea
+                              pasteMode="plainTextSingleParagraph"
                               value={highlight}
                               onChange={(e) => handleHighlightChange(item.id, idx, e.target.value)}
                               className="min-h-[36px] flex-1 rounded-none border border-black/30 bg-white px-2 py-1 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"

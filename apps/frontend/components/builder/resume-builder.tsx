@@ -1759,6 +1759,7 @@ const ResumeBuilderContent = () => {
               <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0">
                 {isEditingResumeTitle && resumeId ? (
                   <Input
+                    pasteMode="plainTextSingleParagraph"
                     ref={resumeTitleInputRef}
                     value={resumeTitleDraft}
                     onChange={(e) => setResumeTitleDraft(e.target.value)}

@@ -100,6 +100,7 @@ export const AddSectionDialog: React.FC<AddSectionDialogProps> = ({
               {t('builder.customSections.sectionNameLabel')}
             </Label>
             <Input
+              pasteMode="plainTextSingleParagraph"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               onKeyDown={handleKeyDown}

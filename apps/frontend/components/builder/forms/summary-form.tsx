@@ -22,6 +22,7 @@ export const SummaryForm: React.FC<SummaryFormProps> = ({ value, onChange }) => 
   return (
     <div>
       <Textarea
+        pasteMode="plainTextMultiline"
         id="summary"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}

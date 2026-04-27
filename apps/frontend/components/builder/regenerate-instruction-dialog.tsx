@@ -124,6 +124,7 @@ export const RegenerateInstructionDialog: React.FC<RegenerateInstructionDialogPr
               {t('builder.regenerate.instructionDialog.hint')}
             </label>
             <Textarea
+              pasteMode="plainTextMultiline"
               id="regenerate-instruction"
               value={instruction}
               onChange={(e) => onInstructionChange(e.target.value)}

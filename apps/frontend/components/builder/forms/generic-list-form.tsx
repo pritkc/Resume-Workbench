@@ -48,6 +48,7 @@ export const GenericListForm: React.FC<GenericListFormProps> = ({
     <div>
       <div className="panel-section-header">{finalLabel}</div>
       <Textarea
+        pasteMode="plainText"
         value={formatItems(items)}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Save, Loader2, FileText, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
+import { handlePasteWithMode } from '@/lib/paste-plain-text';
 
 export interface CoverLetterEditorProps {
   /** Cover letter content */
@@ -89,20 +90,25 @@ export function CoverLetterEditor({
                 title={isCopied ? t('coverLetter.copied') : t('outreach.copy')}
                 className="h-8 w-8 shrink-0 rounded-none"
               >
-                {isCopied ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
+                {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </Button>
             </>
           ) : (
             <>
               <Button size="xs" variant="builderOutline" onClick={onSave} disabled={isSaving}>
-                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                {isSaving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 {isSaving ? t('common.saving') : t('common.save')}
               </Button>
-              <Button size="xs" variant="builderOutline" onClick={() => void handleCopy()} disabled={!content}>
+              <Button
+                size="xs"
+                variant="builderOutline"
+                onClick={() => void handleCopy()}
+                disabled={!content}
+              >
                 {isCopied ? (
                   <>
                     <Check className="h-3.5 w-3.5" />
@@ -136,6 +142,7 @@ export function CoverLetterEditor({
           <textarea
             value={content}
             onChange={(e) => onChange(e.target.value)}
+            onPaste={(e) => handlePasteWithMode(e, 'plainTextMultiline', () => content, onChange)}
             placeholder={t('coverLetter.editor.placeholder')}
             className={cn(
               'min-h-[120px] w-full flex-1 p-2.5',
@@ -143,7 +150,9 @@ export function CoverLetterEditor({
               layout === 'letter' ? 'border-0 bg-transparent' : 'border border-black/20 bg-white',
               'resize-y',
               'focus:outline-none focus:ring-0',
-              layout === 'letter' ? 'focus-visible:ring-1 focus-visible:ring-black/15' : 'focus:border-black',
+              layout === 'letter'
+                ? 'focus-visible:ring-1 focus-visible:ring-black/15'
+                : 'focus:border-black',
               'placeholder:text-black/30'
             )}
           />

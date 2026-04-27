@@ -160,6 +160,7 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
               <div>
                 <span className={fldLabel}>{t('builder.genericItemForm.fields.title')}</span>
                 <Input
+                  pasteMode="plainTextSingleParagraph"
                   value={item.title || ''}
                   onChange={(e) => handleChange(item.id, 'title', e.target.value)}
                   placeholder={finalTitlePlaceholder}
@@ -172,6 +173,7 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
                     {t('builder.genericItemForm.fields.organization')}
                   </span>
                   <Input
+                    pasteMode="plainTextSingleParagraph"
                     value={item.subtitle || ''}
                     onChange={(e) => handleChange(item.id, 'subtitle', e.target.value)}
                     placeholder={finalSubtitlePlaceholder}
@@ -183,6 +185,7 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
                 <div>
                   <span className={fldLabel}>{t('builder.genericItemForm.fields.location')}</span>
                   <Input
+                    pasteMode="plainTextSingleParagraph"
                     value={item.location || ''}
                     onChange={(e) => handleChange(item.id, 'location', e.target.value)}
                     placeholder={finalLocationPlaceholder}
@@ -194,6 +197,7 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
                 <div>
                   <span className={fldLabel}>{t('builder.genericItemForm.fields.years')}</span>
                   <Input
+                    pasteMode="plainTextSingleParagraph"
                     value={item.years || ''}
                     onChange={(e) => handleChange(item.id, 'years', e.target.value)}
                     placeholder={finalYearsPlaceholder}
@@ -225,6 +229,7 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
                       onChange={(html) => handleDescriptionChange(item.id, idx, html)}
                       placeholder={finalDescriptionPlaceholder}
                       minHeight="36px"
+                      plainTextPaste
                     />
                   </div>
                   <Button

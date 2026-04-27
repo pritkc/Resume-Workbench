@@ -173,8 +173,8 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
       <div className="space-y-2">
         {data.length > 0 ? (
           <p className="font-mono text-[9px] leading-snug text-black/40">
-            Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on each bullet or project
-            card to reorder.
+            Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on each bullet or
+            project card to reorder.
           </p>
         ) : null}
         {data.length > 0 ? (
@@ -206,60 +206,73 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                         </Button>
 
                         <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
-                <div>
-                  <span className={fldLabel}>{t('builder.forms.projects.fields.projectName')}</span>
-                  <Input
-                    value={item.name || ''}
-                    onChange={(e) => handleFieldChange(item.id, 'name', e.target.value)}
-                    placeholder={t('builder.forms.projects.placeholders.projectName')}
-                    className={`mt-0.5 ${inp}`}
-                  />
-                </div>
-                <div>
-                  <span className={fldLabel}>{t('builder.genericItemForm.fields.date')}</span>
-                  <Input
-                    value={getProjectDate(item)}
-                    onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
-                    placeholder={t('builder.forms.projects.placeholders.date')}
-                    className={`mt-0.5 ${inp}`}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <span className={fldLabel}>
-                    {t('builder.forms.projects.fields.techStackOptional')}
-                  </span>
-                  <Textarea
-                    value={getProjectTechStack(item)}
-                    onChange={(e) => handleFieldChange(item.id, 'summary', e.target.value)}
-                    placeholder={t('builder.forms.projects.placeholders.techStack')}
-                    className="mt-0.5 min-h-[72px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"
-                  />
-                </div>
-                <div>
-                  <span className={fldLabel}>
-                    <Github className="mr-1 inline h-3 w-3 align-text-bottom" />
-                    Repo
-                  </span>
-                  <Input
-                    value={item.github || ''}
-                    onChange={(e) => handleFieldChange(item.id, 'github', e.target.value)}
-                    placeholder="github.com/org/repo"
-                    className={`mt-0.5 ${inp}`}
-                  />
-                </div>
-                <div>
-                  <span className={fldLabel}>
-                    <Globe className="mr-1 inline h-3 w-3 align-text-bottom" />
-                    Link
-                  </span>
-                  <Input
-                    value={item.website || ''}
-                    onChange={(e) => handleFieldChange(item.id, 'website', e.target.value)}
-                    placeholder="your-project.com"
-                    className={`mt-0.5 ${inp}`}
-                  />
-                </div>
-              </div>
+                          <div>
+                            <span className={fldLabel}>
+                              {t('builder.forms.projects.fields.projectName')}
+                            </span>
+                            <Input
+                              pasteMode="plainTextSingleParagraph"
+                              value={item.name || ''}
+                              onChange={(e) => handleFieldChange(item.id, 'name', e.target.value)}
+                              placeholder={t('builder.forms.projects.placeholders.projectName')}
+                              className={`mt-0.5 ${inp}`}
+                            />
+                          </div>
+                          <div>
+                            <span className={fldLabel}>
+                              {t('builder.genericItemForm.fields.date')}
+                            </span>
+                            <Input
+                              pasteMode="plainTextSingleParagraph"
+                              value={getProjectDate(item)}
+                              onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
+                              placeholder={t('builder.forms.projects.placeholders.date')}
+                              className={`mt-0.5 ${inp}`}
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <span className={fldLabel}>
+                              {t('builder.forms.projects.fields.techStackOptional')}
+                            </span>
+                            <Textarea
+                              pasteMode="plainTextMultiline"
+                              value={getProjectTechStack(item)}
+                              onChange={(e) =>
+                                handleFieldChange(item.id, 'summary', e.target.value)
+                              }
+                              placeholder={t('builder.forms.projects.placeholders.techStack')}
+                              className="mt-0.5 min-h-[72px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"
+                            />
+                          </div>
+                          <div>
+                            <span className={fldLabel}>
+                              <Github className="mr-1 inline h-3 w-3 align-text-bottom" />
+                              Repo
+                            </span>
+                            <Input
+                              pasteMode="plainTextSingleParagraph"
+                              value={item.github || ''}
+                              onChange={(e) => handleFieldChange(item.id, 'github', e.target.value)}
+                              placeholder="github.com/org/repo"
+                              className={`mt-0.5 ${inp}`}
+                            />
+                          </div>
+                          <div>
+                            <span className={fldLabel}>
+                              <Globe className="mr-1 inline h-3 w-3 align-text-bottom" />
+                              Link
+                            </span>
+                            <Input
+                              pasteMode="plainTextSingleParagraph"
+                              value={item.website || ''}
+                              onChange={(e) =>
+                                handleFieldChange(item.id, 'website', e.target.value)
+                              }
+                              placeholder="your-project.com"
+                              className={`mt-0.5 ${inp}`}
+                            />
+                          </div>
+                        </div>
 
                         <div>
                           <div className="mb-1 flex items-center justify-between gap-2">

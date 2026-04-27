@@ -111,6 +111,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
           {isEditing ? (
             <div className="flex min-w-0 items-center gap-1">
               <Input
+                pasteMode="plainTextSingleParagraph"
                 value={editedName}
                 onChange={(e) => setEditedName(e.target.value)}
                 onKeyDown={handleKeyDown}

@@ -209,8 +209,8 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
           >
             <div className="space-y-2">
               <p className="font-mono text-[9px] leading-snug text-black/40">
-                Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on the left of each
-                bullet to reorder.
+                Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on the left of
+                each bullet to reorder.
               </p>
               {data.map((item) => {
                 const highlights = getExperienceHighlightsEditor(item);
@@ -235,6 +235,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                             {t('builder.forms.experience.fields.position')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={getExperiencePosition(item)}
                             onChange={(e) =>
                               handleTextFieldChange(item.id, 'position', e.target.value)
@@ -248,6 +249,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                             {t('builder.forms.experience.fields.company')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.company || ''}
                             onChange={(e) =>
                               handleTextFieldChange(item.id, 'company', e.target.value)
@@ -261,6 +263,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                             {t('builder.genericItemForm.fields.location')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.location || ''}
                             onChange={(e) =>
                               handleTextFieldChange(item.id, 'location', e.target.value)
@@ -272,6 +275,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                         <div>
                           <span className={fldLabel}>Start Date</span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.start_date || ''}
                             onChange={(e) =>
                               handleTextFieldChange(item.id, 'start_date', e.target.value)
@@ -283,6 +287,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                         <div>
                           <span className={fldLabel}>End Date</span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={item.end_date || ''}
                             onChange={(e) =>
                               handleTextFieldChange(item.id, 'end_date', e.target.value)
@@ -296,6 +301,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                             {t('builder.genericItemForm.fields.date')}
                           </span>
                           <Input
+                            pasteMode="plainTextSingleParagraph"
                             value={getExperienceExplicitDate(item)}
                             onChange={(e) => handleTextFieldChange(item.id, 'date', e.target.value)}
                             placeholder={t('builder.forms.experience.placeholders.date')}

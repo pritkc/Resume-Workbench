@@ -8,6 +8,7 @@ import Underline from '@tiptap/extension-underline';
 import { RichTextToolbar } from './rich-text-toolbar';
 import { LinkDialog } from './link-dialog';
 import { cn } from '@/lib/utils';
+import { normalizePastedSingleParagraph } from '@/lib/paste-plain-text';
 
 interface RichTextEditorProps {
   /** HTML content string */
@@ -22,6 +23,11 @@ interface RichTextEditorProps {
   minHeight?: string;
   /** `full` toolbar, `hint` line, or `none` (editor only — use a section-level hint when needed). */
   toolbarMode?: 'full' | 'hint' | 'none';
+  /**
+   * When true, paste uses text/plain and merges YAML-style wrapped lines.
+   * Defaults to true when toolbarMode is `none`; set explicitly for full/hint toolbars.
+   */
+  plainTextPaste?: boolean;
 }
 
 /**
@@ -39,7 +45,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   className,
   minHeight = '60px',
   toolbarMode = 'full',
+  plainTextPaste,
 }) => {
+  const usePlainTextPaste = plainTextPaste ?? toolbarMode === 'none';
+  const plainTextPasteRef = useRef(usePlainTextPaste);
+
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -98,6 +108,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
         return false;
       },
+      handlePaste: (view, event) => {
+        if (!plainTextPasteRef.current) {
+          return false;
+        }
+        const plain = event.clipboardData?.getData('text/plain');
+        if (plain == null || plain === '') {
+          return false;
+        }
+        event.preventDefault();
+        const text = normalizePastedSingleParagraph(plain);
+        const { state } = view;
+        const { from, to } = state.selection;
+        view.dispatch(state.tr.insertText(text, from, to));
+        return true;
+      },
     },
     // Immediately render without waiting for idle
     immediatelyRender: false,
@@ -107,6 +132,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    plainTextPasteRef.current = usePlainTextPaste;
+  }, [usePlainTextPaste]);
 
   // Sync external value changes (e.g., from parent reset)
   useEffect(() => {
