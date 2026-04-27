@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RENDER_DIMENSION_UNITS, type RenderDimensionUnit } from '@/lib/types/render-theme';
@@ -303,6 +303,14 @@ function formatDimensionValue(amount: string, unit: RenderDimensionUnit | null):
   return unit ? `${normalizedAmount}${unit}` : normalizedAmount;
 }
 
+function normalizeAmountForCommit(amount: string): string {
+  let a = amount.trim();
+  if (a.endsWith('.')) {
+    a = a.slice(0, -1);
+  }
+  return a.trim();
+}
+
 export function RenderCvDimensionInput({
   value,
   onChange,
@@ -317,37 +325,57 @@ export function RenderCvDimensionInput({
   const [draftUnit, setDraftUnit] = useState<RenderDimensionUnit>(
     parsedValue.unit ?? parsedPlaceholder.unit ?? 'cm'
   );
+  const [amountDraft, setAmountDraft] = useState(parsedValue.amount);
 
   useEffect(() => {
-    if (parsedValue.unit) {
-      setDraftUnit(parsedValue.unit);
-      return;
+    const p = parseDimensionValue(value);
+    const ph = parseDimensionValue(placeholder);
+    setAmountDraft(p.amount);
+    if (p.unit) {
+      setDraftUnit(p.unit);
+    } else if (ph.unit) {
+      setDraftUnit(ph.unit);
     }
-    if (parsedPlaceholder.unit) {
-      setDraftUnit(parsedPlaceholder.unit);
-    }
-  }, [parsedPlaceholder.unit, parsedValue.unit]);
+  }, [value, placeholder]);
 
-  const activeUnit = parsedValue.unit ?? draftUnit;
+  const commitDimension = useCallback(
+    (amount: string, unit: RenderDimensionUnit) => {
+      const normalized = normalizeAmountForCommit(amount);
+      if (normalized === '' || normalized === '-') {
+        onChange('');
+        return;
+      }
+      onChange(formatDimensionValue(normalized, unit));
+    },
+    [onChange]
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <Input
-        value={parsedValue.amount}
-        onChange={(event) => {
-          onChange(formatDimensionValue(event.target.value, activeUnit));
+        pasteMode="plainText"
+        value={amountDraft}
+        onChange={(event) => setAmountDraft(event.target.value)}
+        onBlur={() => commitDimension(amountDraft, draftUnit)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commitDimension(amountDraft, draftUnit);
+            (event.target as HTMLInputElement).blur();
+          }
         }}
         placeholder={parsedPlaceholder.amount || placeholder}
         inputMode="decimal"
         className="h-7 w-20 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
       />
       <select
-        value={activeUnit}
+        value={draftUnit}
         onChange={(e) => {
           const unit = e.target.value as RenderDimensionUnit;
           setDraftUnit(unit);
-          if (parsedValue.amount) {
-            onChange(formatDimensionValue(parsedValue.amount, unit));
+          const normalized = normalizeAmountForCommit(amountDraft);
+          if (normalized !== '' && normalized !== '-') {
+            onChange(formatDimensionValue(normalized, unit));
           }
         }}
         className="unit-selector-select h-7 min-w-[3.5rem] rounded-none border border-black/30 bg-white px-1 font-mono text-[9px] uppercase focus:border-black"
