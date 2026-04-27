@@ -29,6 +29,14 @@ import { DraggableListItem } from '../draggable-list-item';
 import { SkillGroupValuesDnd } from '../skill-group-values-dnd';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
+/** Split pasted or typed draft text into individual skill tags (comma, semicolon, or line break). */
+function parseSkillDraftTokens(raw: string): string[] {
+  return raw
+    .split(/[,;\n\r]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 interface AdditionalGroupsFormProps {
   data: SkillsSection;
   onChange: (data: SkillsSection) => void;
@@ -105,7 +113,32 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
     if (!raw) return;
     const g = groups.find((x) => x.id === groupId);
     if (!g) return;
-    const next = [...(g.values || []), raw];
+    const tokens = parseSkillDraftTokens(raw);
+    if (tokens.length === 0) return;
+    const next = [...(g.values || []), ...tokens];
+    handleItemsReplace(groupId, next);
+    setDraftByGroupId((d) => ({ ...d, [groupId]: '' }));
+  };
+
+  const handleDraftPaste = (groupId: string, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData?.getData('text/plain') ?? '';
+    const fromClipboard = parseSkillDraftTokens(pasted);
+    if (fromClipboard.length < 2) {
+      return;
+    }
+    e.preventDefault();
+    const el = e.currentTarget;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const cur = draftByGroupId[groupId] ?? '';
+    const merged = cur.slice(0, start) + pasted + cur.slice(end);
+    const allTokens = parseSkillDraftTokens(merged);
+    if (allTokens.length === 0) {
+      return;
+    }
+    const g = groups.find((x) => x.id === groupId);
+    if (!g) return;
+    const next = [...(g.values || []), ...allTokens];
     handleItemsReplace(groupId, next);
     setDraftByGroupId((d) => ({ ...d, [groupId]: '' }));
   };
@@ -201,13 +234,14 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
                         onChange={(e) =>
                           setDraftByGroupId((d) => ({ ...d, [group.id]: e.target.value }))
                         }
+                        onPaste={(e) => handleDraftPaste(group.id, e)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
                             handleAddDraft(group.id);
                           }
                         }}
-                        placeholder="+ tag"
+                        placeholder={t('builder.additionalForm.addValuePlaceholder')}
                         className="h-7 w-full min-w-0 rounded-none border border-black/20 bg-white px-2 font-mono text-sm text-black placeholder:text-black/35 focus:border-black focus:outline-none"
                       />
                     </div>

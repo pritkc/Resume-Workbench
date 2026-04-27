@@ -150,7 +150,8 @@
       "wordsChars": "{wordCount} words / {charCount} chars"
     },
     "additionalForm": {
-      "instructions": "One skill group per card: edit the label, add tags (press Enter), remove with ×. Drag the grip beside a value to change the order shown on your resume.",
+      "instructions": "One skill group per card: edit the label, add tags (press Enter, or paste comma- / newline-separated lists), remove with ×. Drag the grip beside a value to change the order shown on your resume.",
+      "addValuePlaceholder": "Add tag — comma, semicolon, or Enter for several",
       "valuesReorderHint": "Drag grip to reorder",
       "reorderGripTitle": "Drag to reorder",
       "groupLabel": "Label",
