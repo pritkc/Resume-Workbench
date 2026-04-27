@@ -1,4 +1,4 @@
-# Shipped prompt index (Phase 3.12.2) — keep in sync with app.prompts.VALID_STEPS
+# Shipped prompt index — keep in sync with app.prompts.VALID_STEPS
 steps:
   - parse_resume
   - extract_jd_intel
@@ -8,21 +8,10 @@ steps:
   - rewrite_resume
   - cover_letter
   - answer_questions
-fragments:
+output_file_schema_rules:
   - resume_diff_output
-  - jd_intel_contract
-  - jd_intel_craft
-  - critique_rules
-  - tailoring_craft
-  - tailoring_mode_full
-  - tailoring_mode_lite
-  - tailoring_user_shell_full
-  - tailoring_user_shell_lite
 enrichment:
-  - analyze_system
-  - analyze_user
-  - enhance_system
-  - enhance_user
-  - regenerate_system
-  - regenerate_item_user
-  - regenerate_group_user
+  - analyze
+  - enhance
+  - regenerate_item
+  - regenerate_group

@@ -119,28 +119,28 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         PromptCatalogSection(
             id="tailoring_craft_block",
             label="Craft block (role, voice, ATS, tailoring approach)",
-            note="Narrative instructions and writing standards. Shipped: apps/backend/app/prompts/text/fragments/tailoring_craft.txt",
+            note="Narrative instructions and writing standards. Shipped: apps/backend/app/prompts/text/tailor_resume_full/system.txt (craft section before TAILORING MODE:).",
             policy="user_editable_future",
             children=craft_children,
         ),
         PromptCatalogSection(
             id="tailoring_mode_strategies",
             label="Mode strategies",
-            note="One mode strategy is selected per run. Shipped: text/fragments/tailoring_mode_full.txt and tailoring_mode_lite.txt",
+            note="One mode strategy is selected per run. Shipped: tailor_resume_full/system.txt and tailor_resume_lite/system.txt (section from TAILORING MODE: onward).",
             policy="user_editable_future",
             children=mode_children,
         ),
         PromptCatalogSection(
             id="tailoring_contract_block",
             label="Resume diff output (strict JSON schema)",
-            note="Keys and shapes only. Shipped: apps/backend/app/prompts/text/fragments/resume_diff_output.txt — change rarely; requires tests.",
+            note="Keys and shapes only. Shipped: apps/backend/app/prompts/text/output_file_schema_rules/resume_diff_output.txt — change rarely; requires tests.",
             policy="system",
             children=contract_children,
         ),
         PromptCatalogSection(
             id="tailoring_user_message",
             label="User message templates",
-            note="Full vs lite use different shipped shells. Full: text/fragments/tailoring_user_shell_full.txt · Lite: tailoring_user_shell_lite.txt",
+            note="Full vs lite use different shipped shells. Full: text/tailor_resume_full/user.txt · Lite: text/tailor_resume_lite/user.txt",
             policy="user_editable_future",
             children=[
                 PromptCatalogSection(

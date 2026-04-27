@@ -8,7 +8,7 @@
 |------|----------------|
 | `apps/backend/app/llm.py` | LiteLLM router, health checks, retries, JSON extraction, trace persistence |
 | `apps/backend/app/config.py` | runtime settings, API-key fallback, trace/cost knobs |
-| `apps/backend/app/prompts/text/` | **Shipped** `.txt` prompt bodies + `fragments/` — see `text/README.md` |
+| `apps/backend/app/prompts/text/` | **Shipped** `.txt` prompt bodies (`{step}/system.txt` + `user.txt`, shared diff under `output_file_schema_rules/`) — see `text/README.md` |
 | `apps/backend/app/prompts/*.py` | Step modules (`build_messages`, …) — see [llm-prompt-inventory.md](llm-prompt-inventory.md) |
 | `apps/backend/app/prompts/__init__.py` | re-exports, valid steps, optional `prompt_overrides/` |
 | `apps/backend/app/prompts/enrichment.py` | enrichment and regenerate prompts |

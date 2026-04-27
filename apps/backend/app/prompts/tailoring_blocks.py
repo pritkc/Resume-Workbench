@@ -1,19 +1,34 @@
-"""Shared tailoring blocks: craft text, per-mode strategy, and shipped user shells (full vs lite)."""
+"""Tailoring prompt helpers and backward-compat exports for catalog and services."""
 
 from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
 from app.prompts._text_prompts import read_shipped_txt
 
 TAILORING_CONTRACT_BLOCK = RESUME_DIFF_RULES
 
-TAILORING_CRAFT_BLOCK = read_shipped_txt("fragments/tailoring_craft.txt")
+_MERGED_FULL = read_shipped_txt("tailor_resume_full/system.txt")
+_MERGED_LITE = read_shipped_txt("tailor_resume_lite/system.txt")
+_MARK = "\n\nTAILORING MODE:"
 
+
+def _craft_from_merged(merged: str) -> str:
+    before, sep, _rest = merged.partition(_MARK)
+    return before.strip() if sep else merged.strip()
+
+
+def _mode_from_merged(merged: str) -> str:
+    _before, sep, rest = merged.partition(_MARK)
+    if not sep:
+        return ""
+    return ("TAILORING MODE:" + rest).strip()
+
+
+TAILORING_CRAFT_BLOCK = _craft_from_merged(_MERGED_FULL)
 TAILORING_MODE_STRATEGY = {
-    "full": read_shipped_txt("fragments/tailoring_mode_full.txt"),
-    "lite": read_shipped_txt("fragments/tailoring_mode_lite.txt"),
+    "full": _mode_from_merged(_MERGED_FULL),
+    "lite": _mode_from_merged(_MERGED_LITE),
 }
-
-TAILORING_USER_SHELL_FULL = read_shipped_txt("fragments/tailoring_user_shell_full.txt")
-TAILORING_USER_SHELL_LITE = read_shipped_txt("fragments/tailoring_user_shell_lite.txt")
+TAILORING_USER_SHELL_FULL = read_shipped_txt("tailor_resume_full/user.txt")
+TAILORING_USER_SHELL_LITE = read_shipped_txt("tailor_resume_lite/user.txt")
 
 TAILORING_SYSTEM_PROMPT = "\n\n".join(
     [TAILORING_CRAFT_BLOCK, TAILORING_MODE_STRATEGY["full"], TAILORING_CONTRACT_BLOCK]
@@ -24,7 +39,3 @@ TAILORING_MODE_CONSTRAINTS = {k: v for k, v in TAILORING_MODE_STRATEGY.items()}
 TAILORING_USER_SHELL = TAILORING_USER_SHELL_FULL
 IMPROVE_RESUME_PROMPT_TEMPLATE = TAILORING_USER_SHELL_FULL
 IMPROVE_RESUME_PROMPT = TAILORING_USER_SHELL_FULL
-
-REWRITE_RULES_BUNDLE = "\n\n".join(
-    [RESUME_DIFF_RULES, TAILORING_CRAFT_BLOCK, TAILORING_MODE_STRATEGY["full"]]
-)

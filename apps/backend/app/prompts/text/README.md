@@ -1,20 +1,22 @@
 # Shipped LLM prompts (`text/`)
 
-**Source of truth** for pipeline prompt bodies used by `VALID_STEPS` and shared fragments. Edit **`.txt`** files here; Python modules under `app/prompts/` load them via `_text_prompts.read_shipped_txt`.
+**Source of truth** for pipeline prompt bodies used by `VALID_STEPS`. Edit **`.txt`** files here; Python modules under `app/prompts/` load them via `_text_prompts.read_shipped_txt`.
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
-| `fragments/` | Shared blocks: resume diff JSON contract, JD intel contract/craft, critique schema, tailoring craft/modes, separate full/lite user shells |
-| `{step_id}/` | Per-step `system.txt` / `user.txt` where the full message is not only composed fragments (e.g. `parse_resume/`, `critique_resume/instructions.txt`) |
-| `index.yaml` | Machine-readable list of step ids and enrichment asset names |
-| `enrichment/` | Resume enrichment prompts (`app/routers/enrichment.py`). **User** templates use Python **`str.format`** with `{field}` placeholders; JSON examples in those files use `{{` / `}}` so braces survive `.format()`. |
+| `output_file_schema_rules/` | Shared **resume diff JSON** contract (`resume_diff_output.txt`) appended at runtime to tailor + rewrite system prose |
+| `{step_id}/` | Per-step **`system.txt`** and **`user.txt`** (`parse_resume/`, `extract_jd_intel/`, `tailor_resume_full/`, `tailor_resume_lite/`, `critique_resume/`, `rewrite_resume/`, `cover_letter/`, `answer_questions/`) |
+| `enrichment/{analyze,enhance,regenerate_item,regenerate_group}/` | Each op has `system.txt` + `user.txt` |
+| `index.yaml` | Machine-readable list of step ids and enrichment ops |
+| `fragments/` | Deprecated — see `fragments/README.md` |
 
-## Overrides (unchanged)
+## Overrides
 
-- **Per-step:** `app/prompt_overrides/{step}.instructions.txt`, `{step}.rules.txt`, `{step}.composer.json`
-- **Shared rules:** `app/prompt_overrides/_rules.resume_diff.txt`, `_rules.jd_intel.txt`, `_rules.critique.txt`
+- **Per-step prose:** `app/prompt_overrides/{step}.system.txt` (or legacy `{step}.instructions.txt`), `{step}.rules.txt` (diff block override for tailoring steps when used)
+- **Composer:** `app/prompt_overrides/{step}.composer.json`
+- **Shared diff:** `app/prompt_overrides/_rules.resume_diff.txt`
 
 Composer and file overrides **replace** shipped text at runtime; they do not live in this directory.
 

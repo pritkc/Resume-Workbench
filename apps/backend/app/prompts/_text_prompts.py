@@ -8,7 +8,7 @@ _TEXT_ROOT = Path(__file__).resolve().parent / "text"
 
 
 def read_shipped_txt(relative_path: str) -> str:
-    """Read ``relative_path`` under ``text/`` (e.g. ``fragments/resume_diff_output.txt``)."""
+    """Read ``relative_path`` under ``text/`` (e.g. ``parse_resume/system.txt``)."""
     rel = relative_path.lstrip("/")
     path = _TEXT_ROOT / rel
     if not path.is_file():

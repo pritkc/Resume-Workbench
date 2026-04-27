@@ -112,14 +112,6 @@ def _resolved_rules(step_name: str, mod: ModuleType) -> tuple[str, bool, str | N
         ov = bool(step_rules) or has_shared_rules_override(rs)
         return cur, ov, rs
 
-    legacy = {"extract_jd_intel": "jd_intel", "critique_resume": "critique"}
-    if step_name in legacy:
-        ln = legacy[step_name]
-        leg = load_shared_rules_override(ln)
-        cur = step_rules or leg or rules_def
-        ov = bool(step_rules) or has_shared_rules_override(ln)
-        return cur, ov, None
-
     cur = step_rules or rules_def
     ov = bool(step_rules)
     return cur, ov, None
@@ -237,7 +229,7 @@ def build_shared_rule_entries() -> list[SharedRuleEntry]:
         SharedRuleEntry(
             name=resume_diff_mod.RULES_NAME,
             label=resume_diff_mod.RULES_LABEL,
-            rules_source_file="apps/backend/app/prompts/text/fragments/resume_diff_output.txt",
+            rules_source_file="apps/backend/app/prompts/text/output_file_schema_rules/resume_diff_output.txt",
             rules=load_shared_rules_override("resume_diff") or resume_diff_mod.RESUME_DIFF_RULES,
             rules_is_override=has_shared_rules_override("resume_diff"),
             rules_default=resume_diff_mod.RESUME_DIFF_RULES,

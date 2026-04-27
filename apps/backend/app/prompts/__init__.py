@@ -13,7 +13,6 @@ from app.prompts._constants import (
     PROMPT_VERSIONS,
     get_language_name,
 )
-from app.prompts._rules.jd_intel import JD_INTELLIGENCE_CONTRACT_BLOCK, JD_INTELLIGENCE_CRAFT_BLOCK
 from app.prompts.answer_questions import APPLICATION_QUESTIONS_PROMPT, APPLICATION_QUESTIONS_SYSTEM_PROMPT
 from app.prompts.cover_letter import COMBINED_MESSAGES_SYSTEM_PROMPT
 from app.prompts.extract_jd_intel import (
@@ -49,7 +48,7 @@ VALID_STEPS = frozenset(
     }
 )
 
-_VALID_SHARED_RULES = frozenset({"resume_diff", "jd_intel", "critique"})
+_VALID_SHARED_RULES = frozenset({"resume_diff"})
 
 _OVERRIDE_DIR = Path(__file__).parent.parent / "prompt_overrides"
 
@@ -73,7 +72,15 @@ def load_override(step_name: str, part: str) -> str | None:
         raise ValueError("Invalid part")
     if not _STEP_NAME_RE.fullmatch(step_name):
         raise ValueError("Invalid step_name")
-    path = _OVERRIDE_DIR / f"{step_name}.{part}.txt"
+    if part == "instructions":
+        primary = _OVERRIDE_DIR / f"{step_name}.system.txt"
+        legacy = _OVERRIDE_DIR / f"{step_name}.instructions.txt"
+        if primary.exists():
+            return primary.read_text(encoding="utf-8")
+        if legacy.exists():
+            return legacy.read_text(encoding="utf-8")
+        return None
+    path = _OVERRIDE_DIR / f"{step_name}.rules.txt"
     if not path.exists():
         return None
     return path.read_text(encoding="utf-8")
@@ -85,11 +92,25 @@ def save_override(step_name: str, part: str, content: str) -> None:
     if part not in ("instructions", "rules"):
         raise ValueError("Invalid part")
     _OVERRIDE_DIR.mkdir(parents=True, exist_ok=True)
-    (_OVERRIDE_DIR / f"{step_name}.{part}.txt").write_text(content, encoding="utf-8")
+    if part == "instructions":
+        (_OVERRIDE_DIR / f"{step_name}.system.txt").write_text(content, encoding="utf-8")
+        return
+    (_OVERRIDE_DIR / f"{step_name}.rules.txt").write_text(content, encoding="utf-8")
 
 
 def delete_override(step_name: str, part: str) -> bool:
-    path = _OVERRIDE_DIR / f"{step_name}.{part}.txt"
+    if part == "instructions":
+        primary = _OVERRIDE_DIR / f"{step_name}.system.txt"
+        legacy = _OVERRIDE_DIR / f"{step_name}.instructions.txt"
+        removed = False
+        if primary.exists():
+            primary.unlink()
+            removed = True
+        if legacy.exists():
+            legacy.unlink()
+            removed = True
+        return removed
+    path = _OVERRIDE_DIR / f"{step_name}.rules.txt"
     if path.exists():
         path.unlink()
         return True
@@ -97,7 +118,11 @@ def delete_override(step_name: str, part: str) -> bool:
 
 
 def has_override(step_name: str, part: str) -> bool:
-    return (_OVERRIDE_DIR / f"{step_name}.{part}.txt").exists()
+    if part == "instructions":
+        return (_OVERRIDE_DIR / f"{step_name}.system.txt").exists() or (
+            _OVERRIDE_DIR / f"{step_name}.instructions.txt"
+        ).exists()
+    return (_OVERRIDE_DIR / f"{step_name}.rules.txt").exists()
 
 
 def load_shared_rules_override(rules_name: str) -> str | None:
@@ -154,8 +179,6 @@ __all__ = [
     "IMPROVE_PROMPT_OPTIONS",
     "IMPROVE_RESUME_PROMPT",
     "IMPROVE_RESUME_PROMPT_TEMPLATE",
-    "JD_INTELLIGENCE_CONTRACT_BLOCK",
-    "JD_INTELLIGENCE_CRAFT_BLOCK",
     "PARSE_RESUME_PROMPT",
     "PROMPT_VERSIONS",
     "TAILORING_CONTRACT_BLOCK",

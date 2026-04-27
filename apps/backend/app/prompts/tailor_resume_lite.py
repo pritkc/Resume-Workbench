@@ -2,32 +2,26 @@
 
 from app.prompts._constants import PROMPT_VERSIONS
 from app.prompts._rules.resume_diff import RESUME_DIFF_RULES, RULES_NAME
-from app.prompts.tailoring_blocks import (
-    TAILORING_CRAFT_BLOCK,
-    TAILORING_MODE_STRATEGY,
-    TAILORING_USER_SHELL_LITE,
-)
+from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "tailor_resume_lite"
 STEP_LABEL = "Tailor resume (lite)"
 STEP_VERSION = PROMPT_VERSIONS["tailoring_user"]
 FILE_PATH = "prompts/tailor_resume_lite.py"
 SYSTEM_PROMPT_FILES = (
-    "apps/backend/app/prompts/text/fragments/tailoring_craft.txt",
-    "apps/backend/app/prompts/text/fragments/tailoring_mode_lite.txt",
-    "apps/backend/app/prompts/text/fragments/resume_diff_output.txt",
-    "apps/backend/app/prompts/tailor_resume_lite.py",
+    "apps/backend/app/prompts/text/tailor_resume_lite/system.txt",
+    "apps/backend/app/prompts/text/output_file_schema_rules/resume_diff_output.txt",
 )
-USER_PROMPT_FILE = "apps/backend/app/prompts/text/fragments/tailoring_user_shell_lite.txt"
+USER_PROMPT_FILE = "apps/backend/app/prompts/text/tailor_resume_lite/user.txt"
 PIPELINE = "lite"
 PIPELINE_ORDER = 2
 RECEIVES_FROM = ["extract_jd_intel"]
 FEEDS_INTO: list[str] = []
 
-INSTRUCTIONS = TAILORING_CRAFT_BLOCK + "\n\n" + TAILORING_MODE_STRATEGY["lite"]
+INSTRUCTIONS = read_shipped_txt("tailor_resume_lite/system.txt")
 RULES = RESUME_DIFF_RULES
 RULES_SOURCE = RULES_NAME
-USER_TEMPLATE = TAILORING_USER_SHELL_LITE
+USER_TEMPLATE = read_shipped_txt("tailor_resume_lite/user.txt")
 DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip() + "\n\n" + RULES.strip()
 VARIABLES = {
@@ -55,13 +49,13 @@ def build_messages(
             response_contract=response_contract,
         )
 
-    instructions = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
-    rules = (
+    prose = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
+    diff = (
         load_override(STEP_NAME, "rules")
         or load_shared_rules_override(RULES_SOURCE)
         or RULES
     )
-    system = instructions.strip() + "\n\n" + rules.strip()
+    system = prose.strip() + "\n\n" + diff.strip()
     user = render_user_template(
         USER_TEMPLATE,
         extract_jd_intel_output=extract_jd_intel_output,

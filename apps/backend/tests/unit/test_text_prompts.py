@@ -14,7 +14,7 @@ def test_read_shipped_txt_parse_resume_system() -> None:
 
 def test_read_shipped_txt_strips_crlf() -> None:
     # Loader normalizes newlines; spot-check fragment exists
-    assert "OUTPUT FORMAT:" in read_shipped_txt("fragments/resume_diff_output.txt")
+    assert "OUTPUT FORMAT:" in read_shipped_txt("output_file_schema_rules/resume_diff_output.txt")
 
 
 def test_text_root_contains_index_yaml() -> None:

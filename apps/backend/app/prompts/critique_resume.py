@@ -1,29 +1,25 @@
 """Prompt: critique_resume — hiring-manager review of tailored diff."""
 
-from app.prompts._rules.critique import CRITIQUE_RULES
 from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "critique_resume"
 STEP_LABEL = "Critique Resume"
 STEP_VERSION = "v1.0"
 FILE_PATH = "prompts/critique_resume.py"
-SYSTEM_PROMPT_FILES = (
-    "apps/backend/app/prompts/text/critique_resume/instructions.txt",
-    "apps/backend/app/prompts/text/fragments/critique_rules.txt",
-)
+SYSTEM_PROMPT_FILES = ("apps/backend/app/prompts/text/critique_resume/system.txt",)
 USER_PROMPT_FILE = "apps/backend/app/prompts/text/critique_resume/user.txt"
 PIPELINE = "full"
 PIPELINE_ORDER = 3
 RECEIVES_FROM = ["tailor_resume_full"]
 FEEDS_INTO = ["rewrite_resume"]
 
-INSTRUCTIONS = read_shipped_txt("critique_resume/instructions.txt")
-RULES = CRITIQUE_RULES
+INSTRUCTIONS = read_shipped_txt("critique_resume/system.txt")
+RULES = ""
 
 USER_TEMPLATE = read_shipped_txt("critique_resume/user.txt")
 
 DATA_TEMPLATE = USER_TEMPLATE
-SYSTEM_DEFAULT = INSTRUCTIONS.strip() + "\n\n" + RULES.strip()
+SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
     "tailor_resume_full_output": "Tailored diff JSON from tailor_resume_full",
     "extract_jd_intel_output": "JSON from extract_jd_intel step",
@@ -31,7 +27,7 @@ VARIABLES = {
 
 
 def build_messages(tailor_resume_full_output: str, extract_jd_intel_output: str) -> tuple[str, str]:
-    from app.prompts import load_override, load_shared_rules_override
+    from app.prompts import load_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
 
     comp = load_composer_override(STEP_NAME)
@@ -42,13 +38,7 @@ def build_messages(tailor_resume_full_output: str, extract_jd_intel_output: str)
             extract_jd_intel_output=extract_jd_intel_output,
         )
 
-    instructions = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
-    rules = (
-        load_override(STEP_NAME, "rules")
-        or load_shared_rules_override("critique")
-        or RULES
-    )
-    system = instructions.strip() + "\n\n" + rules.strip()
+    system = (load_override(STEP_NAME, "instructions") or INSTRUCTIONS).strip()
     user = render_user_template(
         USER_TEMPLATE,
         tailor_resume_full_output=tailor_resume_full_output,

@@ -1,7 +1,0 @@
-TAILORING MODE: Full edit (maximum alignment)
-- Rewrite bullets to strongly match the target role. Every bullet should serve the candidate's case for this specific role.
-- Enhance titles with platform, domain, or scope context (e.g., "Software Engineer" → "Software Engineer, Platform & Distributed Systems").
-- Replace the least applicable bullets with naturally fitting alternatives.
-- Regroup skills into concise, role-relevant categories.
-- For projects, relate them to the company's products or domain where the candidate was employed.
-- Calibrate scope to experience level: early career roles get modest bullets; short stints get proportionally scoped bullets.

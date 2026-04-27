@@ -2,13 +2,13 @@
 
 > Current prompt surfaces and the safest refactor seams for the next prompt pass.
 
-The monolithic `app/prompts/templates.py` from older upstream revisions **has been removed**. **Shipped prompt bodies** for pipeline steps live under **`apps/backend/app/prompts/text/`** (`.txt` files and `fragments/`). Thin Python modules under `apps/backend/app/prompts/` load them via `_text_prompts.read_shipped_txt` and still expose `build_messages`, `STEP_NAME`, `VARIABLES`, etc. Re-exports and the override mechanism are in `apps/backend/app/prompts/__init__.py`.
+The monolithic `app/prompts/templates.py` from older upstream revisions **has been removed**. **Shipped prompt bodies** for pipeline steps live under **`apps/backend/app/prompts/text/`** as **`{step}/system.txt`** and **`{step}/user.txt`**, with the shared resume-diff JSON contract in **`text/output_file_schema_rules/resume_diff_output.txt`**. Thin Python modules under `apps/backend/app/prompts/` load them via `_text_prompts.read_shipped_txt` and still expose `build_messages`, `STEP_NAME`, `VARIABLES`, etc. Re-exports and the override mechanism are in `apps/backend/app/prompts/__init__.py`.
 
 **Human / agent entrypoint:** `apps/backend/app/prompts/text/README.md` and `text/index.yaml` (step list must match `VALID_STEPS`).
 
 ## Runtime-Configurable Prompt IDs (tailoring)
 
-Tailoring exposes **`full`** and **`lite`** modes (see `IMPROVE_PROMPT_OPTIONS` in `apps/backend/app/prompts/_constants.py`). Strategy text is loaded into **`TAILORING_MODE_STRATEGY`** in `apps/backend/app/prompts/tailoring_blocks.py` from `text/fragments/tailoring_mode_*.txt`.
+Tailoring exposes **`full`** and **`lite`** modes (see `IMPROVE_PROMPT_OPTIONS` in `apps/backend/app/prompts/_constants.py`). Per-mode prose lives in **`text/tailor_resume_full/system.txt`** and **`text/tailor_resume_lite/system.txt`**; **`TAILORING_MODE_STRATEGY`** in `tailoring_blocks.py` exposes the mode slice after the `TAILORING MODE:` marker for catalog/UI.
 
 Selection precedence in `apps/backend/app/routers/resumes.py`:
 
@@ -32,10 +32,10 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | `tailoring_catalog.py` | Catalog metadata for tailoring |
 | `cover_letter.py` | Cover letter + outreach system prompts |
 | `answer_questions.py` | Application-question prompts |
-| `enrichment.py` | Loads enrichment / regenerate user + system strings from `text/enrichment/*.txt`; callers use `str.format` on user templates |
+| `enrichment.py` | Loads enrichment / regenerate user + system strings from `text/enrichment/{op}/system.txt` and `user.txt`; callers use `str.format` on user templates |
 | `refinement.py` | Older refinement helpers; not the active tailoring path |
 | `critique_resume.py`, `rewrite_resume.py` | Critique / rewrite flows |
-| `_rules/*.py` | Shared rule **metadata** + loaders; default bodies read from `text/fragments/*.txt` |
+| `_rules/resume_diff.py` | Shared resume-diff JSON rules; shipped body under `text/output_file_schema_rules/resume_diff_output.txt` |
 | `text/` | **Shipped** prompt `.txt` files (see `text/README.md`) |
 
 ### Representative constants → call sites

@@ -361,13 +361,14 @@ class TestPromptCatalog:
         assert "user_template_resolved" in entry
         assert "composer_override_active" in entry
         assert entry.get("system_prompt_files") == [
-            "apps/backend/app/prompts/text/fragments/jd_intel_contract.txt",
-            "apps/backend/app/prompts/text/fragments/jd_intel_craft.txt",
+            "apps/backend/app/prompts/text/extract_jd_intel/system.txt",
         ]
         assert entry.get("user_prompt_file") == "apps/backend/app/prompts/text/extract_jd_intel/user.txt"
 
         shared = next(r for r in data["shared_rules"] if r["name"] == "resume_diff")
-        assert shared.get("rules_source_file") == "apps/backend/app/prompts/text/fragments/resume_diff_output.txt"
+        assert shared.get("rules_source_file") == (
+            "apps/backend/app/prompts/text/output_file_schema_rules/resume_diff_output.txt"
+        )
 
     @patch("app.routers.config.capped_master_resume_preview_text")
     async def test_get_master_resume_preview(self, mock_preview, client):

@@ -287,7 +287,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_analyze"),
             system_prompt=ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
             user_prompt=ANALYZE_RESUME_PROMPT,
-            notes="Shipped: text/enrichment/analyze_system.txt, text/enrichment/analyze_user.txt (str.format: resume_json).",
+            notes="Shipped: text/enrichment/analyze/system.txt, text/enrichment/analyze/user.txt (str.format: resume_json).",
         ),
         PromptCatalogEntry(
             id="enrichment_enhance",
@@ -295,7 +295,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_enhance"),
             system_prompt=ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
             user_prompt=ENHANCE_DESCRIPTION_PROMPT,
-            notes="Shipped: text/enrichment/enhance_system.txt, text/enrichment/enhance_user.txt (str.format).",
+            notes="Shipped: text/enrichment/enhance/system.txt, text/enrichment/enhance/user.txt (str.format).",
         ),
         PromptCatalogEntry(
             id="enrichment_regenerate_item",
@@ -303,7 +303,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_regenerate_item"),
             system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
             user_prompt=REGENERATE_ITEM_PROMPT,
-            notes="Shipped: text/enrichment/regenerate_system.txt, text/enrichment/regenerate_item_user.txt (str.format).",
+            notes="Shipped: text/enrichment/regenerate_item/system.txt, text/enrichment/regenerate_item/user.txt (str.format).",
         ),
         PromptCatalogEntry(
             id="enrichment_regenerate_group",
@@ -311,7 +311,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_regenerate_group"),
             system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
             user_prompt=REGENERATE_ADDITIONAL_GROUP_PROMPT,
-            notes="Shipped: text/enrichment/regenerate_system.txt, text/enrichment/regenerate_group_user.txt (str.format).",
+            notes="Shipped: text/enrichment/regenerate_group/system.txt, text/enrichment/regenerate_group/user.txt (str.format).",
         ),
     ]
 
@@ -955,19 +955,11 @@ async def put_shared_rules(
     request: SharedRulesPutRequest,
 ) -> SharedRuleOverrideSuccess:
     from app.prompts import save_shared_rules_override
-    from app.prompts._rules.critique import USED_BY as CRITIQUE_USED_BY
-    from app.prompts._rules.jd_intel import USED_BY as JD_USED_BY
     from app.prompts._rules.resume_diff import USED_BY as RD_USED_BY
 
-    affected: list[str]
-    if rules_name == "resume_diff":
-        affected = list(RD_USED_BY)
-    elif rules_name == "jd_intel":
-        affected = list(JD_USED_BY)
-    elif rules_name == "critique":
-        affected = list(CRITIQUE_USED_BY)
-    else:
+    if rules_name != "resume_diff":
         raise HTTPException(status_code=404, detail="Unknown shared rules name.")
+    affected = list(RD_USED_BY)
     save_shared_rules_override(rules_name, request.rules)
     return SharedRuleOverrideSuccess(success=True, rules_name=rules_name, affected_steps=affected)
 
@@ -975,19 +967,11 @@ async def put_shared_rules(
 @router.delete("/shared-rules/{rules_name}", response_model=SharedRuleOverrideSuccess)
 async def delete_shared_rules(rules_name: str) -> SharedRuleOverrideSuccess:
     from app.prompts import delete_shared_rules_override
-    from app.prompts._rules.critique import USED_BY as CRITIQUE_USED_BY
-    from app.prompts._rules.jd_intel import USED_BY as JD_USED_BY
     from app.prompts._rules.resume_diff import USED_BY as RD_USED_BY
 
-    affected: list[str]
-    if rules_name == "resume_diff":
-        affected = list(RD_USED_BY)
-    elif rules_name == "jd_intel":
-        affected = list(JD_USED_BY)
-    elif rules_name == "critique":
-        affected = list(CRITIQUE_USED_BY)
-    else:
+    if rules_name != "resume_diff":
         raise HTTPException(status_code=404, detail="Unknown shared rules name.")
+    affected = list(RD_USED_BY)
     delete_shared_rules_override(rules_name)
     return SharedRuleOverrideSuccess(success=True, rules_name=rules_name, affected_steps=affected)
 
