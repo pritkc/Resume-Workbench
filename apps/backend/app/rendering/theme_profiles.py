@@ -21,7 +21,7 @@ ThemeId = Literal[
     "ember",
     "ink",
 ]
-PageSize = Literal["A4", "LETTER"]
+PageSize = Literal["A4", "LETTER", "FREEFLOW"]
 DensityProfile = Literal["compact", "balanced", "spacious"]
 AccentColor = Literal["blue", "green", "orange", "red"]
 
@@ -147,7 +147,11 @@ def _normalize_theme_id(value: Any) -> ThemeId:
 
 
 def _normalize_page_size(value: Any) -> PageSize:
-    return "LETTER" if value == "LETTER" else "A4"
+    if value == "LETTER":
+        return "LETTER"
+    if value == "FREEFLOW":
+        return "FREEFLOW"
+    return "A4"
 
 
 def _normalize_density(value: Any) -> DensityProfile:
@@ -382,9 +386,13 @@ def _resolve_theme_profile_state(
     active_profile = profile or ThemeProfileSettings()
     design = _deep_merge(get_theme_design_baseline(theme_id), active_profile.design)
 
-    if active_profile.page_size:
+    if active_profile.page_size in ("A4", "LETTER"):
         page = design.setdefault("page", {})
         page["size"] = "a4" if active_profile.page_size == "A4" else "us-letter"
+    elif active_profile.page_size == "FREEFLOW":
+        page = design.setdefault("page", {})
+        if page.get("size") not in ("a4", "us-letter"):
+            page["size"] = "a4"
 
     if active_profile.margins_mm:
         page = design.setdefault("page", {})
@@ -417,9 +425,11 @@ def _resolve_theme_profile_state(
             colors[key] = accent
 
     page = design.get("page") if isinstance(design.get("page"), dict) else {}
-    page_size: PageSize = (
-        "LETTER" if page.get("size") == "us-letter" else "A4"
-    )
+    physical = "us-letter" if page.get("size") == "us-letter" else "a4"
+    if active_profile.page_size == "FREEFLOW":
+        page_size: PageSize = "FREEFLOW"
+    else:
+        page_size = "LETTER" if physical == "us-letter" else "A4"
     margins_mm = {
         "top": _dimension_to_mm(page.get("top_margin"), DEFAULT_MARGINS_MM["top"]),
         "bottom": _dimension_to_mm(page.get("bottom_margin"), DEFAULT_MARGINS_MM["bottom"]),
@@ -438,7 +448,7 @@ def _resolve_theme_profile_state(
     )
 
     design["theme"] = theme_id
-    page["size"] = "a4" if page_size == "A4" else "us-letter"
+    page["size"] = physical
     header = design.setdefault("header", {})
     header_connections = header.setdefault("connections", {})
     header_connections["show_icons"] = show_contact_icons
@@ -461,10 +471,14 @@ def _build_sparse_design_from_profile(
     active_profile = profile or ThemeProfileSettings()
     design: dict[str, Any] = {"theme": theme_id}
 
-    if active_profile.page_size:
+    if active_profile.page_size in ("A4", "LETTER"):
         design.setdefault("page", {})["size"] = (
             "a4" if active_profile.page_size == "A4" else "us-letter"
         )
+    elif active_profile.page_size == "FREEFLOW":
+        p = design.setdefault("page", {})
+        if p.get("size") not in ("a4", "us-letter"):
+            p["size"] = "a4"
 
     if active_profile.margins_mm:
         page = design.setdefault("page", {})
@@ -773,7 +787,11 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
     legacy_design: dict[str, Any] = {
         "theme": settings.theme_id,
         "page": {
-            "size": "a4" if settings.page_size == "A4" else "us-letter",
+            "size": (
+                "us-letter"
+                if settings.page_size == "LETTER"
+                else "a4"
+            ),
             "top_margin": _mm_to_inches(settings.margins_mm["top"]),
             "bottom_margin": _mm_to_inches(settings.margins_mm["bottom"]),
             "left_margin": _mm_to_inches(settings.margins_mm["left"]),
@@ -868,11 +886,23 @@ def theme_settings_from_rendercv_sections(
         else {}
     )
 
-    page_size: PageSize = (
-        "LETTER"
-        if page.get("size") == "us-letter"
-        else ("A4" if page.get("size") == "a4" else base.page_size)
-    )
+    raw_size = page.get("size")
+    if raw_size in ("us-letter", "a4"):
+        physical = raw_size
+    else:
+        base_page = base.design.get("page", {}) if isinstance(base.design.get("page"), dict) else {}
+        physical = "us-letter" if base_page.get("size") == "us-letter" else "a4"
+
+    if base.page_size == "FREEFLOW":
+        base_page = base.design.get("page", {}) if isinstance(base.design.get("page"), dict) else {}
+        base_physical = "us-letter" if base_page.get("size") == "us-letter" else "a4"
+        page_size: PageSize = (
+            "FREEFLOW"
+            if physical == base_physical
+            else ("LETTER" if physical == "us-letter" else "A4")
+        )
+    else:
+        page_size = "LETTER" if physical == "us-letter" else "A4"
     margins_mm = {
         "top": _dimension_to_mm(page.get("top_margin"), base.margins_mm["top"]),
         "bottom": _dimension_to_mm(page.get("bottom_margin"), base.margins_mm["bottom"]),

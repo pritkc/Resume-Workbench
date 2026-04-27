@@ -40,6 +40,7 @@ import {
   downloadCoverLetterPdf,
   getResumePdfUrl,
   getCoverLetterPdfUrl,
+  physicalPageSizeForCoverLetter,
   fetchResume,
   updateCoverLetter,
   updateOutreachMessage,
@@ -1556,13 +1557,27 @@ const ResumeBuilderContent = () => {
     }
     try {
       setIsDownloading(true);
-      const blob = await downloadCoverLetterPdf(resumeId, themeSettings.page_size, uiLanguage);
+      const blob = await downloadCoverLetterPdf(
+        resumeId,
+        physicalPageSizeForCoverLetter(
+          themeSettings.page_size,
+          themeSettings.design?.page?.size
+        ),
+        uiLanguage
+      );
       const filename = sanitizeFilename(resumeTitle, resumeId, 'cover-letter');
       downloadBlobAsFile(blob, filename);
     } catch (error) {
       console.error('Failed to download cover letter:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        const fallbackUrl = getCoverLetterPdfUrl(resumeId, themeSettings.page_size, uiLanguage);
+        const fallbackUrl = getCoverLetterPdfUrl(
+          resumeId,
+          physicalPageSizeForCoverLetter(
+            themeSettings.page_size,
+            themeSettings.design?.page?.size
+          ),
+          uiLanguage
+        );
         const didOpen = openUrlInNewTab(fallbackUrl);
         if (!didOpen) {
           showNotification(t('common.popupBlocked', { url: fallbackUrl }), 'warning');
@@ -2284,7 +2299,13 @@ const ResumeBuilderContent = () => {
                 themeSettings.theme_id}
             </span>
             <span className="text-gray-300">·</span>
-            <span>{themeSettings.page_size === 'A4' ? 'A4' : t('builder.pageSize.usLetter')}</span>
+            <span>
+              {themeSettings.page_size === 'A4'
+                ? 'A4'
+                : themeSettings.page_size === 'FREEFLOW'
+                  ? t('builder.pageSize.freeflow')
+                  : t('builder.pageSize.usLetter')}
+            </span>
           </div>
         </div>
       </div>

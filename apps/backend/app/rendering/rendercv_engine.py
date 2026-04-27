@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import shutil
 from pathlib import Path
 import re
 from typing import Any
@@ -30,6 +31,13 @@ from app.rendering.theme_profiles import RenderThemeSettings
 logger = logging.getLogger(__name__)
 
 _ATS_PDF_STANDARDS = ["a-2u"]
+_FREEFLOW_TYST_LIB_NAME = "rendercv_lib_resume_matcher.typ"
+_VENDOR_RENDERCV_LIB = Path(__file__).resolve().parent / "vendor" / _FREEFLOW_TYST_LIB_NAME
+_PREVIEW_RENDERCV_IMPORT_RE = re.compile(
+    r'^#import "@preview/rendercv:[^"]+": \*\s*$',
+    re.MULTILINE,
+)
+_PAGE_SIZE_LINE_RE = re.compile(r"^(\s*)(page-size:\s*\"[^\"]+\",)\s*$", re.MULTILINE)
 _SUMMARY_HEADING_RE = re.compile(r"(?im)^==\s+summary[:\s]*\r?\n(?:\r?\n)?")
 _TYPST_DIMENSION_RE = re.compile(r"^\d+(?:\.\d+)?(?:cm|mm|in|pt|em|ex)$")
 
@@ -71,7 +79,9 @@ def _default_identifier(seed: str | None = None) -> str:
     return str(uuid4())
 
 
-def _generate_pdf_with_ats_profile(model: Any, typst_path: Path | None) -> Path | None:
+def _generate_pdf_with_ats_profile(
+    model: Any, typst_path: Path | None, theme_settings: RenderThemeSettings
+) -> Path | None:
     if model.settings.render_command.dont_generate_pdf or typst_path is None:
         return None
 
@@ -79,12 +89,16 @@ def _generate_pdf_with_ats_profile(model: Any, typst_path: Path | None) -> Path 
     typst_compiler = get_typst_compiler(model._input_file_path, typst_path.parent)
     copy_photo_next_to_typst_file(model, typst_path)
 
+    compile_kwargs: dict[str, Any] = {}
+    if theme_settings.page_size != "FREEFLOW":
+        compile_kwargs["pdf_standards"] = _ATS_PDF_STANDARDS
+
     try:
         typst_compiler.compile(
             input=typst_path,
             format="pdf",
             output=pdf_path,
-            pdf_standards=_ATS_PDF_STANDARDS,
+            **compile_kwargs,
         )
         return pdf_path
     except Exception:  # noqa: BLE001
@@ -94,6 +108,46 @@ def _generate_pdf_with_ats_profile(model: Any, typst_path: Path | None) -> Path 
         )
         _reset_rendercv_typst_caches()
         return generate_pdf(model, typst_path)
+
+
+def _apply_freeflow_typst_patch(
+    typst_path: Path, theme_settings: RenderThemeSettings
+) -> None:
+    """Use patched RenderCV Typst lib with height:auto for single continuous PDF pages."""
+    if theme_settings.page_size != "FREEFLOW":
+        return
+    if not _VENDOR_RENDERCV_LIB.is_file():
+        logger.warning("Freeflow Typst vendor lib missing at %s", _VENDOR_RENDERCV_LIB)
+        return
+    try:
+        text = typst_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    if not _PREVIEW_RENDERCV_IMPORT_RE.search(text):
+        logger.warning(
+            "Freeflow Typst patch skipped: expected @preview/rendercv:… import in %s",
+            typst_path,
+        )
+        return
+    dest = typst_path.parent / _FREEFLOW_TYST_LIB_NAME
+    try:
+        shutil.copy2(_VENDOR_RENDERCV_LIB, dest)
+    except OSError:
+        logger.warning("Freeflow Typst patch could not copy vendor lib to %s", dest)
+        return
+    text = _PREVIEW_RENDERCV_IMPORT_RE.sub(
+        f'#import "{_FREEFLOW_TYST_LIB_NAME}": *',
+        text,
+        count=1,
+    )
+    match = _PAGE_SIZE_LINE_RE.search(text)
+    if not match:
+        logger.warning("Freeflow Typst patch: page-size line not found in %s", typst_path)
+        return
+    indent, page_line = match.group(1), match.group(2)
+    insert = f"{indent}{page_line}\n{indent}continuous-page: true,"
+    text = _PAGE_SIZE_LINE_RE.sub(insert, text, count=1)
+    typst_path.write_text(text, encoding="utf-8")
 
 
 def _coerce_bool(value: Any, default: bool) -> bool:
@@ -181,7 +235,11 @@ def render_resume_bundle(
                 generated_typst,
                 heading_gap=_resolve_summary_heading_gap(payload),
             )
-        generated_pdf = _generate_pdf_with_ats_profile(model, generated_typst)
+        if generated_typst is not None:
+            _apply_freeflow_typst_patch(generated_typst, theme_settings)
+        generated_pdf = _generate_pdf_with_ats_profile(
+            model, generated_typst, theme_settings
+        )
         generated_pngs = generate_png(model, generated_typst) or []
         generated_markdown = generate_markdown(model)
         generated_html = generate_html(model, generated_markdown)

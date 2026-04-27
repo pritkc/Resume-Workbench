@@ -55,6 +55,45 @@ def test_rendercv_engine_recovers_after_bundled_typst_package_temp_removed(
     assert second.pdf_path is not None and second.pdf_path.exists()
 
 
+def test_rendercv_engine_generates_pdf_png_yaml_for_freeflow_profile(
+    sample_resume: dict,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {"classic": {"page_size": "FREEFLOW"}},
+        },
+        uses_theme_profiles=True,
+    )
+    bundle = render_resume_bundle(
+        sample_resume,
+        settings,
+        identifier="freeflow_smoke",
+    )
+
+    assert bundle.pdf_path is not None and bundle.pdf_path.exists()
+    assert bundle.typst_path is not None
+    typ = bundle.typst_path.read_text(encoding="utf-8")
+    assert "continuous-page: true" in typ
+    assert "rendercv_lib_resume_matcher.typ" in typ
+    assert bundle.png_paths
+    assert len(bundle.png_paths) == 1, "FREEFLOW should produce a single PNG (one continuous page)"
+    pdfinfo_bin = shutil.which("pdfinfo")
+    if pdfinfo_bin:
+        proc = subprocess.run(
+            [pdfinfo_bin, str(bundle.pdf_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        pages_line = next((ln for ln in proc.stdout.splitlines() if ln.startswith("Pages:")), "")
+        assert pages_line.split()[-1] == "1", f"expected single-page PDF, got {pages_line!r}"
+
+
 def test_rendercv_engine_generates_pdf_png_and_yaml(
     sample_resume: dict,
     tmp_path: Path,

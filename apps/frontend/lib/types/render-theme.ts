@@ -10,7 +10,7 @@ export type RenderThemeId =
   | 'opal'
   | 'ember'
   | 'ink';
-export type RenderPageSize = 'A4' | 'LETTER';
+export type RenderPageSize = 'A4' | 'LETTER' | 'FREEFLOW';
 export type RenderDensityProfile = 'compact' | 'balanced' | 'spacious';
 export type RenderAccentColor = 'blue' | 'green' | 'orange' | 'red';
 export type RenderAlignment =
@@ -674,7 +674,7 @@ function buildLegacyDefaultDesign(
   return {
     theme: themeId,
     page: {
-      size: pageSize === 'A4' ? 'a4' : 'us-letter',
+      size: pageSize === 'LETTER' ? 'us-letter' : 'a4',
       top_margin: mmToInches(marginsMm.top),
       bottom_margin: mmToInches(marginsMm.bottom),
       left_margin: mmToInches(marginsMm.left),
@@ -812,7 +812,9 @@ function normalizeThemeId(value?: string | null): RenderThemeId {
 }
 
 function normalizePageSize(value?: string | null): RenderPageSize {
-  return value === 'LETTER' ? 'LETTER' : 'A4';
+  if (value === 'LETTER') return 'LETTER';
+  if (value === 'FREEFLOW') return 'FREEFLOW';
+  return 'A4';
 }
 
 function normalizeDensity(value?: string | null): RenderDensityProfile {
@@ -947,12 +949,22 @@ function resolveThemeProfileState(
     (activeProfile.design ?? {}) as Record<string, unknown>
   ) as RenderCvDesign;
 
-  if (activeProfile.page_size) {
+  if (activeProfile.page_size === 'A4' || activeProfile.page_size === 'LETTER') {
     design = {
       ...design,
       page: {
         ...design.page,
         size: activeProfile.page_size === 'A4' ? 'a4' : 'us-letter',
+      },
+    };
+  } else if (activeProfile.page_size === 'FREEFLOW') {
+    const cur = design.page?.size;
+    const physical = cur === 'us-letter' || cur === 'a4' ? cur : 'a4';
+    design = {
+      ...design,
+      page: {
+        ...design.page,
+        size: physical,
       },
     };
   }
@@ -999,12 +1011,14 @@ function resolveThemeProfileState(
     design = applyAccentToDesign(design, activeProfile.accent_color);
   }
 
-  const pageSize =
-    design.page?.size === 'us-letter'
-      ? 'LETTER'
-      : design.page?.size === 'a4'
-        ? 'A4'
-        : (activeProfile.page_size ?? 'A4');
+  const physical =
+    design.page?.size === 'us-letter' ? 'us-letter' : ('a4' as const);
+  const pageSize: RenderPageSize =
+    activeProfile.page_size === 'FREEFLOW'
+      ? 'FREEFLOW'
+      : physical === 'us-letter'
+        ? 'LETTER'
+        : 'A4';
 
   const marginsMm = {
     top: inchesToMm(design.page?.top_margin, DEFAULT_MARGINS_MM.top),
@@ -1029,7 +1043,7 @@ function resolveThemeProfileState(
       theme: themeId,
       page: {
         ...design.page,
-        size: pageSize === 'A4' ? 'a4' : 'us-letter',
+        size: physical,
       },
       header: {
         ...design.header,
@@ -1113,12 +1127,21 @@ function normalizeLegacyRenderThemeSettings(
     designDefaults as Record<string, unknown>,
     (value?.design ?? {}) as Record<string, unknown>
   ) as RenderCvDesign;
-  const pageSize =
-    design.page?.size === 'us-letter'
-      ? 'LETTER'
-      : design.page?.size === 'a4'
-        ? 'A4'
-        : normalizePageSize(value?.page_size);
+  const semanticFromPayload = normalizePageSize(value?.page_size);
+  let physicalFromDesign: 'a4' | 'us-letter';
+  if (design.page?.size === 'us-letter') {
+    physicalFromDesign = 'us-letter';
+  } else if (design.page?.size === 'a4') {
+    physicalFromDesign = 'a4';
+  } else {
+    physicalFromDesign = semanticFromPayload === 'LETTER' ? 'us-letter' : 'a4';
+  }
+  const pageSize: RenderPageSize =
+    semanticFromPayload === 'FREEFLOW'
+      ? 'FREEFLOW'
+      : physicalFromDesign === 'us-letter'
+        ? 'LETTER'
+        : 'A4';
   const nextMargins = {
     top: inchesToMm(design.page?.top_margin, marginsMm.top),
     bottom: inchesToMm(design.page?.bottom_margin, marginsMm.bottom),
@@ -1151,7 +1174,7 @@ function normalizeLegacyRenderThemeSettings(
       theme: themeId,
       page: {
         ...design.page,
-        size: pageSize === 'A4' ? 'a4' : 'us-letter',
+        size: physicalFromDesign,
       },
       header: {
         ...design.header,
@@ -1324,7 +1347,7 @@ export function updateActiveRenderTheme(
 
   const cleanedProfile = cleanThemeProfile({
     ...draftProfile,
-    ...(designDiff ? { design: designDiff } : { design: undefined }),
+    ...(designDiff ? { design: designDiff } : {}),
   });
 
   const nextProfiles = { ...settings.theme_profiles };

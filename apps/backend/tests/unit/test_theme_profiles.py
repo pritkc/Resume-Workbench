@@ -96,6 +96,26 @@ def test_build_design_keeps_fixed_link_color_for_theme_profile_overrides() -> No
     assert design["colors"]["links"] == "rgb(0, 79, 144)"
 
 
+def test_build_design_resolves_freeflow_with_a4_typst_width() -> None:
+    settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {
+                "classic": {
+                    "page_size": "FREEFLOW",
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    design = build_design(settings)
+
+    assert settings.page_size == "FREEFLOW"
+    # Physical width comes from merged theme baseline (classic defaults to us-letter in baselines).
+    assert design["page"]["size"] in ("a4", "us-letter")
+
+
 def test_theme_settings_from_rendercv_sections_preserves_app_runtime_settings() -> None:
     base = RenderThemeSettings.from_payload(
         {

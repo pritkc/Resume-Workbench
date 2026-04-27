@@ -297,7 +297,11 @@ def _resolve_render_theme_settings(theme_settings: Any) -> RenderThemeProfile:
 
 
 def _coerce_page_size(value: Any) -> str:
-    return "LETTER" if value == "LETTER" else "A4"
+    if value == "LETTER":
+        return "LETTER"
+    if value == "FREEFLOW":
+        return "FREEFLOW"
+    return "A4"
 
 
 def _coerce_spacing_level(value: Any, default: int) -> int:
@@ -2540,7 +2544,7 @@ async def download_resume_pdf_with_config(
 async def download_resume_pdf(
     resume_id: str,
     template: str = Query("swiss-single"),
-    pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
+    pageSize: str = Query("A4", pattern="^(A4|LETTER|FREEFLOW)$"),
     marginTop: int = Query(10, ge=5, le=25),
     marginBottom: int = Query(10, ge=5, le=25),
     marginLeft: int = Query(10, ge=5, le=25),
@@ -2662,7 +2666,7 @@ async def render_resume_preview_with_config(
 async def render_resume_preview(
     resume_id: str,
     template: str = Query("swiss-single"),
-    pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
+    pageSize: str = Query("A4", pattern="^(A4|LETTER|FREEFLOW)$"),
     marginTop: int = Query(10, ge=5, le=25),
     marginBottom: int = Query(10, ge=5, le=25),
     marginLeft: int = Query(10, ge=5, le=25),

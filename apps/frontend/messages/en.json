@@ -250,7 +250,8 @@
       "twoColumn": "Two Column"
     },
     "pageSize": {
-      "usLetter": "US Letter"
+      "usLetter": "US Letter",
+      "freeflow": "Continuous page"
     },
     "generatePrompt": {
       "notAvailableTitle": "{title} Not Available",

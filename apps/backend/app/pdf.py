@@ -55,6 +55,7 @@ def _resolve_pdf_format(page_size: str) -> str:
     format_map = {
         "A4": "A4",
         "LETTER": "Letter",
+        "FREEFLOW": "A4",
     }
     return format_map.get(page_size, "A4")
 

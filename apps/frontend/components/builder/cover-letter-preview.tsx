@@ -21,7 +21,7 @@ export interface CoverLetterPreviewProps {
   /** Personal info for header */
   personalInfo: CoverLetterPersonalInfo;
   /** Page size for styling */
-  pageSize?: 'A4' | 'LETTER';
+  pageSize?: 'A4' | 'LETTER' | 'FREEFLOW';
   /** Additional class names */
   className?: string;
 }
@@ -53,9 +53,12 @@ export function CoverLetterPreview({
     >
       {/* Letter Content */}
       <div
-        className={cn('p-5 md:p-6', pageSize === 'A4' ? 'min-h-[297mm]' : 'min-h-[11in]')}
+        className={cn(
+          'p-5 md:p-6',
+          pageSize === 'A4' || pageSize === 'FREEFLOW' ? 'min-h-[297mm]' : 'min-h-[11in]'
+        )}
         style={{
-          maxWidth: pageSize === 'A4' ? '210mm' : '8.5in',
+          maxWidth: pageSize === 'A4' || pageSize === 'FREEFLOW' ? '210mm' : '8.5in',
         }}
       >
         {/* Header - Personal Info */}

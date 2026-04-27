@@ -635,6 +635,18 @@ export async function renameResume(resumeId: string, title: string): Promise<voi
   }
 }
 
+/** Cover letter PDF endpoint only supports fixed paper sizes. */
+export function physicalPageSizeForCoverLetter(
+  pageSize: 'A4' | 'LETTER' | 'FREEFLOW',
+  designPaper?: 'a4' | 'us-letter'
+): 'A4' | 'LETTER' {
+  if (pageSize === 'LETTER') return 'LETTER';
+  if (pageSize === 'FREEFLOW') {
+    return designPaper === 'us-letter' ? 'LETTER' : 'A4';
+  }
+  return 'A4';
+}
+
 /** Downloads cover letter as PDF */
 export function getCoverLetterPdfUrl(
   resumeId: string,

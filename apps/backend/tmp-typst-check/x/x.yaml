@@ -1,0 +1,41 @@
+cv:
+  name: A
+  headline: t
+  location: null
+  email: e@e.com
+  photo: null
+  phone: null
+  website: null
+  social_networks: []
+  custom_connections: null
+  sections:
+    summary:
+    - S
+design:
+  theme: classic
+  page:
+    size: a4
+    top_margin: 0.39in
+    bottom_margin: 0.39in
+    left_margin: 0.39in
+    right_margin: 0.39in
+  colors:
+    name: rgb(0, 79, 144)
+    headline: rgb(0, 79, 144)
+    connections: rgb(0, 79, 144)
+    section_titles: rgb(0, 79, 144)
+    links: rgb(0, 79, 144)
+  header:
+    connections:
+      show_icons: false
+      display_urls_instead_of_usernames: false
+  typography:
+    line_spacing: 0.6em
+    bold:
+      name: true
+      section_titles: true
+  sections:
+    space_between_regular_entries: 1em
+    space_between_text_based_entries: 0.24em
+  section_titles:
+    type: with_partial_line

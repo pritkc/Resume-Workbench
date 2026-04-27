@@ -151,8 +151,32 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
               ]}
               onChange={(value) =>
                 updateDesign(['page', 'size'], value, (profile) => {
-                  profile.page_size = value === 'us-letter' ? 'LETTER' : 'A4';
+                  if (settings.page_size === 'FREEFLOW') {
+                    profile.page_size = 'FREEFLOW';
+                  } else {
+                    profile.page_size = value === 'us-letter' ? 'LETTER' : 'A4';
+                  }
                 })
+              }
+            />
+          </RenderCvRow>
+          <RenderCvRow label="Continuous page">
+            <RenderCvToggle
+              checked={settings.page_size === 'FREEFLOW'}
+              onChange={(enabled) =>
+                onChange(
+                  updateActiveRenderTheme(settings, ({ design, profile }) => {
+                    if (enabled) {
+                      profile.page_size = 'FREEFLOW';
+                      const sz = design.page?.size;
+                      if (sz !== 'a4' && sz !== 'us-letter') {
+                        setNestedValue(design as Record<string, unknown>, ['page', 'size'], 'a4');
+                      }
+                    } else {
+                      profile.page_size = design.page?.size === 'us-letter' ? 'LETTER' : 'A4';
+                    }
+                  })
+                )
               }
             />
           </RenderCvRow>

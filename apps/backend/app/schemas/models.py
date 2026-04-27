@@ -1224,7 +1224,7 @@ class ArtifactSummary(BaseModel):
 class RenderThemeProfileSettings(BaseModel):
     """Sparse per-theme design overrides stored for the builder."""
 
-    page_size: Literal["A4", "LETTER"] | None = None
+    page_size: Literal["A4", "LETTER", "FREEFLOW"] | None = None
     density_profile: Literal["compact", "balanced", "spacious"] | None = None
     accent_color: Literal["blue", "green", "orange", "red"] | None = None
     show_contact_icons: bool | None = None
@@ -1251,7 +1251,7 @@ class RenderThemeSettings(BaseModel):
         "ember",
         "ink",
     ] = "classic"
-    page_size: Literal["A4", "LETTER"] = "A4"
+    page_size: Literal["A4", "LETTER", "FREEFLOW"] = "A4"
     density_profile: Literal["compact", "balanced", "spacious"] = "balanced"
     bold_keywords: bool = False
     accent_color: Literal["blue", "green", "orange", "red"] = "blue"

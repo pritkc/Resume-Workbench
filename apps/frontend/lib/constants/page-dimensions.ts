@@ -6,6 +6,8 @@ import { type PageSize, type MarginSettings } from '@/lib/types/template-setting
 export const PAGE_DIMENSIONS = {
   A4: { width: 210, height: 297 },
   LETTER: { width: 215.9, height: 279.4 },
+  /** Preview pagination: treat as one unbounded vertical page (width matches A4). */
+  FREEFLOW: { width: 210, height: 50000 },
 } as const;
 
 /**

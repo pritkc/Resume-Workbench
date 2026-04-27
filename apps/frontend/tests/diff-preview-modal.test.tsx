@@ -5,6 +5,7 @@ import type {
   TailoringStageBreakdown,
   ResumeDiffSummary,
   ResumeFieldDiff,
+  ResumeChange,
 } from '@/components/common/resume_previewer_context';
 
 vi.mock('@/lib/i18n', () => ({
@@ -54,7 +55,7 @@ const changeBreakdown: TailoringStageBreakdown = {
   location_value: 'Remote',
 };
 
-const changeManifest = [
+const changeManifest: ResumeChange[] = [
   {
     path: 'summary',
     action: 'replace',
