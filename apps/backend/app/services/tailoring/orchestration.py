@@ -101,7 +101,11 @@ async def generate_tailored_resume(
     if resolved_prompt_id == "full" and get_enable_critique():
         draft_json = json.dumps(result, ensure_ascii=True)
         jd_json = prompt_context.extract_jd_intel_output_json
-        c_sys, c_user = build_critique_messages(draft_json, jd_json)
+        c_sys, c_user = build_critique_messages(
+            draft_json,
+            jd_json,
+            prompt_context.original_resume_json,
+        )
         critique_raw = await complete_json(
             prompt=c_user,
             system_prompt=c_sys,

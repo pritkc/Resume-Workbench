@@ -237,7 +237,7 @@ Open to a quick intro call this week?
 
         outreach = await generate_outreach_message(sample_resume, sample_job_description)
 
-        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description, "en")
+        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description)
         assert outreach == "Worth a quick chat?"
 
     @patch("app.services.cover_letter.generate_cover_letter_and_outreach", new_callable=AsyncMock)
@@ -248,7 +248,7 @@ Open to a quick intro call this week?
 
         cover_letter = await generate_cover_letter(sample_resume, sample_job_description)
 
-        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description, "en")
+        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description)
         assert cover_letter == "Thanks for your time."
 
     def test_combined_parser_accepts_json_fallback(self):

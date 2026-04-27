@@ -148,7 +148,7 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "RESPONSE CONTRACT:" in prompt
+        assert "RESPONSE CONTRACT" in prompt
         assert '"mode":"full"' in prompt
         assert '"output_keys"' in prompt
         assert '"bullet_counts"' in prompt

@@ -634,10 +634,8 @@ def _build_message_metadata(
 async def generate_cover_letter_and_outreach(
     resume_data: dict[str, Any],
     job_description: str,
-    language: str = "en",
 ) -> tuple[str, str]:
     """Generate cover letter and outreach message together in one LLM call."""
-    del language
     prompt_inputs = _build_message_prompt_inputs(resume_data, job_description)
     system, user = cover_letter_build_messages(
         job_target=prompt_inputs["job_target"],
@@ -668,13 +666,11 @@ async def generate_cover_letter_and_outreach(
 async def generate_cover_letter(
     resume_data: dict[str, Any],
     job_description: str,
-    language: str = "en",
 ) -> str:
     """Generate the cover-letter field via the shared auxiliary package call."""
     cover_letter, _outreach_message = await generate_cover_letter_and_outreach(
         resume_data,
         job_description,
-        language,
     )
     return cover_letter
 
@@ -682,12 +678,10 @@ async def generate_cover_letter(
 async def generate_outreach_message(
     resume_data: dict[str, Any],
     job_description: str,
-    language: str = "en",
 ) -> str:
     """Generate the outreach field via the shared auxiliary package call."""
     _cover_letter, outreach_message = await generate_cover_letter_and_outreach(
         resume_data,
         job_description,
-        language,
     )
     return outreach_message

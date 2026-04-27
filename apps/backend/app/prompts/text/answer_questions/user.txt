@@ -1,14 +1,33 @@
 Write personalized answers for job-application custom questions using only the provided resume/JD context.
 
 STYLE:
-- Fixed default style: professional, concise, confident
+- Professional, concise, confident
 - Directly answer each question in plain text
-- Keep each answer compact (typically 2-5 sentences) unless the question requires more detail
+- Length should match question complexity (see QUESTION TYPE HANDLING below)
+
+QUESTION TYPE HANDLING:
+- Behavioral ("Tell me about a time...", "Describe a situation where..."): use STAR structure in 3-5 sentences (Situation, Task, Action, Result); draw from actual experience in resume context
+- Motivational ("Why this role?", "Why this company?"): connect one concrete JD detail to one real credential from the candidate profile; 2-3 sentences
+- Factual ("How many years of X?", "Do you have experience with Y?"): give a direct, specific answer citing resume evidence; 1-2 sentences
+- Legal/EEOC ("Are you authorized to work in the US?", "Are you 18 or older?"): one sentence only; do not elaborate; add a warning suggesting the candidate confirm accuracy
+- Salary/compensation ("What is your expected salary?", "What are your compensation requirements?"): answer "I am open to discussing compensation based on the full scope of the role and benefits package." and add a warning that the candidate should personalize this before submitting
+- Essay/personal statement ("Describe yourself in X words", "Tell us about yourself"): use 6-10 sentences in narrative form; do not bullet-point; draw from headline, summary, and top credentials
+- Hypothetical ("How would you approach X?", "What would you do if..."): give structured reasoning in 3-5 sentences; anchor in real experience where possible
+
+CONFIDENCE LEVEL GUIDE:
+- high: answer is directly supported by explicit facts in the resume context (job titles, named tools, stated outcomes, dates)
+- medium: answer requires reasonable inference from context (scale or impact implied but not stated; transferable skills)
+- low: weak context match; answer is best-effort; candidate should review and personalize before submitting
 
 GROUNDING RULES:
-- Use only facts supported by candidate profile, tailored resume context, and job context
+- Use only facts supported by candidate profile, resume context, and job context
 - Do not invent employers, dates, certifications, credentials, metrics, or legal claims
-- If context is weak, provide the best truthful answer and include a short warning
+- If context is weak or absent for a question, provide the best truthful answer and include a warning
+
+CONSISTENCY:
+- Maintain consistency across all answers in this batch
+- Do not describe the same experience, project, or credential identically in multiple answers — vary framing when it appears more than once
+- Use the same employer names, role titles, and dates consistently throughout
 
 FORMAT:
 - Return valid JSON only with this exact shape:
@@ -18,7 +37,7 @@ FORMAT:
       "question_id": "q_0",
       "answer": "string",
       "confidence": "high|medium|low",
-      "warnings": ["optional warning"]
+      "warnings": ["optional warning — include if answer is weak, salary-related, EEOC, or needs candidate review"]
     }
   ]
 }
@@ -34,7 +53,7 @@ $job_description
 CANDIDATE PROFILE (JSON):
 $resume_profile
 
-TAILORED RESUME CONTEXT (JSON):
+RESUME CONTEXT (JSON):
 $tailored_resume_context
 
 QUESTIONS (JSON):

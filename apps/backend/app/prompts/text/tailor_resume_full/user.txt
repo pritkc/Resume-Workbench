@@ -11,5 +11,5 @@ $extract_jd_intel_output
 MASTER RESUME:
 $original_resume
 
-RESPONSE CONTRACT:
+RESPONSE CONTRACT (allowed sections and bullet counts — do not emit sections absent from this list):
 $response_contract

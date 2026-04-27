@@ -1,3 +1,6 @@
+ORIGINAL MASTER RESUME (source of truth — scope claims in the diff must be supportable from this):
+$original_resume
+
 TAILORED RESUME (first pass, JSON):
 $tailor_resume_full_output
 

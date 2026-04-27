@@ -21,12 +21,17 @@ USER_TEMPLATE = read_shipped_txt("critique_resume/user.txt")
 DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
+    "original_resume": "Original master resume JSON — used to validate scope claims in the diff",
     "tailor_resume_full_output": "Tailored diff JSON from tailor_resume_full",
     "extract_jd_intel_output": "JSON from extract_jd_intel step",
 }
 
 
-def build_messages(tailor_resume_full_output: str, extract_jd_intel_output: str) -> tuple[str, str]:
+def build_messages(
+    tailor_resume_full_output: str,
+    extract_jd_intel_output: str,
+    original_resume: str = "",
+) -> tuple[str, str]:
     from app.prompts import load_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
 
@@ -34,6 +39,7 @@ def build_messages(tailor_resume_full_output: str, extract_jd_intel_output: str)
     if comp:
         return comp["system"], render_user_template(
             comp["user"],
+            original_resume=original_resume,
             tailor_resume_full_output=tailor_resume_full_output,
             extract_jd_intel_output=extract_jd_intel_output,
         )
@@ -41,6 +47,7 @@ def build_messages(tailor_resume_full_output: str, extract_jd_intel_output: str)
     system = (load_override(STEP_NAME, "instructions") or INSTRUCTIONS).strip()
     user = render_user_template(
         USER_TEMPLATE,
+        original_resume=original_resume,
         tailor_resume_full_output=tailor_resume_full_output,
         extract_jd_intel_output=extract_jd_intel_output,
     )

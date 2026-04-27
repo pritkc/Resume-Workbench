@@ -13,7 +13,7 @@ from app.services.tailoring.contracts import build_response_contract
 def test_assemble_full_contains_contract_craft_and_mode() -> None:
     assembled = assemble_tailoring_system_prompt("full")
     assert "OUTPUT FORMAT:" in assembled
-    assert "APPROACH:" in assembled
+    assert "WRITING STANDARDS:" in assembled
     assert "TAILORING MODE: Full edit" in assembled
 
 

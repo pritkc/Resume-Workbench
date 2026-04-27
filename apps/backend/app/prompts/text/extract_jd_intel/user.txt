@@ -5,18 +5,18 @@ Output JSON matching this schema:
 {
   "role": {
     "title": "core role title — no company name, location, or qualifiers",
-    "seniority": "junior | mid | senior | staff | principal | lead",
-    "function": "primary function (full-stack, backend, data engineering, devops, etc.)",
+    "seniority": "junior | mid | senior | staff+",
+    "function": "backend | frontend | full-stack | data-engineering | analytics | ml-engineering | platform | devops | mobile | other",
     "scope": "expected scope of work (team-level delivery, org-wide standardization, cross-functional initiatives, etc.)"
   },
   "company": {
     "name": "company name or null",
     "team": "specific team or division or null",
     "domain": "industry and domain context (fintech, healthtech, enterprise SaaS, e-commerce, etc.)",
-    "product_context": "what the team builds — infer from the description",
-    "scale_signals": ["any mentions of scale: user counts, transaction volumes, data volume, global reach"]
+    "product_context": "what the team builds — state only what the JD makes clear; if uncertain, use the company name and division",
+    "scale_signals": ["up to 5 mentions of scale: user counts, transaction volumes, data volume, global reach"]
   },
-  "location": "strict location in `City, ST` format (e.g., `Mountain View, CA`) or empty string when not explicitly present",
+  "location": "strict location in `City, ST` format (e.g., `Austin, TX`) or empty string — US only; if only Remote or Hybrid is stated, return empty string",
   "technical_requirements": {
     "primary_stack": ["hard-required technologies in the order the JD emphasizes"],
     "secondary_stack": ["preferred or nice-to-have technologies"],
@@ -24,35 +24,42 @@ Output JSON matching this schema:
     "paradigms": ["architectural patterns and methodologies: microservices, event-driven, agile, CI/CD, etc."]
   },
   "requirements": {
-    "years": 5,
+    "years": 2,
     "must_have": ["hard requirements as stated in the JD"],
     "preferred": ["nice-to-have qualifications"],
     "education": "education requirement or null"
   },
+  "experience_level_signal": "what tenure or experience depth the JD actually implies — e.g., '2-4 years of Python in production', 'led a team of 3+', 'owned a service end-to-end'",
   "responsibility_themes": [
-    "distill responsibilities into 5-8 actionable themes for resume writing — not raw JD copies"
+    "distill responsibilities into 5-8 actionable themes for resume writing — not raw JD copies; fewer if the JD is thin"
   ],
   "ats_keywords": [
-    "every technical term, tool, methodology, and domain keyword an ATS would scan for — be thorough"
+    "every technical term, tool, methodology, and domain keyword an ATS would scan for — 20-60 terms; include common abbreviation variants (e.g., 'CI/CD' and 'Continuous Integration/Continuous Deployment')"
   ],
   "bold_keywords": [
     "the 10-15 most impactful keywords that should appear prominently in the resume"
   ],
+  "culture_signals": [
+    "any team culture or working-style signals from the JD: fast-moving, remote-first, cross-functional, data-driven, on-call, etc."
+  ],
   "calibration": {
-    "seniority_expectations": "what this level is expected to demonstrate — ownership scope, leadership, depth",
+    "seniority_expectations": "what this level is expected to demonstrate — ownership scope, leadership, technical depth",
     "team_context": "IC, tech lead, cross-team, org-wide, etc."
   }
 }
 
 Rules:
 - role.title: strip company name, location, employment type, "apply now"-style noise
-- location: return only `City, ST` (US state abbreviation). Do not return `Remote`, `Hybrid`, `On-site`, regions, or long phrases. If unavailable, return empty string.
-- company.product_context: infer from team/division description what they build or maintain
-- responsibility_themes: distill into themes a resume writer can target, not raw JD bullet copies. Examples: "API architecture & governance", "cloud-native microservices", "frontend accessibility & performance"
-- ats_keywords: include every technical and domain term. Include common abbreviation variants (e.g., "CI/CD" and "Continuous Integration/Continuous Deployment")
-- bold_keywords: the highest-signal keywords for this specific role — will be visually emphasized in the final resume
-- calibration.seniority_expectations: interpret what scope of impact, leadership, and technical depth this level demands
-- Use null for missing scalars, [] for missing arrays
+- role.seniority: use junior for 0-1 years, mid for 2-4 years, senior for 5-8 years, staff+ for 9+ or explicit staff/principal/lead/director titles
+- role.function: pick the single best fit from the enum; use "other" only when none fit
+- location: return only `City, ST` US format. Do not return Remote, Hybrid, On-site, or any non-US location. If not present or not US, return empty string.
+- company.product_context: state only what the JD makes clear — do not speculate beyond the job description
+- company.scale_signals: max 5 items; omit if no scale signals present
+- requirements.years: integer or null — infer from phrases like "3+ years", "at least 2 years"; null if not stated
+- responsibility_themes: distill into 5-8 actionable themes; examples: "API architecture & governance", "cloud-native microservices", "frontend accessibility & performance"
+- ats_keywords: include every technical term and domain keyword; 20-60 terms target
+- experience_level_signal: prose description of what experience depth the JD implies beyond just a year count
+- culture_signals: include only signals explicitly or strongly implied by the JD; leave [] if none
 
 Job description:
 $job_description

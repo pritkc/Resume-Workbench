@@ -1120,7 +1120,6 @@ async def _generate_auxiliary_messages(
     improved_data: dict[str, Any],
     job_content: str,
     job_keywords: dict[str, Any] | None,
-    language: str,
     *,
     include_cover_letter: bool,
     include_outreach_message: bool,
@@ -1142,7 +1141,6 @@ async def _generate_auxiliary_messages(
             await generate_cover_letter_and_outreach(
                 improved_data,
                 job_content,
-                language,
             )
         )
         if include_cover_letter:
@@ -1241,7 +1239,6 @@ async def _resolve_confirm_auxiliary_messages(
     improved_data: dict[str, Any],
     job_content: str,
     job_keywords: dict[str, Any] | None,
-    language: str,
     include_cover_letter: bool,
     include_outreach_message: bool,
 ) -> tuple[str | None, str | None, str | None, list[str]]:
@@ -1270,7 +1267,6 @@ async def _resolve_confirm_auxiliary_messages(
             improved_data,
             job_content,
             job_keywords,
-            language,
             include_cover_letter=missing_cover_letter,
             include_outreach_message=missing_outreach_message,
         )
@@ -2903,7 +2899,7 @@ async def generate_auxiliary_package_endpoint(
 ) -> GenerateAuxiliaryPackageResponse:
     """Generate cover letter + outreach in one explicit merged action."""
 
-    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+    _resume, resume_data, job, _language = _load_tailored_resume_generation_context(
         resume_id,
         feature_name="CL + message package",
     )
@@ -2911,7 +2907,6 @@ async def generate_auxiliary_package_endpoint(
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,
             job["content"],
-            language,
         )
     except Exception as e:
         logger.error("CL + message package generation failed: %s", e)
@@ -2945,7 +2940,7 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
     - The resume must be a tailored resume (has parent_id)
     - The resume must have an associated job context in the improvements table
     """
-    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+    _resume, resume_data, job, _language = _load_tailored_resume_generation_context(
         resume_id,
         feature_name="Cover letter",
     )
@@ -2955,7 +2950,6 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,
             job["content"],
-            language,
         )
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
@@ -2988,7 +2982,7 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     - The resume must be a tailored resume (has parent_id)
     - The resume must have an associated job context in the improvements table
     """
-    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+    _resume, resume_data, job, _language = _load_tailored_resume_generation_context(
         resume_id,
         feature_name="Outreach message",
     )
@@ -2998,7 +2992,6 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,
             job["content"],
-            language,
         )
     except Exception as e:
         logger.error(f"Outreach message generation failed: {e}")
