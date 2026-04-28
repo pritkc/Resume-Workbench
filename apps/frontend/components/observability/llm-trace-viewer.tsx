@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
+import { LlmTraceGenerationGroup } from '@/components/observability/llm-trace-generation-group';
+import { LlmTraceNav, type LlmTraceNavItem } from '@/components/observability/llm-trace-nav';
 import {
   fetchLlmCalls,
   fetchLlmCallSummary,
@@ -13,19 +15,16 @@ import {
   type LLMCallSummary,
 } from '@/lib/api/llm';
 import {
-  Activity,
-  AlertTriangle,
-  Braces,
-  CheckCircle2,
-  Clock3,
-  Database,
-  Loader2,
-  RefreshCw,
-  Search,
-  XCircle,
-} from 'lucide-react';
-
-type SuccessFilter = 'all' | 'success' | 'failed';
+  formatCost,
+  formatCount,
+  formatTimestamp,
+  groupCallsByResumeGeneration,
+  shortenId,
+  sortCalls,
+  toSuccessValue,
+  type SuccessFilter,
+} from '@/lib/observability/llm-trace-helpers';
+import { Activity, Braces, Database, Loader2, RefreshCw, Search } from 'lucide-react';
 
 interface TraceQuery {
   traceId: string;
@@ -50,95 +49,32 @@ const REQUEST_SCOPE_SUGGESTIONS = [
 
 const LIMIT_OPTIONS = [25, 50, 100, 200] as const;
 
-const FILTER_BUTTON_BASE =
-  'border border-black px-3 py-2 text-xs font-mono uppercase tracking-wider transition-colors';
-const FILTER_BUTTON_ACTIVE = 'bg-blue-700 text-white';
-const FILTER_BUTTON_INACTIVE = 'bg-white text-gray-700 hover:bg-[#E5E5E0]';
+const FILTER_BTN =
+  'rounded-md border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300';
+const FILTER_ACTIVE = 'border-slate-800 bg-slate-800 text-white';
+const FILTER_IDLE =
+  'border-slate-200/80 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50';
 
-function toSuccessValue(value: SuccessFilter): boolean | undefined {
-  if (value === 'success') return true;
-  if (value === 'failed') return false;
-  return undefined;
+function scrollToElementId(id: string): void {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function formatCount(value: number | null | undefined): string {
-  return new Intl.NumberFormat('en-US').format(value ?? 0);
-}
-
-function formatCost(value: number | null | undefined): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
-  }).format(value ?? 0);
-}
-
-function formatTimestamp(value?: string | null): string {
-  if (!value) return 'n/a';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'n/a';
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function formatLatency(value?: number | null): string {
-  if (value === undefined || value === null) return 'n/a';
-  if (value < 1000) return `${value} ms`;
-  return `${(value / 1000).toFixed(2)} s`;
-}
-
-function shortenId(value?: string | null): string {
-  if (!value) return 'n/a';
-  if (value.length <= 22) return value;
-  return `${value.slice(0, 10)}...${value.slice(-8)}`;
-}
-
-function getInputTokens(call: LLMCallRecord): number {
-  return call.usage_input_tokens ?? call.prompt_tokens_est ?? 0;
-}
-
-function getOutputTokens(call: LLMCallRecord): number {
-  return call.usage_output_tokens ?? call.response_tokens_est ?? 0;
-}
-
-function getPreviewChars(value?: string | null): number {
-  return value?.length ?? 0;
-}
-
-function hasStoredTruncation(value?: string | null): boolean {
-  return value?.includes('[truncated ') ?? false;
-}
-
-function renderPreviewStats(
-  label: string,
-  preview: string | null | undefined,
-  totalChars: number | null | undefined
-): string {
-  const previewChars = getPreviewChars(preview);
-  const total = totalChars ?? previewChars;
-  const suffix =
-    hasStoredTruncation(preview) || total > previewChars ? ' / stored preview is truncated' : '';
-  return `${label}: ${formatCount(total)} total chars / ${formatCount(previewChars)} shown${suffix}`;
-}
-
-function sortCalls(calls: LLMCallRecord[], traceId?: string): LLMCallRecord[] {
-  const sorted = [...calls].sort((left, right) => {
-    const leftTime = new Date(left.created_at ?? 0).getTime();
-    const rightTime = new Date(right.created_at ?? 0).getTime();
-    return leftTime - rightTime;
-  });
-
-  if (traceId) {
-    return sorted;
-  }
-
-  return sorted.reverse();
+function StatCard({
+  label,
+  primary,
+  secondary,
+}: {
+  label: string;
+  primary: React.ReactNode;
+  secondary?: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="rounded-md border border-slate-200/80 bg-white p-3 shadow-sm">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <div className="mt-1.5 text-slate-900">{primary}</div>
+      {secondary ? <div className="mt-1 text-xs text-slate-500">{secondary}</div> : null}
+    </div>
+  );
 }
 
 export function LLMTraceViewer({
@@ -169,7 +105,23 @@ export function LLMTraceViewer({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
-  const [expandedPreviewCalls, setExpandedPreviewCalls] = useState<Record<string, boolean>>({});
+  /** When true, prompt/response previews for that call are hidden (toolbar). Default: expanded. */
+  const [collapsedPreviewPanels, setCollapsedPreviewPanels] = useState<Record<string, boolean>>({});
+  const [jumpSelectKey, setJumpSelectKey] = useState(0);
+
+  const traceGroups = useMemo(() => groupCallsByResumeGeneration(calls), [calls]);
+  const isTraceScoped = Boolean(query.traceId);
+
+  const navItems: LlmTraceNavItem[] = useMemo(
+    () => [
+      { id: 'trace-query', label: 'Query & refresh' },
+      { id: 'trace-summary', label: 'Summary' },
+      { id: 'trace-operations', label: 'Operations' },
+      { id: 'trace-timeline', label: 'Generations' },
+      { id: 'trace-notes', label: 'Notes' },
+    ],
+    []
+  );
 
   const loadData = useCallback(async (nextQuery: TraceQuery) => {
     setIsLoading(true);
@@ -241,7 +193,7 @@ export function LLMTraceViewer({
   };
 
   const togglePreviewPanels = (callId: string) => {
-    setExpandedPreviewCalls((current) => ({
+    setCollapsedPreviewPanels((current) => ({
       ...current,
       [callId]: !current[callId],
     }));
@@ -254,467 +206,374 @@ export function LLMTraceViewer({
       : 'Latest calls across the whole system';
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <div className="border border-black bg-white p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Query
-            </p>
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="trace-id">Trace ID</Label>
-              <Input
-                id="trace-id"
-                value={traceIdInput}
-                onChange={(event) => setTraceIdInput(event.target.value)}
-                placeholder="Paste request_id / trace_id"
-                className="font-mono"
-              />
-              <p className="text-xs text-gray-500">
-                Best for one end-to-end request flow, including retries.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="request-scope">Request Scope</Label>
-              <Input
-                id="request-scope"
-                value={requestScopeInput}
-                onChange={(event) => setRequestScopeInput(event.target.value)}
-                placeholder="resumes.improve_preview"
-                className="font-mono"
-              />
-              <div className="flex flex-wrap gap-2">
-                {REQUEST_SCOPE_SUGGESTIONS.map((scope) => (
-                  <button
-                    key={scope}
-                    type="button"
-                    onClick={() => setRequestScopeInput(scope)}
-                    className="border border-black bg-[#F6F5EE] px-2 py-1 font-mono text-[11px] uppercase tracking-wide hover:bg-[#E5E5E0]"
-                  >
-                    {scope}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto_auto]">
-            <div className="space-y-2">
-              <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-                Status Filter
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {(['all', 'success', 'failed'] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setSuccessFilterInput(value)}
-                    className={`${FILTER_BUTTON_BASE} ${
-                      successFilterInput === value ? FILTER_BUTTON_ACTIVE : FILTER_BUTTON_INACTIVE
-                    }`}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-                Limit
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {LIMIT_OPTIONS.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setLimitInput(value)}
-                    className={`${FILTER_BUTTON_BASE} ${
-                      limitInput === value ? FILTER_BUTTON_ACTIVE : FILTER_BUTTON_INACTIVE
-                    }`}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-                Actions
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleApplyFilters} className="gap-2">
-                  <Search className="h-4 w-4" />
-                  Apply
-                </Button>
-                <Button variant="outline" onClick={() => void loadData(query)} className="gap-2">
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
-                <Button variant="outline" onClick={handleClearFilters}>
-                  Clear
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <ToggleSwitch
-          checked={autoRefresh}
-          onCheckedChange={setAutoRefresh}
-          label="Auto Refresh"
-          description="Poll every 4 seconds so you can keep this page open while another tab is generating."
-          className="h-fit"
+    <div className="lg:grid lg:grid-cols-[10rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+      <aside className="mb-3 hidden min-w-0 self-start lg:sticky lg:top-4 lg:mb-0 lg:block lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+        <LlmTraceNav
+          items={navItems}
+          title="On this page"
+          onJumped={() => setJumpSelectKey((k) => k + 1)}
         />
-      </div>
+      </aside>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="border border-black bg-white p-4">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
-            Mode
-          </p>
-          <p className="mt-2 text-sm text-gray-800">{currentModeLabel}</p>
-          <p className="mt-2 font-mono text-xs text-gray-500">
-            Updated {lastUpdatedAt ? formatTimestamp(lastUpdatedAt) : 'not yet'}
-          </p>
-        </div>
-        <div className="border border-black bg-white p-4">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
-            Calls
-          </p>
-          <p className="mt-2 font-mono text-2xl font-bold">{formatCount(summary?.total_calls)}</p>
-          <p className="mt-2 text-xs text-gray-500">
-            {formatCount(summary?.successful_calls)} successful /{' '}
-            {formatCount(summary?.failed_calls)} failed
-          </p>
-        </div>
-        <div className="border border-black bg-white p-4">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
-            Tokens
-          </p>
-          <p className="mt-2 font-mono text-2xl font-bold">{formatCount(summary?.total_tokens)}</p>
-          <p className="mt-2 text-xs text-gray-500">
-            {formatCount(summary?.input_tokens)} in / {formatCount(summary?.output_tokens)} out
-          </p>
-        </div>
-        <div className="border border-black bg-white p-4">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
-            Estimated Cost
-          </p>
-          <p className="mt-2 font-mono text-2xl font-bold">
-            {formatCost(summary?.estimated_cost_usd)}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            {formatCount(summary?.usage_backed_calls)} usage-backed /{' '}
-            {formatCount(summary?.estimated_calls)} estimated
-          </p>
-        </div>
-      </div>
-
-      <div className="border border-black bg-white p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="flex items-center gap-2">
-          <Database className="h-4 w-4" />
-          <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-            Operation Breakdown
-          </p>
+      <div className="min-w-0 space-y-4">
+        <div className="lg:hidden">
+          <select
+            key={jumpSelectKey}
+            defaultValue=""
+            aria-label="Jump to section"
+            className="h-9 w-full max-w-md rounded-md border border-slate-200/80 bg-white px-2 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              scrollToElementId(v);
+              setJumpSelectKey((k) => k + 1);
+            }}
+          >
+            <option value="" disabled>
+              Jump to section…
+            </option>
+            {navItems.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {summary?.operations?.length ? (
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {summary.operations.map((operation) => (
-              <div key={operation.operation} className="border border-black bg-[#F8F7F1] p-4">
-                <p className="font-mono text-sm font-bold uppercase">{operation.operation}</p>
-                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Calls
-                    </p>
-                    <p className="mt-1 font-mono font-bold">{formatCount(operation.calls)}</p>
-                  </div>
-                  <div>
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Success
-                    </p>
-                    <p className="mt-1 font-mono font-bold">
-                      {formatCount(operation.successes)} / {formatCount(operation.failures)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Tokens
-                    </p>
-                    <p className="mt-1 font-mono font-bold">
-                      {formatCount(operation.total_tokens)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      Cost
-                    </p>
-                    <p className="mt-1 font-mono font-bold">
-                      {formatCost(operation.estimated_cost_usd)}
-                    </p>
+        <section id="trace-query" className="scroll-mt-6 space-y-3">
+          <h2 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            Query & refresh
+          </h2>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,14rem)] lg:items-start">
+            <div className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-slate-500">
+                <Activity className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className="text-xs font-medium text-slate-600">Filters</span>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="trace-id" className="text-xs text-slate-600">
+                    Trace ID
+                  </Label>
+                  <Input
+                    id="trace-id"
+                    value={traceIdInput}
+                    onChange={(event) => setTraceIdInput(event.target.value)}
+                    placeholder="Paste request_id / trace_id"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-[11px] leading-snug text-slate-500">
+                    One end-to-end request, including retries.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="request-scope" className="text-xs text-slate-600">
+                    Request scope
+                  </Label>
+                  <Input
+                    id="request-scope"
+                    value={requestScopeInput}
+                    onChange={(event) => setRequestScopeInput(event.target.value)}
+                    placeholder="resumes.improve_preview"
+                    className="font-mono text-sm"
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {REQUEST_SCOPE_SUGGESTIONS.map((scope) => (
+                      <button
+                        key={scope}
+                        type="button"
+                        onClick={() => setRequestScopeInput(scope)}
+                        className="rounded-md bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate-600 transition hover:bg-slate-200 hover:text-slate-900"
+                      >
+                        {scope}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-gray-500">No operation data yet for this filter.</p>
-        )}
-      </div>
 
-      <div className="border border-black bg-white p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Braces className="h-4 w-4" />
-            <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Call Timeline
-            </p>
-          </div>
-          {query.traceId && (
-            <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-              Trace {shortenId(query.traceId)}
-            </p>
-          )}
-        </div>
-
-        {error && (
-          <div className="mt-4 border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading LLM trace data...
-          </div>
-        )}
-
-        {!isLoading && !error && calls.length === 0 && (
-          <div className="mt-4 border border-dashed border-gray-300 bg-[#F8F7F1] p-5 text-sm text-gray-500">
-            No calls matched the current filters.
-          </div>
-        )}
-
-        <div className="mt-4 space-y-4">
-          {calls.map((call) => {
-            const previewsExpanded = Boolean(expandedPreviewCalls[call.llm_call_id]);
-
-            return (
-              <article
-                key={call.llm_call_id}
-                className={`border p-4 ${
-                  call.success ? 'border-black bg-[#F8F7F1]' : 'border-red-400 bg-red-50'
-                }`}
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-sm font-bold uppercase">
-                        {call.operation}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1 border px-2 py-1 font-mono text-[11px] uppercase ${
-                          call.success
-                            ? 'border-green-700 text-green-700'
-                            : 'border-red-700 text-red-700'
+              <div className="mt-5 flex flex-col gap-4 border-t border-slate-100 pt-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+                <div className="space-y-2">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                    Status
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(['all', 'success', 'failed'] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setSuccessFilterInput(value)}
+                        className={`${FILTER_BTN} ${
+                          successFilterInput === value ? FILTER_ACTIVE : FILTER_IDLE
                         }`}
                       >
-                        {call.success ? (
-                          <CheckCircle2 className="h-3 w-3" />
-                        ) : (
-                          <XCircle className="h-3 w-3" />
-                        )}
-                        {call.success ? 'success' : 'failed'}
-                      </span>
-                      <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
-                        attempt {call.attempt}
-                      </span>
-                      <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
-                        {call.request_kind}
-                      </span>
-                      {call.json_mode && (
-                        <span className="border border-black px-2 py-1 font-mono text-[11px] uppercase">
-                          json mode
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="font-mono text-xs text-gray-500">
-                      {call.provider} / {call.model_name} / group {shortenId(call.call_group_id)}
-                    </div>
-
-                    <div className="grid gap-2 text-xs text-gray-600 md:grid-cols-2 xl:grid-cols-4">
-                      <div>
-                        <p className="font-mono uppercase tracking-wider text-gray-500">Trace</p>
-                        <p className="mt-1 font-mono">{shortenId(call.trace_id)}</p>
-                      </div>
-                      <div>
-                        <p className="font-mono uppercase tracking-wider text-gray-500">Scope</p>
-                        <p className="mt-1 font-mono">{call.request_scope ?? 'n/a'}</p>
-                      </div>
-                      <div>
-                        <p className="font-mono uppercase tracking-wider text-gray-500">Created</p>
-                        <p className="mt-1 font-mono">{formatTimestamp(call.created_at)}</p>
-                      </div>
-                      <div>
-                        <p className="font-mono uppercase tracking-wider text-gray-500">Finished</p>
-                        <p className="mt-1 font-mono">{formatTimestamp(call.completed_at)}</p>
-                      </div>
-                      <div>
-                        <p className="font-mono uppercase tracking-wider text-gray-500">
-                          Prompt Size
-                        </p>
-                        <p className="mt-1 font-mono">{formatCount(call.prompt_chars)} chars</p>
-                      </div>
-                      <div>
-                        <p className="font-mono uppercase tracking-wider text-gray-500">
-                          Response Size
-                        </p>
-                        <p className="mt-1 font-mono">
-                          {formatCount(call.response_chars ?? 0)} chars
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm lg:min-w-[320px]">
-                    <div className="border border-black bg-white p-3">
-                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                        Latency
-                      </p>
-                      <p className="mt-1 font-mono font-bold">{formatLatency(call.latency_ms)}</p>
-                    </div>
-                    <div className="border border-black bg-white p-3">
-                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                        Finish Reason
-                      </p>
-                      <p className="mt-1 font-mono font-bold">{call.finish_reason ?? 'n/a'}</p>
-                    </div>
-                    <div className="border border-black bg-white p-3">
-                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                        Tokens
-                      </p>
-                      <p className="mt-1 font-mono font-bold">
-                        {formatCount(getInputTokens(call) + getOutputTokens(call))}
-                      </p>
-                      <p className="mt-1 font-mono text-[11px] text-gray-500">
-                        {formatCount(getInputTokens(call))} in /{' '}
-                        {formatCount(getOutputTokens(call))} out
-                      </p>
-                    </div>
-                    <div className="border border-black bg-white p-3">
-                      <p className="font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                        Est. Cost
-                      </p>
-                      <p className="mt-1 font-mono font-bold">
-                        {formatCost(call.estimated_total_cost_usd)}
-                      </p>
-                      <p className="mt-1 font-mono text-[11px] text-gray-500">
-                        max {call.max_tokens ?? 'n/a'} tokens
-                      </p>
-                    </div>
+                        {value}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {(call.error_type || call.error_message) && (
-                  <div className="mt-4 border border-red-300 bg-red-50 p-3">
-                    <div className="flex items-start gap-2 text-sm text-red-700">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="space-y-2">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                    Limit
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {LIMIT_OPTIONS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setLimitInput(value)}
+                        className={`${FILTER_BTN} ${
+                          limitInput === value ? FILTER_ACTIVE : FILTER_IDLE
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={handleApplyFilters} className="gap-1.5">
+                    <Search className="h-3.5 w-3.5" aria-hidden />
+                    Apply
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void loadData(query)}
+                    className="gap-1.5 border-slate-200"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`}
+                      aria-hidden
+                    />
+                    Refresh
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleClearFilters}
+                    className="text-slate-600"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <ToggleSwitch
+              checked={autoRefresh}
+              onCheckedChange={setAutoRefresh}
+              label="Auto refresh"
+              description="Poll every 4s while you work in another tab."
+              density="compact"
+              className="h-fit rounded-md border-slate-200/80 shadow-none"
+            />
+          </div>
+        </section>
+
+        <section id="trace-summary" className="scroll-mt-6 space-y-2">
+          <h2 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            Summary
+          </h2>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Mode"
+              primary={<p className="text-sm leading-snug text-slate-800">{currentModeLabel}</p>}
+              secondary={
+                <span className="font-mono text-[11px] text-slate-500">
+                  Updated {lastUpdatedAt ? formatTimestamp(lastUpdatedAt) : 'not yet'}
+                </span>
+              }
+            />
+            <StatCard
+              label="Calls"
+              primary={
+                <p className="font-mono text-xl font-semibold">
+                  {formatCount(summary?.total_calls)}
+                </p>
+              }
+              secondary={
+                <>
+                  {formatCount(summary?.successful_calls)} successful /{' '}
+                  {formatCount(summary?.failed_calls)} failed
+                </>
+              }
+            />
+            <StatCard
+              label="Tokens"
+              primary={
+                <p className="font-mono text-xl font-semibold">
+                  {formatCount(summary?.total_tokens)}
+                </p>
+              }
+              secondary={
+                <>
+                  {formatCount(summary?.input_tokens)} in / {formatCount(summary?.output_tokens)}{' '}
+                  out
+                </>
+              }
+            />
+            <StatCard
+              label="Est. cost"
+              primary={
+                <p className="font-mono text-xl font-semibold">
+                  {formatCost(summary?.estimated_cost_usd)}
+                </p>
+              }
+              secondary={
+                <>
+                  {formatCount(summary?.usage_backed_calls)} usage-backed /{' '}
+                  {formatCount(summary?.estimated_calls)} estimated
+                </>
+              }
+            />
+          </div>
+        </section>
+
+        <section id="trace-operations" className="scroll-mt-6 space-y-2">
+          <h2 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            Operation breakdown
+          </h2>
+          <div className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-slate-500">
+              <Database className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+              <span className="text-xs font-medium text-slate-600">By operation</span>
+            </div>
+
+            {summary?.operations?.length ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {summary.operations.map((operation) => (
+                  <div
+                    key={operation.operation}
+                    className="rounded-md border border-slate-200/80 bg-slate-50/60 p-3"
+                  >
+                    <p className="font-mono text-xs font-semibold uppercase tracking-wide text-slate-800">
+                      {operation.operation}
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                       <div>
-                        <p className="font-mono font-bold uppercase tracking-wider">
-                          {call.error_type ?? 'error'}
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          Calls
                         </p>
-                        <p className="mt-1 whitespace-pre-wrap text-sm">{call.error_message}</p>
+                        <p className="mt-0.5 font-mono text-sm font-semibold text-slate-900">
+                          {formatCount(operation.calls)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          Success
+                        </p>
+                        <p className="mt-0.5 font-mono text-sm font-semibold text-slate-900">
+                          {formatCount(operation.successes)} / {formatCount(operation.failures)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          Tokens
+                        </p>
+                        <p className="mt-0.5 font-mono text-sm font-semibold text-slate-900">
+                          {formatCount(operation.total_tokens)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          Cost
+                        </p>
+                        <p className="mt-0.5 font-mono text-sm font-semibold text-slate-900">
+                          {formatCost(operation.estimated_cost_usd)}
+                        </p>
                       </div>
                     </div>
                   </div>
-                )}
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-slate-500">No operation data for this filter.</p>
+            )}
+          </div>
+        </section>
 
-                <div className="mt-4 grid gap-3 xl:grid-cols-3">
-                  <details open={previewsExpanded} className="border border-black bg-white p-3">
-                    <summary
-                      className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        togglePreviewPanels(call.llm_call_id);
-                      }}
-                    >
-                      Prompt Preview
-                    </summary>
-                    <p className="mt-3 font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      {renderPreviewStats('Prompt', call.prompt_preview, call.prompt_chars)}
-                    </p>
-                    <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
-                      {call.prompt_preview || 'No prompt preview stored.'}
-                    </pre>
-                  </details>
+        <section id="trace-timeline" className="scroll-mt-6 space-y-2">
+          <h2 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            Generations
+          </h2>
+          <p className="text-[11px] leading-snug text-slate-500">
+            Each group shares one{' '}
+            <code className="rounded bg-slate-100 px-1 font-mono">trace_id</code> (one API request
+            such as a resume preview). Calls inside run in pipeline order.
+          </p>
+          <div className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-slate-500">
+                <Braces className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className="text-xs font-medium text-slate-600">Records</span>
+              </div>
+              {query.traceId ? (
+                <p className="font-mono text-[11px] text-slate-400" title={query.traceId}>
+                  {shortenId(query.traceId)}
+                </p>
+              ) : null}
+            </div>
 
-                  <details open={previewsExpanded} className="border border-black bg-white p-3">
-                    <summary
-                      className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        togglePreviewPanels(call.llm_call_id);
-                      }}
-                    >
-                      Response Preview
-                    </summary>
-                    <p className="mt-3 font-mono text-[11px] uppercase tracking-wider text-gray-500">
-                      {renderPreviewStats('Response', call.response_preview, call.response_chars)}
-                    </p>
-                    <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
-                      {call.response_preview || 'No response preview stored.'}
-                    </pre>
-                  </details>
+            {error ? (
+              <div className="mt-3 rounded-md border border-red-200 bg-red-50/90 p-3 text-sm text-red-800">
+                {error}
+              </div>
+            ) : null}
 
-                  <details open={previewsExpanded} className="border border-black bg-white p-3">
-                    <summary
-                      className="cursor-pointer font-mono text-xs font-bold uppercase tracking-wider"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        togglePreviewPanels(call.llm_call_id);
-                      }}
-                    >
-                      Request Context
-                    </summary>
-                    <pre className="mt-3 h-80 overflow-auto whitespace-pre-wrap break-words border border-black bg-[#F8F7F1] p-3 text-xs text-gray-700">
-                      {call.request_context
-                        ? JSON.stringify(call.request_context, null, 2)
-                        : 'No request context stored.'}
-                    </pre>
-                  </details>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </div>
+            {isLoading ? (
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={1.75} aria-hidden />
+                Loading…
+              </div>
+            ) : null}
 
-      <div className="border border-black bg-[#F8F7F1] p-4 text-sm text-gray-600">
-        <div className="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider text-gray-500">
-          <Clock3 className="h-4 w-4" />
-          Notes
-        </div>
-        <ul className="mt-3 list-disc space-y-1 pl-5">
-          <li>`trace_id` follows one request end-to-end. Use it when you want the exact flow.</li>
-          <li>
-            `request_scope` is better for live watching a class of requests, like preview or
-            confirm.
-          </li>
-          <li>
-            Prompt and response previews can contain resume/JD content, so keep this page
-            internal-only.
-          </li>
-        </ul>
+            {!isLoading && !error && calls.length === 0 ? (
+              <div className="mt-3 rounded-md border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
+                No calls matched the current filters.
+              </div>
+            ) : null}
+
+            <div className="mt-4 space-y-3">
+              {traceGroups.map((group, index) => (
+                <LlmTraceGenerationGroup
+                  key={group.traceKey}
+                  group={group}
+                  defaultOpen={isTraceScoped || traceGroups.length <= 1 || index < 6}
+                  isSingleTraceQuery={isTraceScoped}
+                  collapsedPreviewsByCallId={collapsedPreviewPanels}
+                  onToggleCallPreviews={togglePreviewPanels}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="trace-notes"
+          className="scroll-mt-6 rounded-md border border-slate-200/80 bg-slate-50/80 p-3 text-xs leading-relaxed text-slate-600"
+        >
+          <h2 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Notes</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-4 marker:text-slate-300">
+            <li>
+              <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] text-slate-800">
+                trace_id
+              </code>{' '}
+              is one browser/API generation run; the timeline groups all LLM calls under it.
+            </li>
+            <li>
+              <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] text-slate-800">
+                request_scope
+              </code>{' '}
+              is better for watching a class of requests (e.g. preview or confirm).
+            </li>
+            <li>Previews may contain resume or JD text — keep this page internal-only.</li>
+          </ul>
+        </section>
       </div>
     </div>
   );
