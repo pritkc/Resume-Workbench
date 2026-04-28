@@ -447,3 +447,8 @@ export function getProjectHighlightsEditor(project?: Project): string[] {
 export function buildProjectDescription(highlights?: Array<string | null | undefined>): string[] {
   return normalizeList(highlights);
 }
+
+/** Projects the user wants on the resume preview and in exported PDFs (default: all). */
+export function personalProjectsVisibleInResume(projects: Project[] | undefined | null): Project[] {
+  return (projects ?? []).filter((p) => p.includeInResume !== false);
+}

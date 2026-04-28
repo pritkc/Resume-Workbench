@@ -18,6 +18,7 @@ import {
   getProjectDate,
   getProjectHighlights,
   getProjectTechStack,
+  personalProjectsVisibleInResume,
 } from '@/lib/utils/rendercv-fields';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
@@ -179,13 +180,14 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
           </div>
         );
 
-      case 'personalProjects':
-        if (!personalProjects || personalProjects.length === 0) return null;
+      case 'personalProjects': {
+        const visibleProjects = personalProjectsVisibleInResume(personalProjects);
+        if (visibleProjects.length === 0) return null;
         return (
           <div key={section.id} className={baseStyles['resume-section']}>
             <h3 className={styles['section-title-accent']}>{section.displayName}</h3>
             <div className={baseStyles['resume-items']}>
-              {personalProjects.map((project) => (
+              {visibleProjects.map((project) => (
                 <div key={project.id} className={baseStyles['resume-item']}>
                   <div
                     className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}
@@ -264,6 +266,7 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
             </div>
           </div>
         );
+      }
 
       case 'education':
         if (!education || education.length === 0) return null;

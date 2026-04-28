@@ -17,6 +17,7 @@ import {
   getProjectDate,
   getProjectHighlights,
   getProjectTechStack,
+  personalProjectsVisibleInResume,
 } from '@/lib/utils/rendercv-fields';
 import { JDDisplay } from './jd-display';
 import { HighlightedResumeView } from './highlighted-resume-view';
@@ -74,7 +75,7 @@ export function JDComparisonView({ jobDescription, resumeData }: JDComparisonVie
       getEducationHighlights(edu).forEach((d) => parts.push(d));
     });
 
-    resumeData.personalProjects?.forEach((proj) => {
+    personalProjectsVisibleInResume(resumeData.personalProjects).forEach((proj) => {
       if (proj.name) parts.push(proj.name);
       const techStack = getProjectTechStack(proj);
       const date = getProjectDate(proj);

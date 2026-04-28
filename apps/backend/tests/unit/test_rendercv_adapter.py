@@ -31,6 +31,36 @@ def test_experience_highlights_drop_duplicate_tech_stack_row() -> None:
     assert exp.highlights == ["Shipped APIs"]
 
 
+def test_rendercv_omits_projects_with_include_in_resume_false() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Visible Project",
+                "years": "2024",
+                "description": ["Shipped feature A"],
+                "includeInResume": True,
+            },
+            {
+                "id": 2,
+                "name": "Hidden Project",
+                "years": "2023",
+                "description": ["Should not appear"],
+                "includeInResume": False,
+            },
+        ],
+        "skills": {"groups": []},
+    }
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    projects = payload["cv"]["sections"]["projects"]
+    assert len(projects) == 1
+    assert projects[0]["name"] == "Visible Project"
+
+
 def test_project_highlights_drop_duplicate_tech_stack_row() -> None:
     data = normalize_resume_data(
         {

@@ -514,6 +514,15 @@ def _education_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _project_included_in_resume(item: dict[str, Any]) -> bool:
+    """Omit projects explicitly marked hidden from RenderCV output."""
+    if "includeInResume" in item:
+        return bool(item.get("includeInResume"))
+    if "include_in_resume" in item:
+        return bool(item.get("include_in_resume"))
+    return True
+
+
 def _project_entries(
     entries: list[dict[str, Any]],
     *,
@@ -521,6 +530,8 @@ def _project_entries(
 ) -> list[dict[str, Any]]:
     project_rows: list[dict[str, Any]] = []
     for item in entries:
+        if not _project_included_in_resume(item):
+            continue
         name = _clean_text(item.get("name")) or "Project"
         github = _ensure_absolute_url(_clean_text(item.get("github")))
         website = _ensure_absolute_url(_clean_text(item.get("website")))
@@ -1168,6 +1179,13 @@ def rendercv_cv_to_resume_data(
                 "description": _text_list(item.get("highlights")),
             }
         )
+
+    base_projects = (base_resume_data or {}).get("personalProjects") or []
+    for idx, proj in enumerate(projects):
+        if idx < len(base_projects) and isinstance(base_projects[idx], dict):
+            base_flag = base_projects[idx].get("includeInResume")
+            if base_flag is not None:
+                proj["includeInResume"] = bool(base_flag)
 
     custom_sections_payload = {
         title: values

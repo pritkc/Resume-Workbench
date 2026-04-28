@@ -425,6 +425,10 @@
       "projects": {
         "addProject": "Add Project",
         "addFirstProject": "Add First Project",
+        "actions": {
+          "showOnResume": "Show on resume",
+          "hideFromResume": "Hide from resume"
+        },
         "fields": {
           "projectName": "Project Name",
           "role": "Role",

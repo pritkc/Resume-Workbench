@@ -18,6 +18,7 @@ import {
   getProjectDate,
   getProjectHighlights,
   getProjectTechStack,
+  personalProjectsVisibleInResume,
 } from '@/lib/utils/rendercv-fields';
 import { DynamicResumeSection } from './dynamic-resume-section';
 import { AdditionalGroupSection } from './additional-group-section';
@@ -50,6 +51,7 @@ export const ResumeTwoColumn: React.FC<ResumeTwoColumnProps> = ({
   showSummaryHeading = false,
 }) => {
   const { personalInfo, summary, workExperience, education, personalProjects, skills } = data;
+  const visiblePersonalProjects = personalProjectsVisibleInResume(personalProjects);
 
   // Get sorted visible sections
   const sortedSections = getSortedSections(data);
@@ -272,15 +274,13 @@ export const ResumeTwoColumn: React.FC<ResumeTwoColumnProps> = ({
           )}
 
           {/* Projects Section */}
-          {isSectionVisible('personalProjects') &&
-            personalProjects &&
-            personalProjects.length > 0 && (
+          {isSectionVisible('personalProjects') && visiblePersonalProjects.length > 0 && (
               <div className={baseStyles['resume-section']}>
                 <h3 className={baseStyles['resume-section-title']}>
                   {getSectionDisplayName('personalProjects', headingFallbacks.projects)}
                 </h3>
                 <div className={baseStyles['resume-items']}>
-                  {personalProjects.map((project) => (
+                  {visiblePersonalProjects.map((project) => (
                     <div key={project.id} className={baseStyles['resume-item']}>
                       <div
                         className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}

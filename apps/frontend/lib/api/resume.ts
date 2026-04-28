@@ -83,6 +83,7 @@ interface ProcessedResume {
     website?: string | null;
     description?: string[];
     highlights?: string[];
+    includeInResume?: boolean;
   }>;
   skills?: {
     groups?: SkillGroup[];

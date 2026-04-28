@@ -555,6 +555,10 @@ class Project(BaseModel):
     website: str | None = None
     description: list[str] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
+    includeInResume: bool = Field(
+        default=True,
+        description="When false, project is kept in the builder but omitted from preview and PDF.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -584,6 +588,8 @@ class Project(BaseModel):
         highlights = _strip_leading_duplicate_stack_line(stack, highlights)
         data["highlights"] = highlights
         data["description"] = highlights
+        if "include_in_resume" in data and "includeInResume" not in data:
+            data["includeInResume"] = bool(data.pop("include_in_resume"))
         return data
 
     @field_validator("description", mode="before")
@@ -600,6 +606,19 @@ class Project(BaseModel):
     @classmethod
     def _normalize_summary(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
+
+    @field_validator("includeInResume", mode="before")
+    @classmethod
+    def _normalize_include_in_resume(cls, value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            return value.strip().lower() not in {"false", "0", "no", "off"}
+        return True
 
 
 class SkillGroup(BaseModel):

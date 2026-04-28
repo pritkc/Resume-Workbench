@@ -228,6 +228,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
       website: '',
       description: [],
       highlights: [],
+      includeInResume: true,
     };
     onUpdate({ ...resumeData, personalProjects: [...data, next] });
   };

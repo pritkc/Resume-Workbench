@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Project } from '@/components/dashboard/resume-component';
-import { Plus, Trash2, Github, Globe } from 'lucide-react';
+import { Plus, Trash2, Github, Globe, Eye, EyeOff } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import {
   DndContext,
@@ -81,6 +81,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
         website: '',
         description: [],
         highlights: [],
+        includeInResume: true,
       },
     ]);
   };
@@ -194,18 +195,52 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
 
                   return (
                     <DraggableListItem key={item.id} id={item.id}>
-                      <div className="group entry-card-editor relative border border-black/20 bg-white">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={t('common.delete')}
-                          className="absolute right-1 top-1 h-7 w-7 border border-red-600/25 text-red-600 opacity-70 hover:bg-red-600/[0.06] group-hover:opacity-100"
-                          onClick={() => handleRemove(item.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                      <div
+                        className={`group entry-card-editor relative border border-black/20 bg-white ${
+                          item.includeInResume === false ? 'opacity-60' : ''
+                        }`}
+                      >
+                        <div className="absolute right-1 top-1 flex gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            type="button"
+                            aria-label={
+                              item.includeInResume === false
+                                ? t('builder.forms.projects.actions.showOnResume')
+                                : t('builder.forms.projects.actions.hideFromResume')
+                            }
+                            title={
+                              item.includeInResume === false
+                                ? t('builder.forms.projects.actions.showOnResume')
+                                : t('builder.forms.projects.actions.hideFromResume')
+                            }
+                            className="h-7 w-7 border border-black/15 text-black/50 opacity-70 hover:bg-black/[0.04] group-hover:opacity-100"
+                            onClick={() =>
+                              updateItem(item.id, (row) => ({
+                                ...row,
+                                includeInResume: row.includeInResume === false,
+                              }))
+                            }
+                          >
+                            {item.includeInResume === false ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('common.delete')}
+                            className="h-7 w-7 border border-red-600/25 text-red-600 opacity-70 hover:bg-red-600/[0.06] group-hover:opacity-100"
+                            onClick={() => handleRemove(item.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
 
-                        <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
+                        <div className="mb-2 grid grid-cols-1 gap-2 pr-[4.25rem] md:grid-cols-2">
                           <div>
                             <span className={fldLabel}>
                               {t('builder.forms.projects.fields.projectName')}

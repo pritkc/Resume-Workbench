@@ -18,6 +18,7 @@ import {
   getProjectDate,
   getProjectHighlights,
   getProjectTechStack,
+  personalProjectsVisibleInResume,
 } from '@/lib/utils/rendercv-fields';
 import { DynamicResumeSection } from './dynamic-resume-section';
 import { AdditionalGroupSection } from './additional-group-section';
@@ -179,13 +180,14 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
           </div>
         );
 
-      case 'personalProjects':
-        if (!personalProjects || personalProjects.length === 0) return null;
+      case 'personalProjects': {
+        const visibleProjects = personalProjectsVisibleInResume(personalProjects);
+        if (visibleProjects.length === 0) return null;
         return (
           <div key={section.id} className={baseStyles['resume-section']}>
             <h3 className={baseStyles['resume-section-title']}>{section.displayName}</h3>
             <div className={baseStyles['resume-items']}>
-              {personalProjects.map((project) => (
+              {visibleProjects.map((project) => (
                 <div key={project.id} className={baseStyles['resume-item']}>
                   <div
                     className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}
@@ -264,6 +266,7 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
             </div>
           </div>
         );
+      }
 
       case 'education':
         if (!education || education.length === 0) return null;

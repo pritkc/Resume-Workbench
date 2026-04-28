@@ -19,6 +19,7 @@ import {
   getProjectDate,
   getProjectHighlights,
   getProjectTechStack,
+  personalProjectsVisibleInResume,
 } from '@/lib/utils/rendercv-fields';
 import { FileUser, Briefcase, GraduationCap, FolderKanban, Wrench } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
@@ -33,6 +34,7 @@ interface HighlightedResumeViewProps {
  * Shows all resume sections with visual highlighting of JD matches.
  */
 export function HighlightedResumeView({ resumeData, keywords }: HighlightedResumeViewProps) {
+  const visiblePersonalProjects = personalProjectsVisibleInResume(resumeData.personalProjects);
   const { t } = useTranslations();
   const skillGroups = useMemo(
     () => getAdditionalGroupsWithContent(resumeData.skills ?? resumeData.additional),
@@ -139,12 +141,12 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
         )}
 
         {/* Projects */}
-        {resumeData.personalProjects && resumeData.personalProjects.length > 0 && (
+        {visiblePersonalProjects.length > 0 && (
           <Section
             title={t('resume.sections.projects')}
             icon={<FolderKanban className="w-4 h-4" />}
           >
-            {resumeData.personalProjects.map((proj) => (
+            {visiblePersonalProjects.map((proj) => (
               <div key={proj.id} className="mb-4 last:mb-0">
                 <div className="font-semibold text-gray-900">
                   <HighlightedText text={proj.name || ''} keywords={keywords} />

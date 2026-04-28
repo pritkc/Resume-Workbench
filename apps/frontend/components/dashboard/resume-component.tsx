@@ -88,6 +88,8 @@ export interface Project {
   website?: string;
   description?: string[];
   highlights?: string[];
+  /** When false, kept in the builder but omitted from on-screen resume and PDF. */
+  includeInResume?: boolean;
 }
 
 export interface SkillGroup {
