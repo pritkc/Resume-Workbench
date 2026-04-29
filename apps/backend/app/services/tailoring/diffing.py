@@ -88,7 +88,7 @@ def _format_project_entry(entry: dict[str, Any], index: int) -> str:
     return _format_entry_label(
         [
             _clean_text(entry.get("name")),
-            _first_text(entry, "summary", "role"),
+            _first_text(entry, "techStack", "summary", "role"),
             _entry_date(entry),
         ],
         f"Project #{index + 1}",
@@ -216,7 +216,7 @@ def _extract_description_list(entry: Any) -> list[str]:
     description = _normalize_string_list(entry.get("description", []), "entry.description")
     if not description:
         description = _normalize_string_list(entry.get("highlights", []), "entry.highlights")
-    stack = _clean_text(entry.get("summary") or entry.get("tech_stacks"))
+    stack = _clean_text(entry.get("techStack") or entry.get("summary") or entry.get("tech_stacks"))
     while stack and description and _clean_text(description[0]) == stack:
         description = description[1:]
     return description
@@ -346,7 +346,7 @@ def count_description_words(data: dict[str, Any]) -> int:
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            summary = _clean_text(entry.get("summary") or entry.get("tech_stacks"))
+            summary = _clean_text(entry.get("techStack") or entry.get("summary") or entry.get("tech_stacks"))
             if summary:
                 total += len(summary.split())
 
@@ -488,8 +488,8 @@ def calculate_resume_diff(
         )
         if not isinstance(orig, dict) or not isinstance(impr, dict):
             continue
-        orig_s = _clean_text(orig.get("summary") or orig.get("tech_stacks"))
-        improved_s = _clean_text(impr.get("summary") or impr.get("tech_stacks"))
+        orig_s = _clean_text(orig.get("techStack") or orig.get("summary") or orig.get("tech_stacks"))
+        improved_s = _clean_text(impr.get("techStack") or impr.get("summary") or impr.get("tech_stacks"))
         if orig_s == improved_s:
             continue
         if orig_s and not improved_s:
@@ -500,7 +500,7 @@ def calculate_resume_diff(
             change_type = "modified"
         changes.append(
             ResumeFieldDiff(
-                field_path=f"workExperience[{j}].summary",
+                field_path=f"workExperience[{j}].techStack",
                 field_type="experience",
                 change_type=change_type,
                 original_value=orig_s or None,
@@ -517,8 +517,8 @@ def calculate_resume_diff(
         )
         if not isinstance(orig, dict) or not isinstance(impr, dict):
             continue
-        orig_s = _clean_text(orig.get("summary") or orig.get("tech_stacks"))
-        improved_s = _clean_text(impr.get("summary") or impr.get("tech_stacks"))
+        orig_s = _clean_text(orig.get("techStack") or orig.get("summary") or orig.get("tech_stacks"))
+        improved_s = _clean_text(impr.get("techStack") or impr.get("summary") or impr.get("tech_stacks"))
         if orig_s == improved_s:
             continue
         if orig_s and not improved_s:
@@ -529,7 +529,7 @@ def calculate_resume_diff(
             change_type = "modified"
         changes.append(
             ResumeFieldDiff(
-                field_path=f"personalProjects[{j}].summary",
+                field_path=f"personalProjects[{j}].techStack",
                 field_type="project",
                 change_type=change_type,
                 original_value=orig_s or None,
@@ -594,7 +594,7 @@ def calculate_resume_diff(
         original.get("workExperience", []),
         improved.get("workExperience", []),
         _format_experience_entry,
-        {"description", "highlights", "summary", "position", "title"},
+        {"description", "highlights", "techStack", "position", "title"},
     )
     _append_entry_changes(
         changes,
@@ -612,7 +612,7 @@ def calculate_resume_diff(
         original.get("personalProjects", []),
         improved.get("personalProjects", []),
         _format_project_entry,
-        {"description", "highlights", "summary", "name"},
+        {"description", "highlights", "techStack", "name"},
     )
 
     summary = ResumeDiffSummary(

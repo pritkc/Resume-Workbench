@@ -187,7 +187,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
       end_date: '',
       date: '',
       years: '',
-      summary: '',
+      techStack: '',
       description: [],
       highlights: [],
     };
@@ -220,7 +220,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     const next: Project = {
       id: newId,
       name: '',
-      summary: '',
+      techStack: '',
       role: '',
       date: '',
       years: '',

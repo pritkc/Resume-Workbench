@@ -156,7 +156,7 @@ class CandidatePromptProfile(BaseModel):
                 title=_truncate_text(entry.position or entry.title, 80),
                 company=_truncate_text(entry.company, 80),
                 years=_truncate_text(entry.date or entry.years, 40),
-                tech_stacks=_truncate_text(entry.summary, 80) or None,
+                tech_stacks=_truncate_text(entry.techStack, 80) or None,
                 highlights=_normalize_lines(
                     entry.highlights or [],
                     limit=MAX_PROFILE_HIGHLIGHTS_PER_ENTRY,
@@ -170,7 +170,7 @@ class CandidatePromptProfile(BaseModel):
                 name=_truncate_text(entry.name, 80),
                 role=_truncate_text(entry.role, 80),
                 years=_truncate_text(entry.date or entry.years, 40),
-                tech_stacks=_truncate_text(entry.summary, 80) or None,
+                tech_stacks=_truncate_text(entry.techStack, 80) or None,
                 highlights=_normalize_lines(
                     entry.highlights or [],
                     limit=MAX_PROFILE_HIGHLIGHTS_PER_ENTRY,

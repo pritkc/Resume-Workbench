@@ -114,17 +114,17 @@ def _split_description_lines(value: str) -> list[str]:
 
 
 def _work_entry_tech_stack_text(data: dict[str, Any]) -> str | None:
-    """Coalesce per-role tech stack from legacy and LLM-facing keys."""
+    """Coalesce per-role tech stack from canonical and legacy keys."""
     return _coerce_optional_text(
-        data.get("summary")
-        or data.get("techStack")
+        data.get("techStack")
         or data.get("tech_stack")
         or data.get("tech_stacks")
+        or data.get("summary")
     )
 
 
 def _project_tech_stack_text(data: dict[str, Any]) -> str | None:
-    """Coalesce per-project tech stack from legacy and LLM-facing keys."""
+    """Coalesce per-project tech stack from canonical and legacy keys."""
     return _coerce_optional_text(
         data.get("techStack")
         or data.get("tech_stack")
@@ -403,7 +403,7 @@ class Experience(BaseModel):
     end_date: str | None = None
     date: str = ""
     years: str = ""
-    summary: str | None = None
+    techStack: str | None = None
     description: list[str] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
 
@@ -428,10 +428,10 @@ class Experience(BaseModel):
         data["date"] = date
         data["years"] = _coerce_text(data.get("years") or date)
 
-        summary = _work_entry_tech_stack_text(data)
-        for legacy_key in ("techStack", "tech_stack", "tech_stacks"):
+        stack = _work_entry_tech_stack_text(data)
+        for legacy_key in ("techStack", "tech_stack", "tech_stacks", "summary"):
             data.pop(legacy_key, None)
-        data["summary"] = summary
+        data["techStack"] = stack
 
         legacy_description = data.get("description")
         legacy_highlights = data.get("highlights")
@@ -443,15 +443,15 @@ class Experience(BaseModel):
                 legacy_description = highlights
 
         legacy_description_list = _coerce_string_list(legacy_description)
-        if summary and legacy_description_list and legacy_description_list[0] == summary:
+        if stack and legacy_description_list and legacy_description_list[0] == stack:
             highlights = legacy_description_list[1:]
         elif legacy_highlights is None and legacy_description_list:
             highlights = legacy_description_list
 
-        highlights = _strip_leading_duplicate_stack_line(summary, highlights)
+        highlights = _strip_leading_duplicate_stack_line(stack, highlights)
 
         data["highlights"] = highlights
-        data["description"] = [summary, *highlights] if summary else list(highlights)
+        data["description"] = [stack, *highlights] if stack else list(highlights)
         return data
 
     @field_validator("description", mode="before")
@@ -466,9 +466,9 @@ class Experience(BaseModel):
     def _normalize_highlights(cls, value: Any) -> list[str]:
         return _coerce_highlights_list(value)
 
-    @field_validator("summary", mode="before")
+    @field_validator("techStack", mode="before")
     @classmethod
-    def _normalize_summary(cls, value: Any) -> str | None:
+    def _normalize_tech_stack(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
 
 
@@ -547,7 +547,7 @@ class Project(BaseModel):
 
     id: int = 0
     name: str = ""
-    summary: str | None = None
+    techStack: str | None = None
     role: str = ""
     date: str = ""
     years: str = ""
@@ -569,10 +569,10 @@ class Project(BaseModel):
         data = copy.deepcopy(value)
 
         stack = _project_tech_stack_text(data)
-        for legacy_key in ("techStack", "tech_stack", "tech_stacks"):
+        for legacy_key in ("techStack", "tech_stack", "tech_stacks", "summary"):
             data.pop(legacy_key, None)
 
-        data["summary"] = stack
+        data["techStack"] = stack
         data["role"] = _coerce_text(data.get("role") or stack)
 
         date = _coerce_text(data.get("date") or data.get("years"))
@@ -602,9 +602,9 @@ class Project(BaseModel):
     def _normalize_highlights(cls, value: Any) -> list[str]:
         return _coerce_highlights_list(value)
 
-    @field_validator("summary", mode="before")
+    @field_validator("techStack", mode="before")
     @classmethod
-    def _normalize_summary(cls, value: Any) -> str | None:
+    def _normalize_tech_stack(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
 
     @field_validator("includeInResume", mode="before")
@@ -814,6 +814,22 @@ def normalize_resume_data(data: dict[str, Any]) -> dict[str, Any]:
         data["sectionMeta"] = migrated_meta
     if "customSections" not in data:
         data["customSections"] = {}
+
+    for exp in data.get("workExperience") or []:
+        if not isinstance(exp, dict):
+            continue
+        if exp.get("techStack") is None and "summary" in exp:
+            exp["techStack"] = exp.pop("summary")
+        else:
+            exp.pop("summary", None)
+    for proj in data.get("personalProjects") or []:
+        if not isinstance(proj, dict):
+            continue
+        if proj.get("techStack") is None and "summary" in proj:
+            proj["techStack"] = proj.pop("summary")
+        else:
+            proj.pop("summary", None)
+
     return data
 
 

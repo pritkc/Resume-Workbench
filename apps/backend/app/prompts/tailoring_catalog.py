@@ -110,7 +110,13 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         PromptCatalogSection(
             id="tailoring_rt_contract",
             label="{response_contract}",
-            content="JSON contract describing allowed response shape for this resume.",
+            content="JSON contract describing allowed response shape for this resume (parallel arrays align by entry index).",
+            policy="runtime_injected",
+        ),
+        PromptCatalogSection(
+            id="tailoring_rt_resume_diff_rules",
+            label="{resume_diff_rules}",
+            content="Shared compact JSON output schema (resume_diff rules file; same text as prompt catalog shared rules).",
             policy="runtime_injected",
         ),
     ]
@@ -133,8 +139,8 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         PromptCatalogSection(
             id="tailoring_contract_block",
             label="Resume diff output (strict JSON schema)",
-            note="Keys and shapes only. Shipped: apps/backend/app/prompts/text/output_file_schema_rules/resume_diff_output.txt — change rarely; requires tests.",
-            policy="system",
+            note="Injected at runtime as $resume_diff_rules in the user message. Shipped: apps/backend/app/prompts/text/output_file_schema_rules/resume_diff_output.txt — change rarely; requires tests.",
+            policy="user_editable_future",
             children=contract_children,
         ),
         PromptCatalogSection(

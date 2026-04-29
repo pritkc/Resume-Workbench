@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.schemas import (
     CustomSection,
+    Education,
     ResumeChange,
     ResumeData,
     ResumeFieldDiff,
@@ -65,7 +66,7 @@ def _coerce_bullet_list(value: Any) -> list[str]:
 class TailoringExperience(BaseModel):
     """Canonical work entry sent to and read from the LLM.
 
-    ``tech_stacks`` is the per-role tooling line (stored as ``summary`` on ResumeData).
+    ``tech_stacks`` is the per-role tooling line (stored as ``techStack`` on resume JSON).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -92,12 +93,12 @@ class TailoringExperience(BaseModel):
             data["description"] = copy.deepcopy(data.get("highlights"))
         data.pop("highlights", None)
         if "tech_stacks" not in data:
-            if "summary" in data:
-                data["tech_stacks"] = data.pop("summary")
-            elif "techStack" in data:
+            if "techStack" in data:
                 data["tech_stacks"] = data.pop("techStack")
             elif "tech_stack" in data:
                 data["tech_stacks"] = data.pop("tech_stack")
+            elif "summary" in data:
+                data["tech_stacks"] = data.pop("summary")
         return data
 
     @field_validator("position", "title", "company", "date", "years", mode="before")
@@ -116,9 +117,9 @@ class TailoringExperience(BaseModel):
         return _coerce_bullet_list(value)
 
     def to_resume_entry_dict(self) -> dict[str, Any]:
-        """Map tailoring shape back to stored resume JSON (tech_stacks → summary)."""
+        """Map tailoring shape back to stored resume JSON."""
         data = self.model_dump()
-        data["summary"] = data.pop("tech_stacks", None)
+        data["techStack"] = data.pop("tech_stacks", None)
         return data
 
     @classmethod
@@ -130,10 +131,10 @@ class TailoringExperience(BaseModel):
         date = _coerce_text(entry.get("date") or entry.get("years") or _compose_date_range(start_date, end_date))
         years = _coerce_text(entry.get("years") or date)
         tech_stacks = _coerce_optional_text(
-            entry.get("summary")
-            or entry.get("tech_stacks")
-            or entry.get("techStack")
+            entry.get("techStack")
             or entry.get("tech_stack")
+            or entry.get("tech_stacks")
+            or entry.get("summary")
         )
         description = _coerce_bullet_list(entry.get("description"))
         if not description:
@@ -164,10 +165,10 @@ def split_experience_bullets_for_llm_indexing(entry: dict[str, Any]) -> tuple[li
     tail only; the prefix must be prepended unchanged when writing back.
     """
     tech_stacks = _coerce_optional_text(
-        entry.get("summary")
-        or entry.get("tech_stacks")
-        or entry.get("techStack")
+        entry.get("techStack")
         or entry.get("tech_stack")
+        or entry.get("tech_stacks")
+        or entry.get("summary")
     )
     full = _coerce_bullet_list(entry.get("description"))
     if not full:
@@ -182,7 +183,7 @@ def split_experience_bullets_for_llm_indexing(entry: dict[str, Any]) -> tuple[li
 class TailoringProject(BaseModel):
     """Canonical project entry sent to and read from the LLM.
 
-    The 'tech_stacks' field carries what is stored as 'summary' in the resume
+    The 'tech_stacks' field carries what is stored as ``techStack`` on the resume
     data, but is renamed in the LLM prompt to discourage hallucination —
     the model treats it as a factual tech-stack annotation rather than a
     free-form narrative summary.
@@ -209,7 +210,8 @@ class TailoringProject(BaseModel):
         if "description" not in data and "highlights" in data:
             data["description"] = copy.deepcopy(data.get("highlights"))
         data.pop("highlights", None)
-        # Accept 'summary' from LLM responses or legacy payloads
+        if "tech_stacks" not in data and "techStack" in data:
+            data["tech_stacks"] = data.pop("techStack")
         if "tech_stacks" not in data and "summary" in data:
             data["tech_stacks"] = data.pop("summary")
         return data
@@ -230,14 +232,14 @@ class TailoringProject(BaseModel):
         return _coerce_bullet_list(value)
 
     def to_resume_entry_dict(self) -> dict[str, Any]:
-        """Convert back to resume data format (tech_stacks → summary)."""
+        """Convert back to resume data format."""
         data = self.model_dump()
-        data["summary"] = data.pop("tech_stacks", None)
+        data["techStack"] = data.pop("tech_stacks", None)
         return data
 
     @classmethod
     def from_resume_entry(cls, entry: dict[str, Any]) -> "TailoringProject":
-        tech_stacks = _coerce_optional_text(entry.get("summary") or entry.get("tech_stacks") or entry.get("role"))
+        tech_stacks = _coerce_optional_text(entry.get("techStack") or entry.get("tech_stacks") or entry.get("summary") or entry.get("role"))
         date = _coerce_text(entry.get("date") or entry.get("years"))
         years = _coerce_text(entry.get("years") or date)
         description = _coerce_bullet_list(entry.get("description"))
@@ -256,6 +258,62 @@ class TailoringProject(BaseModel):
         )
 
 
+def _llm_strip_empty(value: Any) -> Any:
+    """Drop empty leaves for compact JSON sent to the model."""
+    if isinstance(value, dict):
+        out = {k: _llm_strip_empty(v) for k, v in value.items() if v not in (None, "", [], {})}
+        return out
+    if isinstance(value, list):
+        return [_llm_strip_empty(v) for v in value if v not in (None, "", [], {})]
+    return value
+
+
+def _experience_for_llm_prompt(exp: TailoringExperience) -> dict[str, Any]:
+    data = exp.model_dump()
+    date_val = str(data.pop("date", None) or "").strip()
+    years_val = str(data.pop("years", None) or "").strip()
+    sd = str(data.get("start_date") or "").strip()
+    ed = str(data.get("end_date") or "").strip()
+    if not sd and not ed:
+        merged = (date_val or years_val).strip()
+        if merged:
+            data["employment_period"] = merged
+    return _llm_strip_empty(data)
+
+
+def _education_for_llm_prompt(row: Education) -> dict[str, Any]:
+    data = row.model_dump()
+    data.pop("id", None)
+    date_val = str(data.pop("date", None) or "").strip()
+    years_val = str(data.pop("years", None) or "").strip()
+    sd = str(data.get("start_date") or "").strip()
+    ed = str(data.get("end_date") or "").strip()
+    if not sd and not ed:
+        merged = (date_val or years_val).strip()
+        if merged:
+            data["study_period"] = merged
+    return _llm_strip_empty(data)
+
+
+def _project_for_llm_prompt(proj: TailoringProject) -> dict[str, Any]:
+    data = proj.model_dump()
+    date_val = str(data.pop("date", None) or "").strip()
+    years_val = str(data.pop("years", None) or "").strip()
+    merged = (date_val or years_val).strip()
+    if merged:
+        data["project_period"] = merged
+    return _llm_strip_empty(data)
+
+
+def _skills_for_llm_prompt(skills: SkillsSection) -> dict[str, Any]:
+    groups = [{"label": g.label, "values": list(g.values)} for g in skills.groups]
+    return _llm_strip_empty({"groups": groups})
+
+
+def _custom_sections_for_llm(sections: dict[str, CustomSection]) -> dict[str, Any]:
+    return {k: _llm_strip_empty(v.model_dump()) for k, v in sections.items()}
+
+
 class TailoringResumePayload(BaseModel):
     """Smaller LLM-facing resume shape used only for tailoring."""
 
@@ -264,6 +322,7 @@ class TailoringResumePayload(BaseModel):
     summary: str = ""
     workExperience: list[TailoringExperience] = Field(default_factory=list)
     personalProjects: list[TailoringProject] = Field(default_factory=list)
+    education: list[Education] = Field(default_factory=list)
     skills: SkillsSection = Field(default_factory=SkillsSection)
     customSections: dict[str, CustomSection] = Field(default_factory=dict)
 
@@ -312,10 +371,34 @@ class TailoringResumePayload(BaseModel):
                 for entry in source.get("personalProjects", [])
                 if isinstance(entry, dict)
             ],
+            "education": [
+                Education.model_validate(copy.deepcopy(row))
+                for row in source.get("education", [])
+                if isinstance(row, dict)
+            ],
             "skills": copy.deepcopy(source.get("skills") or source.get("additional") or {}),
             "customSections": copy.deepcopy(source.get("customSections") or {}),
         }
         return cls.model_validate(payload)
+
+    def to_llm_prompt_dict(self) -> dict[str, Any]:
+        """Resume JSON for tailoring prompts: less redundant dates, skills without group ids, plus education."""
+
+        data: dict[str, Any] = {}
+        if self.summary:
+            data["summary"] = self.summary
+        if self.workExperience:
+            data["workExperience"] = [_experience_for_llm_prompt(e) for e in self.workExperience]
+        if self.personalProjects:
+            data["personalProjects"] = [_project_for_llm_prompt(p) for p in self.personalProjects]
+        if self.education:
+            data["education"] = [_education_for_llm_prompt(ed) for ed in self.education]
+        skills_block = _skills_for_llm_prompt(self.skills)
+        if skills_block.get("groups"):
+            data["skills"] = skills_block
+        if self.customSections:
+            data["customSections"] = _custom_sections_for_llm(self.customSections)
+        return _llm_strip_empty(data)
 
 
 class TailoringLLMResponse(TailoringResumePayload):
@@ -504,7 +587,12 @@ class TailoringSectionContract(BaseModel):
 
 
 class TailoringResponseContract(BaseModel):
-    """Compact JSON contract that defines the expected LLM response shape."""
+    """Compact JSON contract that defines the expected LLM response shape.
+
+    Built per tailoring request from ``build_response_contract(resume_payload, prompt_id)``,
+    so entry counts, bullet counts, and parallel hint arrays always match the current
+    structured resume snapshot (no stale cache).
+    """
 
     model_config = ConfigDict(extra="forbid")
 

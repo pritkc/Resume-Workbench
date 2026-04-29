@@ -473,7 +473,7 @@ def _experience_entries(
     rows: list[dict[str, Any]] = []
     for item in entries:
         stack = _clean_text(
-            item.get("summary") or item.get("tech_stacks") or item.get("techStack")
+            item.get("techStack") or item.get("tech_stacks") or item.get("summary")
         )
         bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
         while stack and bullets and _clean_text(bullets[0]) == stack:
@@ -1109,9 +1109,9 @@ def rendercv_cv_to_resume_data(
         if not isinstance(item, dict):
             continue
         description = _text_list(item.get("highlights"))
-        summary = _clean_text(item.get("summary"))
-        if summary:
-            description = [summary, *description]
+        stack_line = _clean_text(item.get("summary"))
+        if stack_line:
+            description = [stack_line, *description]
         work_experience.append(
             {
                 "id": index,
@@ -1123,7 +1123,7 @@ def rendercv_cv_to_resume_data(
                 "end_date": _clean_text(item.get("end_date")),
                 "date": _resume_date_label(item),
                 "years": _resume_date_label(item),
-                "summary": summary,
+                "techStack": stack_line,
                 "highlights": _text_list(item.get("highlights")),
                 "description": description,
             }
@@ -1169,7 +1169,7 @@ def rendercv_cv_to_resume_data(
             {
                 "id": index,
                 "name": name or "",
-                "summary": stack,
+                "techStack": stack,
                 "role": _clean_text(item.get("role")) or stack or "",
                 "date": _clean_text(item.get("date")) or "",
                 "years": _clean_text(item.get("date")) or "",

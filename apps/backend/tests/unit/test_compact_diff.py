@@ -41,7 +41,7 @@ def base_resume():
             {
                 "id": 1,
                 "name": "LogLens",
-                "summary": "Creator",
+                "techStack": "Creator",
                 "role": "Creator",
                 "years": "2023 - Present",
                 "description": [
@@ -87,7 +87,7 @@ class TestApplyCompactDiff:
                 {
                     "title": "Senior Engineer",
                     "company": "Acme",
-                    "summary": "Python, AWS, Kubernetes",
+                    "techStack": "Python, AWS, Kubernetes",
                     "description": [
                         "Python, AWS, Kubernetes",
                         "First real bullet",
@@ -173,13 +173,13 @@ class TestApplyCompactDiff:
     def test_project_tech_stacks_written(self, base_resume):
         diff = {"projects": {"0": {"tech_stacks": "Python, Click, observability"}}}
         result = apply_compact_diff(base_resume, diff)
-        assert result["personalProjects"][0]["summary"] == "Python, Click, observability"
+        assert result["personalProjects"][0]["techStack"] == "Python, Click, observability"
 
     def test_experience_tech_stacks_applied_with_bullets(self, base_resume):
         diff = {"experience": {"0": {"tech_stacks": "Python, FastAPI", "bullets": {"0": "Bullet"}}}}
         result = apply_compact_diff(base_resume, diff)
         assert result["workExperience"][0]["description"][0] == "Bullet"
-        assert result["workExperience"][0].get("summary") == "Python, FastAPI"
+        assert result["workExperience"][0].get("techStack") == "Python, FastAPI"
 
     def test_skills_regroup_applied(self, base_resume):
         new_skills = [
@@ -266,7 +266,7 @@ class TestApplyCompactDiff:
         }
         result = apply_compact_diff(base_resume, diff)
         assert result["personalProjects"][0]["name"] == "LogLens | Observability Toolkit"
-        assert result["personalProjects"][0]["summary"] == "Python, Click, observability"
+        assert result["personalProjects"][0]["techStack"] == "Python, Click, observability"
         assert result["personalProjects"][0]["description"][0] == "Built a CLI for structured log analysis"
 
     def test_position_not_applied_to_projects(self, base_resume):

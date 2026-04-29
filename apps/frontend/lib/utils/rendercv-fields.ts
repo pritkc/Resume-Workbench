@@ -262,13 +262,8 @@ export function getExperienceExplicitDate(experience?: Experience): string {
   return cleanText(experience?.date || experience?.years);
 }
 
-export function getExperienceSummary(experience?: Experience): string {
-  return cleanText(experience?.summary ?? experience?.techStack);
-}
-
-/** Per-role tech stack (stored as `summary` on the wire; optional `techStack` for newer payloads). */
 export function getExperienceTechStack(experience?: Experience): string {
-  return getExperienceSummary(experience);
+  return cleanText(experience?.techStack);
 }
 
 function stripLeadingTechStackDuplicates(
@@ -289,7 +284,7 @@ function stripLeadingTechStackDuplicates(
 }
 
 export function getExperienceHighlights(experience?: Experience): string[] {
-  const stackRaw = experience?.summary ?? experience?.techStack;
+  const stackRaw = experience?.techStack;
   const richStack = Boolean(stackRaw && /<[^>]+>/.test(stackRaw));
 
   const highlights = normalizeList(experience?.highlights);
@@ -298,20 +293,20 @@ export function getExperienceHighlights(experience?: Experience): string[] {
   }
 
   const description = normalizeList(experience?.description);
-  const summary = getExperienceSummary(experience);
+  const stack = getExperienceTechStack(experience);
 
-  if (summary && description[0] === summary) {
+  if (stack && description[0] === stack) {
     return description.slice(1);
   }
 
-  return stripLeadingTechStackDuplicates(summary, description, richStack);
+  return stripLeadingTechStackDuplicates(stack, description, richStack);
 }
 
 /** Highlights for the form editor: preserves empty strings (e.g. new bullet rows). */
 export function getExperienceHighlightsEditor(experience?: Experience): string[] {
   const raw = experience?.highlights;
   if (Array.isArray(raw) && raw.length > 0) {
-    const stackRaw = experience?.summary ?? experience?.techStack;
+    const stackRaw = experience?.techStack;
     const richStack = Boolean(stackRaw && /<[^>]+>/.test(String(stackRaw)));
     const mapped = raw.map((h) => (h == null ? '' : String(h)));
     return stripLeadingTechStackDuplicates(cleanText(String(stackRaw || '')), mapped, richStack);
@@ -400,13 +395,8 @@ export function getEducationCredential(education?: Education): string {
   return degree || area;
 }
 
-export function getProjectSummary(project?: Project): string {
-  return getProjectTechStack(project);
-}
-
-/** Tech stack / tooling line for a project (stored as `summary`; optional `techStack`). */
 export function getProjectTechStack(project?: Project): string {
-  return cleanText(project?.summary ?? project?.techStack ?? project?.role);
+  return cleanText(project?.techStack ?? project?.role);
 }
 
 export function getProjectDate(project?: Project): string {
@@ -414,7 +404,7 @@ export function getProjectDate(project?: Project): string {
 }
 
 function projectStackRawForStrip(project?: Project): string {
-  return String(project?.summary ?? project?.techStack ?? project?.role ?? '');
+  return String(project?.techStack ?? project?.role ?? '');
 }
 
 export function getProjectHighlights(project?: Project): string[] {

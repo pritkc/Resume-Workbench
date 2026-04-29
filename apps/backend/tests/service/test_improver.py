@@ -131,6 +131,7 @@ class TestImproveResume:
         assert "jane@example.com" not in prompt
         assert "linkedin.com/in/janedoe" not in prompt
         assert '"sectionMeta"' not in prompt
+        assert '"education"' in prompt
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -153,8 +154,11 @@ class TestImproveResume:
         assert '"output_keys"' in prompt
         assert '"bullet_counts"' in prompt
         assert '"entries"' in prompt
-        assert "JOB INTELLIGENCE:" in prompt
+        assert "tech_stacks" in prompt
+        assert "EXTRACTED JD INTELLIGENCE:" in prompt
         assert "bold_keywords" in prompt
+        assert "OUTPUT FORMAT:" in prompt
+        assert "MIT" in prompt
         # FastAPI appears in the MASTER RESUME skills section
         assert "FastAPI" in prompt
         assert "Experienced software engineer with 5+ years" not in prompt
@@ -222,7 +226,7 @@ class TestImproveResume:
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
         assert "# Markdown with Jan 2020" not in prompt
-        assert '"years":"2020 - 2023"' in prompt
+        assert "2020 - 2023" in prompt
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -240,7 +244,7 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "Tailor this resume for the target role." in prompt
+        assert "EXTRACTED JD INTELLIGENCE:" in prompt
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)

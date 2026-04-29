@@ -77,7 +77,7 @@ def _resume_context_payload(resume_data: dict[str, Any]) -> dict[str, Any]:
     for entry in normalized.workExperience[:4]:
         bullet_source = list(entry.highlights or [])
         if not bullet_source and entry.description:
-            stack = (entry.summary or "").strip()
+            stack = (entry.techStack or "").strip()
             bullet_source = list(entry.description)
             if stack and bullet_source and str(bullet_source[0]).strip() == stack:
                 bullet_source = bullet_source[1:]
@@ -98,7 +98,7 @@ def _resume_context_payload(resume_data: dict[str, Any]) -> dict[str, Any]:
         projects.append(
             {
                 "name": _truncate_text(entry.name, 80),
-                "role": _truncate_text(entry.role or entry.summary, 80),
+                "role": _truncate_text(entry.role or entry.techStack, 80),
                 "date": _truncate_text(entry.date or entry.years, 40),
                 "bullets": [_truncate_text(bullet, 180) for bullet in bullets if bullet],
             }

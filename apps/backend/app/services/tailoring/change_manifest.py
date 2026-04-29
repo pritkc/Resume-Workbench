@@ -14,10 +14,9 @@ _PATH_SEGMENT_RE = re.compile(r"([a-zA-Z_]+)(?:\[(\d+)\])?")
 _METRIC_RE = re.compile(r"\$?\b\d+(?:\.\d+)?(?:[kKmMbBxX%])?\b")
 _ALLOWED_PATH_PATTERNS = (
     re.compile(r"^summary$"),
-    re.compile(r"^workExperience\[\d+\]\.summary$"),
-    re.compile(r"^workExperience\[\d+\]\.tech_stacks$"),
+    re.compile(r"^workExperience\[\d+\]\.(?:techStack|summary|tech_stacks)$"),
     re.compile(r"^workExperience\[\d+\]\.description(\[\d+\])?$"),
-    re.compile(r"^personalProjects\[\d+\]\.(?:summary|tech_stacks)$"),
+    re.compile(r"^personalProjects\[\d+\]\.(?:techStack|summary|tech_stacks)$"),
     re.compile(r"^personalProjects\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^skills\.groups$"),
     re.compile(r"^customSections\.[^.]+\.text$"),
@@ -45,7 +44,7 @@ def _description_list(entry: Any) -> list[str]:
     description = _text_list(entry.get("description"))
     if not description:
         description = _text_list(entry.get("highlights"))
-    stack = _clean_text(entry.get("summary") or entry.get("tech_stacks"))
+    stack = _clean_text(entry.get("techStack") or entry.get("summary") or entry.get("tech_stacks"))
     while stack and description and _clean_text(description[0]) == stack:
         description = description[1:]
     return description
@@ -186,14 +185,14 @@ def build_change_manifest(
             if not isinstance(original_entry, dict) or not isinstance(updated_entry, dict):
                 continue
             base_path = f"{section_key}[{index}]"
-            # Work + projects: per-entry tooling line (stored as summary on resume JSON).
-            orig_summary = original_entry.get("summary") or original_entry.get("tech_stacks")
-            updated_summary = updated_entry.get("summary") or updated_entry.get("tech_stacks")
+            # Work + projects: per-entry tooling line (stored as techStack on resume JSON).
+            orig_stack = original_entry.get("techStack") or original_entry.get("summary")
+            updated_stack = updated_entry.get("techStack") or updated_entry.get("summary")
             _append_summary_change(
                 changes,
-                path=f"{base_path}.summary",
-                original=orig_summary,
-                updated=updated_summary,
+                path=f"{base_path}.techStack",
+                original=orig_stack,
+                updated=updated_stack,
                 reason=(
                     "Updated role tech stack for job alignment."
                     if section_key == "workExperience"

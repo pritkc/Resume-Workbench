@@ -99,7 +99,7 @@ def verify_generated_resume_result(
             "personalProjects",
             [
                 ("name", lambda entry: _clean_text(entry.get("name"))),
-                ("summary", lambda entry: _first_text(entry, "summary", "role")),
+                ("techStack", lambda entry: _first_text(entry, "techStack", "summary", "role")),
                 ("date", _entry_date),
                 ("github", lambda entry: _clean_text(entry.get("github"))),
                 ("website", lambda entry: _clean_text(entry.get("website"))),

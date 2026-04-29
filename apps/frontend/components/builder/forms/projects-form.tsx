@@ -73,7 +73,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
       {
         id: newId,
         name: '',
-        summary: '',
+        techStack: '',
         role: '',
         date: '',
         years: '',
@@ -92,14 +92,14 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
 
   const handleFieldChange = (
     id: number,
-    field: 'name' | 'summary' | 'date' | 'github' | 'website',
+    field: 'name' | 'techStack' | 'date' | 'github' | 'website',
     value: string
   ) => {
     updateItem(id, (item) => {
-      if (field === 'summary') {
+      if (field === 'techStack') {
         return {
           ...item,
-          summary: value,
+          techStack: value,
           role: value,
         };
       }
@@ -273,7 +273,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                               pasteMode="plainTextMultiline"
                               value={getProjectTechStack(item)}
                               onChange={(e) =>
-                                handleFieldChange(item.id, 'summary', e.target.value)
+                                handleFieldChange(item.id, 'techStack', e.target.value)
                               }
                               placeholder={t('builder.forms.projects.placeholders.techStack')}
                               className="mt-0.5 min-h-[72px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"

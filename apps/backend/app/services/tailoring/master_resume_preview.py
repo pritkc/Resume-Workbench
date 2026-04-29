@@ -36,7 +36,7 @@ def serialize_original_resume_for_tailoring(resume: dict[str, Any]) -> str:
     if isinstance(raw, dict) and raw:
         payload = TailoringResumePayload.from_resume_data(raw)
         if payload is not None:
-            return json.dumps(payload.model_dump(), separators=(",", ":"), ensure_ascii=True)
+            return json.dumps(payload.to_llm_prompt_dict(), separators=(",", ":"), ensure_ascii=True)
     om = resume.get("original_markdown")
     if isinstance(om, str) and om.strip():
         return om

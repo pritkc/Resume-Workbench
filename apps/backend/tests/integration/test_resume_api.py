@@ -106,7 +106,7 @@ class TestGetResume:
             "Led migration from monolith to microservices architecture",
             "Mentored 3 junior developers on backend best practices",
         ]
-        assert processed["personalProjects"][0]["summary"] == "Creator & Maintainer"
+        assert processed["personalProjects"][0]["techStack"] == "Creator & Maintainer"
         assert processed["personalProjects"][0]["date"] == "Mar 2021 - Present"
         assert processed["personalProjects"][0]["highlights"] == [
             "CLI tool generating API clients from OpenAPI specs",

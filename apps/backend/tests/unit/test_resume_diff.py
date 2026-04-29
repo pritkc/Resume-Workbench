@@ -335,12 +335,12 @@ def test_project_title_pairs_by_id_when_order_changes() -> None:
 def test_project_entry_summary_change_detected() -> None:
     original = {
         "personalProjects": [
-            {"id": 1, "name": "App", "summary": "Stack: Python", "description": []},
+            {"id": 1, "name": "App", "techStack": "Stack: Python", "description": []},
         ]
     }
     improved = {
         "personalProjects": [
-            {"id": 1, "name": "App", "summary": "Stack: Python, Rust", "description": []},
+            {"id": 1, "name": "App", "techStack": "Stack: Python, Rust", "description": []},
         ]
     }
 
@@ -349,7 +349,7 @@ def test_project_entry_summary_change_detected() -> None:
     summary_changes = [
         c
         for c in changes
-        if c.field_path == "personalProjects[0].summary" and c.field_type == "project"
+        if c.field_path == "personalProjects[0].techStack" and c.field_type == "project"
     ]
     assert len(summary_changes) == 1
     assert summary_changes[0].change_type == "modified"
@@ -365,7 +365,7 @@ def test_project_entry_summary_tech_stacks_alias() -> None:
     }
     improved = {
         "personalProjects": [
-            {"id": 1, "name": "App", "summary": "Go, gRPC", "description": []},
+            {"id": 1, "name": "App", "techStack": "Go, gRPC", "description": []},
         ]
     }
 
@@ -374,7 +374,7 @@ def test_project_entry_summary_tech_stacks_alias() -> None:
     summary_changes = [
         c
         for c in changes
-        if c.field_path == "personalProjects[0].summary" and c.field_type == "project"
+        if c.field_path == "personalProjects[0].techStack" and c.field_type == "project"
     ]
     assert len(summary_changes) == 1
     assert summary_changes[0].change_type == "modified"
@@ -387,7 +387,7 @@ def test_work_experience_entry_summary_change_detected() -> None:
                 "position": "Dev",
                 "company": "Co",
                 "years": "2020",
-                "summary": "Focus: APIs",
+                "techStack": "Focus: APIs",
                 "description": [],
             }
         ]
@@ -398,7 +398,7 @@ def test_work_experience_entry_summary_change_detected() -> None:
                 "position": "Dev",
                 "company": "Co",
                 "years": "2020",
-                "summary": "Focus: APIs and data",
+                "techStack": "Focus: APIs and data",
                 "description": [],
             }
         ]
@@ -409,7 +409,7 @@ def test_work_experience_entry_summary_change_detected() -> None:
     summary_changes = [
         c
         for c in changes
-        if c.field_path == "workExperience[0].summary" and c.field_type == "experience"
+        if c.field_path == "workExperience[0].techStack" and c.field_type == "experience"
     ]
     assert len(summary_changes) == 1
     assert summary_changes[0].change_type == "modified"

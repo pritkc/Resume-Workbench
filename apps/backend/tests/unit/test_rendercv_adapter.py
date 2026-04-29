@@ -20,14 +20,14 @@ def test_experience_highlights_drop_duplicate_tech_stack_row() -> None:
                     "id": 1,
                     "position": "Engineer",
                     "company": "Co",
-                    "summary": "Python, AWS",
+                    "techStack": "Python, AWS",
                     "highlights": ["Python, AWS", "Shipped APIs"],
                 }
             ]
         }
     )
     exp = ResumeData.model_validate(data).workExperience[0]
-    assert exp.summary == "Python, AWS"
+    assert exp.techStack == "Python, AWS"
     assert exp.highlights == ["Shipped APIs"]
 
 
@@ -68,14 +68,14 @@ def test_project_highlights_drop_duplicate_tech_stack_row() -> None:
                 {
                     "id": 1,
                     "name": "Demo",
-                    "summary": "Rust, WASM",
+                    "techStack": "Rust, WASM",
                     "highlights": ["Rust, WASM", "Shipped CLI"],
                 }
             ]
         }
     )
     proj = ResumeData.model_validate(data).personalProjects[0]
-    assert proj.summary == "Rust, WASM"
+    assert proj.techStack == "Rust, WASM"
     assert proj.highlights == ["Shipped CLI"]
 
 
@@ -88,7 +88,7 @@ def test_rendercv_experience_bullets_omit_stack_when_description_prefixed() -> N
                 "id": 1,
                 "position": "Eng",
                 "company": "Acme",
-                "summary": "Go, gRPC",
+                "techStack": "Go, gRPC",
                 "description": ["Go, gRPC", "Built APIs"],
             }
         ],
@@ -459,7 +459,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
         {
             "position": "Software Engineer, Data Infra & MLOps",
             "date": "Jan 2021 - Present",
-            "summary": "Owned platform reliability and delivery for ML systems.",
+            "techStack": "Owned platform reliability and delivery for ML systems.",
             "description": [
                 "Built a CDC-powered ETL pipeline for production embeddings.",
                 "Improved retrieval latency by 35% with semantic caching.",
@@ -482,7 +482,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
     )
     sample_resume_copy["personalProjects"][0].update(
         {
-            "summary": "Open-source API tooling project.",
+            "techStack": "Open-source API tooling project.",
             "date": "Mar 2021 - Present",
             "description": [
                 "500+ GitHub stars",
@@ -572,7 +572,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
         },
     ]
     assert parsed_resume["workExperience"][0]["position"] == "Software Engineer, Data Infra & MLOps"
-    assert parsed_resume["workExperience"][0]["summary"] == "Owned platform reliability and delivery for ML systems."
+    assert parsed_resume["workExperience"][0]["techStack"] == "Owned platform reliability and delivery for ML systems."
     assert parsed_resume["workExperience"][0]["highlights"] == [
         "Built a CDC-powered ETL pipeline for production embeddings.",
         "Improved retrieval latency by 35% with semantic caching.",
@@ -583,7 +583,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
         "Dean's List",
         "Distributed systems capstone",
     ]
-    assert parsed_resume["personalProjects"][0]["summary"] == "Open-source API tooling project."
+    assert parsed_resume["personalProjects"][0]["techStack"] == "Open-source API tooling project."
     assert parsed_resume["personalProjects"][0]["highlights"] == [
         "500+ GitHub stars",
         "Used by 30+ engineering teams",

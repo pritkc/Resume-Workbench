@@ -53,7 +53,7 @@ interface ProcessedResume {
     end_date?: string | null;
     date?: string;
     years?: string;
-    summary?: string | null;
+    techStack?: string | null;
     description?: string[];
     highlights?: string[];
   }>;
@@ -74,7 +74,6 @@ interface ProcessedResume {
   personalProjects?: Array<{
     id: number;
     name?: string;
-    summary?: string | null;
     techStack?: string | null;
     role?: string;
     date?: string;
@@ -284,12 +283,48 @@ function normalizeDraftValidationDetail(value: unknown): DraftValidationDetail |
   };
 }
 
+/** Migrate legacy per-role / per-project `summary` into `techStack` and drop `summary` on those rows. */
+function migrateWorkProjectTechStackKeys<T extends Record<string, unknown>>(resume: T): T {
+  const out: Record<string, unknown> = { ...resume };
+
+  const work = out.workExperience;
+  if (Array.isArray(work)) {
+    out.workExperience = work.map((entry) => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const row = { ...(entry as Record<string, unknown>) };
+      const legacy = row.summary;
+      delete row.summary;
+      if ((row.techStack == null || row.techStack === '') && legacy != null && legacy !== '') {
+        row.techStack = legacy;
+      }
+      return row;
+    });
+  }
+
+  const projects = out.personalProjects;
+  if (Array.isArray(projects)) {
+    out.personalProjects = projects.map((entry) => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const row = { ...(entry as Record<string, unknown>) };
+      const legacy = row.summary;
+      delete row.summary;
+      if ((row.techStack == null || row.techStack === '') && legacy != null && legacy !== '') {
+        row.techStack = legacy;
+      }
+      return row;
+    });
+  }
+
+  return out as T;
+}
+
 function normalizeProcessedResume<T extends ProcessedResume | ResumeData | null>(value: T): T {
   if (!value) {
     return value;
   }
 
-  return normalizeResumeSkills(value) as T;
+  const migrated = migrateWorkProjectTechStackKeys(value as Record<string, unknown>);
+  return normalizeResumeSkills(migrated as ResumeData) as T;
 }
 
 export function isDraftRequestError(error: unknown): error is DraftRequestError {

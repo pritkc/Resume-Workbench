@@ -156,8 +156,8 @@ function buildContextLabel(change: ResumeFieldDiff, parsed: ParsedChangePath): s
     case 'summary':
       return 'Resume summary';
     case 'experience':
-      if (change.field_path.includes('.summary')) {
-        return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} summary`;
+      if (change.field_path.includes('.techStack')) {
+        return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} tech stack`;
       }
       if (change.field_type === 'experience_title') {
         return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} title`;
@@ -167,7 +167,7 @@ function buildContextLabel(change: ResumeFieldDiff, parsed: ParsedChangePath): s
       }
       return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} entry`;
     case 'project':
-      if (change.field_path.includes('.summary')) {
+      if (change.field_path.includes('.techStack')) {
         return `Project ${((parsed.entryIndex ?? 0) + 1).toString()} tech stack`;
       }
       if (change.field_type === 'project_title') {

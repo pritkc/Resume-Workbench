@@ -261,7 +261,6 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
                 [
                     TAILORING_CRAFT_BLOCK,
                     TAILORING_MODE_STRATEGY["full"],
-                    TAILORING_CONTRACT_BLOCK,
                 ]
             ),
             user_prompt=TAILORING_USER_SHELL_FULL,

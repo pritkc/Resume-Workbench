@@ -26,7 +26,7 @@ import {
   getExperienceExplicitDate,
   getExperienceHighlightsEditor,
   getExperiencePosition,
-  getExperienceSummary,
+  getExperienceTechStack,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
 import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
@@ -85,7 +85,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
         end_date: '',
         date: '',
         years: '',
-        summary: '',
+        techStack: '',
         description: [],
         highlights: [],
       },
@@ -98,7 +98,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
 
   const handleTextFieldChange = (
     id: number,
-    field: 'company' | 'location' | 'position' | 'date' | 'start_date' | 'end_date' | 'summary',
+    field: 'company' | 'location' | 'position' | 'date' | 'start_date' | 'end_date' | 'techStack',
     value: string
   ) => {
     updateItem(id, (item) => {
@@ -118,11 +118,11 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
         };
       }
 
-      if (field === 'summary') {
+      if (field === 'techStack') {
         const highlights = getExperienceHighlightsEditor(item);
         return {
           ...item,
-          summary: value,
+          techStack: value,
           description: buildExperienceDescription(value, highlights),
         };
       }
@@ -142,7 +142,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights,
-        description: buildExperienceDescription(getExperienceSummary(item), highlights),
+        description: buildExperienceDescription(getExperienceTechStack(item), highlights),
       };
     });
   };
@@ -153,7 +153,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights,
-        description: buildExperienceDescription(getExperienceSummary(item), highlights),
+        description: buildExperienceDescription(getExperienceTechStack(item), highlights),
       };
     });
   };
@@ -166,7 +166,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights,
-        description: buildExperienceDescription(getExperienceSummary(item), highlights),
+        description: buildExperienceDescription(getExperienceTechStack(item), highlights),
       };
     });
   };
@@ -179,7 +179,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights: next,
-        description: buildExperienceDescription(getExperienceSummary(item), next),
+        description: buildExperienceDescription(getExperienceTechStack(item), next),
       };
     });
   };
@@ -214,7 +214,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
               </p>
               {data.map((item) => {
                 const highlights = getExperienceHighlightsEditor(item);
-                const summary = getExperienceSummary(item);
+                const techStack = getExperienceTechStack(item);
 
                 return (
                   <DraggableListItem key={item.id} id={item.id}>
@@ -322,8 +322,8 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                         </span>
                         <div className="mt-0.5">
                           <RichTextEditor
-                            value={summary}
-                            onChange={(html) => handleTextFieldChange(item.id, 'summary', html)}
+                            value={techStack}
+                            onChange={(html) => handleTextFieldChange(item.id, 'techStack', html)}
                             placeholder={t('builder.forms.experience.placeholders.techStack')}
                             minHeight="40px"
                             toolbarMode="none"

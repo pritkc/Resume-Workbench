@@ -11,7 +11,7 @@ def test_build_change_manifest_captures_summary_bullets_and_skills() -> None:
         "summary": "Backend engineer with Python experience.",
         "workExperience": [
             {
-                "summary": "Backend engineer",
+                "techStack": "Backend engineer",
                 "description": ["Built APIs", "Led migrations"],
             }
         ],
@@ -25,7 +25,7 @@ def test_build_change_manifest_captures_summary_bullets_and_skills() -> None:
         "summary": "Backend engineer with Python and FastAPI experience.",
         "workExperience": [
             {
-                "summary": "Senior backend engineer",
+                "techStack": "Senior backend engineer",
                 "description": ["Built APIs", "Led service migrations", "Improved CI/CD pipelines"],
             }
         ],
@@ -40,7 +40,7 @@ def test_build_change_manifest_captures_summary_bullets_and_skills() -> None:
 
     assert any(change.path == "summary" and change.action == "replace" for change in changes)
     assert any(
-        change.path == "workExperience[0].summary" and change.action == "replace"
+        change.path == "workExperience[0].techStack" and change.action == "replace"
         for change in changes
     )
     assert any(

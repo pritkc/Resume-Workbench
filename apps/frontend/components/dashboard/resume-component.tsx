@@ -53,8 +53,6 @@ export interface Experience {
   end_date?: string | null;
   date?: string;
   years?: string;
-  /** Per-role tech stack (API may also send camelCase `techStack`). */
-  summary?: string | null;
   techStack?: string | null;
   description?: string[];
   highlights?: string[];
@@ -78,8 +76,6 @@ export interface Education {
 export interface Project {
   id: number;
   name?: string;
-  /** Project tech stack (persisted as `summary` in JSON; optional `techStack` alias). */
-  summary?: string | null;
   techStack?: string | null;
   role?: string;
   date?: string;

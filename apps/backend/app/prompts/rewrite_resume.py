@@ -24,13 +24,14 @@ RULES_SOURCE = "resume_diff"
 USER_TEMPLATE = read_shipped_txt("rewrite_resume/user.txt")
 
 DATA_TEMPLATE = USER_TEMPLATE
-SYSTEM_DEFAULT = INSTRUCTIONS.strip() + "\n\n" + RULES.strip()
+SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
     "original_resume": "Base resume JSON or markdown",
     "tailor_resume_full_output": "First-pass diff JSON from tailor_resume_full",
     "critique_resume_output": "Critique JSON from critique_resume",
     "extract_jd_intel_output": "JSON from extract_jd_intel step",
     "response_contract": "Response contract JSON",
+    "resume_diff_rules": "Shared compact JSON output schema (resume_diff; DB override supported)",
 }
 
 
@@ -45,6 +46,13 @@ def build_messages(
     from app.prompts import load_override, load_shared_rules_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
 
+    diff = (
+        load_override(STEP_NAME, "rules")
+        or load_shared_rules_override(RULES_SOURCE)
+        or RULES
+    )
+    resume_diff_rules = diff.strip()
+
     comp = load_composer_override(STEP_NAME)
     if comp:
         return comp["system"], render_user_template(
@@ -54,15 +62,11 @@ def build_messages(
             critique_resume_output=critique_resume_output,
             extract_jd_intel_output=extract_jd_intel_output,
             response_contract=response_contract,
+            resume_diff_rules=resume_diff_rules,
         )
 
     prose = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
-    diff = (
-        load_override(STEP_NAME, "rules")
-        or load_shared_rules_override(RULES_SOURCE)
-        or RULES
-    )
-    system = prose.strip() + "\n\n" + diff.strip()
+    system = prose.strip()
     user = render_user_template(
         USER_TEMPLATE,
         original_resume=original_resume,
@@ -70,5 +74,6 @@ def build_messages(
         critique_resume_output=critique_resume_output,
         extract_jd_intel_output=extract_jd_intel_output,
         response_contract=response_contract,
+        resume_diff_rules=resume_diff_rules,
     )
     return system, user

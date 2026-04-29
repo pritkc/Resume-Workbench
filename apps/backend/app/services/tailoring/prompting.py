@@ -93,7 +93,7 @@ def build_prompt_context(
     selected_mode = _resolve_mode(prompt_id)
 
     resume_input = (
-        json.dumps(resume_payload.model_dump(), separators=(",", ":"), ensure_ascii=True)
+        json.dumps(resume_payload.to_llm_prompt_dict(), separators=(",", ":"), ensure_ascii=True)
         if resume_payload is not None
         else original_resume_markdown
     )
