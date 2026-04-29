@@ -79,6 +79,38 @@ class TestApplyCompactDiff:
         assert result["workExperience"][0]["description"][1] == "Led migration to microservices"
         assert result["workExperience"][0]["description"][2] == "Mentored junior engineers"
 
+    def test_experience_bullet_indices_use_llm_prompt_slice_not_raw_storage(self):
+        """Compact diff keys index the same list as tailor_resume_full / rewrite_resume (tech line dropped)."""
+        resume = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Senior Engineer",
+                    "company": "Acme",
+                    "summary": "Python, AWS, Kubernetes",
+                    "description": [
+                        "Python, AWS, Kubernetes",
+                        "First real bullet",
+                        "Second real bullet",
+                        "Third real bullet",
+                        "Fourth real bullet",
+                    ],
+                }
+            ],
+            "personalProjects": [],
+            "skills": {"groups": []},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        diff = {"experience": {"0": {"bullets": {"3": "Fourth bullet rewritten"}}}}
+        result = apply_compact_diff(resume, diff)
+        desc = result["workExperience"][0]["description"]
+        assert desc[0] == "Python, AWS, Kubernetes"
+        assert desc[1] == "First real bullet"
+        assert desc[2] == "Second real bullet"
+        assert desc[3] == "Third real bullet"
+        assert desc[4] == "Fourth bullet rewritten"
+
     def test_multiple_bullets_in_same_entry(self, base_resume):
         diff = {
             "experience": {

@@ -155,6 +155,30 @@ class TailoringExperience(BaseModel):
         )
 
 
+def split_experience_bullets_for_llm_indexing(entry: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Split stored work bullets into (leading_prefix, llm_indexed_bullets).
+
+    ``TailoringExperience.from_resume_entry`` drops leading ``description`` lines
+    that duplicate the role tech/summary line before building the prompt and
+    ``experience_bullet_counts``. Compact-diff bullet keys index into the dropped
+    tail only; the prefix must be prepended unchanged when writing back.
+    """
+    tech_stacks = _coerce_optional_text(
+        entry.get("summary")
+        or entry.get("tech_stacks")
+        or entry.get("techStack")
+        or entry.get("tech_stack")
+    )
+    full = _coerce_bullet_list(entry.get("description"))
+    if not full:
+        full = _coerce_bullet_list(entry.get("highlights"))
+    indexed = list(full)
+    while tech_stacks and indexed and indexed[0] == tech_stacks:
+        indexed = indexed[1:]
+    prefix_len = len(full) - len(indexed)
+    return full[:prefix_len], indexed
+
+
 class TailoringProject(BaseModel):
     """Canonical project entry sent to and read from the LLM.
 

@@ -22,7 +22,11 @@ from app.services.refiner import (
     validate_master_alignment,
 )
 from app.services.section_metadata import rehydrate_section_meta
-from app.services.tailoring.models import TailoringResumePayload
+from app.services.tailoring.models import (
+    TailoringProject,
+    TailoringResumePayload,
+    split_experience_bullets_for_llm_indexing,
+)
 from app.services.tailoring.verification import verify_generated_resume_result
 
 logger = logging.getLogger(__name__)
@@ -378,9 +382,11 @@ def apply_compact_diff(
                 bullets_diff = None
 
             if isinstance(bullets_diff, dict):
-                desc = coerce_string_list(entry.get("description"))
-                if not desc:
-                    desc = coerce_string_list(entry.get("highlights"))
+                if diff_key == "experience":
+                    prefix, desc = split_experience_bullets_for_llm_indexing(entry)
+                else:
+                    prefix = []
+                    desc = list(TailoringProject.from_resume_entry(entry).description)
                 orig_len = len(desc)
                 for bullet_idx_str, bullet_text in bullets_diff.items():
                     try:
@@ -401,9 +407,10 @@ def apply_compact_diff(
                         )
                         continue
                     desc[bullet_idx] = bullet_text.strip()
-                entry["description"] = desc
+                merged = prefix + desc
+                entry["description"] = merged
                 if "highlights" in entry and isinstance(entry.get("highlights"), list):
-                    entry["highlights"] = list(desc)
+                    entry["highlights"] = list(merged)
 
     skills_diff = diff.get("skills")
     if isinstance(skills_diff, (list, dict)):
