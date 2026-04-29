@@ -100,6 +100,27 @@ WHAT STAYS FIXED:
 - Rewrite bullets, enhance titles with scope context, reorder/reword for fit — same story arc, better presentation.
 - JD is the lens to reorder, reword, and emphasize honest overlap — not to invent new employers or history.
 
+EVIDENCE BOUNDING:
+- RESUME EVIDENCE (see $resume_evidence) gives you three lists: supported (JD terms already in resume), adjacent (close but not exact), unsupported (absent).
+- supported terms: weave naturally throughout bullets where they fit — do not repeat the same term in every bullet.
+- adjacent terms: you may use them where the resume demonstrates the concept, even if not exact phrasing.
+- unsupported terms: do NOT fabricate or invent. If a priority_keyword is unsupported, state the gap in bold_keywords only if explicitly required; otherwise omit.
+- responsibility_themes are your coverage axes. Map each theme to the strongest resume evidence before writing. If a theme has no honest mapping, skip it — do not fabricate.
+- calibration.seniority_expectations and experience_level_signal are soft scope ceilings — use them to calibrate claim size, not to invent ownership.
+
+NEW GRAD CONTEXT (applies when new_grad profile is present in $resume_evidence):
+- Projects and education carry first-class weight — treat them as equivalent to 1-2 years of early-career work.
+- Internship bullets stay scoped to "contributed to", "built a component of", "shipped X feature" — not "architected", "designed the system", "led".
+- Show trajectory: skills learned, problems owned, outcomes shipped — not seniority claimed.
+- If candidate has only internships and projects, lead with the deepest technical project first, then most recent role.
+- Education: degree, GPA if strong (>=3.5), relevant coursework if >=3 courses match JD — brief, one line.
+
+TECH DEPTH TIERS (apply to all writing):
+- deep: used in production, shipped real features, can discuss tradeoffs (include with full confidence)
+- working: used in course/project/intern context with a shipped artifact (include with appropriate scope hedge)
+- adjacent: familiar with concept, not with this specific tool (include only if JD explicitly asks AND candidate can defend in a screen; hedge clearly)
+- unsupported: never seen or used — do NOT include, even if the JD strongly prefers it
+
 TWO FRAMING TRACKS:
 - Same career can ship as: (1) software engineer story — APIs, services, data reliability, delivery, with recent credible AI edge where true; or (2) data/AI engineer story — pipelines, platform, analytics engineering, ML ops.
 - Pick the lead angle that matches the target role without rewriting history.

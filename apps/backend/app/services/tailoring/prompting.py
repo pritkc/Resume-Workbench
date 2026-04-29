@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, get_prompt
 from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
@@ -30,6 +30,7 @@ class TailoringPromptContext:
     system_prompt: str
     user_prompt: str
     used_structured_resume_input: bool
+    resume_evidence_json: str = "{}"
 
 
 def assemble_tailoring_system_prompt(mode: str) -> str:
@@ -38,6 +39,7 @@ def assemble_tailoring_system_prompt(mode: str) -> str:
         original_resume="{}",
         extract_jd_intel_output="{}",
         response_contract="{}",
+        resume_evidence="{}",
     )
     return system
 
@@ -48,12 +50,14 @@ def render_tailoring_user_prompt(
     extract_jd_intel_output_json: str,
     original_resume_json: str,
     response_contract_json: str,
+    resume_evidence: str = "{}",
 ) -> str:
     mod = get_prompt("tailor_resume_full" if mode_id == "full" else "tailor_resume_lite")
     _, user = mod.build_messages(
         original_resume=original_resume_json,
         extract_jd_intel_output=extract_jd_intel_output_json,
         response_contract=response_contract_json,
+        resume_evidence=resume_evidence,
     )
     return user
 
@@ -89,7 +93,10 @@ def build_prompt_context(
     response_contract: TailoringResponseContract,
     resume_payload: TailoringResumePayload | None,
     original_resume_markdown: str,
+    original_resume_data: dict[str, Any] | None = None,
 ) -> TailoringPromptContext:
+    from app.services.tailoring.evidence import build_evidence_binder
+
     selected_mode = _resolve_mode(prompt_id)
 
     resume_input = (
@@ -104,11 +111,24 @@ def build_prompt_context(
     )
     job_json = jd_intelligence_to_prompt_json(jd_intelligence)
 
+    # Build evidence binder (deterministic, no LLM call)
+    try:
+        evidence = build_evidence_binder(
+            jd_intelligence,
+            resume_payload,
+            original_resume_data=original_resume_data,
+        )
+        evidence_json = json.dumps(evidence.to_prompt_dict(), separators=(",", ":"), ensure_ascii=True)
+    except Exception:
+        logger.warning("Evidence binder failed; using empty evidence", exc_info=True)
+        evidence_json = "{}"
+
     mod = get_prompt("tailor_resume_full" if selected_mode == "full" else "tailor_resume_lite")
     system_prompt, user_prompt = mod.build_messages(
         original_resume=resume_input,
         extract_jd_intel_output=job_json,
         response_contract=response_contract_json,
+        resume_evidence=evidence_json,
     )
 
     return TailoringPromptContext(
@@ -120,6 +140,7 @@ def build_prompt_context(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         used_structured_resume_input=resume_payload is not None,
+        resume_evidence_json=evidence_json,
     )
 
 

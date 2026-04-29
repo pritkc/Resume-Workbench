@@ -1,8 +1,7 @@
-
 ORIGINAL RESUME:
 $original_resume
 
-DRAFT RESUME (first pass):
+REHYDRATED DRAFT RESUME (first pass applied to original — this is what a recruiter would see):
 $tailor_resume_full_output
 
 CRITIQUE (JSON):

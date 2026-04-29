@@ -26,6 +26,7 @@ DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
     "extract_jd_intel_output": "JSON from extract_jd_intel step",
+    "resume_evidence": "EvidenceBinder JSON: supported/adjacent/unsupported JD terms and role depth",
     "original_resume": "Structured resume JSON or markdown",
     "response_contract": "Allowed response shape for this resume",
     "resume_diff_rules": "Shared compact JSON output schema (resume_diff; DB override supported)",
@@ -37,6 +38,7 @@ def build_messages(
     original_resume: str,
     extract_jd_intel_output: str,
     response_contract: str,
+    resume_evidence: str = "{}",
 ) -> tuple[str, str]:
     from app.prompts import load_override, load_shared_rules_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
@@ -53,6 +55,7 @@ def build_messages(
         return comp["system"], render_user_template(
             comp["user"],
             extract_jd_intel_output=extract_jd_intel_output,
+            resume_evidence=resume_evidence,
             original_resume=original_resume,
             response_contract=response_contract,
             resume_diff_rules=resume_diff_rules,
@@ -63,6 +66,7 @@ def build_messages(
     user = render_user_template(
         USER_TEMPLATE,
         extract_jd_intel_output=extract_jd_intel_output,
+        resume_evidence=resume_evidence,
         original_resume=original_resume,
         response_contract=response_contract,
         resume_diff_rules=resume_diff_rules,

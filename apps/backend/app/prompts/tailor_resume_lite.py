@@ -37,6 +37,7 @@ def build_messages(
     original_resume: str,
     extract_jd_intel_output: str,
     response_contract: str,
+    resume_evidence: str = "{}",
 ) -> tuple[str, str]:
     from app.prompts import load_override, load_shared_rules_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
