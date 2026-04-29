@@ -13,3 +13,6 @@ $extract_jd_intel_output
 
 RESPONSE CONTRACT:
 $response_contract
+
+OUTPUT SCHEMA (compact JSON you must return — follow field names and nesting exactly):
+$resume_diff_rules

@@ -1,5 +1,3 @@
-Analyze this job description and extract comprehensive intelligence for resume tailoring.
-
 Output JSON matching this schema:
 
 {

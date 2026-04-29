@@ -1,15 +1,11 @@
-Tailor this resume for the target role.
-
-REWRITING EXAMPLE:
-Original: "Worked on backend systems"
-JD needs: Kubernetes, CI/CD, microservices
-Rewritten: "Built and maintained backend microservices deployed on Kubernetes with automated CI/CD pipelines, reducing deployment time from 2 hours to 15 minutes"
-
-JOB INTELLIGENCE:
+EXTRACTED JD INTELLIGENCE:
 $extract_jd_intel_output
 
-MASTER RESUME:
+ORIGINAL RESUME:
 $original_resume
 
 RESPONSE CONTRACT (allowed sections and bullet counts — do not emit sections absent from this list):
 $response_contract
+
+OUTPUT SCHEMA (compact JSON you must return — follow field names and nesting exactly):
+$resume_diff_rules
