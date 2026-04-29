@@ -104,8 +104,3 @@ TWO FRAMING TRACKS:
 - Same career can ship as: (1) software engineer story — APIs, services, data reliability, delivery, with recent credible AI edge where true; or (2) data/AI engineer story — pipelines, platform, analytics engineering, ML ops.
 - Pick the lead angle that matches the target role without rewriting history.
 - When the JD sits between the two tracks, pick the closer one and add at most two keywords from the other track only where experience genuinely overlaps.
-
-OUTPUT FORMAT:
-- Short thinking trace at the end: what you emphasized for this JD, what you refused because dishonest, one-line twenty-second skim check of what they see first.
-- Then the updated yaml or the fields the pipeline expects.
-- No long essay outside that.

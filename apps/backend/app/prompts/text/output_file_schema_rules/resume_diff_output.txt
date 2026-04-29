@@ -1,21 +1,46 @@
 OUTPUT FORMAT:
-- Valid JSON only — no markdown, no commentary
-- Keys: "summary", "experience", "projects", "skills", "bold_keywords"
-- summary: one sentence. "[N]+ years in [domain], [1-2 JD-aligned strengths]."
-- experience: object keyed by 0-based entry index ("0", "1", …)
-  - include only entries you change
-  - each entry: { "position": "enhanced title or omit", "bullets": { "INDEX": "text" } }
-  - INDEX must be within the entry's bullet_count
-  - omit an INDEX to keep that bullet unchanged
-- projects: object keyed by 0-based entry index
-  - each entry: { "name": "enhanced title or omit", "tech_stacks": "updated tagline or omit", "bullets": { "INDEX": "text" } }
-- skills: array of { "label": "...", "values": [...] }
-  - keep this concise and simple: 3-6 groups max
-  - each group label should be short and clear (e.g., Backend, Cloud, Data, Languages, Certifications)
-  - retain highly relevant core skills from the base resume
-  - remove clearly irrelevant skills for this role
-  - avoid duplicates across groups
-  - place JD-critical skills in the first groups
-  - omit "skills" key entirely if no changes
-- bold_keywords: array of 10-20 strings — keywords from the final resume content that should be rendered bold, selected for maximum JD alignment
-- Do NOT emit: id, company, location, dates, github, website, customSections
+- Valid JSON only — no markdown, no prose, no commentary, no thinking trace
+- Top-level keys: "summary", "experience", "projects", "skills", "bold_keywords"
+- Emit only sections you change. Omit a key entirely to leave that section unchanged.
+
+INDEX MAPPING:
+- experience and projects keys are stringified 0-based integers ("0", "1", "2"…)
+- Key "0" corresponds to response_contract.experience.entries[0], key "1" to entries[1], and so on
+- The order matches the response_contract exactly — do not use company or project names as keys
+
+BULLET POLICY (strictly enforced by the applicator):
+- Rewrite existing bullets only. Do NOT add new bullets. Do NOT remove bullets. Do NOT reorder bullets.
+- Valid bullet INDEX values are 0 through (bullet_count - 1) for that entry.
+- Any INDEX at or beyond bullet_count is silently dropped by the applicator.
+- Omit a bullet INDEX to leave that bullet unchanged.
+
+LOCKED FIELDS (never emit — applicator will discard or error):
+id, company, location, start_date, end_date, date, years, github, website, customSections
+
+EDITABLE FIELDS per entry:
+- experience entries: position (title enhancement only — keep base title, add scope qualifier), tech_stacks, bullets
+- project entries: name (enhancement only), tech_stacks, bullets
+
+SUMMARY:
+- One sentence fit-check. State domain, single strongest technical signal, and role alignment.
+- Do NOT use "X years of experience" framing. Do NOT start with a personal pronoun or adjective pile.
+- Good: "Backend engineer with event-driven systems experience targeting data platform roles."
+- Bad: "5+ years in backend, specializing in APIs and AWS." (years-count format)
+
+EXPERIENCE format:
+- "experience": { "0": { "position": "enhanced title or omit", "tech_stacks": "updated line or omit", "bullets": { "0": "text", "2": "text" } } }
+- Include only entries you change; omit unchanged entries entirely.
+
+PROJECTS format:
+- "projects": { "0": { "name": "enhanced name or omit", "tech_stacks": "updated tagline or omit", "bullets": { "0": "text" } } }
+
+SKILLS format:
+- Array of { "label": "...", "values": [...] } — 3-6 groups max
+- Short clear labels (Backend, Cloud, Data, Languages, Certifications)
+- Retain highly relevant core skills; remove clearly irrelevant ones; no duplicates across groups
+- Place JD-critical skills in first groups
+- Omit "skills" key entirely if no changes
+
+BOLD KEYWORDS:
+- "bold_keywords": array of 10-20 strings from the final resume content, selected for JD alignment
+- These are rendering instructions for the PDF renderer — choose words already present in bullets/summary

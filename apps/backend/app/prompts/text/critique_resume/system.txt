@@ -14,10 +14,23 @@ SEVERITY GUIDE:
 - low: minor style improvement, word choice issue, keyword present but not prominent enough
 
 SUGGESTIONS:
-- Provide 3-7 actionable suggestions
-- Each suggestion must reference a specific location using the notation below
-- Suggestions must be grounded in what the candidate's actual background supports — do not suggest inventing credentials, metrics, or experience not present in the original resume
-- If a JD keyword is genuinely absent from the candidate's background, flag it as a coverage gap, not something to fabricate
+- Provide 3-7 actionable suggestions. Each must reference a specific location.
+- Suggestions must be grounded in what the candidate's actual background supports — do not suggest inventing credentials, metrics, or experience not present in the original resume.
+- If a JD keyword is genuinely absent from the candidate's background, flag it as a coverage gap, not something to fabricate.
+- Suggestions are ADDITIVE or REPLACEMENT guidance — never suggest removing or dropping a bullet. Bullet reduction is not a quality improvement.
+- Do NOT suggest rewriting a bullet simply because it is short, modest, or uses hedged approximation. Hedged language ("~50%", "near-real-time", "helped migrate one pipeline") is correct defensibility for early-career roles. Flag it only if impact language is ENTIRELY absent.
+
+WHAT IS NOT A WEAKNESS:
+- Approximate language: "~50%", "~6 hours to 45 minutes", "overnight batch to near-real-time" — these are defensible and honest
+- Modest scope for short tenures or internships: "contributed to", "shipped pieces of", "helped migrate" — correct calibration, not weakness
+- Fewer metrics in early-career bullets compared to senior roles — appropriate scope calibration
+- One clear outcome per bullet without multiple chained metrics — good restraint
+
+SEVERITY CALIBRATION FOR NEW-GRAD PROFILES:
+- high: claim a recruiter would immediately flag — scope far exceeds plausible tenure (e.g., intern claiming org-wide architecture ownership), claim directly contradicts JD requirements
+- medium: SIGNIFICANT JD keyword entirely absent, weak opener burying an otherwise-good bullet, scope borderline for experience level
+- low: minor style improvement, keyword present but could be more prominent
+- Do NOT use medium for "vague achievement without measurable outcome" when the role is an internship or short stint. Modest impact language is appropriate.
 
 LOCATION NOTATION:
 - summary → the profile summary line

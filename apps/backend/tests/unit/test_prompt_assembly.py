@@ -17,7 +17,7 @@ def test_assemble_full_contains_craft_and_mode_without_embedded_diff_rules() -> 
     assembled = assemble_tailoring_system_prompt("full")
     assert "OUTPUT FORMAT:" not in assembled
     assert "ROLE & GOAL:" in assembled
-    assert "OUTPUT HABIT" in assembled
+    assert "TWO FRAMING TRACKS:" in assembled
 
 
 def test_assemble_light_contains_light_touch() -> None:
@@ -83,3 +83,109 @@ def test_config_resolve_prompt_id_migrates_legacy_ids() -> None:
     option_ids = {o["id"] for o in IMPROVE_PROMPT_OPTIONS}
     assert _resolve_prompt_id("keywords", option_ids) == "full"
     assert _resolve_prompt_id("nudge", option_ids) == "lite"
+
+
+# ── P0 contradiction checks ────────────────────────────────────────────────
+
+
+def test_full_system_prompt_has_no_output_format_section() -> None:
+    """OUTPUT FORMAT must NOT appear in system prompt — it belongs in $resume_diff_rules only."""
+    system = assemble_tailoring_system_prompt("full")
+    assert "OUTPUT FORMAT:" not in system, (
+        "OUTPUT FORMAT instructions must live in resume_diff_output.txt (user message), "
+        "not in the system prompt. Having it in both creates conflicting output authorities."
+    )
+
+
+def test_full_system_prompt_has_no_thinking_trace_instruction() -> None:
+    """Thinking-trace / YAML instructions conflict with JSON-only compact diff output."""
+    system = assemble_tailoring_system_prompt("full")
+    lower = system.lower()
+    assert "thinking trace" not in lower, "Remove 'thinking trace' from system prompt"
+    assert "updated yaml" not in lower, "Remove 'updated yaml' from system prompt"
+
+
+def test_full_system_prompt_has_role_and_goal() -> None:
+    system = assemble_tailoring_system_prompt("full")
+    assert "ROLE & GOAL:" in system
+
+
+def test_two_framing_tracks_has_data_ai_track() -> None:
+    """The data/AI engineer framing track must be present — was missing as point 2."""
+    system = assemble_tailoring_system_prompt("full")
+    assert "data/AI engineer" in system or "data engineer" in system.lower(), (
+        "TWO FRAMING TRACKS must include the data/AI engineer track"
+    )
+
+
+def test_resume_diff_rules_in_user_prompt() -> None:
+    """$resume_diff_rules must be rendered into the user message (output-format authority)."""
+    user = render_tailoring_user_prompt(
+        mode_id="full",
+        extract_jd_intel_output_json="{}",
+        original_resume_json="{}",
+        response_contract_json="{}",
+    )
+    assert "OUTPUT FORMAT:" in user, (
+        "$resume_diff_rules must include OUTPUT FORMAT instructions in the user message"
+    )
+    assert "$resume_diff_rules" not in user, "Template placeholder must be substituted"
+
+
+def test_resume_diff_rules_no_years_format() -> None:
+    """Summary schema must NOT force '[N]+ years in [domain]' — conflicts with SUMMARY section."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    assert "[N]+ years" not in RESUME_DIFF_RULES, (
+        "resume_diff_output.txt summary rule forces a years-count format that "
+        "tailor_resume_full/system.txt SUMMARY section explicitly forbids. "
+        "Remove the [N]+ years template from the diff rules."
+    )
+
+
+def test_resume_diff_rules_has_bullet_policy() -> None:
+    """Diff rules must document the forbid-add/remove bullet policy."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "do not add" in lower or "rewrite existing" in lower or "forbid" in lower, (
+        "resume_diff_output.txt must state that bullets may only be rewritten, not added or removed"
+    )
+
+
+def test_resume_diff_rules_has_locked_fields() -> None:
+    """Diff rules must document which fields are locked."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    assert "LOCKED" in RESUME_DIFF_RULES or "locked" in RESUME_DIFF_RULES.lower(), (
+        "resume_diff_output.txt must list locked (immutable) fields"
+    )
+
+
+def test_resume_diff_rules_has_index_mapping_note() -> None:
+    """Diff rules must explain that string keys are 0-based indexes matching contract order."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    assert "0-based" in RESUME_DIFF_RULES or "response_contract" in RESUME_DIFF_RULES, (
+        "resume_diff_output.txt must state that experience/projects keys are 0-based "
+        "integer strings matching response_contract entry order"
+    )
+
+
+def test_contract_to_prompt_dict_includes_mode_rules() -> None:
+    """to_prompt_dict() must include mode_rules so the LLM sees constraints."""
+    payload = TailoringResumePayload()
+    rc = build_response_contract(payload, prompt_id="full")
+    d = rc.to_prompt_dict()
+    assert "rules" in d, (
+        "TailoringResponseContract.to_prompt_dict() must include 'rules' key with mode_rules. "
+        "Currently mode_rules is built but silently omitted from the LLM-visible dict."
+    )
+    assert len(d["rules"]) > 0
+
+
+def test_contract_to_prompt_dict_includes_index_mapping() -> None:
+    """to_prompt_dict() must document that keys are 0-based and match contract order."""
+    payload = TailoringResumePayload()
+    rc = build_response_contract(payload, prompt_id="full")
+    d = rc.to_prompt_dict()
+    assert "index_note" in d or "index_mapping" in d or any(
+        "0-based" in str(v) or "contract order" in str(v)
+        for v in d.values()
+    ), "to_prompt_dict() must include an index mapping note"

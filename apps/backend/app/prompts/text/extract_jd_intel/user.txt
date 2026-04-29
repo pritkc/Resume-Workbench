@@ -34,8 +34,8 @@ Output JSON matching this schema:
   "ats_keywords": [
     "every technical term, tool, methodology, and domain keyword an ATS would scan for — 20-60 terms; include common abbreviation variants (e.g., 'CI/CD' and 'Continuous Integration/Continuous Deployment')"
   ],
-  "bold_keywords": [
-    "the 10-15 most impactful keywords that should appear prominently in the resume"
+  "priority_keywords": [
+    "10-15 highest-impact JD keywords that must appear prominently in the tailored resume — not a final rendering list, just the top coverage targets"
   ],
   "culture_signals": [
     "any team culture or working-style signals from the JD: fast-moving, remote-first, cross-functional, data-driven, on-call, etc."

@@ -480,6 +480,20 @@ class JDRoleContext(BaseModel):
     function: str | None = None
     scope: str | None = None
 
+    @field_validator("seniority", mode="before")
+    @classmethod
+    def _normalize_seniority(cls, v: Any) -> str | None:
+        if not isinstance(v, str):
+            return v
+        normalized = v.strip().lower().replace("_", "-")
+        _MAP = {
+            "newgrad": "new-grad",
+            "new-grad": "new-grad",
+            "entry-level": "new-grad",
+            "entry level": "new-grad",
+        }
+        return _MAP.get(normalized, normalized) or None
+
 
 class JDCompanyContext(BaseModel):
     """Company/team intelligence from the JD."""
@@ -534,11 +548,32 @@ class JDIntelligence(BaseModel):
     requirements: JDRequirements = Field(default_factory=JDRequirements)
     responsibility_themes: list[str] = Field(default_factory=list)
     ats_keywords: list[str] = Field(default_factory=list)
-    bold_keywords: list[str] = Field(default_factory=list)
+    priority_keywords: list[str] = Field(default_factory=list)  # renamed from JD bold_keywords
     calibration: JDCalibration = Field(default_factory=JDCalibration)
+    experience_level_signal: str | None = None  # soft scope ceiling hint from JD
+    culture_signals: list[str] = Field(default_factory=list)  # tone/working-style hints
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_jd_bold_keywords(cls, value: Any) -> Any:
+        """Transition: accept old 'bold_keywords' key and map to 'priority_keywords'."""
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        if "bold_keywords" in data and "priority_keywords" not in data:
+            data["priority_keywords"] = data.pop("bold_keywords")
+        elif "bold_keywords" in data and "priority_keywords" in data:
+            # Both present: priority_keywords wins, discard old bold_keywords
+            data.pop("bold_keywords")
+        return data
 
     def to_prompt_dict(self) -> dict[str, Any]:
-        """Compact JSON without empty fields."""
+        """Compact JSON without empty fields.
+
+        Includes: role, company, location, technical_requirements, requirements,
+        responsibility_themes, ats_keywords, priority_keywords, calibration,
+        experience_level_signal (soft scope hint), culture_signals (tone hints).
+        """
 
         def _strip_empty(d: Any) -> Any:
             if isinstance(d, dict):
@@ -569,6 +604,8 @@ class JDIntelligence(BaseModel):
             "education_requirements": (
                 [self.requirements.education] if self.requirements.education else []
             ),
+            # expose priority_keywords under legacy bold_keywords key for backward compat
+            "bold_keywords": self.priority_keywords,
         }
 
 
@@ -615,10 +652,21 @@ class TailoringResponseContract(BaseModel):
     project_tech_stacks: list[str] = Field(default_factory=list)
 
     def to_prompt_dict(self) -> dict[str, Any]:
-        """Return compact address contract for the LLM prompt."""
+        """Return compact address contract for the LLM prompt.
+
+        Exposes: mode, rules (mode_rules), output_keys, index_note,
+        experience entry/position/bullet_count arrays, project arrays.
+        The LLM uses rules to understand bullet policy, index_note to understand
+        that output keys are 0-based integers matching this contract's entry order.
+        """
         out: dict[str, Any] = {
             "mode": self.prompt_mode,
+            "rules": self.mode_rules,  # Previously omitted — LLM never saw bullet policy
             "output_keys": ["summary", "experience", "projects", "skills", "bold_keywords"],
+            "index_note": (
+                "experience and projects keys are stringified 0-based integers. "
+                "Key '0' = entries[0] in this contract, '1' = entries[1], etc."
+            ),
         }
 
         if self.experience_entries:
