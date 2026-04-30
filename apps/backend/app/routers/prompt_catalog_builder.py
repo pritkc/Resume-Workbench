@@ -82,6 +82,7 @@ def _probe_system_message(step_name: str) -> str:
             job_target="{}",
             job_description="probe",
             resume_profile="{}",
+            tailored_resume_context="{}",
         )
         return s
     if step_name == "answer_questions":

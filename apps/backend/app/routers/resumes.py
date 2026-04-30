@@ -1145,6 +1145,7 @@ async def _generate_auxiliary_messages(
             await generate_cover_letter_and_outreach(
                 improved_data,
                 job_content,
+                job_keywords=job_keywords,
             )
         )
         if include_cover_letter:
@@ -2907,10 +2908,12 @@ async def generate_auxiliary_package_endpoint(
         resume_id,
         feature_name="CL + message package",
     )
+    job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
     try:
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,
             job["content"],
+            job_keywords=job_kw,
         )
     except Exception as e:
         logger.error("CL + message package generation failed: %s", e)
@@ -2948,12 +2951,14 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
         resume_id,
         feature_name="Cover letter",
     )
+    job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
 
     # Generate the shared auxiliary package once and return the requested field.
     try:
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,
             job["content"],
+            job_keywords=job_kw,
         )
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
@@ -2990,12 +2995,14 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
         resume_id,
         feature_name="Outreach message",
     )
+    job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
 
     # Generate the shared auxiliary package once and return the requested field.
     try:
         cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
             resume_data,
             job["content"],
+            job_keywords=job_kw,
         )
     except Exception as e:
         logger.error(f"Outreach message generation failed: {e}")

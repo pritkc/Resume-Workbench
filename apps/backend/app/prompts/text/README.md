@@ -6,7 +6,7 @@
 
 | Path | Purpose |
 |------|---------|
-| `output_file_schema_rules/` | Shared **resume diff JSON** contract (`resume_diff_output.txt`) appended at runtime to tailor + rewrite system prose |
+| `output_file_schema_rules/` | Shared **resume diff JSON** contract (`resume_diff_output.txt`), injected at runtime as **`$resume_diff_rules`** in tailor + rewrite **user** messages |
 | `{step_id}/` | Per-step **`system.txt`** and **`user.txt`** (`parse_resume/`, `extract_jd_intel/`, `tailor_resume_full/`, `tailor_resume_lite/`, `critique_resume/`, `rewrite_resume/`, `cover_letter/`, `answer_questions/`) |
 | `enrichment/{analyze,enhance,regenerate_item,regenerate_group}/` | Each op has `system.txt` + `user.txt` |
 | `index.yaml` | Machine-readable list of step ids and enrichment ops |
@@ -24,7 +24,9 @@ Composer and file overrides **replace** shipped text at runtime; they do not liv
 
 User templates use **`string.Template`** with `$name` placeholders. A literal dollar sign in prose must be written as **`$$`**.
 
-Common tailoring-related names (LLM outputs use the **`step_name_output`** style): **`$extract_jd_intel_output`**, **`$tailor_resume_full_output`**, **`$critique_resume_output`**, plus **`$original_resume`** and **`$response_contract`**. There is no **`$output_language`** placeholder; English-only wording is fixed in prompt text.
+Common tailoring-related names (LLM outputs use the **`step_name_output`** style): **`$extract_jd_intel_output`**, **`$tailor_resume_full_output`**, **`$critique_resume_output`**, plus **`$resume_evidence`** (deterministic support/adjacency/gap map), **`$original_resume`**, **`$response_contract`**, and **`$resume_diff_rules`** (shared output-schema text). Auxiliary writing prompts use **`$tailored_resume_context`** for the rehydrated resume's JD-specific summary, top bullets, projects, education, selected skills, and style note. There is no **`$output_language`** placeholder; English-only wording is fixed in prompt text.
+
+**Runtime injection points:** full tailoring receives `$extract_jd_intel_output`, `$resume_evidence`, `$original_resume`, `$response_contract`, and `$resume_diff_rules`; rewrite receives the original resume, rehydrated first-pass draft, critique JSON, JD intelligence, response contract, and diff rules; cover letter and application-question prompts receive `$tailored_resume_context` alongside the stable `$resume_profile`.
 
 **Master resume for catalog preview:** `GET /api/v1/config/prompts/catalog/master-resume-preview` serializes the same `original_resume` string tailoring would use for the **active** resume if one is set; otherwise the **first resume in list order with no `parent_id`**; otherwise the **first resume** returned by `list_resumes`. Payload is capped at **256 KiB** with a `truncated` flag.
 

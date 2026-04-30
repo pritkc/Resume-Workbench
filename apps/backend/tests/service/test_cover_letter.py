@@ -1,8 +1,10 @@
 """Service tests for cover letter and outreach helpers."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 from app.services.cover_letter import (
+    _build_message_prompt_inputs,
     build_job_target_title,
     extract_job_target_metadata,
     parse_combined_message_response,
@@ -198,6 +200,28 @@ class TestCandidatePromptProfile:
         assert len(prompt_json) < 900
 
 
+class TestCoverLetterPromptInputs:
+    def test_includes_tailored_resume_context_json(self, sample_resume, sample_job_description):
+        inputs = _build_message_prompt_inputs(sample_resume, sample_job_description)
+        assert "tailored_resume_context" in inputs
+        assert "tailored_summary" in inputs["tailored_resume_context"]
+        assert "top_experience" in inputs["tailored_resume_context"]
+
+    def test_job_keywords_refine_job_target(self, sample_resume):
+        jd = "Join our platform team."
+        inputs = _build_message_prompt_inputs(
+            sample_resume,
+            jd,
+            job_keywords={
+                "role": {"title": "Backend Engineer", "seniority": "junior"},
+                "company": {"name": "Pylon Labs"},
+            },
+        )
+        target = json.loads(inputs["job_target"])
+        assert target.get("role") == "Backend Engineer"
+        assert target.get("company") == "Pylon Labs"
+
+
 class TestGeneratedMessages:
     @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
     async def test_combined_generation_uses_single_json_call(
@@ -221,11 +245,14 @@ Open to a quick intro call this week?
         prompt = kwargs["prompt"]
         assert "JOB TARGET (JSON):" in prompt
         assert "CANDIDATE PROFILE (JSON):" in prompt
+        assert "TAILORED RESUME CONTEXT" in prompt
+        assert "tailored_summary" in prompt or "top_experience" in prompt
         assert kwargs["operation"] == "cover_letter_outreach_generate"
         assert kwargs["max_tokens"] == 2600
         assert kwargs["retries"] == 2
         assert kwargs["retry_max_tokens"] == 3200
         assert kwargs["metadata"]["candidate_profile_chars"] < 900
+        assert kwargs["metadata"].get("tailored_resume_context_chars", 0) > 0
         assert cover_letter == "Thanks for considering my application."
         assert outreach == "Open to a quick intro call this week?"
 
@@ -237,7 +264,11 @@ Open to a quick intro call this week?
 
         outreach = await generate_outreach_message(sample_resume, sample_job_description)
 
-        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description)
+        mock_combined.assert_awaited_once_with(
+            sample_resume,
+            sample_job_description,
+            job_keywords=None,
+        )
         assert outreach == "Worth a quick chat?"
 
     @patch("app.services.cover_letter.generate_cover_letter_and_outreach", new_callable=AsyncMock)
@@ -248,7 +279,11 @@ Open to a quick intro call this week?
 
         cover_letter = await generate_cover_letter(sample_resume, sample_job_description)
 
-        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description)
+        mock_combined.assert_awaited_once_with(
+            sample_resume,
+            sample_job_description,
+            job_keywords=None,
+        )
         assert cover_letter == "Thanks for your time."
 
     def test_combined_parser_accepts_json_fallback(self):

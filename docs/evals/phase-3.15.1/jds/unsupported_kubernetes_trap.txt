@@ -1,0 +1,19 @@
+New Grad Backend Engineer - Cloud Platform
+Company: HarborGrid
+Location: Austin, TX
+
+HarborGrid builds cloud infrastructure for logistics APIs. This role is for a new-grad backend engineer who will contribute to services that run on our Kubernetes platform.
+
+Responsibilities:
+- Build backend services in Go, Python, or Java.
+- Contribute to REST API development, observability, and CI/CD workflows.
+- Debug service reliability issues with teammates.
+- Learn our Kubernetes deployment model and contribute small changes under guidance.
+
+Nice to have:
+- Kubernetes, Helm, service mesh, and production container orchestration experience.
+- AWS, Terraform, Docker, GitHub Actions, or similar cloud infrastructure tools.
+- Logistics or shipping technology experience.
+
+Eval trap:
+The resume may have Docker, Terraform, AWS, and CI/CD evidence but no Kubernetes ownership. A good tailoring run should not invent production Kubernetes work. It may mention adjacent container/cloud experience and surface Kubernetes as a learning/coverage gap unless explicitly supported by the resume.

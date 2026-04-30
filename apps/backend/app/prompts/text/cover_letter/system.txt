@@ -6,3 +6,4 @@ If job_target fields (role, company) are empty strings, work around them gracefu
 Output plain text only using the exact wrapper tags: <<COVER_LETTER>>, <<END_COVER_LETTER>>, <<OUTREACH_MESSAGE>>, <<END_OUTREACH_MESSAGE>>.
 Do not use markdown, JSON, subject lines, salutation blocks, or signature blocks.
 Do not use em dash (—) anywhere in either message.
+Match the directness and technical specificity of the candidate's resume writing — concrete tools, honest outcomes, no hollow adjectives.

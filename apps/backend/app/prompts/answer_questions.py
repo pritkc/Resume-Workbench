@@ -24,10 +24,10 @@ USER_TEMPLATE = APPLICATION_QUESTIONS_PROMPT
 DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
-    "job_target": "Role/company JSON",
+    "job_target": "Role/company/location JSON (from job + JD metadata)",
     "job_description": "JD excerpt",
-    "resume_profile": "Candidate profile JSON",
-    "tailored_resume_context": "Tailored resume JSON",
+    "resume_profile": "Stable compact candidate profile (headline, summary, top roles/projects/education/skills) — same shape as cover letter profile",
+    "tailored_resume_context": "JD-aligned resume framing: tailored summary, top experience bullets, top projects, education lines, and selected skills — use for role-specific evidence",
     "questions": "Questions list JSON",
 }
 
