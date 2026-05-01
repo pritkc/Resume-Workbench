@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 from string import Template
+from typing import Any
 
 _OVERRIDE_DIR = Path(__file__).resolve().parent.parent / "prompt_overrides"
 _STEP_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -74,10 +75,29 @@ def delete_composer_override(step_name: str) -> bool:
     return False
 
 
-def render_user_template(template: str, **kwargs: str) -> str:
-    """Substitute $placeholders; raises ValueError if unknown or unfilled placeholders remain."""
+def render_user_template(
+    template: str,
+    *,
+    jd_intel_blob: dict[str, Any] | None = None,
+    **kwargs: str,
+) -> str:
+    """Substitute ``$placeholders``; optional JD blob replaces ``$extract_jd_intel_output`` dot paths."""
+    from app.services.tailoring.jd_intel_blob import substitute_jd_intel_placeholders
+
+    text = template
+    blob = jd_intel_blob
+    if blob is None and "extract_jd_intel_output" in kwargs:
+        raw = kwargs.get("extract_jd_intel_output", "")
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                blob = parsed
+        except (json.JSONDecodeError, TypeError):
+            blob = None
+    if blob is not None:
+        text = substitute_jd_intel_placeholders(text, blob)
     try:
-        out = Template(template).substitute(**kwargs)
+        out = Template(text).substitute(**kwargs)
     except KeyError as e:
         raise ValueError(f"Missing template variable: {e.args[0]}") from e
     for m in _UNFILLED.finditer(out):

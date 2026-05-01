@@ -133,18 +133,15 @@ If you want the main happy path only, read these steps in order:
   What it does: loads the resume + JD, resolves prompt mode, sets trace scope, and runs the preview pipeline with a timeout.
 
 - Main preview flow: [`_improve_preview_flow()`](apps/backend/app/routers/resumes.py#L1179)
-  What it does: fetches/caches JD keyword analysis, generates the tailored resume preview, computes diffs, generates auxiliary documents, creates the application pack, and renders preview artifacts.
+  What it does: fetches/caches **JD intelligence JSON** (`job_keywords`), generates the tailored resume preview, computes diffs, generates auxiliary documents, creates the application pack, and renders preview artifacts.
 
-## 9. Extract JD Keywords And Build Tailoring Context
+## 9. Extract JD Intelligence And Build Tailoring Context
 
-- JD keyword extraction: [`extract_job_keywords()`](apps/backend/app/services/tailoring/analysis.py#L134)
-  What it does: asks the LLM for skills, keywords, responsibilities, years, and metadata from the JD.
+- JD extraction: [`extract_job_keywords()` / `extract_jd_intelligence()`](apps/backend/app/services/tailoring/analysis.py) — calls the LLM and returns a **JSON blob** persisted as `jobs.job_keywords` (shape follows **`extract_jd_intel`** prompts). [`enrich_jd_intel_blob()`](apps/backend/app/services/tailoring/jd_intel_blob.py) fills nested **`role`**, **`company`**, and **`location`** when missing. Tailoring **user** templates expand this blob via **`$extract_jd_intel_output`** (optional dot paths) before `string.Template` — see [`render_user_template`](apps/backend/app/prompts/_prompt_loader.py).
 
-- Supported-keyword filtering: [`find_supported_keywords()`](apps/backend/app/services/tailoring/analysis.py#L94)
-  What it does: keeps only the keywords that are already supported by the source resume, so the LLM stays grounded.
+- Keyword harvesting for local checks: [`collect_job_keywords()`](apps/backend/app/services/tailoring/analysis.py) — collects deduped strings from **list nodes anywhere** in the blob (used by verification and suggestions).
 
-- Compact job analysis object: [`build_job_analysis()`](apps/backend/app/services/tailoring/analysis.py#L104)
-  What it does: builds the smaller JD-analysis payload passed into the tailoring prompt.
+- Supported-keyword filtering: [`find_supported_keywords()`](apps/backend/app/services/tailoring/analysis.py) — keyword subset already present in the source resume text.
 
 - Tailoring handoff from router to service: [`_generate_tailored_resume_data()`](apps/backend/app/routers/resumes.py#L616)
   What it does: loads the original structured resume, finds cleanup source data, and calls the primary tailoring orchestration service.
@@ -157,8 +154,8 @@ If you want the main happy path only, read these steps in order:
 - Tailoring response contract: [`build_response_contract()`](apps/backend/app/services/tailoring/contracts.py#L61)
   What it does: tells the LLM which top-level keys and section fields it is allowed to return.
 
-- Prompt assembly: [`build_prompt_context()`](apps/backend/app/services/tailoring/prompting.py#L72)
-  What it does: serializes the compact resume JSON, compact JD analysis, and compact response contract into one prompt context.
+- Prompt assembly: [`build_prompt_context()`](apps/backend/app/services/tailoring/prompting.py)
+  What it does: serializes the compact resume JSON, passes **`jd_intel_blob`** so **`$extract_jd_intel_output`** placeholders (with optional dot paths) expand before **`string.Template`**, and serializes the response contract into one prompt context (`extract_jd_intel_output_json` on the context object is the compact JD JSON string for logging or reuse).
 
 - Prompt rendering: [`render_tailoring_prompt()`](apps/backend/app/services/tailoring/prompting.py#L110)
   What it does: injects the context into the actual tailoring prompt template.

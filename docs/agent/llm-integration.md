@@ -123,7 +123,7 @@ See [llm-prompt-inventory.md](llm-prompt-inventory.md) for the full prompt map.
 
 The active tailoring path is now:
 
-1. `job_extract_keywords`
+1. `extract_jd_intel_output` — returns arbitrary JSON cached as `job_keywords` (no typed `JDIntelligence` model); **`LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT`** in code
 2. `resume_generate_full`
 3. local cleanup and validation
 4. local diff generation for preview UI

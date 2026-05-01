@@ -97,8 +97,8 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
     runtime_children = [
         PromptCatalogSection(
             id="tailoring_rt_job_intel",
-            label="{extract_jd_intel_output}",
-            content="JSON from extract_jd_intel (role, keywords, themes, etc.).",
+            label="$extract_jd_intel_output (+ .path)",
+            content="Cached JD JSON blob; optional dot paths (e.g. .requirements.years_min) inject fragments.",
             policy="runtime_injected",
         ),
         PromptCatalogSection(

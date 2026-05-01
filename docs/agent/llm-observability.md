@@ -78,7 +78,7 @@ If content storage is disabled, previews will be empty even though call metadata
 1. capture the `request_id` returned by preview
 2. open `/llm-traces?trace_id=<request_id>&request_scope=resumes.improve_preview`
 3. inspect:
-   - `job_extract_keywords`
+   - `extract_jd_intel_output` (stores arbitrary JD JSON on the job; shape follows `extract_jd_intel` prompts; same name as **`$extract_jd_intel_output`** in tailoring user templates — see `apps/backend/app/prompts/text/README.md`; legacy traces may show `job_extract_keywords`)
    - `resume_generate_full`
    - optional `cover_letter_outreach_generate` (cover letter + outreach in one call)
 

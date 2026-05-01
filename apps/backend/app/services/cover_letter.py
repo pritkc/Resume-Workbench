@@ -401,7 +401,7 @@ def _get_keyword_metadata_value(job_keywords: dict[str, Any] | None, *keys: str)
             cleaned = _clean_metadata_value(value)
             if cleaned:
                 return cleaned
-        # JDIntelligence 2.0 shape: nested role/company objects (flat core_title may be missing).
+        # Nested role/company dicts (flat core_title may still appear on older rows).
         if isinstance(value, dict):
             nested_key = "title" if key == "role" else "name" if key == "company" else None
             if nested_key:

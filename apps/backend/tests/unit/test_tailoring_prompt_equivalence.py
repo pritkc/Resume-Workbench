@@ -15,7 +15,7 @@ def test_full_system_message_matches_tailor_resume_full_module() -> None:
     mod = get_prompt("tailor_resume_full")
     new, _ = mod.build_messages(
         original_resume="{}",
-        extract_jd_intel_output="{}",
+        jd_intel_blob={},
         response_contract="{}",
     )
     assert old == new
@@ -26,7 +26,7 @@ def test_lite_system_message_matches_tailor_resume_lite_module() -> None:
     mod = get_prompt("tailor_resume_lite")
     new, _ = mod.build_messages(
         original_resume="{}",
-        extract_jd_intel_output="{}",
+        jd_intel_blob={},
         response_contract="{}",
     )
     assert old == new
@@ -42,7 +42,7 @@ def test_full_user_message_matches_module() -> None:
     mod = get_prompt("tailor_resume_full")
     _, new = mod.build_messages(
         original_resume="{}",
-        extract_jd_intel_output="{}",
+        jd_intel_blob={},
         response_contract="{}",
     )
     assert old == new
@@ -58,7 +58,7 @@ def test_lite_user_message_matches_module() -> None:
     mod = get_prompt("tailor_resume_lite")
     _, new = mod.build_messages(
         original_resume="{}",
-        extract_jd_intel_output="{}",
+        jd_intel_blob={},
         response_contract="{}",
     )
     assert old == new

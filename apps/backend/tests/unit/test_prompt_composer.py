@@ -42,7 +42,7 @@ def test_tailor_build_messages_fills_template() -> None:
     mod = get_prompt("tailor_resume_full")
     _, user = mod.build_messages(
         original_resume="{}",
-        extract_jd_intel_output="{}",
+        jd_intel_blob={},
         response_contract="{}",
     )
     assert "$extract_jd_intel_output" not in user

@@ -55,9 +55,9 @@ class TestExtractJobKeywords:
 
         assert "Python" in result["required_skills"]
         assert result["experience_years"] == 5
-        assert result["core_title"] == "Backend Engineer"
-        assert result["company_name"] == "TechCorp"
-        assert result["location"] == ""
+        assert result["role"]["title"] == "Backend Engineer"
+        assert result["company"]["name"] == "TechCorp"
+        assert result["location"] == "Remote"
         mock_llm.assert_called_once()
 
     @patch("app.services.tailoring.analysis.complete_json", new_callable=AsyncMock)
@@ -82,8 +82,8 @@ class TestExtractJobKeywords:
             "As an Agile Business Analyst at West Shore Home, you will work across teams."
         )
 
-        assert result["core_title"] == "Agile Business Analyst"
-        assert result["company_name"] == "West Shore Home"
+        assert result["role"]["title"] == "Agile Business Analyst"
+        assert result["company"]["name"] == "West Shore Home"
 
 
 class TestImproveResume:

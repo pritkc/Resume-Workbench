@@ -315,39 +315,3 @@ class TestAllSkillValues:
         resume = {"additional": {"groups": [{"label": "Tech", "values": ["Go", "Rust"]}]}}
         vals = _all_skill_values(resume)
         assert vals == {"Go", "Rust"}
-
-
-class TestJDIntelligence:
-    def test_to_prompt_dict_strips_empty_fields(self):
-        from app.services.tailoring.models import JDIntelligence
-        intel = JDIntelligence(
-            role={"title": "Backend Engineer", "seniority": "senior"},
-            company={"name": "TechCorp"},
-            ats_keywords=["Python", "FastAPI"],
-        )
-        d = intel.to_prompt_dict()
-        assert d["role"]["title"] == "Backend Engineer"
-        assert "location" not in d
-        assert "bold_keywords" not in d
-        assert d["ats_keywords"] == ["Python", "FastAPI"]
-
-    def test_to_legacy_keywords_backward_compat(self):
-        from app.services.tailoring.models import JDIntelligence
-        intel = JDIntelligence(
-            role={"title": "Backend Engineer", "seniority": "senior"},
-            company={"name": "TechCorp"},
-            location="Remote",
-            technical_requirements={"primary_stack": ["Python", "FastAPI"]},
-            requirements={"years": 5, "education": "BS in CS"},
-            ats_keywords=["microservices"],
-            responsibility_themes=["API design"],
-        )
-        legacy = intel.to_legacy_keywords()
-        assert legacy["core_title"] == "Backend Engineer"
-        assert legacy["company_name"] == "TechCorp"
-        assert legacy["location"] == "Remote"
-        assert legacy["required_skills"] == ["Python", "FastAPI"]
-        assert legacy["experience_years"] == 5
-        assert legacy["seniority_level"] == "senior"
-        assert legacy["keywords"] == ["microservices"]
-        assert legacy["education_requirements"] == ["BS in CS"]

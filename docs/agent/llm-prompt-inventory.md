@@ -24,9 +24,9 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | `_constants.py` | `IMPROVE_PROMPT_OPTIONS`, `DEFAULT_IMPROVE_PROMPT_ID`, `PROMPT_VERSIONS`, language names |
 | `_schema.py` | Shared JSON schema fragments for prompts |
 | `_text_prompts.py` | Load shipped UTF-8 `.txt` from `text/` (BOM strip, newline normalize) |
-| `_prompt_loader.py` | Composer overrides; `string.Template` user rendering |
+| `_prompt_loader.py` | Composer overrides; `render_user_template` (`string.Template` + optional JD blob dot-path expansion) |
 | `parse_resume.py` | `PARSE_RESUME_PROMPT` — resume upload parsing |
-| `extract_jd_intel.py` | JD keyword / intelligence extraction (`EXTRACT_*`) |
+| `extract_jd_intel.py` | JD intelligence extraction; output is arbitrary JSON cached as `job_keywords` |
 | `tailoring_blocks.py` | Tailoring system/user shells, `IMPROVE_RESUME_PROMPT`, `TAILORING_MODE_STRATEGY`, contracts |
 | `tailor_resume_full.py` / `tailor_resume_lite.py` | Step modules for tailoring operations |
 | `tailoring_catalog.py` | Catalog metadata for tailoring |
@@ -43,7 +43,7 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | Area | Constants / entry | Used by | LLM operation (typical) |
 |------|---------------------|---------|-------------------------|
 | Parse | `PARSE_RESUME_PROMPT` | `services/parser.py` | `resume_parse_json` |
-| JD | `EXTRACT_KEYWORDS_PROMPT`, JD intelligence blocks | `services/tailoring/analysis.py` | keyword / intel extraction |
+| JD | `extract_jd_intel` prompts, `jd_intel_blob` helpers | `services/tailoring/analysis.py`, `services/tailoring/jd_intel_blob.py` | `extract_jd_intel_output` (`LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT`) |
 | Tailor | `IMPROVE_RESUME_PROMPT`, tailoring blocks | `services/tailoring/prompting.py` | `resume_generate_full` |
 | Cover + outreach (single call) | `COMBINED_MESSAGES_SYSTEM_PROMPT`, `COVER_LETTER_OUTREACH_PROMPT` | `services/cover_letter.py` | `cover_letter_outreach_generate` |
 | Enrichment | prompts in `enrichment.py` | `routers/enrichment.py` | enrichment operations |
@@ -53,7 +53,7 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 
 ### Application-pack preview / direct improve
 
-1. Keyword / JD intelligence extraction as needed
+1. JD intelligence extraction when needed — LLM returns JSON stored as `job_keywords`; prompts inject it via **`$extract_jd_intel_output`** and optional **`.path.to.key`** (see `apps/backend/app/prompts/text/README.md`)
 2. `resume_generate_full` with compact tailoring payload + response contract (`personalInfo` / `sectionMeta` excluded from LLM contract)
 3. Local post-processing: preserve fields, rebuild `sectionMeta`, verification, diff
 4. Optional auxiliary generation: title, cover letter, outreach with compact profiles
@@ -68,12 +68,17 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 
 ## User-message placeholders (tailoring pipeline)
 
-Shipped **user** templates under `text/` use Python `string.Template` with `$names`. LLM-step outputs use the **`{step_name}_output`** pattern in code and docs, for example:
+Shipped **user** templates use two mechanisms (see **`render_user_template`** in `app/prompts/_prompt_loader.py`):
 
-- **`$extract_jd_intel_output`** — JD intelligence JSON passed into tailor / critique / rewrite user shells (replacing older names such as `job_intelligence` / `jd_intelligence` in templates).
+- **JD blob expansion** — **`$extract_jd_intel_output`** supports optional dot segments, e.g. **`$extract_jd_intel_output.requirements.years_min`**, resolved from the cached **`job_keywords`** dict before `string.Template` runs.
+- **`string.Template`** — Remaining **`$name`** slots after JD expansion.
+
+Examples:
+
+- **`$extract_jd_intel_output`** — whole JD JSON (shipped `user.txt` uses this root for the full blob or dot paths).
 - **`$tailor_resume_full_output`** — tailored diff JSON fed into critique and rewrite after the full tailor step.
 - **`$critique_resume_output`** — critique JSON for rewrite.
-- **`$original_resume`** and **`$response_contract`** — built from the master resume and response contract (not renamed in this phase).
+- **`$original_resume`** and **`$response_contract`** — built from the master resume and response contract.
 
 **`output_language`** is not passed through templates or `build_messages`; English-only instructions live in shipped prose where needed.
 

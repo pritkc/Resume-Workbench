@@ -6,7 +6,6 @@ from app.services.tailoring.prompting import (
     render_tailoring_user_prompt,
 )
 from app.services.tailoring.models import (
-    JDIntelligence,
     TailoringResumePayload,
     TailoringResponseContract,
 )
@@ -28,7 +27,7 @@ def test_assemble_light_contains_light_touch() -> None:
 def test_render_user_prompt_fills_slots() -> None:
     text = render_tailoring_user_prompt(
         mode_id="full",
-        extract_jd_intel_output_json="{}",
+        jd_intel_blob={},
         original_resume_json="{}",
         response_contract_json="{}",
     )
@@ -44,12 +43,12 @@ def test_tailoring_response_contract_extensions() -> None:
 
 
 def test_build_prompt_context_resolves_unknown_to_default() -> None:
-    jd = JDIntelligence()
+    jd_blob: dict = {}
     payload = TailoringResumePayload()
     rc = build_response_contract(payload, prompt_id="full")
     ctx = build_prompt_context(
         prompt_id="not_a_real_mode",
-        jd_intelligence=jd,
+        jd_intel_blob=jd_blob,
         response_contract=rc,
         resume_payload=payload,
         original_resume_markdown="",
@@ -113,7 +112,7 @@ def test_resume_diff_rules_in_user_prompt() -> None:
     """$resume_diff_rules must be rendered into the user message (output-format authority)."""
     user = render_tailoring_user_prompt(
         mode_id="full",
-        extract_jd_intel_output_json="{}",
+        jd_intel_blob={},
         original_resume_json="{}",
         response_contract_json="{}",
     )

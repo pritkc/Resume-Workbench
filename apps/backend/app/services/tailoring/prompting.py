@@ -7,12 +7,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, get_prompt
+from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT, get_prompt
 from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
 
-from app.services.tailoring.analysis import jd_intelligence_to_prompt_json
+from app.services.tailoring.jd_intel_blob import jd_intel_to_prompt_json
 from app.services.tailoring.models import (
-    JDIntelligence,
     TailoringResponseContract,
     TailoringResumePayload,
 )
@@ -25,6 +24,7 @@ class TailoringPromptContext:
     prompt_id: str
     response_contract_json: str
     extract_jd_intel_output_json: str
+    jd_intel_blob: dict[str, Any]
     original_resume_json: str
     retry_hint: str
     system_prompt: str
@@ -36,7 +36,7 @@ def assemble_tailoring_system_prompt(mode: str) -> str:
     mod = get_prompt("tailor_resume_full" if mode == "full" else "tailor_resume_lite")
     system, _ = mod.build_messages(
         original_resume="{}",
-        extract_jd_intel_output="{}",
+        jd_intel_blob={},
         response_contract="{}",
     )
     return system
@@ -45,14 +45,14 @@ def assemble_tailoring_system_prompt(mode: str) -> str:
 def render_tailoring_user_prompt(
     *,
     mode_id: str,
-    extract_jd_intel_output_json: str,
+    jd_intel_blob: dict[str, Any],
     original_resume_json: str,
     response_contract_json: str,
 ) -> str:
     mod = get_prompt("tailor_resume_full" if mode_id == "full" else "tailor_resume_lite")
     _, user = mod.build_messages(
         original_resume=original_resume_json,
-        extract_jd_intel_output=extract_jd_intel_output_json,
+        jd_intel_blob=jd_intel_blob,
         response_contract=response_contract_json,
     )
     return user
@@ -85,7 +85,7 @@ def _resolve_mode(prompt_id: str | None) -> str:
 def build_prompt_context(
     *,
     prompt_id: str | None,
-    jd_intelligence: JDIntelligence,
+    jd_intel_blob: dict[str, Any],
     response_contract: TailoringResponseContract,
     resume_payload: TailoringResumePayload | None,
     original_resume_markdown: str,
@@ -104,12 +104,12 @@ def build_prompt_context(
         separators=(",", ":"),
         ensure_ascii=True,
     )
-    job_json = jd_intelligence_to_prompt_json(jd_intelligence)
+    job_json = jd_intel_to_prompt_json(jd_intel_blob)
 
     mod = get_prompt("tailor_resume_full" if selected_mode == "full" else "tailor_resume_lite")
     system_prompt, user_prompt = mod.build_messages(
         original_resume=resume_input,
-        extract_jd_intel_output=job_json,
+        jd_intel_blob=jd_intel_blob,
         response_contract=response_contract_json,
     )
 
@@ -117,6 +117,7 @@ def build_prompt_context(
         prompt_id=selected_mode,
         response_contract_json=response_contract_json,
         extract_jd_intel_output_json=job_json,
+        jd_intel_blob=jd_intel_blob,
         original_resume_json=resume_input,
         retry_hint=build_tailoring_retry_hint(response_contract),
         system_prompt=system_prompt,
@@ -145,7 +146,7 @@ DEFAULT_TAILORING_PIPELINE: list[PipelineStep] = [
         name="jd_intelligence",
         build_messages=None,
         enabled=False,
-        operation="job_extract_keywords",
+        operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
         max_tokens=4096,
     ),
     PipelineStep(

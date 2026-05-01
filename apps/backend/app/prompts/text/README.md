@@ -22,11 +22,21 @@ Composer and file overrides **replace** shipped text at runtime; they do not liv
 
 ## Template placeholders
 
-User templates use **`string.Template`** with `$name` placeholders. A literal dollar sign in prose must be written as **`$$`**.
+Rendering is implemented in **`app/prompts/_prompt_loader.render_user_template`** as two passes:
 
-Common tailoring-related names (LLM outputs use the **`step_name_output`** style): **`$extract_jd_intel_output`**, **`$tailor_resume_full_output`**, **`$critique_resume_output`**, **`$original_resume`**, **`$response_contract`**, and **`$resume_diff_rules`** (shared output-schema text). Auxiliary writing prompts use **`$tailored_resume`** for the full current resume JSON (typically the tailored resume) alongside the stable **`$resume_profile`**. There is no **`$output_language`** placeholder; English-only wording is fixed in prompt text.
+1. **JD blob (optional)** — When the caller passes **`jd_intel_blob`** (the cached `job_keywords` dict), placeholders rooted at **`$extract_jd_intel_output`** are expanded first (same **`{step}_output`** convention as **`$tailor_resume_full_output`**, **`$critique_resume_output`**, etc.).
+   - **Whole blob:** `$extract_jd_intel_output` alone → compact JSON for the entire dict (empty keys stripped via **`jd_intel_to_prompt_json`** in **`app/services/tailoring/jd_intel_blob.py`**).
+   - **Dot paths:** e.g. `$extract_jd_intel_output.requirements.years_min`, `$extract_jd_intel_output.role.title` → JSON fragment for that sub-value; missing path → **`null`**.
+   - If **`jd_intel_blob`** is omitted but **`extract_jd_intel_output=`** is supplied as a JSON **string**, it is parsed and used for the same placeholders (composer-only convenience).
+2. **`string.Template`** — Remaining **`$name`** placeholders (`$original_resume`, `$response_contract`, `$resume_diff_rules`, …). A literal dollar sign in prose must be **`$$`**.
 
-**Runtime injection points:** full tailoring receives `$extract_jd_intel_output`, `$original_resume`, `$response_contract`, and `$resume_diff_rules`; rewrite receives the original resume, first-pass tailor output (compact JSON), critique JSON, JD intelligence, response contract, and diff rules; cover letter and application-question prompts receive `$tailored_resume` alongside `$resume_profile`.
+Step modules **`tailor_resume_full`**, **`tailor_resume_lite`**, **`critique_resume`**, and **`rewrite_resume`** take **`jd_intel_blob: dict`** at **`build_messages`** time. Shipped **`user.txt`** files use **`$extract_jd_intel_output`** for the full blob or **`$extract_jd_intel_output.<nested.key>`** for slices.
+
+Other common tailoring-related names: **`$tailor_resume_full_output`**, **`$critique_resume_output`**, **`$original_resume`**, **`$response_contract`**, **`$resume_diff_rules`**. Auxiliary writing prompts use **`$tailored_resume`** and **`$resume_profile`**. There is no **`$output_language`** placeholder.
+
+**Runtime injection points:** tailoring and critique/rewrite receive the JD blob (as above) plus resume/contract/diff rules as applicable; cover letter and application-question prompts receive **`$tailored_resume`** and **`$resume_profile`**.
+
+**Stored `job_keywords`:** Persists the extractor’s JSON (shape driven by **`extract_jd_intel`** prompts). **`enrich_jd_intel_blob`** may fill nested **`role`**, **`company`**, and **`location`** when the model leaves them empty. There is no second server-side “legacy flat” merge. JD extraction LLM rows use **`operation`** = **`extract_jd_intel_output`** (constant **`LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT`** in **`app/prompts/_constants.py`**); older traces may still show **`job_extract_keywords`**.
 
 **Master resume for catalog preview:** `GET /api/v1/config/prompts/catalog/master-resume-preview` serializes the same `original_resume` string tailoring would use for the **active** resume if one is set; otherwise the **first resume in list order with no `parent_id`**; otherwise the **first resume** returned by `list_resumes`. Payload is capped at **256 KiB** with a `truncated` flag.
 
@@ -36,7 +46,7 @@ Encoding: **UTF-8**. Files are normalized to Unix newlines on load.
 
 ## Agent index
 
-See also `docs/agent/llm-prompt-inventory.md` at the **repository root** for the full pipeline map.
+See also **`docs/agent/llm-prompt-inventory.md`** (from the repo root) for the full pipeline map.
 
 ## Prompt Catalog (Settings UI)
 

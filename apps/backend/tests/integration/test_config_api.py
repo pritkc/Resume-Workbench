@@ -336,7 +336,7 @@ class TestPromptCatalog:
         assert {
             "llm_health_check",
             "resume_parse_json",
-            "job_extract_keywords",
+            "extract_jd_intel_output",
             "resume_generate_full",
             "cover_letter_outreach_generate",
             "application_questions_generate",

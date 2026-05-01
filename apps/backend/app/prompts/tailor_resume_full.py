@@ -1,5 +1,9 @@
 """Prompt: tailor_resume_full — full-intensity resume tailoring."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from app.prompts._constants import PROMPT_VERSIONS
 from app.prompts._rules.resume_diff import RESUME_DIFF_RULES, RULES_NAME
 from app.prompts._text_prompts import read_shipped_txt
@@ -25,17 +29,20 @@ USER_TEMPLATE = read_shipped_txt("tailor_resume_full/user.txt")
 DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
-    "extract_jd_intel_output": "JSON from extract_jd_intel step",
     "original_resume": "Structured resume JSON or markdown",
     "response_contract": "Allowed response shape for this resume",
     "resume_diff_rules": "Shared compact JSON output schema (resume_diff; DB override supported)",
+    "jd_intel_blob": (
+        "Cached JD JSON (runtime injects $extract_jd_intel_output "
+        "and optional .path segments — not a string.Template key)"
+    ),
 }
 
 
 def build_messages(
     *,
     original_resume: str,
-    extract_jd_intel_output: str,
+    jd_intel_blob: dict[str, Any],
     response_contract: str,
 ) -> tuple[str, str]:
     from app.prompts import load_override, load_shared_rules_override
@@ -52,7 +59,7 @@ def build_messages(
     if comp:
         return comp["system"], render_user_template(
             comp["user"],
-            extract_jd_intel_output=extract_jd_intel_output,
+            jd_intel_blob=jd_intel_blob,
             original_resume=original_resume,
             response_contract=response_contract,
             resume_diff_rules=resume_diff_rules,
@@ -62,7 +69,7 @@ def build_messages(
     system = prose.strip()
     user = render_user_template(
         USER_TEMPLATE,
-        extract_jd_intel_output=extract_jd_intel_output,
+        jd_intel_blob=jd_intel_blob,
         original_resume=original_resume,
         response_contract=response_contract,
         resume_diff_rules=resume_diff_rules,

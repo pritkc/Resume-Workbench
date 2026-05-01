@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.services.tailoring.analysis import find_supported_keywords, keyword_in_text, extract_resume_text
+from app.services.tailoring.analysis import (
+    collect_job_keywords,
+    extract_resume_text,
+    find_supported_keywords,
+    keyword_in_text,
+)
 from app.services.tailoring.diffing import calculate_resume_diff, count_description_words
 
 _METRIC_RE = re.compile(r"\d+%|\d+x|\$\d+")
@@ -158,10 +163,8 @@ def verify_generated_resume_result(
             warnings.append("Full mode changed section structure more than expected")
 
     if prompt_id == "full":
-        ats_keywords = job_keywords.get("ats_keywords")
-        if ats_keywords and isinstance(ats_keywords, list):
-            # 2.0 pipeline: use the richer ats_keywords list from JDIntelligence,
-            # filtered to only those that appeared in the original resume
+        ats_keywords = collect_job_keywords(job_keywords)
+        if ats_keywords:
             original_text = extract_resume_text(original)
             supported_keywords = [k for k in ats_keywords if keyword_in_text(k, original_text)]
         else:

@@ -61,19 +61,23 @@ def _probe_system_message(step_name: str) -> str:
     if step_name in ("tailor_resume_full", "tailor_resume_lite"):
         s, _ = mod.build_messages(
             original_resume="{}",
-            extract_jd_intel_output="{}",
+            jd_intel_blob={},
             response_contract="{}",
         )
         return s
     if step_name == "critique_resume":
-        s, _ = mod.build_messages("{}", "{}")
+        s, _ = mod.build_messages(
+            tailor_resume_full_output="{}",
+            jd_intel_blob={},
+            original_resume="{}",
+        )
         return s
     if step_name == "rewrite_resume":
         s, _ = mod.build_messages(
             original_resume="{}",
             tailor_resume_full_output="{}",
             critique_resume_output="{}",
-            extract_jd_intel_output="{}",
+            jd_intel_blob={},
             response_contract="{}",
         )
         return s

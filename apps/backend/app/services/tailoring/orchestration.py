@@ -13,9 +13,6 @@ from app.llm import complete_json
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, PROMPT_VERSIONS
 from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
 
-from app.services.tailoring.analysis import (
-    build_jd_intelligence,
-)
 from app.services.tailoring.change_manifest import (
     build_change_manifest,
     build_stage_breakdown,
@@ -80,7 +77,7 @@ async def generate_tailored_resume(
         prompt_id if prompt_id in TAILORING_MODE_STRATEGY else DEFAULT_IMPROVE_PROMPT_ID
     )
     prompt_resume_data = TailoringResumePayload.from_resume_data(original_resume_data)
-    jd_intelligence = build_jd_intelligence(job_keywords)
+    jd_blob = job_keywords if isinstance(job_keywords, dict) else {}
 
     response_contract = build_response_contract(
         prompt_resume_data,
@@ -88,7 +85,7 @@ async def generate_tailored_resume(
     )
     prompt_context = build_prompt_context(
         prompt_id=resolved_prompt_id,
-        jd_intelligence=jd_intelligence,
+        jd_intel_blob=jd_blob,
         response_contract=response_contract,
         resume_payload=prompt_resume_data,
         original_resume_markdown=original_resume,
@@ -112,13 +109,12 @@ async def generate_tailored_resume(
 
     critique_analysis: dict[str, object] | None = None
     if resolved_prompt_id == "full" and get_enable_critique():
-        jd_json = prompt_context.extract_jd_intel_output_json
         primary_tailor_json = json.dumps(result, separators=(",", ":"), ensure_ascii=True)
 
         c_sys, c_user = build_critique_messages(
-            primary_tailor_json,
-            jd_json,
-            prompt_context.original_resume_json,
+            tailor_resume_full_output=primary_tailor_json,
+            jd_intel_blob=prompt_context.jd_intel_blob,
+            original_resume=prompt_context.original_resume_json,
         )
         critique_raw = await complete_json(
             prompt=c_user,
@@ -138,7 +134,7 @@ async def generate_tailored_resume(
             original_resume=prompt_context.original_resume_json,
             tailor_resume_full_output=primary_tailor_json,
             critique_resume_output=critique_s,
-            extract_jd_intel_output=jd_json,
+            jd_intel_blob=prompt_context.jd_intel_blob,
             response_contract=prompt_context.response_contract_json,
         )
         result = await complete_json(

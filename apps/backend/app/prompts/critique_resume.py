@@ -1,5 +1,9 @@
 """Prompt: critique_resume — hiring-manager review of tailored diff."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "critique_resume"
@@ -23,13 +27,16 @@ SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
     "original_resume": "Original master resume JSON — used to validate scope claims in the diff",
     "tailor_resume_full_output": "Tailored diff JSON from tailor_resume_full",
-    "extract_jd_intel_output": "JSON from extract_jd_intel step",
+    "jd_intel_blob": (
+        "Cached JD JSON ($extract_jd_intel_output + optional .paths)"
+    ),
 }
 
 
 def build_messages(
+    *,
     tailor_resume_full_output: str,
-    extract_jd_intel_output: str,
+    jd_intel_blob: dict[str, Any],
     original_resume: str = "",
 ) -> tuple[str, str]:
     from app.prompts import load_override
@@ -39,16 +46,16 @@ def build_messages(
     if comp:
         return comp["system"], render_user_template(
             comp["user"],
+            jd_intel_blob=jd_intel_blob,
             original_resume=original_resume,
             tailor_resume_full_output=tailor_resume_full_output,
-            extract_jd_intel_output=extract_jd_intel_output,
         )
 
     system = (load_override(STEP_NAME, "instructions") or INSTRUCTIONS).strip()
     user = render_user_template(
         USER_TEMPLATE,
+        jd_intel_blob=jd_intel_blob,
         original_resume=original_resume,
         tailor_resume_full_output=tailor_resume_full_output,
-        extract_jd_intel_output=extract_jd_intel_output,
     )
     return system, user

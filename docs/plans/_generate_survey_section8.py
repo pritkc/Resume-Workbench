@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""One-off: rebuild section 8 of 3.15.1-survey-post-tasks.md with full prompts + code excerpts."""
+"""One-off: rebuild section 8 of 3.15.1-survey-post-tasks.md with full prompts + code excerpts.
+
+Model excerpts (e.g. JDIntelligence) may be historical; see doc header in 3.15.1-survey-post-tasks.md and prompts/text/README.md for current behavior.
+"""
 from __future__ import annotations
 
 import textwrap

@@ -1,5 +1,9 @@
 """Prompt: rewrite_resume — second pass using critique feedback."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
 from app.prompts._text_prompts import read_shipped_txt
 
@@ -29,9 +33,11 @@ VARIABLES = {
     "original_resume": "Base resume JSON or markdown",
     "tailor_resume_full_output": "First-pass diff JSON from tailor_resume_full",
     "critique_resume_output": "Critique JSON from critique_resume",
-    "extract_jd_intel_output": "JSON from extract_jd_intel step",
     "response_contract": "Response contract JSON",
     "resume_diff_rules": "Shared compact JSON output schema (resume_diff; DB override supported)",
+    "jd_intel_blob": (
+        "Cached JD JSON ($extract_jd_intel_output + optional .paths)"
+    ),
 }
 
 
@@ -40,7 +46,7 @@ def build_messages(
     original_resume: str,
     tailor_resume_full_output: str,
     critique_resume_output: str,
-    extract_jd_intel_output: str,
+    jd_intel_blob: dict[str, Any],
     response_contract: str,
 ) -> tuple[str, str]:
     from app.prompts import load_override, load_shared_rules_override
@@ -57,10 +63,10 @@ def build_messages(
     if comp:
         return comp["system"], render_user_template(
             comp["user"],
+            jd_intel_blob=jd_intel_blob,
             original_resume=original_resume,
             tailor_resume_full_output=tailor_resume_full_output,
             critique_resume_output=critique_resume_output,
-            extract_jd_intel_output=extract_jd_intel_output,
             response_contract=response_contract,
             resume_diff_rules=resume_diff_rules,
         )
@@ -69,10 +75,10 @@ def build_messages(
     system = prose.strip()
     user = render_user_template(
         USER_TEMPLATE,
+        jd_intel_blob=jd_intel_blob,
         original_resume=original_resume,
         tailor_resume_full_output=tailor_resume_full_output,
         critique_resume_output=critique_resume_output,
-        extract_jd_intel_output=extract_jd_intel_output,
         response_contract=response_contract,
         resume_diff_rules=resume_diff_rules,
     )

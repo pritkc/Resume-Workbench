@@ -28,9 +28,10 @@ Current Tailor page flow:
 Preview work in `apps/backend/app/routers/resumes.py`:
 
 - resolves `prompt_id`
-- extracts job keywords
+- runs **JD intelligence** extraction when cache is empty or stale; result is a **JSON object** on the job (`job_keywords`) — shape is defined by shipped **`extract_jd_intel`** prompts and optional `enrich_jd_intel_blob` fills
 - runs one primary full-resume tailoring call
-- shapes that prompt with compact job analysis, supported keywords from the source resume, a trimmed JD excerpt, the typed tailoring resume payload, and a JSON response contract
+- assembles the prompt with that blob (including **`$extract_jd_intel_output`** and optional dot paths in user templates — see `apps/backend/app/prompts/text/README.md`), compact resume + response contract, and a trimmed JD excerpt
+- **Supported-keyword** style checks use strings harvested from list values anywhere in the blob
 - preserves personal info, dates, skills, and custom sections
 - rebuilds `sectionMeta` locally after tailoring
 - removes unsupported additions and AI-style phrasing locally
@@ -76,7 +77,7 @@ Prompt selection is part of pack creation. The active `prompt_id` comes from:
 
 The preview pipeline currently touches these LLM operations:
 
-- `job_extract_keywords`
+- `extract_jd_intel_output`
 - `resume_generate_full`
 - optional `cover_letter_outreach_generate` (one LLM call returns both cover letter and outreach)
 

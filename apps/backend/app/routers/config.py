@@ -59,7 +59,7 @@ from app.schemas import (
     SharedRulesPutRequest,
 )
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
-from app.prompts._constants import PROMPT_VERSIONS
+from app.prompts._constants import LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT, PROMPT_VERSIONS
 from app.prompts.answer_questions import APPLICATION_QUESTIONS_PROMPT, APPLICATION_QUESTIONS_SYSTEM_PROMPT
 from app.prompts.cover_letter import COMBINED_MESSAGES_SYSTEM_PROMPT, COVER_LETTER_OUTREACH_PROMPT
 from app.prompts.enrichment import (
@@ -247,8 +247,8 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             user_prompt=PARSE_RESUME_PROMPT,
         ),
         PromptCatalogEntry(
-            id="job_extract_keywords",
-            operation="job_intelligence_extract",
+            id=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
+            operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
             version=PROMPT_VERSIONS.get("extract_keywords"),
             system_prompt=EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT,
             user_prompt=EXTRACT_JD_INTELLIGENCE_PROMPT,

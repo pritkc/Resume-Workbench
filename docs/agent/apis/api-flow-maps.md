@@ -22,7 +22,7 @@ POST /api/v1/application-packs/preview
 ├── fetch resume + job
 ├── resolve prompt_id and generation flags
 ├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve_preview")
-├── extract_job_keywords() if missing/stale
+├── extract_job_keywords() if missing/stale  → LLM; stores JSON blob on the job (`job_keywords`)
 ├── _generate_tailored_resume_data()
 │   └── improve_resume() -> LLM (`resume_generate_full`)
 ├── local cleanup
@@ -66,7 +66,7 @@ POST /api/v1/application-packs/confirm
 POST /api/v1/resumes/improve   # deprecated: see OpenAPI /docs
 ├── fetch resume + job
 ├── llm_trace_scope(trace_id=request_id, request_scope="resumes.improve")
-├── extract_job_keywords() -> LLM
+├── extract_job_keywords() -> LLM  (`operation`: **`extract_jd_intel_output`**; raw JSON per `extract_jd_intel` prompts, persisted as `job_keywords`; tailoring templates use `$extract_jd_intel_output` — see `prompts/text/README.md`)
 ├── improve_resume() -> LLM (`resume_generate_full`)
 ├── local cleanup + verification
 ├── calculate_resume_diff()
