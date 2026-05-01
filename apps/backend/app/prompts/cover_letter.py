@@ -26,7 +26,7 @@ VARIABLES = {
     "job_target": "Role/company JSON",
     "job_description": "JD excerpt",
     "resume_profile": "Stable compact candidate profile JSON (skills, education breadth)",
-    "tailored_resume_context": "Compact JD-specific framing from the rehydrated tailored resume (summary + top bullets + projects + education + selected_skills + style_note)",
+    "tailored_resume": "Full current resume JSON (typically the tailored output) for role-specific facts",
 }
 
 
@@ -35,7 +35,7 @@ def build_messages(
     job_target: str,
     job_description: str,
     resume_profile: str,
-    tailored_resume_context: str = "",
+    tailored_resume: str = "",
 ) -> tuple[str, str]:
     from app.prompts import load_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
@@ -47,7 +47,7 @@ def build_messages(
             job_target=job_target,
             job_description=job_description,
             resume_profile=resume_profile,
-            tailored_resume_context=tailored_resume_context,
+            tailored_resume=tailored_resume,
         )
 
     instructions = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
@@ -60,6 +60,6 @@ def build_messages(
         job_target=job_target,
         job_description=job_description,
         resume_profile=resume_profile,
-        tailored_resume_context=tailored_resume_context,
+        tailored_resume=tailored_resume,
     )
     return system, user

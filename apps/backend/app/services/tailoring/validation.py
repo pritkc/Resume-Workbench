@@ -55,20 +55,10 @@ def validate_compact_diff(
                 # Check bullet indexes
                 bullets = entry.get("bullets", {})
                 if isinstance(bullets, dict):
-                    max_valid = (
-                        contract.experience_bullet_counts[idx]
-                        if idx < len(contract.experience_bullet_counts)
-                        else 0
-                    )
                     for bkey in bullets:
                         if not bkey.isdigit():
                             errors.append(
                                 f"experience[{key}].bullets key '{bkey}' is not an integer"
-                            )
-                        elif int(bkey) >= max_valid:
-                            errors.append(
-                                f"experience[{key}].bullets[{bkey}] out of range "
-                                f"(bullet_count={max_valid})"
                             )
 
     # Projects section
@@ -91,20 +81,10 @@ def validate_compact_diff(
                     errors.append(f"projects[{key}] emits locked fields: {sorted(locked)}")
                 bullets = entry.get("bullets", {})
                 if isinstance(bullets, dict):
-                    max_valid = (
-                        contract.project_bullet_counts[idx]
-                        if idx < len(contract.project_bullet_counts)
-                        else 0
-                    )
                     for bkey in bullets:
                         if not bkey.isdigit():
                             errors.append(
                                 f"projects[{key}].bullets key '{bkey}' is not an integer"
-                            )
-                        elif int(bkey) >= max_valid:
-                            errors.append(
-                                f"projects[{key}].bullets[{bkey}] out of range "
-                                f"(bullet_count={max_valid})"
                             )
 
     return DiffValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)

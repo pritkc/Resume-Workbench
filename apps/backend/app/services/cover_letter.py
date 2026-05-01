@@ -1,6 +1,7 @@
 """Cover letter, outreach message, and job target metadata helpers."""
 
 import asyncio
+import copy
 import json
 import re
 from typing import Any
@@ -9,7 +10,8 @@ from app.config import get_step_llm_config
 from app.llm import complete
 from app.prompts import PROMPT_VERSIONS
 from app.prompts.cover_letter import build_messages as cover_letter_build_messages
-from app.services.message_profiles import CandidatePromptProfile, TailoredWritingContext
+from app.schemas import normalize_resume_data
+from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
 _ROLE_AT_COMPANY_RE = re.compile(
@@ -479,6 +481,15 @@ def build_job_target_title(
     return None
 
 
+def _tailored_resume_json(resume_data: dict[str, Any]) -> str:
+    """Serialize the current (typically tailored) resume JSON for auxiliary prompts."""
+    return json.dumps(
+        normalize_resume_data(copy.deepcopy(resume_data)),
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
+
+
 def _build_message_prompt_inputs(
     resume_data: dict[str, Any],
     job_description: str,
@@ -496,7 +507,6 @@ def _build_message_prompt_inputs(
         sanitize_user_input(job_description),
         max_chars=MAX_MESSAGE_JOB_DESCRIPTION_CHARS,
     )
-    tailored_ctx = TailoredWritingContext.from_tailored_resume(resume_data)
     return {
         "job_target": json.dumps(
             {key: value for key, value in job_target.items() if value},
@@ -505,7 +515,7 @@ def _build_message_prompt_inputs(
         ),
         "job_description": sanitized_jd,
         "resume_profile": profile.to_prompt_json(),
-        "tailored_resume_context": tailored_ctx.to_prompt_json(),
+        "tailored_resume": _tailored_resume_json(resume_data),
     }
 
 
@@ -634,9 +644,7 @@ def _build_message_metadata(
         "job_description_chars": len(job_description),
         "prompt_job_description_chars": len(prompt_inputs["job_description"]),
         "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
-        "tailored_resume_context_chars": len(
-            prompt_inputs.get("tailored_resume_context", "")
-        ),
+        "tailored_resume_chars": len(prompt_inputs.get("tailored_resume", "")),
         "prompt_version": prompt_version,
     }
 
@@ -657,7 +665,7 @@ async def generate_cover_letter_and_outreach(
         job_target=prompt_inputs["job_target"],
         job_description=prompt_inputs["job_description"],
         resume_profile=prompt_inputs["resume_profile"],
-        tailored_resume_context=prompt_inputs["tailored_resume_context"],
+        tailored_resume=prompt_inputs["tailored_resume"],
     )
     content = await asyncio.wait_for(
         complete(

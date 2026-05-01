@@ -27,7 +27,7 @@ VARIABLES = {
     "job_target": "Role/company/location JSON (from job + JD metadata)",
     "job_description": "JD excerpt",
     "resume_profile": "Stable compact candidate profile (headline, summary, top roles/projects/education/skills) — same shape as cover letter profile",
-    "tailored_resume_context": "JD-aligned resume framing: tailored summary, top experience bullets, top projects, education lines, and selected skills — use for role-specific evidence",
+    "tailored_resume": "Full current resume JSON (typically tailored) — use for role-specific facts and impact",
     "questions": "Questions list JSON",
 }
 
@@ -37,7 +37,7 @@ def build_messages(
     job_target: str,
     job_description: str,
     resume_profile: str,
-    tailored_resume_context: str,
+    tailored_resume: str,
     questions: str,
 ) -> tuple[str, str]:
     from app.prompts import load_override
@@ -50,7 +50,7 @@ def build_messages(
             job_target=job_target,
             job_description=job_description,
             resume_profile=resume_profile,
-            tailored_resume_context=tailored_resume_context,
+            tailored_resume=tailored_resume,
             questions=questions,
         )
 
@@ -64,7 +64,7 @@ def build_messages(
         job_target=job_target,
         job_description=job_description,
         resume_profile=resume_profile,
-        tailored_resume_context=tailored_resume_context,
+        tailored_resume=tailored_resume,
         questions=questions,
     )
     return system, user

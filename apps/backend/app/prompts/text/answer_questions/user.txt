@@ -2,7 +2,7 @@ Write personalized answers for job-application custom questions using only the p
 
 INPUT SOURCES (use both; they overlap on purpose):
 - CANDIDATE PROFILE: compact cross-role facts (skills groups, education, headline). Use for breadth and consistency.
-- RESUME CONTEXT: JD-tailored highlights (summary + strongest bullets/projects). Prefer this when the question asks for impact, tools, or role-specific fit.
+- TAILORED RESUME: full resume JSON for this application (usually after tailoring). Prefer this for impact, tools, dates, and role-specific fit.
 
 STYLE:
 - Professional, concise, confident
@@ -57,8 +57,8 @@ $job_description
 CANDIDATE PROFILE (JSON):
 $resume_profile
 
-RESUME CONTEXT (JSON — JD-tailored highlights; prefer for role-specific evidence):
-$tailored_resume_context
+TAILORED RESUME (JSON):
+$tailored_resume
 
 QUESTIONS (JSON):
 $questions

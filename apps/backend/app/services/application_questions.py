@@ -13,7 +13,6 @@ from app.prompts.answer_questions import build_messages as build_application_que
 from app.schemas import (
     ApplicationQuestionAnswer,
     ApplicationQuestionInput,
-    ResumeData,
     normalize_resume_data,
 )
 from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
@@ -66,78 +65,6 @@ def _truncate_text(value: str | None, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 3].rstrip(" ,;:-") + "..."
-
-
-def _resume_context_payload(resume_data: dict[str, Any]) -> dict[str, Any]:
-    normalized = ResumeData.model_validate(
-        normalize_resume_data(copy.deepcopy(resume_data))
-    )
-
-    experience = []
-    for entry in normalized.workExperience[:4]:
-        bullet_source = list(entry.highlights or [])
-        if not bullet_source and entry.description:
-            stack = (entry.techStack or "").strip()
-            bullet_source = list(entry.description)
-            if stack and bullet_source and str(bullet_source[0]).strip() == stack:
-                bullet_source = bullet_source[1:]
-        bullets = [item for item in bullet_source if item][:3]
-        experience.append(
-            {
-                "title": _truncate_text(entry.position or entry.title, 80),
-                "company": _truncate_text(entry.company, 80),
-                "location": _truncate_text(entry.location, 60),
-                "date": _truncate_text(entry.date or entry.years, 40),
-                "bullets": [_truncate_text(bullet, 180) for bullet in bullets if bullet],
-            }
-        )
-
-    projects = []
-    for entry in normalized.personalProjects[:3]:
-        bullets = [item for item in (entry.highlights or entry.description) if item][:2]
-        projects.append(
-            {
-                "name": _truncate_text(entry.name, 80),
-                "role": _truncate_text(entry.role or entry.techStack, 80),
-                "date": _truncate_text(entry.date or entry.years, 40),
-                "bullets": [_truncate_text(bullet, 180) for bullet in bullets if bullet],
-            }
-        )
-
-    skills: list[dict[str, Any]] = []
-    for group in normalized.skills.groups[:5]:
-        values = [_truncate_text(value, 40) for value in group.values[:10] if value]
-        if not values:
-            continue
-        skills.append(
-            {
-                "label": _truncate_text(group.label, 50),
-                "values": values,
-            }
-        )
-
-    education = []
-    for entry in normalized.education[:2]:
-        education.append(
-            {
-                "institution": _truncate_text(entry.institution, 80),
-                "degree": _truncate_text(entry.degree, 80),
-                "area": _truncate_text(entry.area, 80),
-                "date": _truncate_text(entry.date or entry.years, 40),
-            }
-        )
-
-    return {
-        "headline": _truncate_text(
-            normalized.personalInfo.headline or normalized.personalInfo.title, 80
-        ),
-        "summary": _truncate_text(normalized.summary, 240),
-        "location": _truncate_text(normalized.personalInfo.location, 60),
-        "experience": experience,
-        "projects": projects,
-        "education": education,
-        "skills": skills,
-    }
 
 
 def _sanitize_warning_list(value: Any) -> list[str]:
@@ -352,7 +279,11 @@ async def generate_application_question_answers(
     validate_question_batch_constraints(questions)
 
     profile = CandidatePromptProfile.from_resume_data(resume_data)
-    tailored_resume_context = _resume_context_payload(resume_data)
+    tailored_resume = json.dumps(
+        normalize_resume_data(copy.deepcopy(resume_data)),
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
     sanitized_job_description = trim_job_description_for_prompt(
         sanitize_user_input(job_description),
         max_chars=3200,
@@ -370,9 +301,7 @@ async def generate_application_question_answers(
         job_target=json.dumps(job_target_payload, separators=(",", ":"), ensure_ascii=True),
         job_description=sanitized_job_description,
         resume_profile=profile.to_prompt_json(),
-        tailored_resume_context=json.dumps(
-            tailored_resume_context, separators=(",", ":"), ensure_ascii=True
-        ),
+        tailored_resume=tailored_resume,
         questions=json.dumps(question_payload, separators=(",", ":"), ensure_ascii=True),
     )
 

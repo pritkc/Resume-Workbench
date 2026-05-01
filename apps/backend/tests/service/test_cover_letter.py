@@ -201,11 +201,11 @@ class TestCandidatePromptProfile:
 
 
 class TestCoverLetterPromptInputs:
-    def test_includes_tailored_resume_context_json(self, sample_resume, sample_job_description):
+    def test_includes_tailored_resume_json(self, sample_resume, sample_job_description):
         inputs = _build_message_prompt_inputs(sample_resume, sample_job_description)
-        assert "tailored_resume_context" in inputs
-        assert "tailored_summary" in inputs["tailored_resume_context"]
-        assert "top_experience" in inputs["tailored_resume_context"]
+        assert "tailored_resume" in inputs
+        body = json.loads(inputs["tailored_resume"])
+        assert "summary" in body or "personalInfo" in body
 
     def test_job_keywords_refine_job_target(self, sample_resume):
         jd = "Join our platform team."
@@ -245,14 +245,14 @@ Open to a quick intro call this week?
         prompt = kwargs["prompt"]
         assert "JOB TARGET (JSON):" in prompt
         assert "CANDIDATE PROFILE (JSON):" in prompt
-        assert "TAILORED RESUME CONTEXT" in prompt
-        assert "tailored_summary" in prompt or "top_experience" in prompt
+        assert "TAILORED RESUME (JSON" in prompt
+        assert "personalInfo" in prompt or "summary" in prompt
         assert kwargs["operation"] == "cover_letter_outreach_generate"
         assert kwargs["max_tokens"] == 2600
         assert kwargs["retries"] == 2
         assert kwargs["retry_max_tokens"] == 3200
         assert kwargs["metadata"]["candidate_profile_chars"] < 900
-        assert kwargs["metadata"].get("tailored_resume_context_chars", 0) > 0
+        assert kwargs["metadata"].get("tailored_resume_chars", 0) > 0
         assert cover_letter == "Thanks for considering my application."
         assert outreach == "Open to a quick intro call this week?"
 

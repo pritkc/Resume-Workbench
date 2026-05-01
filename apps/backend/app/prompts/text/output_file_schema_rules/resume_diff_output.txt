@@ -8,10 +8,8 @@ INDEX MAPPING:
 - Key "0" corresponds to response_contract.experience.entries[0], key "1" to entries[1], and so on
 - The order matches the response_contract exactly — do not use company or project names as keys
 
-BULLET POLICY (strictly enforced by the applicator):
-- Rewrite existing bullets only. Do NOT add new bullets. Do NOT remove bullets. Do NOT reorder bullets.
-- Valid bullet INDEX values are 0 through (bullet_count - 1) for that entry.
-- Any INDEX at or beyond bullet_count is silently dropped by the applicator.
+BULLET POLICY (follow shipped tailoring prompts for when to add vs rewrite bullets):
+- bullets is an object keyed by stringified bullet index; you may rewrite existing indexes or add new trailing indexes when appropriate for fit.
 - Omit a bullet INDEX to leave that bullet unchanged.
 
 LOCKED FIELDS (never emit — applicator will discard or error):

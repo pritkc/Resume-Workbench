@@ -27,22 +27,15 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
 
 
 def _mode_rules(prompt_id: str) -> list[str]:
-    """Return bullet-policy rules that MUST agree with apply_compact_diff() behavior.
-
-    apply_compact_diff() silently drops any bullet INDEX at or beyond bullet_count,
-    so 'add at most one' would be silently ignored. Align prompts/contract with code reality:
-    rewrite existing bullets only.
-    """
+    """High-level shaping rules; bullet add/remove policy is guided by shipped diff rules + prompts."""
     if prompt_id == "lite":
         return [
-            "Rewrite existing bullets only — do not add, remove, or reorder bullets.",
-            "Keep bullet counts identical to response_contract bullet_counts.",
-            "Do not change job titles.",
+            "Follow resume_diff_rules for compact JSON shape and indexing.",
+            "Do not change base job titles.",
         ]
     return [
-        "Rewrite existing bullets only — do not add, remove, or reorder bullets.",
-        "Valid bullet INDEX values: 0 through (bullet_count - 1) for that entry.",
-        "Any bullet INDEX at or beyond bullet_count is silently dropped by the applicator.",
+        "Follow resume_diff_rules for compact JSON shape and indexing.",
+        "experience/projects keys are stringified 0-based indices aligned with response_contract entry order.",
     ]
 
 

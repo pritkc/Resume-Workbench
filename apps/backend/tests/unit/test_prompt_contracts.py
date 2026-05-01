@@ -34,25 +34,20 @@ class TestResponseContractPromptDict:
         assert "rules" in d, "mode_rules must be exposed via 'rules' key"
         assert isinstance(d["rules"], list) and len(d["rules"]) > 0
 
-    def test_full_mode_rule_forbids_bullet_add(self):
-        """Full mode rule must say rewrite-only (not 'add at most one')."""
+    def test_full_mode_rules_reference_diff_shape(self):
+        """Full mode rules point at shipped diff rules / indexing (not hard applicator coupling)."""
         payload = _make_payload_with_experience()
         rc = build_response_contract(payload, prompt_id="full")
         d = rc.to_prompt_dict()
         rules_text = " ".join(d.get("rules", [])).lower()
-        assert "add" not in rules_text or "do not add" in rules_text, (
-            "Full mode rule must forbid bullet addition. "
-            "apply_compact_diff() already silently drops out-of-range indexes, "
-            "so prompts and contract must agree: rewrite existing bullets only."
-        )
+        assert "resume_diff_rules" in rules_text or "index" in rules_text
 
-    def test_lite_mode_rule_also_forbids_add(self):
-        """Lite mode rule must also say rewrite-only."""
+    def test_lite_mode_rules_reference_diff_shape(self):
         payload = _make_payload_with_experience()
         rc = build_response_contract(payload, prompt_id="lite")
         d = rc.to_prompt_dict()
         rules_text = " ".join(d.get("rules", [])).lower()
-        assert "rewrite existing" in rules_text or "do not add" in rules_text
+        assert "resume_diff_rules" in rules_text or "title" in rules_text
 
     def test_bullet_counts_per_entry_visible(self):
         """bullet_counts must be present so LLM knows valid index ranges."""

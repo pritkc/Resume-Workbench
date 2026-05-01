@@ -43,21 +43,6 @@ from app.services.tailoring.prompting import build_prompt_context
 logger = logging.getLogger(__name__)
 
 
-def _should_rewrite(critique_result: dict[str, Any] | None) -> bool:
-    """Gate rewrite to material critique issues only."""
-    if not critique_result or not isinstance(critique_result, dict):
-        return False
-    red_flags = critique_result.get("red_flags") or []
-    if any(f.get("severity") == "high" for f in red_flags if isinstance(f, dict)):
-        return True
-    medium_count = sum(
-        1 for f in red_flags
-        if isinstance(f, dict) and f.get("severity") == "medium"
-    )
-    suggestions = critique_result.get("suggestions") or []
-    return medium_count >= 2 or len(suggestions) >= 4
-
-
 def _check_for_truncation(data: dict[str, Any]) -> None:
     """Log warnings for obvious truncation signs before schema validation."""
 
@@ -128,29 +113,10 @@ async def generate_tailored_resume(
     critique_analysis: dict[str, object] | None = None
     if resolved_prompt_id == "full" and get_enable_critique():
         jd_json = prompt_context.extract_jd_intel_output_json
-
-        # Apply compact diff to get the rehydrated draft to send to critique
-        _pre_v2 = TailoringLLMResponseV2.model_validate(result)
-        _pre_legacy = _looks_like_legacy_full_body_response(result)
-        _pre_has_compact = bool(
-            _pre_v2.experience
-            or _pre_v2.projects
-            or _pre_v2.skills is not None
-            or _pre_v2.bold_keywords
-            or (_pre_v2.summary and not _pre_legacy)
-        )
-        if _pre_has_compact and not _pre_legacy and original_resume_data is not None:
-            _pre_rehydrated = apply_compact_diff(
-                original_resume_data,
-                _pre_v2.model_dump(exclude_none=True),
-            )
-        else:
-            _pre_rehydrated = original_resume_data or {}
-
-        rehydrated_draft_json = json.dumps(_pre_rehydrated, ensure_ascii=True)
+        primary_tailor_json = json.dumps(result, separators=(",", ":"), ensure_ascii=True)
 
         c_sys, c_user = build_critique_messages(
-            rehydrated_draft_json,
+            primary_tailor_json,
             jd_json,
             prompt_context.original_resume_json,
         )
@@ -167,31 +133,27 @@ async def generate_tailored_resume(
         )
         critique_analysis = critique_raw if isinstance(critique_raw, dict) else None
 
-        # Gate rewrite: only run if critique has material issues
-        if _should_rewrite(critique_analysis):
-            critique_s = json.dumps(critique_raw, ensure_ascii=True)
-            r_sys, r_user = build_rewrite_messages(
-                original_resume=prompt_context.original_resume_json,
-                tailor_resume_full_output=rehydrated_draft_json,
-                critique_resume_output=critique_s,
-                extract_jd_intel_output=jd_json,
-                response_contract=prompt_context.response_contract_json,
-            )
-            result = await complete_json(
-                prompt=r_user,
-                system_prompt=r_sys,
-                config=get_step_llm_config("rewrite_resume"),
-                max_tokens=15000,
-                retries=1,
-                operation="rewrite_resume",
-                metadata={
-                    "prompt_version": PROMPT_VERSIONS.get("rewrite_resume", "unknown"),
-                    "prompt_id": prompt_context.prompt_id,
-                },
-                retry_hint=prompt_context.retry_hint,
-            )
-        else:
-            logger.info("Critique passed gate — skipping rewrite step")
+        critique_s = json.dumps(critique_raw, separators=(",", ":"), ensure_ascii=True)
+        r_sys, r_user = build_rewrite_messages(
+            original_resume=prompt_context.original_resume_json,
+            tailor_resume_full_output=primary_tailor_json,
+            critique_resume_output=critique_s,
+            extract_jd_intel_output=jd_json,
+            response_contract=prompt_context.response_contract_json,
+        )
+        result = await complete_json(
+            prompt=r_user,
+            system_prompt=r_sys,
+            config=get_step_llm_config("rewrite_resume"),
+            max_tokens=15000,
+            retries=1,
+            operation="rewrite_resume",
+            metadata={
+                "prompt_version": PROMPT_VERSIONS.get("rewrite_resume", "unknown"),
+                "prompt_id": prompt_context.prompt_id,
+            },
+            retry_hint=prompt_context.retry_hint,
+        )
 
     _check_for_truncation(result)
 

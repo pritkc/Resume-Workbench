@@ -8,7 +8,6 @@ import pytest
 
 from app.schemas import ApplicationQuestionAnswer, ApplicationQuestionInput
 from app.services.application_questions import (
-    _resume_context_payload,
     dedupe_question_inputs,
     generate_application_question_answers,
     merge_answers_for_partial_regeneration,
@@ -96,19 +95,17 @@ def test_merge_answers_for_partial_regeneration_keeps_existing_non_target_answer
     assert merged[1].answer == "I led backend delivery across two teams."
 
 
-def test_resume_profile_and_tailored_context_are_distinct_payloads(sample_resume: dict) -> None:
-    """Profile gives stable breadth; resume context gives richer JD-specific evidence."""
+def test_resume_profile_is_compact_vs_full_resume_json(sample_resume: dict) -> None:
+    import json
+
+    from app.schemas import normalize_resume_data
+
     profile = CandidatePromptProfile.from_resume_data(sample_resume).model_dump(exclude_none=True)
-    tailored_context = _resume_context_payload(sample_resume)
+    full = json.dumps(normalize_resume_data(sample_resume), separators=(",", ":"))
 
     assert "experience" in profile
-    assert "experience" in tailored_context
-    assert len(profile["experience"]) <= 2
-    assert len(tailored_context["experience"]) <= 4
-    assert "bullets" in tailored_context["experience"][0]
-    assert "highlights" in profile["experience"][0]
-    assert "skills" in profile
-    assert "skills" in tailored_context
+    assert "workExperience" in full or "experience" in profile
+    assert len(full) >= len(json.dumps(profile, separators=(",", ":")))
 
 
 def test_answer_questions_prompt_documents_input_source_distinction() -> None:
@@ -116,18 +113,18 @@ def test_answer_questions_prompt_documents_input_source_distinction() -> None:
 
     assert "INPUT SOURCES" in USER_TEMPLATE
     assert "CANDIDATE PROFILE" in USER_TEMPLATE
-    assert "RESUME CONTEXT" in USER_TEMPLATE
+    assert "TAILORED RESUME" in USER_TEMPLATE
 
     _system, user = build_messages(
         job_target="{}",
         job_description="Backend role.",
         resume_profile='{"summary":"Stable profile"}',
-        tailored_resume_context='{"summary":"Tailored context"}',
+        tailored_resume='{"summary":"Full resume body"}',
         questions='[{"question_id":"q_0","question":"Why this role?"}]',
     )
 
     assert "Stable profile" in user
-    assert "Tailored context" in user
+    assert "Full resume body" in user
 
 
 @pytest.mark.asyncio

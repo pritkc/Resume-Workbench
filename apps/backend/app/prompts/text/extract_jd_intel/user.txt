@@ -27,18 +27,14 @@ Output JSON matching this schema:
     "preferred": ["nice-to-have qualifications"],
     "education": "education requirement or null"
   },
-  "experience_level_signal": "what tenure or experience depth the JD actually implies — e.g., '2-4 years of Python in production', 'led a team of 3+', 'owned a service end-to-end'",
   "responsibility_themes": [
     "distill responsibilities into 5-8 actionable themes for resume writing — not raw JD copies; fewer if the JD is thin"
   ],
   "ats_keywords": [
     "every technical term, tool, methodology, and domain keyword an ATS would scan for — 20-60 terms; include common abbreviation variants (e.g., 'CI/CD' and 'Continuous Integration/Continuous Deployment')"
   ],
-  "priority_keywords": [
+  "bold_keywords": [
     "10-15 highest-impact JD keywords that must appear prominently in the tailored resume — not a final rendering list, just the top coverage targets"
-  ],
-  "culture_signals": [
-    "any team culture or working-style signals from the JD: fast-moving, remote-first, cross-functional, data-driven, on-call, etc."
   ],
   "calibration": {
     "seniority_expectations": "what this level is expected to demonstrate — ownership scope, leadership, technical depth",
@@ -56,8 +52,8 @@ Rules:
 - requirements.years: integer or null — infer from phrases like "3+ years", "at least 2 years"; null if not stated
 - responsibility_themes: distill into 5-8 actionable themes; examples: "API architecture & governance", "cloud-native microservices", "frontend accessibility & performance"
 - ats_keywords: include every technical term and domain keyword; 20-60 terms target
-- experience_level_signal: prose description of what experience depth the JD implies beyond just a year count
-- culture_signals: include only signals explicitly or strongly implied by the JD; leave [] if none
+- bold_keywords: 10-15 highest-impact terms for tailoring emphasis
+- Optional (include only when clearly supported by the JD; downstream consumers may ignore unknown keys): you may add top-level string `experience_level_signal` and/or string array `culture_signals` for your own extraction quality — they are not required fields.
 
 Job description:
 $job_description

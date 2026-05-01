@@ -35,7 +35,6 @@ def test_lite_system_message_matches_tailor_resume_lite_module() -> None:
 def test_full_user_message_matches_module() -> None:
     old = Template(TAILORING_USER_SHELL_FULL).substitute(
         extract_jd_intel_output="{}",
-        resume_evidence="{}",
         original_resume="{}",
         response_contract="{}",
         resume_diff_rules=RESUME_DIFF_RULES.strip(),
@@ -45,7 +44,6 @@ def test_full_user_message_matches_module() -> None:
         original_resume="{}",
         extract_jd_intel_output="{}",
         response_contract="{}",
-        resume_evidence="{}",
     )
     assert old == new
 

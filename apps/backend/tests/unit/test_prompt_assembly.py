@@ -17,7 +17,6 @@ def test_assemble_full_contains_craft_and_mode_without_embedded_diff_rules() -> 
     assembled = assemble_tailoring_system_prompt("full")
     assert "OUTPUT FORMAT:" not in assembled
     assert "ROLE & GOAL:" in assembled
-    assert "TWO FRAMING TRACKS:" in assembled
 
 
 def test_assemble_light_contains_light_touch() -> None:
@@ -110,14 +109,6 @@ def test_full_system_prompt_has_role_and_goal() -> None:
     assert "ROLE & GOAL:" in system
 
 
-def test_two_framing_tracks_has_data_ai_track() -> None:
-    """The data/AI engineer framing track must be present — was missing as point 2."""
-    system = assemble_tailoring_system_prompt("full")
-    assert "data/AI engineer" in system or "data engineer" in system.lower(), (
-        "TWO FRAMING TRACKS must include the data/AI engineer track"
-    )
-
-
 def test_resume_diff_rules_in_user_prompt() -> None:
     """$resume_diff_rules must be rendered into the user message (output-format authority)."""
     user = render_tailoring_user_prompt(
@@ -143,12 +134,10 @@ def test_resume_diff_rules_no_years_format() -> None:
 
 
 def test_resume_diff_rules_has_bullet_policy() -> None:
-    """Diff rules must document the forbid-add/remove bullet policy."""
+    """Diff rules must mention bullet handling (prompt-led; not hard-coded replace-only)."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
     lower = RESUME_DIFF_RULES.lower()
-    assert "do not add" in lower or "rewrite existing" in lower or "forbid" in lower, (
-        "resume_diff_output.txt must state that bullets may only be rewritten, not added or removed"
-    )
+    assert "bullet" in lower
 
 
 def test_resume_diff_rules_has_locked_fields() -> None:

@@ -1,9 +1,6 @@
 EXTRACTED JD INTELLIGENCE:
 $extract_jd_intel_output
 
-RESUME EVIDENCE (supported/adjacent/unsupported JD terms, role depth):
-$resume_evidence
-
 ORIGINAL RESUME:
 $original_resume
 

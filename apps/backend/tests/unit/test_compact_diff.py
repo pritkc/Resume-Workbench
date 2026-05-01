@@ -79,6 +79,13 @@ class TestApplyCompactDiff:
         assert result["workExperience"][0]["description"][1] == "Led migration to microservices"
         assert result["workExperience"][0]["description"][2] == "Mentored junior engineers"
 
+    def test_bullet_append_at_new_trailing_index(self, base_resume):
+        diff = {"experience": {"0": {"bullets": {"3": "Fourth net-new bullet"}}}}
+        result = apply_compact_diff(base_resume, diff)
+        desc = result["workExperience"][0]["description"]
+        assert len(desc) == 4
+        assert desc[3] == "Fourth net-new bullet"
+
     def test_experience_bullet_indices_use_llm_prompt_slice_not_raw_storage(self):
         """Compact diff keys index the same list as tailor_resume_full / rewrite_resume (tech line dropped)."""
         resume = {
@@ -150,10 +157,13 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, diff)
         assert result["workExperience"] == base_resume["workExperience"]
 
-    def test_out_of_range_bullet_index_skipped(self, base_resume):
-        diff = {"experience": {"0": {"bullets": {"5": "Appended bullet (forbidden)"}}}}
+    def test_trailing_bullet_index_extends_description(self, base_resume):
+        diff = {"experience": {"0": {"bullets": {"5": "Appended bullet at new index"}}}}
         result = apply_compact_diff(base_resume, diff)
-        assert len(result["workExperience"][0]["description"]) == 3
+        desc = result["workExperience"][0]["description"]
+        assert len(desc) == 6
+        assert desc[5] == "Appended bullet at new index"
+        assert desc[0] == base_resume["workExperience"][0]["description"][0]
 
     def test_non_integer_entry_key_skipped(self, base_resume):
         diff = {"experience": {"Acme Corp": {"bullets": {"0": "should be skipped"}}}}

@@ -102,12 +102,6 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
             policy="runtime_injected",
         ),
         PromptCatalogSection(
-            id="tailoring_rt_resume_evidence",
-            label="{resume_evidence}",
-            content="Deterministic evidence binder JSON: supported, adjacent, and unsupported JD terms plus role-depth and new-grad calibration hints.",
-            policy="runtime_injected",
-        ),
-        PromptCatalogSection(
             id="tailoring_rt_resume",
             label="{original_resume}",
             content="Structured resume JSON or markdown snapshot for this run.",

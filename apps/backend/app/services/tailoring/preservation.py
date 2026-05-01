@@ -387,25 +387,31 @@ def apply_compact_diff(
                 else:
                     prefix = []
                     desc = list(TailoringProject.from_resume_entry(entry).description)
-                orig_len = len(desc)
                 for bullet_idx_str, bullet_text in bullets_diff.items():
                     try:
                         bullet_idx = int(bullet_idx_str)
                     except (ValueError, TypeError):
                         logger.warning("compact_diff: non-integer bullet key %r — skipped", bullet_idx_str)
                         continue
-                    if bullet_idx < 0 or bullet_idx >= orig_len:
+                    if bullet_idx < 0:
                         logger.warning(
-                            "compact_diff: bullet index %d out of range (orig_len=%d) in %s[%d] — skipped",
-                            bullet_idx, orig_len, diff_key, entry_idx,
+                            "compact_diff: negative bullet index %d in %s[%d] — skipped",
+                            bullet_idx,
+                            diff_key,
+                            entry_idx,
                         )
                         continue
                     if not isinstance(bullet_text, str) or not bullet_text.strip():
                         logger.warning(
                             "compact_diff: empty/non-string bullet at %s[%d].bullets[%d] — skipped",
-                            diff_key, entry_idx, bullet_idx,
+                            diff_key,
+                            entry_idx,
+                            bullet_idx,
                         )
                         continue
+                    if bullet_idx >= len(desc):
+                        while len(desc) <= bullet_idx:
+                            desc.append("")
                     desc[bullet_idx] = bullet_text.strip()
                 merged = prefix + desc
                 entry["description"] = merged

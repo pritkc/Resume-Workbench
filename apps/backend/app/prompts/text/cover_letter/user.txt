@@ -19,8 +19,8 @@ $job_description
 CANDIDATE PROFILE (JSON):
 $resume_profile
 
-TAILORED RESUME CONTEXT (JD-specific framing — use this for role-specific evidence):
-$tailored_resume_context
+TAILORED RESUME (JSON — same structure as the candidate resume; typically the tailored version):
+$tailored_resume
 
 COVER LETTER REQUIREMENTS:
 - 95-165 words, 3 tight paragraphs (4 only for a genuine career pivot narrative)
