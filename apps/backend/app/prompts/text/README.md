@@ -12,6 +12,12 @@
 | `index.yaml` | Machine-readable list of step ids and enrichment ops |
 | `fragments/` | Deprecated — see `fragments/README.md` |
 
+### `tailor_resume_full` (three-way split)
+
+- **`tailor_resume_full/user.txt`:** JD first, then resume, response contract, **`$resume_diff_rules`**; short **EDITORIAL ORDER** TOC pointing at system + schema message.
+- **`tailor_resume_full/system.txt`:** **`PRIMARY RUN RULES`** (top, edit often), **ROLE & GOAL**, **PROCESS** only — full-tailor framing.
+- **`output_file_schema_rules/resume_diff_output.txt`:** Universal **output bible**: precedence vs PRIMARY RUN RULES, JSON shape/indexing/locks, plus shared editorial (bullets, calibration, ATS, banned words, etc.) for any phase using this diff format.
+
 ## Overrides
 
 - **Per-step prose:** `app/prompt_overrides/{step}.system.txt` (or legacy `{step}.instructions.txt`), `{step}.rules.txt` (diff block override for tailoring steps when used)

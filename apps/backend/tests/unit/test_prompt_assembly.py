@@ -127,7 +127,7 @@ def test_resume_diff_rules_no_years_format() -> None:
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
     assert "[N]+ years" not in RESUME_DIFF_RULES, (
         "resume_diff_output.txt summary rule forces a years-count format that "
-        "tailor_resume_full/system.txt SUMMARY section explicitly forbids. "
+        "the SUMMARY section in the same file explicitly forbids (years-count format). "
         "Remove the [N]+ years template from the diff rules."
     )
 

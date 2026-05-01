@@ -4,6 +4,8 @@
 
 **Scope of review:** Full backend pipeline (extraction → orchestration → preservation → diffing → router) and frontend (type definitions → improve preview flow → bold_keywords integration → diff display).
 
+> **Update (2026):** JD extraction persists a **JSON blob** (`job_keywords`) without a `JDIntelligence` model; prompts use **`$extract_jd_intel_output`** with optional dot paths (see `apps/backend/app/prompts/text/README.md`). Keyword verification walks **list-valued strings** in that blob via `collect_job_keywords()`. Sections below that mention `JDIntelligence`, `ats_keywords`, or flat legacy merge describe **older** behavior unless noted.
+
 **Status of acceptance criteria (from phase-3.3.3):**
 
 | Criterion | Status |

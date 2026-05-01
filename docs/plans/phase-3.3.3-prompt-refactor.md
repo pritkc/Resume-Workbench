@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python/FastAPI backend, Pydantic v2 models, existing `complete_json` LLM wrapper.
 
+**Archive note (2026-04):** Implementation drifted: JD intel is persisted as **JSON** (`job_keywords`) with **`$extract_jd_intel_output`** dot-path expansion in prompts — no **`JDIntelligence`** model in **`models.py`**. Sections below that specify `JDIntelligence` / `to_legacy_keywords()` describe this plan’s intended design, not current trunk behavior.
+
 ---
 
 ## Table of Contents

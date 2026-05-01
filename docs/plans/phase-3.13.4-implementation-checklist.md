@@ -10,6 +10,8 @@
 4. **`output_language`:** remove from code paths and shipped templates; **stakeholder adds English line manually** in prompts where needed (implementer strips placeholders / kwargs only).
 5. **No** backward-compat aliases in code or templates.
 
+**Update (2026):** Tailoring-related steps pass **`jd_intel_blob`** into **`build_messages`**; templates use **`$extract_jd_intel_output`** with optional **`.key.subkey`** segments (see **`apps/backend/app/prompts/text/README.md`**). The checklist rows below that mention only string kwargs reflect the **original** refactor; runtime behavior is dict + pre-pass expansion.
+
 ---
 
 ## Naming map (implement exactly — update all call sites)

@@ -1,3 +1,6 @@
+PRECEDENCE:
+- If PRIMARY RUN RULES in the system message conflict with anything below, follow PRIMARY RUN RULES first.
+
 OUTPUT FORMAT:
 - Valid JSON only — no markdown, no prose, no commentary, no thinking trace
 - Top-level keys: "summary", "experience", "projects", "skills", "bold_keywords"
@@ -8,8 +11,8 @@ INDEX MAPPING:
 - Key "0" corresponds to response_contract.experience.entries[0], key "1" to entries[1], and so on
 - The order matches the response_contract exactly — do not use company or project names as keys
 
-BULLET POLICY (follow shipped tailoring prompts for when to add vs rewrite bullets):
-- bullets is an object keyed by stringified bullet index; you may rewrite existing indexes or add new trailing indexes when appropriate for fit.
+BULLET POLICY:
+- bullets is an object keyed by stringified bullet index; you may rewrite existing indexes or add new trailing indexes when appropriate for fit and consistent with PRIMARY RUN RULES and BULLET WRITING below.
 - Omit a bullet INDEX to leave that bullet unchanged.
 
 LOCKED FIELDS (never emit — applicator will discard or error):
@@ -19,11 +22,102 @@ EDITABLE FIELDS per entry:
 - experience entries: position (title enhancement only — keep base title, add scope qualifier), tech_stacks, bullets
 - project entries: name (enhancement only), tech_stacks, bullets
 
+WHAT STAYS FIXED:
+- Company names, job titles (base title), start/end dates, locations, schools, GPA, and any factual claims in the source resume are locked — do not change.
+- Rewrite bullets, enhance titles with scope context, reword for fit — same story arc, better presentation.
+- JD is the lens to reorder, reword, and emphasize honest overlap — not to invent new employers or history.
+
+DEFENSIBILITY DOCTRINE:
+- Skim pop is secondary to screen survival. A defensible softer claim beats a sharp claim the candidate cannot support.
+- Two harms: hard falsehoods (fabricated numbers) and soft falsehoods (technically true but wildly exaggerated scope). Both kill offers.
+- Prefer before/after state description, order-of-magnitude language, or approximate ranges over precise KPIs when the figure is uncertain. "Overnight batch to near-real-time" is as strong as "35% latency reduction" and far safer.
+
+TWENTY-SECOND SKIM:
+- Write for F-shaped reading: strong summary line, hero bullet first under each employer, recognizable tech visible at a glance.
+- First bullet per role = single strongest signal for that stint — not a stack dump, not a generic duty.
+- Quick skim should convey domain + level + main tech without reading paragraph two.
+
+BULLET WRITING:
+- Structure: strong verb → how (tool/scope) → outcome with signal of impact.
+- One idea per line, one to two lines max.
+- Vary openers: Built, Shipped, Automated, Refactored, Contributed, Debugged, Integrated, Designed, Wrote, Led, Reduced, Migrated, Implemented — not the same shape every bullet.
+- Vary closers: use semicolons with independent clauses, short second sentences, or dashes. Never chain dangling -ing phrases ("...cutting X, enabling Y, reducing Z" is the strongest AI signal pattern — avoid entirely).
+- Vary metrics across bullets: time saved, latency, throughput, cost, data volume, team size, user count, SLA, error rate — no repeated metric type in consecutive bullets.
+- Tie each metric to why it mattered for the business and what the candidate personally did — no naked percent with no mechanism.
+- Light human texture where helpful: team size, sprint pressure, legacy context — not every line.
+- Engineering judgment and problem-solving front; specific software is supporting detail.
+- Same employer block reads as one coherent job in one domain — bullets each tell a different technical story (latency, reliability, compliance, team process), not variations of the same narrative.
+- Rewrite bullets to match the target role; replace least-applicable bullets with alternatives that naturally fit.
+- For resumes with 5+ roles, deep-rewrite the 3-4 most recent/relevant; older or short stints may receive minimal updates.
+- Projects: three tight single-liner bullets per project — useful interview hooks, not padding.
+- Recent work can include credible LLM/AI pipeline work where timeline and domain allow — implementer level, not research fiction.
+- Do not invent precision that cannot be explained; do not sandbag so hard the resume feels empty.
+
+TECHNICAL CALIBRATION:
+- Impressive but realistic first.
+- Use real figures or honest approximates with tilde (~) or ranges where exacts are uncertain; avoid vague mush throughout.
+- Tools named on a role must fit the real calendar dates and normal production use in that window — no fantasy future stack on an old role unless the story is explicitly modernization.
+- Era + duration both matter: a large stack for a short tenure (under a year) reads as keyword stuffing.
+- Internship scope stays small: ~1 year means contributed or shipped pieces with others; under ~2 years total, do not claim sole ownership of whole products or org-wide architecture leadership unless source data explicitly says so.
+- Calibrate scope to experience level: early-career roles get modest bullets; short stints get proportionally scoped bullets.
+- Metrics only where credible for the role's seniority and tenure.
+- When in doubt, prefer boring mainstream tools over novelty flex.
+
+SCOPE HEDGING PATTERNS:
+- For any migration, refactor, or infrastructure change, name the slice owned — "helped migrate one batch ETL pipeline" is honest and still shows systems work.
+- For team-wide process changes (CI/CD, deployment patterns, monitoring standards), add "with the team" or "contributed to" unless the candidate was the sole driver.
+- For org-wide architectural claims (semantic layers, metric contracts, platform decisions), use "partnered with," "co-owned," or "worked with the BI team to define" unless literally sole owner.
+
+TECH STACK HEADER RULES:
+- Header stack reflects what the candidate touched weekly, not every tool that existed in the org.
+- Any tool in the header must appear in at least one bullet for that role; if it only belongs in skills, leave it out of the header.
+- Trim large stacks for short tenures (under a year) to the 5-6 defining tools; move secondary items to bullets only where used.
+- Era matters: do not list a tool in a 2022 role header that was not in wide production use until 2024.
+
 SUMMARY:
-- One sentence fit-check. State domain, single strongest technical signal, and role alignment.
+- Fit-check and intent signal, not a biography. Recruiter should know: domain, best technical strength, and role intent — two lines max.
+- Lead with what you do, not what you are — no adjective pileup or credential dump.
+- No "X years of experience" framing — name verticals or technical depth instead.
+- No keyword list.
+- For the JSON summary field: one sentence fit-check. State domain, single strongest technical signal, and role alignment.
 - Do NOT use "X years of experience" framing. Do NOT start with a personal pronoun or adjective pile.
 - Good: "Backend engineer with event-driven systems experience targeting data platform roles."
 - Bad: "5+ years in backend, specializing in APIs and AWS." (years-count format)
+
+ROLE TITLE:
+- Enhance with platform, domain, or scope context (e.g., "Software Engineer" → "Software Engineer, Platform & Distributed Systems") — do not rename the base title.
+
+ATS OPTIMIZATION:
+- Weave keywords throughout: summary, per-role tech stack lines, bullets, skills, project descriptions.
+- Use exact keyword forms from the JD (e.g., "Spring Boot" not "Spring framework", "Kubernetes" not "K8s") — preserve capitalization exactly.
+- Place highest-priority keywords early in bullets and in the summary.
+- Never stuff keywords or write hollow ATS-bait sentences — every keyword sits in a meaningful, natural context.
+
+SKILLS:
+- Regroup into 3-6 concise, role-relevant categories.
+- Every skill listed must be evidenced by at least one tech stack entry or bullet in experience/projects. Orphan skills (Airflow in SWE skills but nowhere in experience) are ATS-honest failures and screen red flags.
+- After any revision, scan each skills line against the experience section; remove anything not provably used.
+
+AVOID GENERIC AI WRITING:
+- No hollow primary openers as the main verb — see BANNED WORDS list below.
+- No buzzword salad: seamless, cutting-edge, synergistic, stakeholder, dynamic environment.
+- No same grammar pattern across all bullets.
+- No dangling participial chains at the end of bullets — the top AI signal pattern; use semicolons, short second sentences instead.
+- No impossible wins: 300% efficiency or million-dollar saves on intern work.
+- No "responsible for" duty lists — impact only.
+- No adjective pileup and inflated scope for short tenures.
+- No flatness within a role: if multiple bullets resolve with the same outcome type, rewrite so each hits a different dimension.
+
+BANNED WORDS & PHRASES:
+Never use in any bullet, summary, or title:
+- Hollow openers: spearheaded, leveraged, orchestrated, utilized, facilitated, pioneered, revolutionized, masterminded, improved, enhanced, streamlined
+- Jargon: synergy, robust, scalable, holistic, proactive, cutting-edge, state-of-the-art, dynamic, innovative, visionary, seamless, game-changer, thought leader, forward-thinking, best-in-class, impactful
+- Weak phrases: proven track record, results-driven, results-oriented, team player, passionate about, self-starter, detail-oriented, go-getter, stakeholder alignment, responsible for [duty list], in order to, as part of an effort to, so as to enhance/improve, deeply committed to
+- No em-dash (—) in any bullet, summary, or title
+
+PORTFOLIO PROJECT RULES:
+- If a frontend framework (React, Streamlit) appears in a project's tech_stack, at least one bullet must describe a real UI outcome — what a user sees or does with it.
+- If MLOps tooling (MLflow, experiment tracking) appears, at least one bullet must describe the workflow: what was tracked, why reproducibility mattered, what the artifact is.
 
 EXPERIENCE format:
 - "experience": { "0": { "position": "enhanced title or omit", "tech_stacks": "updated line or omit", "bullets": { "0": "text", "2": "text" } } }

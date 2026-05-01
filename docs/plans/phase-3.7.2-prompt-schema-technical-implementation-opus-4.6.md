@@ -3,6 +3,8 @@
 **Parent design:** [`phase-3.7.1-Prompt-schema-redesign-Opus-4.6.md`](./phase-3.7.1-Prompt-schema-redesign-Opus-4.6.md)  
 **Purpose:** Complete handover for implementation. Every decision, file change, block content, and test point is specified. Follow this document in order.
 
+**Archive note (2026-04):** Live code stores JD intel as an untyped JSON blob and expands **`$extract_jd_intel_output`** dot paths in **`render_user_template`**; snippets referencing **`JDIntelligence`** types are historical.
+
 ---
 
 ## Table of Contents

@@ -27,9 +27,10 @@ SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
     "original_resume": "Original master resume JSON — used to validate scope claims in the diff",
     "tailor_resume_full_output": "Tailored diff JSON from tailor_resume_full",
-    "jd_intel_blob": (
-        "Cached JD JSON ($extract_jd_intel_output + optional .paths)"
+    "extract_jd_intel_output": (
+        "JD blob placeholder — expanded from jd_intel_blob before string.Template in render_user_template"
     ),
+    "jd_intel_blob": "Cached JD dict for $extract_jd_intel_output expansion",
 }
 
 

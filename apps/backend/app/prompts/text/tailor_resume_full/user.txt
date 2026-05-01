@@ -1,3 +1,10 @@
+EDITORIAL ORDER (apply in this sequence; full prose lives in the system message and output schema message):
+1. SUMMARY
+2. SKILLS
+3. ROLE TITLE
+4. ATS OPTIMIZATION
+5. ROLE & GOAL, PROCESS, then all sections in the output schema message (defensibility, bullets, calibration, JSON shapes, etc.)
+
 EXTRACTED JD INTELLIGENCE:
 $extract_jd_intel_output
 

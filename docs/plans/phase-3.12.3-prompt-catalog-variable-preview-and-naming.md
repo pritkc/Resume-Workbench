@@ -4,6 +4,8 @@
 
 **Implementation checklist:** [phase-3.13.4-implementation-checklist.md](./phase-3.13.4-implementation-checklist.md)
 
+**Update (2026):** Prompts use **`$extract_jd_intel_output`** with optional dot-separated paths (e.g. **`$extract_jd_intel_output.requirements.years_min`**); Python passes **`jd_intel_blob`** — see **`apps/backend/app/prompts/text/README.md`**.
+
 ---
 
 ## Read this first (quick approval)
