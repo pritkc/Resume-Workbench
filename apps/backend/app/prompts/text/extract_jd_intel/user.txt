@@ -1,4 +1,4 @@
-Shape (example values only):
+Shape (output keys exactly as below; values shown are illustrative only):
 
 {
   "role": {
@@ -12,7 +12,7 @@ Shape (example values only):
     "team_context": "platform squad",
     "domain_context": "fintech, payouts",
     "product_context": "ledger microservices",
-    "scale_signals": ["1M+ daily tx"]
+    "scale_signals": ["1M+ daily transactions", "multi-region deployment"]
   },
   "location": "",
   "requirements": {
@@ -25,32 +25,36 @@ Shape (example values only):
   "technical_requirements": {
     "required_needs": ["Python", "distributed systems"],
     "nice_to_have_needs": ["Rust"],
-    "other_needs": ["on-call"],
+    "other_needs": ["on-call rotation"],
     "programming_languages": ["Python", "Go"],
     "frameworks": ["FastAPI", "gRPC"],
     "infrastructure": ["AWS", "Kubernetes"],
     "paradigms": ["microservices", "CI/CD"]
   },
-  "responsibility_themes": ["reliability", "data correctness"],
-  "resume_technical_keywords": ["Python", "FastAPI", "Kafka", "AWS"],
-  "resume_domain_keywords": ["payments", "ledger", "PCI"],
+  "responsibility_themes": [
+    "own reliability for high-throughput payment processing pipeline",
+    "define schema migration patterns for zero-downtime deploys",
+    "instrument distributed tracing across service boundaries"
+  ],
+  "resume_technical_keywords": ["Python", "FastAPI", "Kafka", "AWS", "Kubernetes"],
+  "resume_domain_keywords": ["payments", "ledger", "PCI", "settlement"],
   "calibration": {
-    "level_expectations": "senior IC scope, design reviews"
+    "level_expectations": "senior IC; owns full service end-to-end, leads design reviews, no direct reports"
   }
 }
 
 Rules:
 - JSON object only; keys exactly as above.
-- role.title: strip employer name, location, employment-type fluff.
-- role.role_domain: one coarse bucket — backend | frontend | full-stack | ml-ai | data-engineering | data-science | devops | platform | mobile | security | other.
+- role.title: strip employer name, location, and employment-type fluff.
+- role.role_domain: one bucket — backend | frontend | full-stack | ml-ai | data-engineering | data-science | devops | platform | mobile | security | other.
 - location: US city as `City, ST` if stated; else "". Remote/Hybrid-only → "".
-- requirements.years_min / years_max: ints from JD ranges (e.g. 3–5 → min 3 max 5); unknown → null.
-- technical_requirements.required_needs: hard must-haves (tools, stacks, capabilities). nice_to_have_needs: preferred. other_needs: misc demands not captured above.
-- programming_languages / frameworks / infrastructure / paradigms: split literals from JD; abbrev ok if JD uses them.
-- responsibility_themes: 5–8 short rewrite hooks; paraphrase, don’t paste JD.
-- resume_technical_keywords: tools/frameworks/platforms/methods to mirror on resume (ATS tech).
-- resume_domain_keywords: industry/product/regulatory/business terms to mirror on resume.
-- calibration.level_expectations: brief JD signal on ownership/depth (no title ladder guessing).
+- requirements.years_min / years_max: ints from JD (e.g. 3–5 → min 3 max 5); unknown → null.
+- technical_requirements.required_needs: hard must-haves. nice_to_have_needs: preferred. other_needs: misc demands not captured above.
+- programming_languages / frameworks / infrastructure / paradigms: split literals from JD; use JD's own abbreviations.
+- responsibility_themes: exactly 6 action-oriented hooks written as "[verb] [specific what]" fragments the resume must demonstrate — not single-word theme labels. Each hook names a concrete capability or outcome the role requires.
+- resume_technical_keywords: dedupe union of required_needs, programming_languages, frameworks, infrastructure, and paradigms — ordered by JD priority (required_needs items first, then nice_to_have, then others). These are the ATS terms to mirror on the resume.
+- resume_domain_keywords: industry, product, regulatory, and business terms to mirror. Dedupe.
+- calibration.level_expectations: one sentence describing ownership footprint — what the person owns outright vs. contributes to, and the expected decision-making scope. No title-ladder guessing.
 - Lists: dedupe; cap scale_signals at 5.
 
 Job description:

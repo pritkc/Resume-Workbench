@@ -1,17 +1,20 @@
-ORIGINAL RESUME:
-$original_resume
-
-REHYDRATED DRAFT RESUME (first pass applied to original — this is what a recruiter would see):
-$tailor_resume_full_output
-
-CRITIQUE (JSON):
+CRITIQUE (issues to address — touch only what is flagged here):
 $critique_resume_output
 
-JOB DESCRIPTION INTELLIGENCE:
+JD INTELLIGENCE:
 $extract_jd_intel_output
+
+  ATS keyword list (exact forms, exact capitalization): $extract_jd_intel_output.resume_technical_keywords
+  Level ceiling (do not exceed for any bullet):         $extract_jd_intel_output.calibration.level_expectations
+
+ORIGINAL RESUME (source of truth for scope):
+$original_resume
+
+REHYDRATED DRAFT (what a recruiter currently sees):
+$tailor_resume_full_output
 
 RESPONSE CONTRACT:
 $response_contract
 
-OUTPUT SCHEMA (compact JSON you must return — follow field names and nesting exactly):
+OUTPUT SCHEMA:
 $resume_diff_rules

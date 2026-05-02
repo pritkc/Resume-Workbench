@@ -4,26 +4,29 @@ YOUR TASK:
 Compare the tailored resume diff against the original master resume and the job description intelligence. Identify what works, what is inflated, and what is missing.
 
 LOOK FOR:
-1. RED FLAGS — scope claims in the diff that exceed what the original resume supports, vague achievements without outcomes, buzzword stuffing, claims inconsistent with tenure or role dates
-2. MISSED KEYWORDS — requirements from the JD intelligence not reflected anywhere in the tailored diff
-3. WEAK BULLETS — generic lines without impact, hollow opening verbs (Improved, Enhanced, Streamlined, Spearheaded, Leveraged, Facilitated), empty purpose clauses ("in order to improve X")
+1. RED FLAGS — scope claims that exceed what the original resume supports; vague achievements without outcomes; buzzword stuffing; claims inconsistent with tenure or role dates
+2. MISSED KEYWORDS — requirements from JD intelligence not reflected anywhere in the tailored diff
+3. WEAK BULLETS — generic lines without impact; hollow opening verbs (Improved, Enhanced, Streamlined, Spearheaded, Leveraged, Facilitated); empty purpose clauses ("in order to improve X"); shallow name-drops with no mechanism
+4. SUMMARY — is it fit-specific to this role, or still generic? Does it lead with domain + signal + intent?
+5. SKILLS COVERAGE — are all JD-critical tools present? Any orphan skills not evidenced in bullets or tech stacks?
 
 SEVERITY GUIDE:
-- high: claim a recruiter would immediately flag — scope far exceeds plausible tenure (e.g., intern claiming org-wide architecture ownership), claim directly contradicts JD requirements, or content the candidate could not credibly defend in a phone screen
+- high: recruiter would flag immediately — scope far exceeds plausible tenure, claim contradicts JD requirements, or candidate cannot credibly defend it in a screen
 - medium: vague achievement without measurable outcome, scope borderline for experience level, significant JD keyword entirely absent, weak opener burying an otherwise good bullet
-- low: minor style improvement, word choice issue, keyword present but not prominent enough
+- low: minor style issue, keyword present but not prominent enough, mild phrasing improvement
 
 SUGGESTIONS:
-- Provide 3-7 actionable suggestions
-- Each suggestion must reference a specific location using the notation below
-- Suggestions must be grounded in what the candidate's actual background supports — do not suggest inventing credentials, metrics, or experience not present in the original resume
-- If a JD keyword is genuinely absent from the candidate's background, flag it as a coverage gap, not something to fabricate
+- Provide exactly 5 suggestions
+- Each must reference a specific location and describe a concrete, implementable fix
+- Ground all suggestions in the candidate's actual background — do not suggest inventing credentials or metrics absent from the original resume
+- If a JD keyword is genuinely absent from the candidate's background, flag as coverage gap, not fabrication
 
 LOCATION NOTATION:
-- summary → the profile summary line
-- experience.N → role at 0-based index N (e.g., experience.0 = most recent role)
-- experience.N.bullets.M → bullet at 0-based index M of role N
+- summary → the profile summary
+- experience.N → role at 0-based index N (experience.0 = most recent)
+- experience.N.bullets.M → bullet M of role N
 - experience.N.position → job title of role N
+- experience.N.tech_stacks → tech stack line of role N
 - projects.N → project at 0-based index N
 - projects.N.bullets.M → bullet M of project N
 - skills → the skills section
@@ -33,15 +36,17 @@ OUTPUT FORMAT:
 
 REQUIRED KEYS:
 {
-  "overall_assessment": "Brief impression of fit for this role",
+  "overall_assessment": "One sentence: fit signal (strong/borderline/weak) + primary strength + primary gap",
   "red_flags": [
     { "location": "experience.0.bullets.2", "issue": "...", "severity": "high|medium|low" }
   ],
   "missed_keywords": [
-    { "keyword": "Kubernetes", "suggestion": "Where to add it organically — only if supported by candidate background" }
+    { "keyword": "Kubernetes", "location": "experience.0.tech_stacks", "suggestion": "Add only if candidate used it in this role's date window" }
   ],
   "weak_bullets": [
-    { "location": "experience.1.bullets.0", "current": "...", "issue": "..." }
+    { "location": "experience.1.bullets.0", "current": "...", "issue": "...", "suggestion": "Rewrite direction: name the component, mechanism, and observable outcome" }
   ],
-  "suggestions": ["Actionable suggestion referencing a specific location"]
+  "suggestions": [
+    { "location": "experience.0.bullets.1", "action": "Specific implementable fix" }
+  ]
 }

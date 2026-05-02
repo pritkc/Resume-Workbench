@@ -1,4 +1,4 @@
-ORIGINAL MASTER RESUME (source of truth — scope claims in the diff must be supportable from this):
+ORIGINAL MASTER RESUME (source of truth — all scope claims must be supportable from this):
 $original_resume
 
 TAILORED OUTPUT (compact JSON diff from tailor_resume_full):
@@ -6,3 +6,7 @@ $tailor_resume_full_output
 
 JOB DESCRIPTION INTELLIGENCE:
 $extract_jd_intel_output
+
+  Required keywords to check coverage (must appear in diff):  $extract_jd_intel_output.resume_technical_keywords
+  Responsibility themes to check alignment:                    $extract_jd_intel_output.responsibility_themes
+  Level ceiling to check scope against:                        $extract_jd_intel_output.calibration.level_expectations
