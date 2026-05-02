@@ -1,9 +1,9 @@
-EDITORIAL ORDER (apply in this sequence; full prose lives in the system message and output schema message):
-1. SUMMARY
-2. SKILLS
-3. ROLE TITLE
-4. ATS OPTIMIZATION
-5. ROLE & GOAL, PROCESS, then all sections in the output schema message (defensibility, bullets, calibration, JSON shapes, etc.)
+EDITORIAL SEQUENCE (work in this order):
+1. SUMMARY — fit-check rewrite first
+2. SKILLS — regroup and prune after seeing summary direction
+3. ROLE TITLES — scope-enhance position fields
+4. ATS — verify keyword placement across summary, stacks, bullets
+5. BULLETS — deep-rewrite per WRITING RULES and ACCURACY & CALIBRATION in the output schema
 
 EXTRACTED JD INTELLIGENCE:
 $extract_jd_intel_output
