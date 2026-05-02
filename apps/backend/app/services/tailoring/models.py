@@ -487,33 +487,32 @@ class TailoringResponseContract(BaseModel):
     def to_prompt_dict(self) -> dict[str, Any]:
         """Return compact address contract for the LLM prompt.
 
-        Exposes: mode, rules (mode_rules), output_keys, index_note,
-        experience entry/position/bullet_count arrays, project arrays.
-        The LLM uses rules to understand bullet policy, index_note to understand
-        that output keys are 0-based integers matching this contract's entry order.
+        Omits **tech_stacks** and **job titles (positions)** per experience row: both appear on
+        the resume payload. Each row is identified by ``entries`` (company name label) and
+        ``bullet_counts`` for valid bullet index ranges. Project rows use ``entries`` +
+        ``bullet_counts`` only.
         """
         out: dict[str, Any] = {
             "mode": self.prompt_mode,
-            "rules": self.mode_rules,  # Previously omitted — LLM never saw bullet policy
+            "rules": self.mode_rules,
             "output_keys": ["summary", "experience", "projects", "skills", "bold_keywords"],
             "index_note": (
                 "experience and projects keys are stringified 0-based integers. "
-                "Key '0' = entries[0] in this contract, '1' = entries[1], etc."
+                "Key '0' = entries[0] in this contract, '1' = entries[1], etc. "
+                "Job titles, tech stack lines, and bullet text: use ORIGINAL RESUME / "
+                "workExperience and personalProjects only — not repeated here."
             ),
         }
 
         if self.experience_entries:
             out["experience"] = {
                 "entries": self.experience_entries,
-                "positions": self.experience_positions,
-                "tech_stacks": self.experience_tech_stacks,
                 "bullet_counts": self.experience_bullet_counts,
             }
 
         if self.project_entries:
             out["projects"] = {
                 "entries": self.project_entries,
-                "tech_stacks": self.project_tech_stacks,
                 "bullet_counts": self.project_bullet_counts,
             }
 

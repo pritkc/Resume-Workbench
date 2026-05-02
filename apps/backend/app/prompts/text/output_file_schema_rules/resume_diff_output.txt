@@ -10,6 +10,7 @@ INDEX MAPPING:
 - experience and projects keys are stringified 0-based integers ("0", "1", "2"…)
 - Key "0" corresponds to response_contract.experience.entries[0], key "1" to entries[1], and so on
 - The order matches the response_contract exactly — do not use company or project names as keys
+- Current tech_stack lines, job titles, and full bullet text per row live only in ORIGINAL RESUME (workExperience / personalProjects); response_contract supplies entries and bullet_counts for index bounds — no duplicated stacks or titles
 
 BULLET POLICY:
 - bullets is an object keyed by stringified bullet index; you may rewrite existing indexes or add new trailing indexes when appropriate for fit and consistent with PRIMARY RUN RULES and BULLET WRITING below.

@@ -1,7 +1,5 @@
 """Tests for TailoringResponseContract prompt-facing output."""
 
-import pytest
-
 from app.services.tailoring.contracts import build_response_contract
 from app.services.tailoring.models import TailoringResumePayload, TailoringExperience
 
@@ -81,6 +79,17 @@ class TestResponseContractPromptDict:
             "resume_diff_output.txt must list fields the LLM must not emit "
             "(company, location, dates, id, github, website)"
         )
+
+    def test_prompt_dict_omits_resume_duplicate_fields(self):
+        """tech_stacks and titles belong on the resume only — omit from contract JSON."""
+        payload = _make_payload_with_experience()
+        rc = build_response_contract(payload, prompt_id="full")
+        d = rc.to_prompt_dict()
+        assert "experience" in d
+        assert "tech_stacks" not in d["experience"]
+        assert "positions" not in d["experience"]
+        assert d["experience"]["bullet_counts"] == [3, 2]
+        assert d["experience"]["entries"] == ["Acme", "StartupCo"]
 
     def test_empty_payload_still_exposes_rules(self):
         """Rules must appear even when no experience/project entries are present."""

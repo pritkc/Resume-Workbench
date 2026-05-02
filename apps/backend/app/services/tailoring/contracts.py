@@ -30,12 +30,11 @@ def _mode_rules(prompt_id: str) -> list[str]:
     """High-level shaping rules; bullet add/remove policy is guided by shipped diff rules + prompts."""
     if prompt_id == "lite":
         return [
-            "Follow resume_diff_rules for compact JSON shape and indexing.",
+            "Follow resume_diff_rules for compact JSON shape; string keys match entry order below.",
             "Do not change base job titles.",
         ]
     return [
-        "Follow resume_diff_rules for compact JSON shape and indexing.",
-        "experience/projects keys are stringified 0-based indices aligned with response_contract entry order.",
+        "Follow resume_diff_rules for compact JSON shape; experience/projects keys are stringified 0-based indices matching entry order below.",
     ]
 
 

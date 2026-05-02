@@ -5,7 +5,7 @@ LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT = "extract_jd_intel_output"
 
 PROMPT_VERSIONS = {
     "tailoring_system": "v5.1",
-    "tailoring_contract": "v5.1",
+    "tailoring_contract": "v5.3",
     "tailoring_craft": "v5.1",
     "tailoring_user": "v5.1",
     "jd_intelligence_system": "v3.0",
