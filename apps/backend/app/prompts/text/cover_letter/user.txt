@@ -1,4 +1,4 @@
-Generate both outputs in one pass using the same context:
+Generate both outputs in one pass:
 1) a cover letter
 2) a short outreach message
 
@@ -10,40 +10,43 @@ Return plain text only using this exact wrapper format:
 [outreach message body]
 <<END_OUTREACH_MESSAGE>>
 
-JOB TARGET (JSON):
+JOB TARGET:
 $job_target
 
-JOB DESCRIPTION EXCERPT:
+JOB DESCRIPTION:
 $job_description
 
-CANDIDATE PROFILE (JSON):
+CANDIDATE PROFILE:
 $resume_profile
 
-TAILORED RESUME (JSON — same structure as the candidate resume; typically the tailored version):
+TAILORED RESUME (primary source — draw role-specific facts, tools, and outcomes from here):
 $tailored_resume
 
-COVER LETTER REQUIREMENTS:
-- 95-165 words, 3 tight paragraphs (4 only for a genuine career pivot narrative)
-- Write as if the candidate composed this themselves after reading the JD carefully — specific, direct, no template voice
-- This pipeline has rich context. Use it. Every sentence should be rooted in a concrete detail from the JD or the candidate's real work — not generic claims that any applicant could make
-- Paragraph 1: anchor in one specific JD detail — a product area, technical challenge, team mission, or company context (not just "I saw your posting for X role")
-- Paragraph 2: connect 1-2 real facts from the candidate profile to that anchor — name actual tools, outcomes, or team context; no abstract claims
-- Paragraph 3: short, confident close — neutral and direct, not sycophantic
-- No template phrases: avoid "I am writing to express my interest", "I believe I would be an excellent fit", "I look forward to hearing from you", "Please find my resume attached"
-- No invented metrics, inflated scope, or embellishment beyond what the profile states
-- Plain text body only (no letterhead, markdown, signature block)
-- If no recipient name is available, begin paragraph 1 directly — no salutation line
+COVER LETTER:
+- 150 words max, exactly 3 paragraphs
+- Arc: P1 — their world; P2 — your fit evidence; P3 — forward motion
+- P1: anchor in one specific JD detail — a product area, technical challenge, team mission, or company context. Specificity test: this sentence must be uncopiable to a letter for any other company. If it could appear in any other application, rewrite it.
+- P2: connect 1-2 real facts from the tailored resume to the P1 anchor — actual tools, outcomes, or scope. Do not lift sentences verbatim from resume bullets; restate at a narrative level. Frame the connection around their challenge, not your credential: "at X I did Y, which means I understand Z [their problem]" — not "I have experience with Z." No one cares what you built; they care what it does for their problem.
+- P3: 1-2 sentences. State what you want to happen next. Confident, neutral, no eagerness.
+- The cover letter adds something not in the resume: narrative context, motivation for this company specifically, or the connective thread between your work and their challenge. It does not summarize the resume.
+- No salutation line if recipient name is unknown — begin P1 directly.
 
-OUTREACH MESSAGE REQUIREMENTS:
-- 50-95 words, 3-4 short sentences
-- Peer-professional tone: direct and confident, not formal, not salesy — write as someone reaching out to a colleague, not an applicant begging for attention
-- This is not a cover letter. Shorter, looser, more conversational.
-- Sentence 1: concrete anchor — name the specific role or one genuinely interesting thing about the company or team
-- Sentence 2: the candidate's single strongest relevant credential, stated as a plain fact (not a claim)
-- Sentence 3-4: low-friction ask — a conversation, not a favor
-- No subject line, no signature block
+OUTREACH MESSAGE:
+- 60 words max, 2-3 sentences — reads like a text, not a letter
+- S1: name the specific role plus one detail specific to this company or team that couldn't be auto-generated from just the job title alone. Specificity test: would this sentence make sense if sent to a different company? If yes, rewrite it.
+- S2: the candidate's single strongest relevant credential as a plain fact from the tailored resume — not a self-assessment ("Built X at Y, cutting Z" not "I have strong X skills")
+- S3: one time-bounded, low-friction ask ("got 15 min this week?" not "I'd love to connect whenever works for you")
+- Contractions and sentence fragments are fine
+- Tone: peer colleague reaching out, not applicant applying
+
+BANNED (applies to both outputs):
+- Openers: I am writing to express, I am excited/thrilled/passionate about, I would love to, I have always been interested in, I have a strong background in
+- Self-assessments: I believe I would be an excellent/great/perfect fit, I am confident that, I am highly motivated, proven track record, fast learner, I am detail-oriented, extensive experience, I think I would be a valuable addition
+- Closings: I look forward to hearing from you, Please find my resume attached, I hope to hear from you soon, I eagerly await, I would love the opportunity to
+- Vague asks: pick your brain, happy to share more if useful, I'd love to be considered, let me know if you're interested
+- Filler: results-driven, team player, passionate professional, dedicated, dynamic, self-starter
 
 FACTS:
-- Use only information from provided JSON and job description excerpt
+- Use only information from the provided JSON and JD text
 - Do not invent names, metrics, employers, dates, or credentials
-- If a field in job_target is an empty string, omit it gracefully rather than inventing a substitute
+- If a job_target field is an empty string, omit it rather than inventing a substitute
