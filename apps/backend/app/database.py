@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +69,12 @@ def _serialize_resume(record: Resume) -> dict[str, Any]:
     }
 
 
+def _jd_content_hash(content: str) -> str:
+    """SHA-256 of whitespace-normalised JD text. Stable across equivalent pastes."""
+    normalised = re.sub(r"\s+", " ", content).strip()
+    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
+
+
 def _serialize_job(record: Job) -> dict[str, Any]:
     return {
         "job_id": record.job_id,
@@ -78,6 +86,8 @@ def _serialize_job(record: Job) -> dict[str, Any]:
         "job_metadata": record.job_metadata,
         "job_keywords": record.job_keywords,
         "job_keywords_hash": record.job_keywords_hash,
+        "content_hash": record.content_hash,
+        "char_count": record.char_count,
         "preview_hash": record.preview_hash,
         "preview_prompt_id": record.preview_prompt_id,
         "preview_hashes": record.preview_hashes,
@@ -364,6 +374,8 @@ class Database:
                 role=role,
                 location=location,
                 job_metadata=job_metadata,
+                content_hash=_jd_content_hash(content),
+                char_count=len(content),
             )
             return _serialize_job(record)
 

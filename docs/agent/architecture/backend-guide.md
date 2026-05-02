@@ -113,3 +113,34 @@ Touch:
 - `additional.groups` is canonical even if older resumes still deserialize from legacy keys.
 - `sectionMeta` is canonical for UI/rendering, but it is rehydrated locally and should not be added back into LLM prompt contracts.
 - enrichment flows currently call LLMs directly from the router layer.
+
+## Job Description Storage (Training Data)
+
+Every JD pasted into the app is stored in the `jobs` table automatically — no UI action required. The table captures everything needed to build training pairs later:
+
+| Field | Purpose |
+|---|---|
+| `content` | Raw JD text as pasted |
+| `content_hash` | SHA-256 of whitespace-normalised text — use to deduplicate identical pastes in queries |
+| `char_count` | Length of raw `content` — filter trivially short/invalid JDs without loading text |
+| `job_keywords` | Extracted JD intelligence JSON (populated on first tailoring run) |
+| `company`, `role`, `location` | Metadata extracted at upload time |
+
+The full training triple `(jd_text, original_resume, tailored_resume)` is queryable by joining:
+
+```sql
+SELECT
+  j.content          AS jd_text,
+  j.job_keywords     AS jd_intel,
+  r_src.processed_data AS original_resume,
+  r_tail.processed_data AS tailored_resume
+FROM generation_runs gr
+JOIN jobs j         ON gr.job_id             = j.job_id
+JOIN resumes r_src  ON gr.source_resume_id   = r_src.resume_id
+JOIN resumes r_tail ON gr.tailored_resume_id = r_tail.resume_id
+WHERE gr.status     = 'completed'
+  AND j.char_count  > 200
+ORDER BY gr.created_at DESC;
+```
+
+No UI is exposed for JD storage — it is silent and automatic. To query the raw DB: `apps/backend/data/` holds the SQLite file (default path from `settings.DATABASE_URL`).
