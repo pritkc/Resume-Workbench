@@ -27,15 +27,8 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
 
 
 def _mode_rules(prompt_id: str) -> list[str]:
-    """High-level shaping rules; bullet add/remove policy is guided by shipped diff rules + prompts."""
-    if prompt_id == "lite":
-        return [
-            "Follow resume_diff_rules for compact JSON shape; string keys match entry order below.",
-            "Do not change base job titles.",
-        ]
-    return [
-        "Follow resume_diff_rules for compact JSON shape; experience/projects keys are stringified 0-based indices matching entry order below.",
-    ]
+    """Rules are defined in shipped txt prompt files; contract carries structural data only."""
+    return []
 
 
 def _immutable_fields(entry_keys: list[str], editable_fields: set[str]) -> list[str]:
@@ -95,11 +88,6 @@ def build_response_contract(
         ),
         "skills": TailoringSectionContract(
             type="object",
-            rules=[
-                "Return concise skills as label + values only.",
-                "Keep 3-6 groups max, with clear labels and no duplicates across groups.",
-                "Retain the most role-relevant core skills and remove clearly irrelevant items.",
-            ],
             sections={
                 "groups": TailoringSectionContract(
                     type="array",
@@ -114,11 +102,6 @@ def build_response_contract(
         ),
         "changes": TailoringSectionContract(
             type="array",
-            rules=[
-                "Include one change record per actual edit when possible.",
-                "Use indexed paths like workExperience[0].description[1].",
-                "Never include blocked paths like personalInfo or education.",
-            ],
         ),
     }
 
@@ -153,11 +136,6 @@ def build_response_contract(
     sections["skills"] = TailoringSectionContract(
         type="object",
         entry_count=len(groups) if isinstance(groups, list) else 0,
-        rules=[
-            "Return concise skills as label + values only.",
-            "Keep 3-6 groups max, with clear labels and no duplicates across groups.",
-            "Retain the most role-relevant core skills and remove clearly irrelevant items.",
-        ],
         sections={
             "groups": TailoringSectionContract(
                 type="array",

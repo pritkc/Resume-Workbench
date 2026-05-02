@@ -10,15 +10,13 @@ FORMAT:
 
 EXPERIENCE:    { "0": { "position": "enhanced title or omit", "tech_stacks": "updated line or omit", "bullets": { "0": "text", "2": "text" } } }
 PROJECTS:      { "0": { "name": "enhanced name or omit", "tech_stacks": "updated tagline or omit", "bullets": { "0": "text" } } }
-SKILLS:        [{ "label": "...", "values": [...] }]  — 3–6 groups; short labels (Backend, Cloud, Data, Languages, Certifications)
-BOLD_KEYWORDS: array of 10–20 strings from final resume content, chosen for JD alignment
+SKILLS:        [{ "label": "...", "values": [...] }]  — exactly 5 groups; short labels
+BOLD_KEYWORDS: array of exactly 15 strings from final resume content, chosen for JD alignment
+
+NAMING BRIDGE:
+In ORIGINAL RESUME: workExperience → experience keys in output; personalProjects → projects keys; description array → bullets object
 
 --- FIELD CONTRACTS ---
-
-INDEX MAPPING:
-- experience / projects keys = stringified 0-based integers matching response_contract order exactly
-- Do not use company or project names as keys
-- Tech stacks, job titles, and bullet text live in ORIGINAL RESUME; response_contract supplies index bounds only
 
 BULLET POLICY:
 - bullets object keyed by stringified bullet index; rewrite existing indexes or add new trailing indexes where appropriate
@@ -38,32 +36,32 @@ JD is the lens to reorder, reword, and emphasize honest overlap — not to inven
 
 TWENTY-SECOND SKIM:
 - Write for F-shaped reading: strong summary line, hero bullet first per employer (strongest signal, not a stack dump), recognizable tech at a glance
-- Quick skim should convey domain + level + main tech without reading paragraph two
+- Quick skim must convey domain + level + main tech without reading paragraph two
 
 ATS:
-- Weave JD keywords throughout: summary, tech stack lines, bullets, skills, project descriptions
-- Exact keyword forms (e.g., "Spring Boot" not "Spring framework", "Kubernetes" not "K8s") — preserve capitalization exactly
+- Use resume_technical_keywords from JD intelligence as the canonical list — exact forms, exact capitalization (e.g., "Spring Boot" not "Spring framework", "Kubernetes" not "K8s")
 - Place highest-priority keywords early in bullets and summary
+- Weave keywords throughout: summary, tech stack lines, bullets, skills, project descriptions
 - Never keyword-stuff or write hollow ATS-bait sentences
 
 TECH STACK HEADER:
 - Reflects tools touched weekly, not every tool in the org
 - Any header tool must appear in at least one bullet; if only in skills, omit from header
-- Short tenures (< 1 yr): limit to 5–6 defining tools; move secondary items to bullets only
-- Era matters: no tool listed that wasn't in wide production use at the role's dates
+
 
 SKILLS:
-- 3–6 concise, role-relevant groups; JD-critical skills in first groups
+- Exactly 5 groups — split broad categories to reach 5; merge thin ones to avoid padding
+- Group order: JD-critical groups first
 - Every skill must appear in at least one tech stack or bullet — remove orphans; no duplicates across groups
+- Retain near-adjacent skills where evidenced; do not remove skills purely because they are not JD-critical — the section must read as a complete professional profile, not a JD mirror
 - Omit "skills" key entirely if no changes needed
 
 --- WRITING RULES ---
 
 SUMMARY:
-- Two lines max. Domain + best technical strength + role intent.
-- Lead with what you do, not what you are — no adjective pileup, no credential dump, no keyword list
+- Two sentences max. Lead with technical domain, then strongest signal and role intent.
+- What you do, not what you are — no adjective pileup, no credential dump, no keyword list
 - No "X years of experience" framing; name verticals or technical depth instead
-- Good: "Backend engineer with event-driven systems experience targeting data platform roles."
 
 ROLE TITLE:
 - Add platform, domain, or scope context only (e.g., "Software Engineer" → "Software Engineer, Platform & Distributed Systems")
@@ -77,11 +75,14 @@ BULLETS:
 - Tie each metric to why it mattered and what the candidate personally did — no naked percent with no mechanism
 - Engineering judgment and problem-solving front; specific software is supporting detail
 - Each bullet in a role tells a different technical story (latency, reliability, compliance, process) — not variations of the same narrative
-- Replace least-applicable bullets with alternatives that naturally fit the target role
-- For 5+ roles: deep-rewrite 3–4 most recent/relevant; older or short stints may receive minimal updates
-- Projects: three tight single-liners per project — useful interview hooks, not padding
 - Light human texture where helpful: team size, sprint pressure, legacy context
 - Recent work can include LLM/AI pipeline work where timeline and domain allow — implementer level, not research fiction
+
+TECHNICAL DEPTH:
+- Every bullet must name the system or component affected, the technical mechanism, and the observable outcome
+- "Improved API performance" fails — it names a category. "Replaced synchronous DB poll with Redis Pub/Sub in the order-status service, cutting p99 from 800 ms to 90 ms" passes — it names the mechanism
+- If the exact mechanism is unknown, describe before/after state instead
+- No shallow tech-stack name-calling: do not write a tool name unless the sentence explains what was done with it
 
 PORTFOLIO PROJECTS:
 - Frontend framework (React, Streamlit) in tech_stack → at least one bullet must describe a real UI outcome
@@ -96,8 +97,7 @@ DEFENSIBILITY:
 
 TECHNICAL CALIBRATION:
 - Use real figures or honest approximates with ~ or ranges; avoid vague mush throughout
-- Tools on a role must fit real calendar dates and normal production use in that window
-- Era + duration both matter: large stack for short tenure (< 1 yr) reads as keyword stuffing
+- Tools and technologies must match the candidate's real employment timeline and normal production use at those dates
 - Early-career scope: contributed or shipped pieces with others; do not claim sole ownership of products or org-wide architecture unless source explicitly says so
 - Calibrate scope to experience level; metrics only where credible for seniority and tenure
 - When in doubt, prefer mainstream tools over novelty flex
@@ -118,8 +118,8 @@ synergy, robust, scalable, holistic, proactive, cutting-edge, state-of-the-art, 
 PHRASES (never use):
 proven track record, results-driven, results-oriented, team player, passionate about, self-starter, detail-oriented, go-getter, stakeholder alignment, responsible for [duty list], in order to, as part of an effort to, so as to enhance/improve, deeply committed to
 
-PATTERNS (never use):
-- No em-dash (—) in any bullet, summary, or title
+PATTERNS (never):
+- No em-dash (—) anywhere in the output
 - No dangling participial chains ending bullets
 - No impossible wins (300% efficiency on intern work)
 - No flatness within a role: if multiple bullets share the same outcome type, rewrite so each hits a different dimension

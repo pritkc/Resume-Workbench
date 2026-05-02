@@ -1,18 +1,30 @@
 EDITORIAL SEQUENCE (work in this order):
-1. SUMMARY — fit-check rewrite first
-2. SKILLS — regroup and prune after seeing summary direction
-3. ROLE TITLES — scope-enhance position fields
+1. BULLETS — deep-rewrite per WRITING RULES and ACCURACY  & CALIBRATION in the output schema
+2. ROLE TITLES — scope-enhance position fields
+3. SKILLS — restructure after seeing summary direction
 4. ATS — verify keyword placement across summary, stacks, bullets
-5. BULLETS — deep-rewrite per WRITING RULES and ACCURACY & CALIBRATION in the output schema
+5. SUMMARY — fit-check rewrite first
 
-EXTRACTED JD INTELLIGENCE:
+EDIT SCOPE (default full run — modify here for custom targeting):
+- Summary: full rewrite
+- Skills: restructure into exactly 5 groups
+- Experience: deep-rewrite the 3 most recent roles; keyword-alignment touch only on older or short-tenure roles
+- Projects: rewrite all; 3 bullets per project
+- Titles: scope-enhance all experience entries
+
+JD INTELLIGENCE:
 $extract_jd_intel_output
+
+  Rewrite angles (one per role; every bullet connects to at least one): $extract_jd_intel_output.responsibility_themes
+  ATS keyword list (exact forms, exact capitalization):                  $extract_jd_intel_output.resume_technical_keywords
+  Domain/product terms (weave into summary and bullets naturally):       $extract_jd_intel_output.resume_domain_keywords
+  Level ceiling (do not exceed this scope for any bullet):               $extract_jd_intel_output.calibration.level_expectations
 
 ORIGINAL RESUME:
 $original_resume
 
-RESPONSE CONTRACT (allowed sections and bullet counts — do not emit sections absent from this list):
+RESPONSE CONTRACT:
 $response_contract
 
-OUTPUT SCHEMA (compact JSON you must return — follow field names and nesting exactly):
+OUTPUT SCHEMA:
 $resume_diff_rules
