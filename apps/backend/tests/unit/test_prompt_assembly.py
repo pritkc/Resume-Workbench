@@ -139,13 +139,14 @@ def test_resume_diff_rules_has_bullet_policy() -> None:
     assert "bullet" in lower
 
 
-def test_resume_diff_rules_limit_summary_and_bullet_render_fit() -> None:
-    """Prompt must guard against summaries/bullets that wrap into too many visual lines."""
+def test_resume_diff_rules_limit_summary_without_bullet_length_cap() -> None:
+    """Summary should stay render-fit, but bullets should not be forced thin."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
     lower = RESUME_DIFF_RULES.lower()
     assert "120-155 characters" in lower
-    assert "105-145 characters" in lower
-    assert "hard max 165" in lower
+    assert "105-145 characters" not in lower
+    assert "hard max 165" not in lower
+    assert "one clause plus one outcome" not in lower
 
 
 def test_resume_diff_rules_do_not_allow_default_new_bullet_indexes() -> None:

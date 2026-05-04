@@ -76,10 +76,6 @@ SUMMARY:
 - Good: "Data engineer building ETL/ELT pipelines, semantic layers, and cloud warehouse models for analytics teams."
 - Bad: "Data engineer with many years of experience in data engineering."
 
-BULLET FIT:
-- Each bullet must be one resume line where possible: target 105-145 characters, hard max 165 characters.
-- Use one clause plus one outcome; avoid stacking multiple clauses with semicolons.
-
 ROLE TITLE:
 - Add platform, domain, or scope context only (e.g., "Software Engineer" → "Software Engineer, Platform & Distributed Systems")
 - Never rename the base title
@@ -115,7 +111,7 @@ CLAIM POLICY:
 TECHNICAL CALIBRATION:
 - Use real figures or honest approximates with ~ or ranges; avoid vague mush throughout
 - Tools and technologies must match the candidate's real employment timeline and normal production use at those dates
-- Do not promote tools from tech_stacks into bullet text unless the description bullet already names that tool or the action logically requires it.
+- Do not promote tools from tech_stacks into bullet text unless the source bullet already names that tool or the action logically requires it.
 - Early-career scope: contributed or shipped pieces with others; do not claim sole ownership of products or org-wide architecture unless source explicitly says so
 - Calibrate scope to experience level; metrics only where credible for seniority and tenure
 - When in doubt, prefer mainstream tools over novelty flex

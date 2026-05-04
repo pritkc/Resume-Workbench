@@ -32,7 +32,7 @@ FULL-RUN SHAPE GUARDS:
 - Do not compress project bullets: if a project has 3 source bullets, return bullets "0", "1", and "2" as separate lines, not one combined paragraph.
 - Do not drop stack lines from changed entries: emit tech_stacks when rewriting bullets for that role or project.
 - Position qualifiers must reinforce the JD's primary domain; avoid generic labels unless source evidence and JD both justify them. When in doubt, keep the existing qualifier or omit.
-- Keep summary and bullets render-fit: summary 120-155 characters; bullets 105-145 characters where possible.
+- Keep summary render-fit: summary 120-155 characters.
 
 OUTPUT SCHEMA:
 $resume_diff_rules
