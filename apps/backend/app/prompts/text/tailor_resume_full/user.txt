@@ -17,7 +17,7 @@ EXTRACTED JD INTELLIGENCE:
 $extract_jd_intel_output
 
   Rewrite angles (one per role; every bullet connects to at least one): $extract_jd_intel_output.responsibility_themes
-  ATS keyword list (exact forms, exact capitalization):                  $extract_jd_intel_output.resume_technical_keywords
+  ATS keyword list (translation candidates, not mandatory insertions):    $extract_jd_intel_output.resume_technical_keywords
   Bold keyword source (short, high-visibility ATS terms only):           $extract_jd_intel_output.resume_bold_keyword_sources
   Domain/product terms (weave into summary and bullets naturally):       $extract_jd_intel_output.resume_domain_keywords
   Level ceiling (do not exceed this scope for any bullet):               $extract_jd_intel_output.calibration.level_expectations

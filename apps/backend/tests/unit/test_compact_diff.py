@@ -258,12 +258,15 @@ class TestApplyCompactDiff:
             "summary": "Excel analyst.",
             "experience": {
                 "0": {
-                    "tech_stacks": "Python, Excel, SAP",
+                    "tech_stacks": "Python, Excel, SAP, Teams",
                     "bullets": {"0": "Built Excel reports for stakeholders"},
                 }
             },
             "skills": [
-                {"label": "Tools", "values": ["Python", "Excel", "JIRA", "SAP"]},
+                {
+                    "label": "Tools",
+                    "values": ["Python", "Excel", "JIRA", "SAP", "Confluence", "Notion"],
+                },
             ],
         }
         result = apply_compact_diff(base_resume, diff)

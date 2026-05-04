@@ -88,8 +88,15 @@ def test_extract_jd_intel_refines_resume_technical_keywords_for_bolding() -> Non
 
 def test_filter_resume_keyword_sources_removes_basic_tools() -> None:
     blob = {
-        "resume_technical_keywords": ["SAP", "Excel", "Power BI", "Jira"],
-        "resume_bold_keyword_sources": ["Excel", "SAP", "Power BI", "Microsoft Office"],
+        "resume_technical_keywords": ["SAP", "Excel", "Power BI", "Jira", "Teams"],
+        "resume_bold_keyword_sources": [
+            "Excel",
+            "SAP",
+            "Power BI",
+            "Microsoft Office",
+            "Confluence",
+            "Notion",
+        ],
     }
 
     filter_resume_keyword_sources(blob)

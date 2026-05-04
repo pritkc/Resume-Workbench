@@ -245,6 +245,15 @@ def test_full_prompt_retains_closest_two_projects_and_superset_skills() -> None:
     assert "when in doubt, keep the existing qualifier or omit" in lower
     assert "at most 1-2 bullets per experience" in lower
     assert "omit unchanged bullet indexes" in lower
+    assert "translation candidates, not mandatory insertions" in lower
+
+
+def test_resume_diff_rules_handles_pivot_roles_from_candidate_identity() -> None:
+    """Pivot-role summaries should preserve the candidate's stronger original identity."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "pivot role" in lower
+    assert "candidate's engineering perspective" in lower
 
 
 def test_full_system_prompt_aligns_titles_to_target_domain() -> None:

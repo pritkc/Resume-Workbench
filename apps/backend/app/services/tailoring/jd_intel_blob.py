@@ -31,7 +31,11 @@ _BASIC_RESUME_TERMS = frozenset(
         "email",
         "e-mail",
         "slack",
+        "teams",
+        "microsoft teams",
         "jira",
+        "confluence",
+        "notion",
     }
 )
 
