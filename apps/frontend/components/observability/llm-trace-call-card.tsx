@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { LLMCallRecord } from '@/lib/api/llm';
+import { CopyCharBar } from '@/components/settings/prompt-field-chrome';
 import {
   formatCost,
   formatCount,
@@ -12,10 +13,14 @@ import {
   renderPreviewStats,
   shortenId,
 } from '@/lib/observability/llm-trace-helpers';
+import { useTranslations } from '@/lib/i18n';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
 
 const PRE_BASE =
-  'mt-2 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[13px] leading-relaxed text-slate-800 max-lg:min-h-[min(48dvh,22rem)]';
+  'min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[13px] leading-relaxed text-slate-800 max-lg:min-h-[min(48dvh,22rem)]';
+
+const CONTEXT_PRE =
+  'max-h-[min(42dvh,24rem)] overflow-auto whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-800';
 
 function PreviewPane({
   title,
@@ -26,14 +31,20 @@ function PreviewPane({
   statsLine: string;
   body: string;
 }): React.ReactElement {
+  const { t } = useTranslations();
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-md border border-slate-200 bg-white p-3 shadow-sm lg:h-full lg:min-h-0">
-      <p className="shrink-0 font-mono text-xs font-semibold uppercase tracking-wide text-slate-800">
-        {title}
-      </p>
-      <p className="mt-1 shrink-0 font-mono text-[10px] uppercase tracking-wide text-slate-400">
-        {statsLine}
-      </p>
+      <div className="mb-1 flex shrink-0 items-end justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-xs font-semibold uppercase tracking-wide text-slate-800">
+            {title}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-slate-400">
+            {statsLine}
+          </p>
+        </div>
+        <CopyCharBar text={body} t={t} />
+      </div>
       <pre className={PRE_BASE}>{body}</pre>
     </div>
   );
@@ -48,6 +59,15 @@ export function LlmTraceCallCard({
   previewsOpen: boolean;
   onTogglePreviews: () => void;
 }): React.ReactElement {
+  const { t } = useTranslations();
+  const requestContextText = useMemo(
+    () =>
+      call.request_context
+        ? JSON.stringify(call.request_context, null, 2)
+        : 'No request context stored.',
+    [call.request_context]
+  );
+
   return (
     <article
       className={`rounded-md border p-4 ${
@@ -177,10 +197,13 @@ export function LlmTraceCallCard({
         <div className="mt-4 rounded-md border border-red-200 bg-red-50/90 p-3">
           <div className="flex items-start gap-2 text-sm text-red-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            <div className="min-w-0">
-              <p className="font-mono text-xs font-semibold uppercase tracking-wide">
-                {call.error_type ?? 'error'}
-              </p>
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-end justify-between gap-2">
+                <p className="font-mono text-xs font-semibold uppercase tracking-wide">
+                  {call.error_type ?? 'error'}
+                </p>
+                {call.error_message ? <CopyCharBar text={call.error_message} t={t} /> : null}
+              </div>
               <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">
                 {call.error_message}
               </p>
@@ -226,11 +249,10 @@ export function LlmTraceCallCard({
               <summary className="cursor-pointer font-mono text-xs font-semibold uppercase tracking-wide text-slate-700">
                 Request context (JSON)
               </summary>
-              <pre className="mt-2 max-h-[min(42dvh,24rem)] overflow-auto whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-800">
-                {call.request_context
-                  ? JSON.stringify(call.request_context, null, 2)
-                  : 'No request context stored.'}
-              </pre>
+              <div className="mt-2 mb-1 flex items-end justify-end">
+                <CopyCharBar text={requestContextText} t={t} />
+              </div>
+              <pre className={CONTEXT_PRE}>{requestContextText}</pre>
             </details>
           </div>
         ) : null}
