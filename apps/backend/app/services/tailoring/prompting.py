@@ -64,7 +64,7 @@ def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> 
         "summary: one sentence. "
         "experience/projects: object keyed by 0-based entry index with a bullets sub-object. "
         "skills: array of {label, values} objects. "
-        "bold_keywords: array of 10-20 keyword strings. "
+        "bold_keywords: array of 8-12 short technical ATS terms, 1-3 words each. "
         "Do not include personalInfo, sectionMeta, education, id, company, location, or dates. "
         "Start with { and end with }."
     )

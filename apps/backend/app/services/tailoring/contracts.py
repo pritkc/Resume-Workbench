@@ -38,8 +38,9 @@ def _mode_rules(prompt_id: str) -> list[str]:
         rules.extend(
             [
                 "For changed experience/project entries, emit tech_stacks when evidenced by the source resume.",
-                "Preserve project bullet count in full runs; do not compress several project bullets into one.",
-                "Scope-enhanced position qualifiers must align with the target role domain.",
+                "Preserve project bullet count in full runs; retain closest two projects with only light JD-aware reframing.",
+                "Keep summaries and bullets render-fit: summary 120-155 chars, bullets 105-145 chars where possible.",
+                "Scope-enhanced position qualifiers must align with the target role domain without copying JD labels.",
             ]
         )
     return rules

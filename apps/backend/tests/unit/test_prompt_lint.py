@@ -60,6 +60,13 @@ def test_resume_diff_output_example_does_not_demonstrate_years_count() -> None:
     assert "Bad: " in diff_rules
 
 
+def test_bold_keyword_rules_reject_long_phrases() -> None:
+    """Bold keyword guidance should keep highlighted terms short and technical."""
+    diff_rules = read_shipped_txt("output_file_schema_rules/resume_diff_output.txt").lower()
+    assert "1-3 word terms only" in diff_rules
+    assert "avoid sentences, soft skills, and generic domain phrases" in diff_rules
+
+
 # ── cover_letter user.txt: no OUTPUT FORMAT instructions (not its job) ────────
 
 def test_cover_letter_user_has_no_output_format_section() -> None:

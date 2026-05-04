@@ -139,6 +139,71 @@ def test_resume_diff_rules_has_bullet_policy() -> None:
     assert "bullet" in lower
 
 
+def test_resume_diff_rules_limit_summary_and_bullet_render_fit() -> None:
+    """Prompt must guard against summaries/bullets that wrap into too many visual lines."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "120-155 characters" in lower
+    assert "105-145 characters" in lower
+    assert "hard max 165" in lower
+
+
+def test_resume_diff_rules_do_not_allow_default_new_bullet_indexes() -> None:
+    """Work experience should rewrite existing bullets unless the contract explicitly allows additions."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "rewrite existing indexes only" in lower
+    assert "explicitly permits new trailing indexes" in lower
+
+
+def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
+    """Tailoring should translate the JD into a broader credible candidate profile."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "jd is a lens, not a script" in lower
+    assert "broader impressive profile" in lower
+    assert "translate responsibility phrases" in lower
+    assert "not verbatim phrase borrowing" in lower
+    assert "paraphrased jd responsibility" in lower
+
+
+def test_resume_diff_rules_keep_bold_keywords_compact() -> None:
+    """Bold keywords should be short technical ATS terms, not long phrases."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "8-12 short high-visibility technical ats terms" in lower
+    assert "1-3 word terms only" in lower
+    assert "avoid sentences, soft skills, and generic domain phrases" in lower
+
+
+def test_resume_diff_rules_allows_plausible_new_claims() -> None:
+    """Full generation can add plausible stronger claims the user can prove later."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "claim policy" in lower
+    assert "strong plausible claims" in lower
+    assert "do not require exact source wording" in lower
+
+
+def test_resume_diff_rules_lock_project_count_and_limit_tool_promotion() -> None:
+    """Project count and tool specificity should not drift from the source resume."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "project bullet count is locked" in lower
+    assert "violation renders the output malformed" in lower
+    assert "do not promote tools from tech_stacks into bullet text" in lower
+    assert "source bullet already names that tool" in lower
+
+
+def test_resume_diff_rules_apply_bans_globally_and_keep_skills_specific() -> None:
+    """Jargon bans apply everywhere, and skills should not become prose phrases."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "apply jargon and phrases bans to summary, role titles, and bullets equally" in lower
+    assert "skill values must be specific tool, product, method, or technology names" in lower
+    assert "not descriptive phrases" in lower
+
+
 def test_resume_diff_rules_forbid_markdown_fences() -> None:
     """LLM output must be raw JSON so local parsers do not receive markdown fences."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
@@ -160,12 +225,36 @@ def test_full_prompt_preserves_project_bullet_count_and_stacks() -> None:
     assert "emit tech_stacks" in lower
 
 
+def test_full_prompt_retains_closest_two_projects_and_superset_skills() -> None:
+    """Temporary full-run needs: closest projects stay stable and skills stay broader than the JD."""
+    user = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    )
+    lower = user.lower()
+    assert "retain the closest two projects" in lower
+    assert "preserve impressive superset skills" in lower
+    assert "do not copy jd titles or secondary role labels" in lower
+    assert "when in doubt, keep the existing qualifier or omit" in lower
+
+
 def test_full_system_prompt_aligns_titles_to_target_domain() -> None:
     """Title qualifiers should move toward the JD domain instead of generic AI/backend labels."""
     system = assemble_tailoring_system_prompt("full")
     lower = system.lower()
     assert "target role domain" in lower
     assert "generic ai/backend" in lower
+
+
+def test_full_system_prompt_uses_broader_competencies_and_plausible_claims() -> None:
+    """System prompt should ask for translation beyond exact JD language."""
+    system = assemble_tailoring_system_prompt("full")
+    lower = system.lower()
+    assert "broader competencies behind the jd" in lower
+    assert "reasonable new claim the user can later prove" in lower
+    assert "do not borrow jd vocabulary" in lower
 
 
 def test_resume_diff_rules_has_locked_fields() -> None:

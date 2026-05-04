@@ -7,10 +7,10 @@ EDITORIAL SEQUENCE (work in this order):
 
 EDIT SCOPE (default full run — modify here for custom targeting):
 - Summary: full rewrite
-- Skills: restructure into exactly 5 groups
+- Skills: restructure into exactly 5 groups; preserve impressive superset skills after JD-critical groups
 - Experience: deep-rewrite the 3 most recent roles; keyword-alignment touch only on older or short-tenure roles
-- Projects: rewrite all; keep the same bullet count as each source project unless RESPONSE CONTRACT says a different count
-- Titles: scope-enhance all experience entries
+- Projects: retain the closest two projects; lightly reframe wording/context for the JD, keep names and core substance stable
+- Titles: add only broad scope qualifiers; do not copy JD titles or secondary role labels. When in doubt, keep the existing qualifier or omit.
 - Tech stacks: emit tech_stacks for every changed experience and project entry; keep only evidenced tools, ordered by JD relevance
 
 EXTRACTED JD INTELLIGENCE:
@@ -18,6 +18,7 @@ $extract_jd_intel_output
 
   Rewrite angles (one per role; every bullet connects to at least one): $extract_jd_intel_output.responsibility_themes
   ATS keyword list (exact forms, exact capitalization):                  $extract_jd_intel_output.resume_technical_keywords
+  Bold keyword source (short, high-visibility ATS terms only):           $extract_jd_intel_output.resume_bold_keyword_sources
   Domain/product terms (weave into summary and bullets naturally):       $extract_jd_intel_output.resume_domain_keywords
   Level ceiling (do not exceed this scope for any bullet):               $extract_jd_intel_output.calibration.level_expectations
 
@@ -30,7 +31,8 @@ $response_contract
 FULL-RUN SHAPE GUARDS:
 - Do not compress project bullets: if a project has 3 source bullets, return bullets "0", "1", and "2" as separate lines, not one combined paragraph.
 - Do not drop stack lines from changed entries: emit tech_stacks when rewriting bullets for that role or project.
-- Position qualifiers must follow the JD's target role domain; avoid generic AI/backend labels unless the source evidence and JD both justify them.
+- Position qualifiers must reinforce the JD's primary domain; avoid generic labels unless source evidence and JD both justify them. When in doubt, keep the existing qualifier or omit.
+- Keep summary and bullets render-fit: summary 120-155 characters; bullets 105-145 characters where possible.
 
 OUTPUT SCHEMA:
 $resume_diff_rules

@@ -74,3 +74,12 @@ def test_extract_jd_intel_user_template_still_has_schema_marker() -> None:
     assert '"role"' in USER_TEMPLATE
     assert "$job_description" in USER_TEMPLATE
 
+
+def test_extract_jd_intel_refines_resume_technical_keywords_for_bolding() -> None:
+    from app.prompts.extract_jd_intel import USER_TEMPLATE
+
+    lower = USER_TEMPLATE.lower()
+    assert "1-3 word" in lower
+    assert "bold_keywords" in lower
+    assert "tools, languages, platforms" in lower
+    assert "exclude responsibility phrases" in lower

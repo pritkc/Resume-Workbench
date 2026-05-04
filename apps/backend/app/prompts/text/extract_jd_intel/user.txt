@@ -37,6 +37,7 @@ Shape (output keys exactly as below; values shown are illustrative only):
     "instrument distributed tracing across service boundaries"
   ],
   "resume_technical_keywords": ["Python", "FastAPI", "Kafka", "AWS", "Kubernetes"],
+  "resume_bold_keyword_sources": ["Python", "Kafka", "AWS", "Kubernetes", "PCI"],
   "resume_domain_keywords": ["payments", "ledger", "PCI", "settlement"],
   "calibration": {
     "level_expectations": "senior IC; owns full service end-to-end, leads design reviews, no direct reports"
@@ -52,7 +53,8 @@ Rules:
 - technical_requirements.required_needs: hard must-haves. nice_to_have_needs: preferred. other_needs: misc demands not captured above.
 - programming_languages / frameworks / infrastructure / paradigms: split literals from JD; use JD's own abbreviations.
 - responsibility_themes: exactly 6 action-oriented hooks written as "[verb] [specific what]" fragments the resume must demonstrate — not single-word theme labels. Each hook names a concrete capability or outcome the role requires.
-- resume_technical_keywords: dedupe union of required_needs, programming_languages, frameworks, infrastructure, and paradigms — ordered by JD priority (required_needs items first, then nice_to_have, then others). These are the ATS terms to mirror on the resume.
+- resume_technical_keywords: dedupe union of required_needs, programming_languages, frameworks, infrastructure, and paradigms — ordered by JD priority. Include exact high-signal ATS terms, not responsibility phrases.
+- resume_bold_keyword_sources: 8–12 short bold_keywords source terms for visual highlighting. Use 1-3 word tools, languages, platforms, products, data methods, and technical domains only. Exclude responsibility phrases, soft skills, generic business phrases, and full sentences.
 - resume_domain_keywords: industry, product, regulatory, and business terms to mirror. Dedupe.
 - calibration.level_expectations: one sentence describing ownership footprint — what the person owns outright vs. contributes to, and the expected decision-making scope. No title-ladder guessing.
 - Lists: dedupe; cap scale_signals at 5.
