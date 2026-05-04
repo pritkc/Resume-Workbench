@@ -27,6 +27,10 @@ from app.services.tailoring.models import (
     TailoringResumePayload,
     split_experience_bullets_for_llm_indexing,
 )
+from app.services.tailoring.jd_intel_blob import (
+    contains_basic_resume_term,
+    filter_basic_resume_terms,
+)
 from app.services.tailoring.verification import verify_generated_resume_result
 
 logger = logging.getLogger(__name__)
@@ -202,7 +206,7 @@ def _simplify_skills_groups(value: Any) -> dict[str, Any]:
 
         label = str(raw_group.get("label", "")).strip() or "Skills"
         values: list[str] = []
-        for item in coerce_string_list(raw_group.get("values")):
+        for item in filter_basic_resume_terms(coerce_string_list(raw_group.get("values"))):
             key = item.casefold()
             if key in seen_values:
                 continue
@@ -216,6 +220,95 @@ def _simplify_skills_groups(value: Any) -> dict[str, Any]:
         simplified.append({"label": label, "values": values})
 
     return {"groups": simplified}
+
+
+def _strip_basic_terms_from_stack_line(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return value
+    kept = filter_basic_resume_terms([part.strip() for part in value.split(",")])
+    return ", ".join(kept) or None
+
+
+def _description_count(entry: dict[str, Any], *, is_experience: bool) -> int:
+    if is_experience:
+        _prefix, desc = split_experience_bullets_for_llm_indexing(entry)
+        return len(desc)
+    return len(TailoringProject.from_resume_entry(entry).description)
+
+
+def _set_description_items(
+    entry: dict[str, Any],
+    items: list[str],
+    *,
+    is_experience: bool,
+) -> None:
+    if is_experience:
+        stack = str(entry.get("techStack") or entry.get("summary") or "").strip()
+        entry["highlights"] = list(items)
+        entry["description"] = [stack, *items] if stack else list(items)
+        return
+    entry["description"] = list(items)
+    if "highlights" in entry and isinstance(entry.get("highlights"), list):
+        entry["highlights"] = list(items)
+
+
+def _current_description_items(entry: dict[str, Any], *, is_experience: bool) -> list[str]:
+    if is_experience:
+        _prefix, desc = split_experience_bullets_for_llm_indexing(entry)
+        return list(desc)
+    return list(TailoringProject.from_resume_entry(entry).description)
+
+
+def _sync_experience_stack_prefix(
+    entry: dict[str, Any],
+    source_entry: dict[str, Any],
+) -> None:
+    prefix, desc = split_experience_bullets_for_llm_indexing(source_entry)
+    if not prefix:
+        return
+    updated_stack = str(entry.get("techStack") or "").strip()
+    merged = ([updated_stack] if updated_stack else []) + desc
+    entry["description"] = merged
+    if "highlights" in entry and isinstance(entry.get("highlights"), list):
+        entry["highlights"] = list(merged)
+
+
+def _enforce_description_counts(
+    original_data: dict[str, Any] | None,
+    result_data: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    if not original_data:
+        return result_data, []
+
+    result = copy.deepcopy(result_data)
+    warnings: list[str] = []
+    for section_key, is_experience in (
+        ("workExperience", True),
+        ("personalProjects", False),
+    ):
+        original_entries = original_data.get(section_key, [])
+        result_entries = result.get(section_key, [])
+        if not isinstance(original_entries, list) or not isinstance(result_entries, list):
+            continue
+        for index, original_entry in enumerate(original_entries):
+            if index >= len(result_entries):
+                break
+            result_entry = result_entries[index]
+            if not isinstance(original_entry, dict) or not isinstance(result_entry, dict):
+                continue
+            expected_count = _description_count(original_entry, is_experience=is_experience)
+            current_items = _current_description_items(result_entry, is_experience=is_experience)
+            if len(current_items) == expected_count:
+                continue
+            original_items = _current_description_items(original_entry, is_experience=is_experience)
+            fixed_items = list(current_items[:expected_count])
+            if len(fixed_items) < expected_count:
+                fixed_items.extend(original_items[len(fixed_items):expected_count])
+            _set_description_items(result_entry, fixed_items, is_experience=is_experience)
+            warnings.append(
+                f"Restored {section_key}[{index}] description count to {expected_count}"
+            )
+    return result, warnings
 
 
 def protect_custom_sections(
@@ -310,7 +403,12 @@ def apply_compact_diff(
     """
     result = copy.deepcopy(original_resume_data)
 
-    if "summary" in diff and isinstance(diff["summary"], str) and diff["summary"].strip():
+    if (
+        "summary" in diff
+        and isinstance(diff["summary"], str)
+        and diff["summary"].strip()
+        and not contains_basic_resume_term(diff["summary"])
+    ):
         result["summary"] = diff["summary"].strip()
 
     for diff_key, resume_key in [("experience", "workExperience"), ("projects", "personalProjects")]:
@@ -343,6 +441,7 @@ def apply_compact_diff(
                 continue
 
             entry = entries[entry_idx]
+            entry_before_mutation = copy.deepcopy(entry)
 
             if diff_key == "experience" and "position" in entry_diff:
                 pos = entry_diff["position"]
@@ -358,12 +457,12 @@ def apply_compact_diff(
             if diff_key == "projects" and "tech_stacks" in entry_diff:
                 ts = entry_diff["tech_stacks"]
                 if isinstance(ts, str):
-                    entry["techStack"] = ts.strip() or None
+                    entry["techStack"] = _strip_basic_terms_from_stack_line(ts)
 
             if diff_key == "experience" and "tech_stacks" in entry_diff:
                 ts = entry_diff["tech_stacks"]
                 if isinstance(ts, str):
-                    entry["techStack"] = ts.strip() or None
+                    entry["techStack"] = _strip_basic_terms_from_stack_line(ts)
 
             bullets_diff_raw = entry_diff.get("bullets")
             if bullets_diff_raw is None:
@@ -381,12 +480,22 @@ def apply_compact_diff(
             else:
                 bullets_diff = None
 
+            if (
+                diff_key == "experience"
+                and "tech_stacks" in entry_diff
+                and not isinstance(bullets_diff, dict)
+            ):
+                _sync_experience_stack_prefix(entry, entry_before_mutation)
+
             if isinstance(bullets_diff, dict):
                 if diff_key == "experience":
-                    prefix, desc = split_experience_bullets_for_llm_indexing(entry)
+                    prefix, desc = split_experience_bullets_for_llm_indexing(entry_before_mutation)
+                    if prefix:
+                        updated_stack = str(entry.get("techStack") or "").strip()
+                        prefix = [updated_stack] if updated_stack else []
                 else:
                     prefix = []
-                    desc = list(TailoringProject.from_resume_entry(entry).description)
+                    desc = list(TailoringProject.from_resume_entry(entry_before_mutation).description)
                 for bullet_idx_str, bullet_text in bullets_diff.items():
                     try:
                         bullet_idx = int(bullet_idx_str)
@@ -410,8 +519,23 @@ def apply_compact_diff(
                         )
                         continue
                     if bullet_idx >= len(desc):
-                        while len(desc) <= bullet_idx:
-                            desc.append("")
+                        logger.warning(
+                            "compact_diff: out-of-range bullet at %s[%d].bullets[%d] "
+                            "(len=%d) — skipped",
+                            diff_key,
+                            entry_idx,
+                            bullet_idx,
+                            len(desc),
+                        )
+                        continue
+                    if contains_basic_resume_term(bullet_text):
+                        logger.warning(
+                            "compact_diff: bullet at %s[%d].bullets[%d] contains basic tool — skipped",
+                            diff_key,
+                            entry_idx,
+                            bullet_idx,
+                        )
+                        continue
                     desc[bullet_idx] = bullet_text.strip()
                 merged = prefix + desc
                 entry["description"] = merged
@@ -528,6 +652,8 @@ def finalize_tailored_resume(
         job_content,
     )
     warnings.extend(cleanup_warnings)
+    result, count_warnings = _enforce_description_counts(original_resume_data, result)
+    warnings.extend(count_warnings)
 
     target_location = _resolved_target_location(job_keywords)
     if target_location:

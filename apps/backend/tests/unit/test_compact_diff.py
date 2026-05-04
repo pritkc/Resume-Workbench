@@ -5,7 +5,9 @@ import pytest
 from app.services.tailoring.preservation import (
     _all_skill_values,
     apply_compact_diff,
+    finalize_tailored_resume,
 )
+from app.services.tailoring.models import TailoringResumePayload
 
 
 @pytest.fixture
@@ -79,12 +81,10 @@ class TestApplyCompactDiff:
         assert result["workExperience"][0]["description"][1] == "Led migration to microservices"
         assert result["workExperience"][0]["description"][2] == "Mentored junior engineers"
 
-    def test_bullet_append_at_new_trailing_index(self, base_resume):
+    def test_out_of_range_experience_bullet_index_is_skipped(self, base_resume):
         diff = {"experience": {"0": {"bullets": {"3": "Fourth net-new bullet"}}}}
         result = apply_compact_diff(base_resume, diff)
-        desc = result["workExperience"][0]["description"]
-        assert len(desc) == 4
-        assert desc[3] == "Fourth net-new bullet"
+        assert result["workExperience"][0]["description"] == base_resume["workExperience"][0]["description"]
 
     def test_experience_bullet_indices_use_llm_prompt_slice_not_raw_storage(self):
         """Compact diff keys index the same list as tailor_resume_full / rewrite_resume (tech line dropped)."""
@@ -117,6 +117,50 @@ class TestApplyCompactDiff:
         assert desc[2] == "Second real bullet"
         assert desc[3] == "Third real bullet"
         assert desc[4] == "Fourth bullet rewritten"
+
+    def test_tech_stack_change_does_not_leave_old_tail_bullet(self):
+        """Changing tech_stacks must not make the old stack line count as a real bullet."""
+        resume = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": [
+                        "Python, SQL",
+                        "Old bullet 0",
+                        "Old bullet 1",
+                        "Old bullet 2",
+                    ],
+                }
+            ],
+            "personalProjects": [],
+            "skills": {"groups": []},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        diff = {
+            "experience": {
+                "0": {
+                    "tech_stacks": "Python, PostgreSQL",
+                    "bullets": {
+                        "0": "New bullet 0",
+                        "1": "New bullet 1",
+                        "2": "New bullet 2",
+                    },
+                }
+            }
+        }
+        result = apply_compact_diff(resume, diff)
+        entry = result["workExperience"][0]
+        assert entry["techStack"] == "Python, PostgreSQL"
+        assert entry["description"] == [
+            "Python, PostgreSQL",
+            "New bullet 0",
+            "New bullet 1",
+            "New bullet 2",
+        ]
 
     def test_multiple_bullets_in_same_entry(self, base_resume):
         diff = {
@@ -157,13 +201,10 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, diff)
         assert result["workExperience"] == base_resume["workExperience"]
 
-    def test_trailing_bullet_index_extends_description(self, base_resume):
+    def test_trailing_bullet_index_does_not_extend_description(self, base_resume):
         diff = {"experience": {"0": {"bullets": {"5": "Appended bullet at new index"}}}}
         result = apply_compact_diff(base_resume, diff)
-        desc = result["workExperience"][0]["description"]
-        assert len(desc) == 6
-        assert desc[5] == "Appended bullet at new index"
-        assert desc[0] == base_resume["workExperience"][0]["description"][0]
+        assert result["workExperience"][0]["description"] == base_resume["workExperience"][0]["description"]
 
     def test_non_integer_entry_key_skipped(self, base_resume):
         diff = {"experience": {"Acme Corp": {"bullets": {"0": "should be skipped"}}}}
@@ -190,6 +231,46 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, diff)
         assert result["workExperience"][0]["description"][0] == "Bullet"
         assert result["workExperience"][0].get("techStack") == "Python, FastAPI"
+
+    def test_experience_tech_stack_only_update_replaces_stored_stack_prefix(self):
+        resume = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": ["Python, SQL", "Built APIs"],
+                }
+            ],
+            "personalProjects": [],
+            "skills": {"groups": []},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        diff = {"experience": {"0": {"tech_stacks": "Python, PostgreSQL"}}}
+        result = apply_compact_diff(resume, diff)
+        assert result["workExperience"][0]["techStack"] == "Python, PostgreSQL"
+        assert result["workExperience"][0]["description"] == ["Python, PostgreSQL", "Built APIs"]
+
+    def test_basic_tools_are_stripped_from_compact_output(self, base_resume):
+        diff = {
+            "summary": "Excel analyst.",
+            "experience": {
+                "0": {
+                    "tech_stacks": "Python, Excel, SAP",
+                    "bullets": {"0": "Built Excel reports for stakeholders"},
+                }
+            },
+            "skills": [
+                {"label": "Tools", "values": ["Python", "Excel", "JIRA", "SAP"]},
+            ],
+        }
+        result = apply_compact_diff(base_resume, diff)
+        assert result["summary"] == base_resume["summary"]
+        assert result["workExperience"][0]["techStack"] == "Python, SAP"
+        assert result["workExperience"][0]["description"][0] == base_resume["workExperience"][0]["description"][0]
+        assert result["skills"]["groups"] == [{"label": "Tools", "values": ["Python", "SAP"]}]
 
     def test_skills_regroup_applied(self, base_resume):
         new_skills = [
@@ -301,6 +382,62 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, {})
         assert result["summary"] == base_resume["summary"]
         assert result["workExperience"] == base_resume["workExperience"]
+
+    def test_finalize_enforces_original_description_counts(self):
+        original = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": ["Python, SQL", "Old 0", "Old 1"],
+                }
+            ],
+            "personalProjects": [
+                {
+                    "name": "Project",
+                    "techStack": "Python",
+                    "description": ["Old project"],
+                }
+            ],
+            "skills": {"groups": [{"label": "Data", "values": ["Python"]}]},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        improved = {
+            **original,
+            "workExperience": [
+                {
+                    **original["workExperience"][0],
+                    "description": ["Python, SQL", "New 0", "New 1", "Leaked old tail"],
+                }
+            ],
+            "personalProjects": [
+                {
+                    **original["personalProjects"][0],
+                    "description": ["New project", "Leaked project tail"],
+                }
+            ],
+        }
+        payload = TailoringResumePayload.from_resume_data(improved)
+        assert payload is not None
+
+        result, warnings, _location_source, _location_value = finalize_tailored_resume(
+            payload=payload,
+            original_resume_data=original,
+            original_resume_markdown="",
+            cleanup_source_data=None,
+            job_content="",
+            job_keywords={},
+            prompt_id="full",
+        )
+
+        work_highlights = result["workExperience"][0]["highlights"]
+        project_desc = result["personalProjects"][0]["description"]
+        assert work_highlights == ["New 0", "New 1"]
+        assert project_desc == ["New project"]
+        assert any("description count" in warning for warning in warnings)
 
 
 class TestAllSkillValues:

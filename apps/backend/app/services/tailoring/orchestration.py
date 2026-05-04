@@ -36,6 +36,7 @@ from app.prompts.critique_resume import build_messages as build_critique_message
 from app.prompts.rewrite_resume import build_messages as build_rewrite_messages
 from app.services.tailoring.llm_calls import run_primary_tailoring
 from app.services.tailoring.prompting import build_prompt_context
+from app.services.tailoring.jd_intel_blob import filter_basic_resume_terms
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +223,11 @@ async def generate_tailored_resume(
         location_source=location_source,
         location_value=location_value,
     )
-    bold_keywords = llm_response_v2.bold_keywords if has_compact_content else []
+    bold_keywords = (
+        filter_basic_resume_terms(llm_response_v2.bold_keywords)
+        if has_compact_content
+        else []
+    )
 
     return TailoringResult(
         resume_data=resume_data,

@@ -60,6 +60,12 @@ def validate_compact_diff(
                             errors.append(
                                 f"experience[{key}].bullets key '{bkey}' is not an integer"
                             )
+                            continue
+                        if idx < len(contract.experience_bullet_counts) and int(bkey) >= contract.experience_bullet_counts[idx]:
+                            errors.append(
+                                f"experience[{key}].bullets key '{bkey}' out of range "
+                                f"(contract has {contract.experience_bullet_counts[idx]} bullets)"
+                            )
 
     # Projects section
     proj = diff.get("projects", {})
@@ -85,6 +91,12 @@ def validate_compact_diff(
                         if not bkey.isdigit():
                             errors.append(
                                 f"projects[{key}].bullets key '{bkey}' is not an integer"
+                            )
+                            continue
+                        if idx < len(contract.project_bullet_counts) and int(bkey) >= contract.project_bullet_counts[idx]:
+                            errors.append(
+                                f"projects[{key}].bullets key '{bkey}' out of range "
+                                f"(contract has {contract.project_bullet_counts[idx]} bullets)"
                             )
 
     return DiffValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)

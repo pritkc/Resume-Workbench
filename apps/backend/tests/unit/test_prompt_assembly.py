@@ -161,11 +161,12 @@ def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
     """Tailoring should translate the JD into a broader credible candidate profile."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
     lower = RESUME_DIFF_RULES.lower()
-    assert "jd is a lens, not a script" in lower
-    assert "broader impressive profile" in lower
+    assert "jd is a lens, not the resume's center" in lower
+    assert "broader capability first" in lower
     assert "translate responsibility phrases" in lower
     assert "not verbatim phrase borrowing" in lower
     assert "paraphrased jd responsibility" in lower
+    assert "no more than 1-2 bullets per experience entry" in lower
 
 
 def test_resume_diff_rules_keep_bold_keywords_compact() -> None:
@@ -175,6 +176,7 @@ def test_resume_diff_rules_keep_bold_keywords_compact() -> None:
     assert "8-12 short high-visibility technical ats terms" in lower
     assert "1-3 word terms only" in lower
     assert "avoid sentences, soft skills, and generic domain phrases" in lower
+    assert "do not include basic tools or generic role/domain labels" in lower
 
 
 def test_resume_diff_rules_allows_plausible_new_claims() -> None:
@@ -203,6 +205,8 @@ def test_resume_diff_rules_apply_bans_globally_and_keep_skills_specific() -> Non
     assert "apply jargon and phrases bans to summary, role titles, and bullets equally" in lower
     assert "skill values must be specific tool, product, method, or technology names" in lower
     assert "not descriptive phrases" in lower
+    assert "broad professional toolkit" in lower
+    assert "do not emit basic office tools" in lower
 
 
 def test_resume_diff_rules_forbid_markdown_fences() -> None:
@@ -235,10 +239,12 @@ def test_full_prompt_retains_closest_two_projects_and_superset_skills() -> None:
         response_contract_json="{}",
     )
     lower = user.lower()
-    assert "retain the closest two projects" in lower
+    assert "edit at most the closest two projects" in lower
     assert "preserve impressive superset skills" in lower
     assert "do not copy jd titles or secondary role labels" in lower
     assert "when in doubt, keep the existing qualifier or omit" in lower
+    assert "at most 1-2 bullets per experience" in lower
+    assert "omit unchanged bullet indexes" in lower
 
 
 def test_full_system_prompt_aligns_titles_to_target_domain() -> None:

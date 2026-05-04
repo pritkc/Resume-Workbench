@@ -15,6 +15,70 @@ from app.services.cover_letter import extract_job_target_metadata, sanitize_job_
 _JD_PLACEHOLDER = re.compile(
     r"(?<!\$)\$extract_jd_intel_output(?P<path>(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)"
 )
+_BASIC_RESUME_TERMS = frozenset(
+    {
+        "excel",
+        "microsoft excel",
+        "google sheets",
+        "microsoft office",
+        "ms office",
+        "word",
+        "microsoft word",
+        "powerpoint",
+        "microsoft powerpoint",
+        "outlook",
+        "microsoft outlook",
+        "email",
+        "e-mail",
+        "slack",
+        "jira",
+    }
+)
+
+
+def _term_key(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().casefold())
+
+
+def is_basic_resume_term(value: str) -> bool:
+    """Return true for table-stakes office tools that should not consume resume space."""
+    return _term_key(value) in _BASIC_RESUME_TERMS
+
+
+def contains_basic_resume_term(value: str) -> bool:
+    """Return true when free text mentions a blocked basic/table-stakes tool."""
+    text = value.casefold()
+    return any(
+        re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text)
+        for term in _BASIC_RESUME_TERMS
+    )
+
+
+def filter_basic_resume_terms(values: Any) -> list[str]:
+    """Return a deduped list without basic/table-stakes resume terms."""
+    if not isinstance(values, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        text = value.strip()
+        if not text or is_basic_resume_term(text):
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
+
+
+def filter_resume_keyword_sources(blob: dict[str, Any]) -> None:
+    """Strip low-signal office tools from JD keyword lists used for tailoring."""
+    for key in ("resume_technical_keywords", "resume_bold_keyword_sources"):
+        if key in blob:
+            blob[key] = filter_basic_resume_terms(blob.get(key))
 
 
 def deep_get(obj: Any, dotted_path: str, default: Any = None) -> Any:

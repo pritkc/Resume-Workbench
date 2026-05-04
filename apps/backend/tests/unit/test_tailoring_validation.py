@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from app.services.tailoring.contracts import build_response_contract
 from app.services.tailoring.models import TailoringResumePayload
 from app.services.tailoring.validation import DiffValidationResult, validate_compact_diff
@@ -130,11 +128,12 @@ def test_multiple_locked_fields_in_experience() -> None:
     assert result.valid is False
 
 
-def test_bullet_index_beyond_contract_count_allowed() -> None:
+def test_bullet_index_beyond_contract_count_rejected() -> None:
     contract = _make_contract()
     diff = {"experience": {"0": {"bullets": {"99": "extra bullet"}}}}
     result = validate_compact_diff(diff, contract)
-    assert result.valid is True
+    assert result.valid is False
+    assert any("out of range" in e for e in result.errors)
 
 
 def test_non_integer_bullet_key() -> None:
@@ -162,11 +161,12 @@ def test_locked_field_in_project() -> None:
     assert any("github" in e for e in result.errors)
 
 
-def test_project_bullet_beyond_count_allowed() -> None:
+def test_project_bullet_beyond_count_rejected() -> None:
     contract = _make_contract()
     diff = {"projects": {"0": {"bullets": {"5": "extra"}}}}
     result = validate_compact_diff(diff, contract)
-    assert result.valid is True
+    assert result.valid is False
+    assert any("out of range" in e for e in result.errors)
 
 
 # ── DiffValidationResult ──────────────────────────────────────────────────────

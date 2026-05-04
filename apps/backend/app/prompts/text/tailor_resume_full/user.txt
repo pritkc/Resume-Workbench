@@ -1,5 +1,5 @@
 EDITORIAL SEQUENCE (work in this order):
-1. BULLETS — deep-rewrite per WRITING RULES and ACCURACY  & CALIBRATION in the output schema
+1. BULLETS — selective rewrite: keep most source bullets; add direct JD framing to only 1-2 bullets per experience
 2. ROLE TITLES — scope-enhance position fields
 3. SKILLS — restructure after seeing summary direction
 4. ATS — verify keyword placement across summary, stacks, bullets
@@ -8,8 +8,8 @@ EDITORIAL SEQUENCE (work in this order):
 EDIT SCOPE (default full run — modify here for custom targeting):
 - Summary: full rewrite
 - Skills: restructure into exactly 5 groups; preserve impressive superset skills after JD-critical groups
-- Experience: deep-rewrite the 3 most recent roles; keyword-alignment touch only on older or short-tenure roles
-- Projects: retain the closest two projects; lightly reframe wording/context for the JD, keep names and core substance stable
+- Experience: per role, rewrite at most 1-2 bullets per experience for direct JD alignment; keep the rest unchanged or broadened with impressive adjacent work
+- Projects: edit at most the closest two projects; keep names stable; use light JD context only when it naturally fits
 - Titles: add only broad scope qualifiers; do not copy JD titles or secondary role labels. When in doubt, keep the existing qualifier or omit.
 - Tech stacks: emit tech_stacks for every changed experience and project entry; keep only evidenced tools, ordered by JD relevance
 
@@ -29,6 +29,7 @@ RESPONSE CONTRACT:
 $response_contract
 
 FULL-RUN SHAPE GUARDS:
+- Omit unchanged bullet indexes; do not emit all bullets just to show work was considered.
 - Do not compress project bullets: if a project has 3 source bullets, return bullets "0", "1", and "2" as separate lines, not one combined paragraph.
 - Do not drop stack lines from changed entries: emit tech_stacks when rewriting bullets for that role or project.
 - Position qualifiers must reinforce the JD's primary domain; avoid generic labels unless source evidence and JD both justify them. When in doubt, keep the existing qualifier or omit.

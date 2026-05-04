@@ -124,3 +124,37 @@ class TestVerifyGeneratedResumeResult:
         )
 
         assert any("supported job keywords still missing" in warning.lower() for warning in warnings)
+
+    def test_warns_when_basic_tools_leak_into_final_resume(
+        self, sample_resume, sample_job_keywords
+    ):
+        result = copy.deepcopy(sample_resume)
+        result["summary"] = "Backend engineer building Excel reporting automations."
+
+        warnings = verify_generated_resume_result(
+            sample_resume,
+            result,
+            sample_job_keywords,
+            prompt_id="full",
+        )
+
+        assert any("basic office tools" in warning.lower() for warning in warnings)
+
+    def test_warns_when_experience_overuses_new_jd_terms(
+        self, sample_resume, sample_job_keywords
+    ):
+        result = copy.deepcopy(sample_resume)
+        result["workExperience"][0]["description"] = [
+            "Built Kubernetes services for platform deployments.",
+            "Automated Terraform workflows for cloud infrastructure.",
+            "Created GraphQL APIs for backend integrations.",
+        ]
+
+        warnings = verify_generated_resume_result(
+            sample_resume,
+            result,
+            sample_job_keywords,
+            prompt_id="full",
+        )
+
+        assert any("jd saturation" in warning.lower() for warning in warnings)

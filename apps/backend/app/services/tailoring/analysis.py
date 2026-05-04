@@ -15,6 +15,7 @@ from app.services.prompt_utils import sanitize_user_input
 from app.services.tailoring.jd_intel_blob import (
     collect_keyword_strings_from_blob,
     enrich_jd_intel_blob,
+    filter_resume_keyword_sources,
 )
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
         result = {}
 
     enrich_jd_intel_blob(result, job_description)
+    filter_resume_keyword_sources(result)
     return result
 
 

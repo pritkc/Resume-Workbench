@@ -14,6 +14,7 @@ PROJECTS:      { "0": { "name": "enhanced name or omit", "tech_stacks": "updated
 SKILLS:        [{ "label": "...", "values": [...] }]  — exactly 5 groups; short labels
 BOLD_KEYWORDS: array of 8-12 short high-visibility technical ATS terms from final resume content
 Use 1-3 word terms only; prefer tools, languages, platforms, data methods, and product systems; avoid sentences, soft skills, and generic domain phrases.
+Do not include basic tools or generic role/domain labels; choose only recruiter-scan technical terms worth bolding.
 
 NAMING BRIDGE:
 In ORIGINAL RESUME: workExperience → experience keys in output; personalProjects → projects keys; description array → bullets object
@@ -37,7 +38,7 @@ EDITABLE per entry:
 
 --- SIGNAL & ATS ---
 
-JD is a lens, not a script: translate the candidate into a broader impressive profile where JD alignment is a subset.
+JD is a lens, not the resume's center: each section should show broader capability first, with only selected JD-aligned evidence.
 
 TWENTY-SECOND SKIM:
 - Write for F-shaped reading: strong summary line, hero bullet first per employer (strongest signal, not a stack dump), recognizable tech at a glance
@@ -48,10 +49,12 @@ ATS & NATURALNESS:
 - Place highest-priority keywords early in bullets and summary
 - Weave keywords throughout: summary, tech stack lines, bullets, skills, project descriptions
 - Never keyword-stuff or write hollow ATS-bait sentences
+- Do not emit basic office tools in summary, bullets, tech_stacks, skills, or bold_keywords, even if the JD asks for them.
 
 JD ALIGNMENT STYLE:
 - Map candidate work to JD themes through shared domain vocabulary, not verbatim phrase borrowing.
 - If a bullet reads like a paraphrased JD responsibility, rewrite it around the candidate's mechanism and outcome.
+- Direct JD terms should appear in no more than 1-2 bullets per experience entry; other bullets should stay original or show adjacent stronger work.
 
 TECH STACK HEADER:
 - Reflects tools touched weekly, not every tool in the org
@@ -61,6 +64,7 @@ TECH STACK HEADER:
 SKILLS:
 - Exactly 5 groups — split broad categories to reach 5; merge thin ones to avoid padding
 - Group order: JD-critical groups first
+- Skills must read as a broad professional toolkit: preserve original strong engineering/data skills, then add only a few high-signal JD-specific terms.
 - Skills should preserve impressive superset capability; JD-critical skills come first, but adjacent strong skills stay when credible.
 - Skill values must be specific tool, product, method, or technology names — not descriptive phrases.
 - Retain near-adjacent skills where evidenced; do not remove skills purely because they are not JD-critical — the section must read as a complete professional profile, not a JD mirror
@@ -71,6 +75,7 @@ SKILLS:
 SUMMARY:
 - One sentence only, target 120-155 characters; must fit in 1-2 resume lines after rendering.
 - Write one compact role thesis: domain + strongest transferable capability + outcome area; no keyword list.
+- Summary must position the candidate broadly; do not lead with the JD title when the source resume shows a stronger wider profile.
 - No "X years of experience" framing; name verticals or technical depth instead
 - Avoid the years-count format.
 - Good: "Data engineer building ETL/ELT pipelines, semantic layers, and cloud warehouse models for analytics teams."

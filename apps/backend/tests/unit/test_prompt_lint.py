@@ -65,6 +65,7 @@ def test_bold_keyword_rules_reject_long_phrases() -> None:
     diff_rules = read_shipped_txt("output_file_schema_rules/resume_diff_output.txt").lower()
     assert "1-3 word terms only" in diff_rules
     assert "avoid sentences, soft skills, and generic domain phrases" in diff_rules
+    assert "do not include basic tools" in diff_rules
 
 
 # ── cover_letter user.txt: no OUTPUT FORMAT instructions (not its job) ────────

@@ -12,6 +12,8 @@ from app.services.tailoring.analysis import (
     keyword_in_text,
 )
 from app.services.tailoring.diffing import calculate_resume_diff, count_description_words
+from app.services.tailoring.jd_intel_blob import contains_basic_resume_term
+from app.services.tailoring.models import split_experience_bullets_for_llm_indexing
 
 _METRIC_RE = re.compile(r"\d+%|\d+x|\$\d+")
 
@@ -51,6 +53,54 @@ def _entry_date(entry: dict[str, Any]) -> str:
     if start_date:
         return f"{start_date} - present"
     return end_date
+
+
+def _experience_bullets(entry: dict[str, Any]) -> list[str]:
+    _prefix, bullets = split_experience_bullets_for_llm_indexing(entry)
+    return bullets
+
+
+def _warn_on_jd_saturation(
+    original: dict[str, Any],
+    result: dict[str, Any],
+    job_keywords: dict[str, Any],
+) -> list[str]:
+    keywords = [
+        keyword
+        for keyword in collect_job_keywords(job_keywords)
+        if isinstance(keyword, str) and len(keyword.strip()) >= 3
+    ]
+    if not keywords:
+        return []
+
+    warnings: list[str] = []
+    original_entries = original.get("workExperience", [])
+    result_entries = result.get("workExperience", [])
+    if not isinstance(original_entries, list) or not isinstance(result_entries, list):
+        return warnings
+
+    for index, (original_entry, result_entry) in enumerate(zip(original_entries, result_entries)):
+        if not isinstance(original_entry, dict) or not isinstance(result_entry, dict):
+            continue
+        original_entry_text = extract_resume_text(original_entry)
+        jd_only_keywords = [
+            keyword
+            for keyword in keywords
+            if not keyword_in_text(keyword, original_entry_text)
+        ]
+        if not jd_only_keywords:
+            continue
+        jd_bullet_count = sum(
+            1
+            for bullet in _experience_bullets(result_entry)
+            if any(keyword_in_text(keyword, bullet) for keyword in jd_only_keywords)
+        )
+        if jd_bullet_count > 2:
+            warnings.append(
+                f"JD saturation: workExperience[{index}] uses new JD-only terms in "
+                f"{jd_bullet_count} bullets; keep direct JD framing to 1-2 bullets"
+            )
+    return warnings
 
 
 def verify_generated_resume_result(
@@ -133,6 +183,12 @@ def verify_generated_resume_result(
             f"{original_words} → {result_words} ({result_words / original_words:.1f}x)"
         )
 
+    if contains_basic_resume_term(extract_resume_text(result)):
+        warnings.append(
+            "Basic office tools appear in final resume text; remove table-stakes "
+            "tools such as Excel, Microsoft Office, Slack, and Jira"
+        )
+
     for change in changes:
         new_text = change.new_value or ""
         if not new_text:
@@ -163,6 +219,8 @@ def verify_generated_resume_result(
             warnings.append("Full mode changed section structure more than expected")
 
     if prompt_id == "full":
+        warnings.extend(_warn_on_jd_saturation(original, result, job_keywords))
+
         ats_keywords = collect_job_keywords(job_keywords)
         if ats_keywords:
             original_text = extract_resume_text(original)

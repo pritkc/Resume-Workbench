@@ -6,6 +6,7 @@ from app.prompts._prompt_loader import render_user_template
 from app.services.tailoring.jd_intel_blob import (
     collect_keyword_strings_from_blob,
     deep_get,
+    filter_resume_keyword_sources,
     jd_intel_to_prompt_json,
     substitute_jd_intel_placeholders,
 )
@@ -83,3 +84,15 @@ def test_extract_jd_intel_refines_resume_technical_keywords_for_bolding() -> Non
     assert "bold_keywords" in lower
     assert "tools, languages, platforms" in lower
     assert "exclude responsibility phrases" in lower
+
+
+def test_filter_resume_keyword_sources_removes_basic_tools() -> None:
+    blob = {
+        "resume_technical_keywords": ["SAP", "Excel", "Power BI", "Jira"],
+        "resume_bold_keyword_sources": ["Excel", "SAP", "Power BI", "Microsoft Office"],
+    }
+
+    filter_resume_keyword_sources(blob)
+
+    assert blob["resume_technical_keywords"] == ["SAP", "Power BI"]
+    assert blob["resume_bold_keyword_sources"] == ["SAP", "Power BI"]
