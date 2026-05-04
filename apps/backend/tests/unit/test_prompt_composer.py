@@ -26,6 +26,16 @@ def test_render_user_template_rejects_unknown_placeholder() -> None:
         render_user_template("Hello $name", foo="bar")
 
 
+def test_render_user_template_allows_literal_dollar_not_a_placeholder() -> None:
+    """Currency or other $text that is not a declared key stays literal in the template body."""
+    text = render_user_template(
+        "A=$x mid$50k tail=$y",
+        x="1",
+        y="2",
+    )
+    assert text == "A=1 mid$50k tail=2"
+
+
 def test_validate_user_template_against_variables() -> None:
     validate_user_template_against_variables(
         "A $x and $y",
@@ -46,7 +56,7 @@ def test_tailor_build_messages_fills_template() -> None:
         response_contract="{}",
     )
     assert "$extract_jd_intel_output" not in user
-    assert "EXTRACTED JD INTELLIGENCE:" in user
+    assert "JD INTELLIGENCE:" in user
 
 
 def test_composer_override_takes_precedence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

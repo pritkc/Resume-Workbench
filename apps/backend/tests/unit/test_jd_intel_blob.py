@@ -49,6 +49,17 @@ def test_render_user_template_with_jd_blob() -> None:
     assert text == 'JD="Backend" END'
 
 
+def test_render_user_template_jd_blob_currency_survives_template_substitute() -> None:
+    """JD JSON must not break render_user_template when values contain $ (e.g. salary ranges)."""
+    text = render_user_template(
+        'JD=$extract_jd_intel_output.compensation MORE=$original_resume',
+        jd_intel_blob={"compensation": {"note": "$50k-$80k OTE"}},
+        original_resume="{}",
+    )
+    assert "$50k-$80k" in text
+    assert " MORE=" in text
+
+
 def test_render_user_template_parses_extract_kwarg_as_blob() -> None:
     text = render_user_template(
         'X=$extract_jd_intel_output.requirements.years_min',

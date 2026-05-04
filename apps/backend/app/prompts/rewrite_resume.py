@@ -36,7 +36,7 @@ VARIABLES = {
     "response_contract": "Response contract JSON",
     "resume_diff_rules": "Shared compact JSON output schema (resume_diff; DB override supported)",
     "extract_jd_intel_output": (
-        "JD blob placeholder — expanded from jd_intel_blob before string.Template in render_user_template"
+        "JD blob placeholder — expanded from jd_intel_blob before render_user_template substitution"
     ),
     "jd_intel_blob": "Cached JD dict for $extract_jd_intel_output expansion",
 }

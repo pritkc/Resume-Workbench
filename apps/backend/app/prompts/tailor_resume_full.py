@@ -33,11 +33,11 @@ VARIABLES = {
     "response_contract": "Allowed response shape for this resume",
     "resume_diff_rules": "Shared compact JSON output schema (resume_diff; DB override supported)",
     "extract_jd_intel_output": (
-        "JD blob placeholder — expanded from jd_intel_blob before string.Template in render_user_template"
+        "JD blob placeholder — expanded from jd_intel_blob before render_user_template substitution"
     ),
     "jd_intel_blob": (
         "Cached JD JSON (runtime injects $extract_jd_intel_output "
-        "and optional .path segments — not a string.Template key)"
+        "and optional .path segments — not a render_user_template kwarg key)"
     ),
 }
 
