@@ -27,8 +27,22 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
 
 
 def _mode_rules(prompt_id: str) -> list[str]:
-    """Rules are defined in shipped txt prompt files; contract carries structural data only."""
-    return []
+    """Return concise structural reminders included beside per-resume indexes."""
+    rules = [
+        "Return raw valid JSON only: no markdown fences, no prose, start with { and end with }.",
+        "Use only the compact diff keys listed in output_keys; omit unchanged sections.",
+        "experience/projects keys are stringified 0-based indexes matching entries order.",
+        "Do not emit locked identity fields such as id, title, company, location, dates, schools, github, or website.",
+    ]
+    if prompt_id == "full":
+        rules.extend(
+            [
+                "For changed experience/project entries, emit tech_stacks when evidenced by the source resume.",
+                "Preserve project bullet count in full runs; do not compress several project bullets into one.",
+                "Scope-enhanced position qualifiers must align with the target role domain.",
+            ]
+        )
+    return rules
 
 
 def _immutable_fields(entry_keys: list[str], editable_fields: set[str]) -> list[str]:

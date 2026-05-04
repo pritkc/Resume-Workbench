@@ -3,8 +3,9 @@ PRECEDENCE:
 
 --- OUTPUT CONTRACT ---
 
-FORMAT:
+OUTPUT FORMAT:
 - Valid JSON only — no markdown, no prose, no commentary
+- No markdown fences. Start with { and end with }.
 - Top-level keys: "summary", "experience", "projects", "skills", "bold_keywords"
 - Emit only sections you change; omit a key entirely to leave it unchanged
 
@@ -15,12 +16,15 @@ BOLD_KEYWORDS: array of exactly 15 strings from final resume content, chosen for
 
 NAMING BRIDGE:
 In ORIGINAL RESUME: workExperience → experience keys in output; personalProjects → projects keys; description array → bullets object
+Index keys are stringified 0-based integers matching RESPONSE CONTRACT order; key "0" means response_contract.entries[0].
 
 --- FIELD CONTRACTS ---
 
 BULLET POLICY:
 - bullets object keyed by stringified bullet index; rewrite existing indexes or add new trailing indexes where appropriate
 - Omit an index to leave that bullet unchanged
+- Full-run project rewrites should preserve the source project bullet count. Do not compress multiple project bullets into one bullet.
+- For changed experience/project entries, include tech_stacks when the source provides an evidenced stack or JD-relevant stack ordering is needed.
 
 LOCKED (never emit):
 - id, company, location, start_date, end_date, date, years, github, website, customSections
@@ -62,6 +66,9 @@ SUMMARY:
 - Two sentences max. Lead with technical domain, then strongest signal and role intent.
 - What you do, not what you are — no adjective pileup, no credential dump, no keyword list
 - No "X years of experience" framing; name verticals or technical depth instead
+- Avoid the years-count format.
+- Good: "Data engineer building ETL/ELT pipelines, semantic layers, and cloud warehouse models for analytics teams."
+- Bad: "Data engineer with many years of experience in data engineering."
 
 ROLE TITLE:
 - Add platform, domain, or scope context only (e.g., "Software Engineer" → "Software Engineer, Platform & Distributed Systems")
@@ -114,6 +121,8 @@ spearheaded, leveraged, orchestrated, utilized, facilitated, pioneered, revoluti
 
 JARGON (never use):
 synergy, robust, scalable, holistic, proactive, cutting-edge, state-of-the-art, dynamic, innovative, visionary, seamless, game-changer, thought leader, best-in-class, impactful
+
+If a JD term appears in the banned list, keep it only as a literal skill/keyword when necessary; do not reuse it as prose filler in summary or bullets.
 
 PHRASES (never use):
 proven track record, results-driven, results-oriented, team player, passionate about, self-starter, detail-oriented, go-getter, stakeholder alignment, responsible for [duty list], in order to, as part of an effort to, so as to enhance/improve, deeply committed to

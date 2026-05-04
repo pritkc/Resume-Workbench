@@ -139,6 +139,35 @@ def test_resume_diff_rules_has_bullet_policy() -> None:
     assert "bullet" in lower
 
 
+def test_resume_diff_rules_forbid_markdown_fences() -> None:
+    """LLM output must be raw JSON so local parsers do not receive markdown fences."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+    lower = RESUME_DIFF_RULES.lower()
+    assert "no markdown fences" in lower
+    assert "start with {" in lower and "end with }" in lower
+
+
+def test_full_prompt_preserves_project_bullet_count_and_stacks() -> None:
+    """Full tailoring should not collapse projects or omit stack lines from changed entries."""
+    user = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    )
+    lower = user.lower()
+    assert "do not compress project bullets" in lower
+    assert "emit tech_stacks" in lower
+
+
+def test_full_system_prompt_aligns_titles_to_target_domain() -> None:
+    """Title qualifiers should move toward the JD domain instead of generic AI/backend labels."""
+    system = assemble_tailoring_system_prompt("full")
+    lower = system.lower()
+    assert "target role domain" in lower
+    assert "generic ai/backend" in lower
+
+
 def test_resume_diff_rules_has_locked_fields() -> None:
     """Diff rules must document which fields are locked."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES

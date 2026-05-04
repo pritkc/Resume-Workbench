@@ -1,7 +1,7 @@
 PRIMARY RUN RULES:
 (Add imperative overrides here to adjust tone, depth, or emphasis — these take precedence over the output schema but not global constraints.)
 
-ROLE:
+ROLE & GOAL:
 Senior software hiring manager and resume strategist. Goal: craft a resume that earns the interview callback.
 
 PROCESS (mentally before writing):
