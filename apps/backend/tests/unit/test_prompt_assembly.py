@@ -4,6 +4,7 @@ from app.services.tailoring.prompting import (
     assemble_tailoring_system_prompt,
     build_prompt_context,
     render_tailoring_user_prompt,
+    validate_prompt_canaries,
 )
 from app.services.tailoring.models import (
     TailoringResumePayload,
@@ -54,6 +55,19 @@ def test_build_prompt_context_resolves_unknown_to_default() -> None:
         original_resume_markdown="",
     )
     assert ctx.prompt_id == "full"
+    assert len(ctx.prompt_hash) == 12
+
+
+def test_build_prompt_context_validates_current_prompt_canaries() -> None:
+    ctx = build_prompt_context(
+        prompt_id="full",
+        jd_intel_blob={},
+        response_contract=build_response_contract(TailoringResumePayload(), prompt_id="full"),
+        resume_payload=TailoringResumePayload(),
+        original_resume_markdown="",
+    )
+    validate_prompt_canaries(ctx.user_prompt, ("JD coverage themes",))
+    assert "translation candidates, not mandatory insertions" in ctx.user_prompt
 
 
 def test_tailoring_resume_to_llm_prompt_education_and_skills_without_group_ids(
@@ -143,7 +157,7 @@ def test_resume_diff_rules_limit_summary_without_bullet_length_cap() -> None:
     """Summary should stay render-fit, but bullets should not be forced thin."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
     lower = RESUME_DIFF_RULES.lower()
-    assert "120-155 characters" in lower
+    assert "105-135 characters" in lower
     assert "105-145 characters" not in lower
     assert "hard max 165" not in lower
     assert "one clause plus one outcome" not in lower
@@ -167,13 +181,15 @@ def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
     assert "not verbatim phrase borrowing" in lower
     assert "paraphrased jd responsibility" in lower
     assert "no more than 1-2 bullets per experience entry" in lower
+    assert "original resume is the superset" in lower
+    assert "do not make every section repeat the same jd nouns" in lower
 
 
 def test_resume_diff_rules_keep_bold_keywords_compact() -> None:
     """Bold keywords should be short technical ATS terms, not long phrases."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
     lower = RESUME_DIFF_RULES.lower()
-    assert "8-12 short high-visibility technical ats terms" in lower
+    assert "6-10 short high-visibility technical ats terms" in lower
     assert "1-3 word terms only" in lower
     assert "avoid sentences, soft skills, and generic domain phrases" in lower
     assert "do not include basic tools or generic role/domain labels" in lower
@@ -207,6 +223,8 @@ def test_resume_diff_rules_apply_bans_globally_and_keep_skills_specific() -> Non
     assert "not descriptive phrases" in lower
     assert "broad professional toolkit" in lower
     assert "do not emit basic office tools" in lower
+    assert "target 4-5 dense groups" in lower
+    assert "add at most 1-2 jd-specific values" in lower
 
 
 def test_resume_diff_rules_forbid_markdown_fences() -> None:
@@ -226,7 +244,7 @@ def test_full_prompt_preserves_project_bullet_count_and_stacks() -> None:
         response_contract_json="{}",
     )
     lower = user.lower()
-    assert "do not compress project bullets" in lower
+    assert "projects: preserve source bullet count and shape" in lower
     assert "emit tech_stacks" in lower
 
 
@@ -246,6 +264,51 @@ def test_full_prompt_retains_closest_two_projects_and_superset_skills() -> None:
     assert "at most 1-2 bullets per experience" in lower
     assert "omit unchanged bullet indexes" in lower
     assert "translation candidates, not mandatory insertions" in lower
+    assert "career story" in lower
+    assert "story retention" in lower
+
+
+def test_full_prompt_uses_coverage_hooks_not_jd_insertion_commands() -> None:
+    """JD intelligence labels should not tell the model to connect or weave every bullet."""
+    user = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    )
+    lower = user.lower()
+    assert "every bullet connects" not in lower
+    assert "weave into summary and bullets" not in lower
+    assert "jd coverage themes" in lower
+    assert "competency hooks, not resume copy" in lower
+    assert "coverage signals, not phrases to weave" in lower
+    assert "do not force every bullet to connect" in lower
+
+
+def test_full_prompt_splits_experience_sparse_diffs_from_project_shape() -> None:
+    """Experience diffs should stay sparse while edited projects preserve bullet shape."""
+    user = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    )
+    lower = user.lower()
+    assert "for roles with 2 or fewer bullets, touch at most one bullet" in lower
+    assert "experience: omit unchanged bullet indexes" in lower
+    assert "projects: preserve source bullet count and shape" in lower
+    assert "including lightly unchanged bullets when needed to prevent compression" in lower
+
+
+def test_jd_extractor_prompts_use_neutral_hooks_not_mirror_language() -> None:
+    """Extractor output should feed translation, not repeated JD phrasing."""
+    from app.prompts.extract_jd_intel import USER_TEMPLATE
+
+    lower = USER_TEMPLATE.lower()
+    assert "neutral competency hooks" in lower
+    assert "coverage checklist, not prose to reuse" in lower
+    assert "terms to mirror" not in lower
+    assert "not mandatory mirror phrases" in lower
 
 
 def test_resume_diff_rules_handles_pivot_roles_from_candidate_identity() -> None:
@@ -254,6 +317,7 @@ def test_resume_diff_rules_handles_pivot_roles_from_candidate_identity() -> None
     lower = RESUME_DIFF_RULES.lower()
     assert "pivot role" in lower
     assert "candidate's engineering perspective" in lower
+    assert "mention at most one jd-specific domain/tool" in lower
 
 
 def test_full_system_prompt_aligns_titles_to_target_domain() -> None:
@@ -269,8 +333,24 @@ def test_full_system_prompt_uses_broader_competencies_and_plausible_claims() -> 
     system = assemble_tailoring_system_prompt("full")
     lower = system.lower()
     assert "broader competencies behind the jd" in lower
-    assert "reasonable new claim the user can later prove" in lower
+    assert "broader adjacent framing" in lower
+    assert "do not add new named vendor products" in lower
     assert "do not borrow jd vocabulary" in lower
+
+
+def test_resume_diff_rules_remove_keyword_weave_and_vendor_substitution_paths() -> None:
+    """Prompt rules should block global keyword stuffing and obvious tool swaps."""
+    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+
+    lower = RESUME_DIFF_RULES.lower()
+    assert "weave keywords throughout" not in lower
+    assert "a keyword appearing once in the right context" in lower
+    assert "do not substitute one vendor/ui/bi surface for another" in lower
+    assert "if the source says streamlit, keep streamlit" in lower
+    assert "never rename or extend the base title" in lower
+    assert "data intern\" -> \"data analyst intern" in lower
+    assert "never add jd-flavored parentheticals" in lower
+    assert "every bullet must be grammatically complete" in lower
 
 
 def test_resume_diff_rules_has_locked_fields() -> None:
@@ -290,24 +370,17 @@ def test_resume_diff_rules_has_index_mapping_note() -> None:
     )
 
 
-def test_contract_to_prompt_dict_includes_mode_rules() -> None:
-    """to_prompt_dict() must include mode_rules so the LLM sees constraints."""
+def test_contract_to_prompt_dict_omits_duplicate_mode_rules() -> None:
+    """Prompt prose lives in .txt files; contract JSON carries only machine shape."""
     payload = TailoringResumePayload()
     rc = build_response_contract(payload, prompt_id="full")
     d = rc.to_prompt_dict()
-    assert "rules" in d, (
-        "TailoringResponseContract.to_prompt_dict() must include 'rules' key with mode_rules. "
-        "Currently mode_rules is built but silently omitted from the LLM-visible dict."
-    )
-    assert len(d["rules"]) > 0
+    assert "rules" not in d
 
 
-def test_contract_to_prompt_dict_includes_index_mapping() -> None:
-    """to_prompt_dict() must document that keys are 0-based and match contract order."""
+def test_contract_to_prompt_dict_omits_duplicate_index_mapping() -> None:
+    """Index-mapping prose lives in resume_diff_output.txt."""
     payload = TailoringResumePayload()
     rc = build_response_contract(payload, prompt_id="full")
     d = rc.to_prompt_dict()
-    assert "index_note" in d or "index_mapping" in d or any(
-        "0-based" in str(v) or "contract order" in str(v)
-        for v in d.values()
-    ), "to_prompt_dict() must include an index mapping note"
+    assert "index_note" not in d

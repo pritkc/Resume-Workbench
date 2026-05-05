@@ -39,7 +39,7 @@ MONTH_PATTERN = re.compile(
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b",
     re.IGNORECASE,
 )
-_MAX_SKILL_GROUPS = 6
+_MAX_SKILL_GROUPS = 5
 _MAX_SKILLS_PER_GROUP = 14
 
 
@@ -180,6 +180,27 @@ def preserve_original_skills(
     return result
 
 
+def normalize_metric_units(value: str) -> str:
+    """Compact common time-unit phrases so bullets keep room for technical detail."""
+    text = value
+    replacements = [
+        (r"(?i)\bhours\s*/\s*week\b", "h/wk"),
+        (r"(?i)\bhour\s*/\s*week\b", "h/wk"),
+        (r"(?i)\bhours\s+per\s+week\b", "h/wk"),
+        (r"(?i)\bhour\s+per\s+week\b", "h/wk"),
+        (r"(?i)\bminutes\b", "min"),
+        (r"(?i)\bminute\b", "min"),
+        (r"(?i)\bmilliseconds\b", "ms"),
+        (r"(?i)\bmillisecond\b", "ms"),
+        (r"(?i)\bseconds\b", "sec"),
+        (r"(?i)\bsecond\b", "sec"),
+    ]
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text)
+    text = re.sub(r"(?<=\d)\s+h/wk\b", "h/wk", text)
+    return text
+
+
 def _simplify_skills_groups(value: Any) -> dict[str, Any]:
     """Normalize skills into a compact label+values structure for UI/rendering.
 
@@ -311,6 +332,77 @@ def _enforce_description_counts(
     return result, warnings
 
 
+def _sanitize_low_signal_resume_terms(
+    original_data: dict[str, Any] | None,
+    result_data: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    result = copy.deepcopy(result_data)
+    warnings: list[str] = []
+
+    if contains_basic_resume_term(str(result.get("summary") or "")):
+        original_summary = ""
+        if isinstance(original_data, dict):
+            original_summary = str(original_data.get("summary") or "").strip()
+        result["summary"] = original_summary
+        warnings.append("Removed blocked low-signal term from summary")
+
+    for section_key, is_experience in (
+        ("workExperience", True),
+        ("personalProjects", False),
+    ):
+        entries = result.get(section_key, [])
+        original_entries = original_data.get(section_key, []) if isinstance(original_data, dict) else []
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            entry_before_stack_cleanup = copy.deepcopy(entry)
+            stack = entry.get("techStack") or entry.get("tech_stacks") or entry.get("summary")
+            if isinstance(stack, str):
+                stripped_stack = _strip_basic_terms_from_stack_line(stack)
+                if stripped_stack != stack:
+                    entry["techStack"] = stripped_stack
+                    warnings.append(
+                        f"Removed blocked low-signal term from {section_key}[{index}].techStack"
+                    )
+
+            original_entry = (
+                original_entries[index]
+                if isinstance(original_entries, list)
+                and index < len(original_entries)
+                and isinstance(original_entries[index], dict)
+                else {}
+            )
+            original_items = _current_description_items(original_entry, is_experience=is_experience)
+            current_items = _current_description_items(
+                entry_before_stack_cleanup,
+                is_experience=is_experience,
+            )
+            fixed_items: list[str] = []
+            changed = False
+            for bullet_index, item in enumerate(current_items):
+                normalized = normalize_metric_units(item)
+                if contains_basic_resume_term(normalized):
+                    replacement = (
+                        original_items[bullet_index]
+                        if bullet_index < len(original_items)
+                        else ""
+                    )
+                    fixed_items.append(replacement)
+                    changed = True
+                    continue
+                fixed_items.append(normalized)
+                changed = changed or normalized != item
+            if changed:
+                _set_description_items(entry, fixed_items, is_experience=is_experience)
+                warnings.append(
+                    f"Removed blocked low-signal term from {section_key}[{index}] bullets"
+                )
+
+    return result, warnings
+
+
 def protect_custom_sections(
     original_data: dict[str, Any] | None,
     improved_data: dict[str, Any],
@@ -409,7 +501,7 @@ def apply_compact_diff(
         and diff["summary"].strip()
         and not contains_basic_resume_term(diff["summary"])
     ):
-        result["summary"] = diff["summary"].strip()
+        result["summary"] = normalize_metric_units(diff["summary"].strip())
 
     for diff_key, resume_key in [("experience", "workExperience"), ("projects", "personalProjects")]:
         section_diff_raw = diff.get(diff_key)
@@ -452,7 +544,8 @@ def apply_compact_diff(
             if diff_key == "projects" and "name" in entry_diff:
                 nm = entry_diff["name"]
                 if isinstance(nm, str) and nm.strip():
-                    entry["name"] = nm.strip()
+                    if not contains_basic_resume_term(nm):
+                        entry["name"] = normalize_metric_units(nm.strip())
 
             if diff_key == "projects" and "tech_stacks" in entry_diff:
                 ts = entry_diff["tech_stacks"]
@@ -536,7 +629,7 @@ def apply_compact_diff(
                             bullet_idx,
                         )
                         continue
-                    desc[bullet_idx] = bullet_text.strip()
+                    desc[bullet_idx] = normalize_metric_units(bullet_text.strip())
                 merged = prefix + desc
                 entry["description"] = merged
                 if "highlights" in entry and isinstance(entry.get("highlights"), list):
@@ -652,6 +745,8 @@ def finalize_tailored_resume(
         job_content,
     )
     warnings.extend(cleanup_warnings)
+    result, low_signal_warnings = _sanitize_low_signal_resume_terms(original_resume_data, result)
+    warnings.extend(low_signal_warnings)
     result, count_warnings = _enforce_description_counts(original_resume_data, result)
     warnings.extend(count_warnings)
 
@@ -680,6 +775,7 @@ def finalize_tailored_resume(
                 result,
                 job_keywords,
                 prompt_id=prompt_id,
+                job_description=job_content,
             )
         )
 

@@ -161,10 +161,10 @@ def test_resume_diff_output_allows_bullet_guidance() -> None:
     assert "json" in diff_rules
 
 
-def test_response_contract_rules_are_non_empty() -> None:
+def test_response_contract_does_not_duplicate_prompt_rules() -> None:
     contract = build_response_contract(TailoringResumePayload(), prompt_id="full").to_prompt_dict()
-    rules = contract.get("rules", [])
-    assert isinstance(rules, list) and len(rules) >= 1
+    assert "rules" not in contract
+    assert "index_note" not in contract
 
 
 def test_tailoring_catalog_runtime_fields_include_core_injections() -> None:

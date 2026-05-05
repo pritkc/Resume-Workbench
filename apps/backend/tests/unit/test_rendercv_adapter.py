@@ -214,6 +214,27 @@ def test_rendercv_adapter_limits_auto_bold_keywords_to_experience_and_project_bu
     assert "bold_keywords" not in payload.get("settings", {})
 
 
+def test_rendercv_adapter_filters_low_signal_bold_keywords(sample_resume_copy: dict) -> None:
+    themed_resume = copy.deepcopy(sample_resume_copy)
+    themed_resume["workExperience"][0]["description"] = [
+        "Built FastAPI services and reviewed Excel handoff data.",
+    ]
+
+    payload = resume_to_rendercv_payload(
+        themed_resume,
+        RenderThemeSettings(
+            theme_id="classic",
+            bold_keywords=True,
+            settings={"bold_keywords": ["FastAPI", "Excel", "Miro", "Data Analysis"]},
+        ),
+    )
+
+    bullet = payload["cv"]["sections"]["experience"][0]["highlights"][0]
+    assert "**FastAPI**" in bullet
+    assert "**Excel**" not in bullet
+    assert "**Miro**" not in bullet
+
+
 def test_rendercv_adapter_keeps_summary_content_and_strips_summary_heading_runtime_flags(
     sample_resume_copy: dict,
 ) -> None:

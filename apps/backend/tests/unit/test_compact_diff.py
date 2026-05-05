@@ -6,6 +6,7 @@ from app.services.tailoring.preservation import (
     _all_skill_values,
     apply_compact_diff,
     finalize_tailored_resume,
+    normalize_metric_units,
 )
 from app.services.tailoring.models import TailoringResumePayload
 
@@ -258,14 +259,22 @@ class TestApplyCompactDiff:
             "summary": "Excel analyst.",
             "experience": {
                 "0": {
-                    "tech_stacks": "Python, Excel, SAP, Teams",
-                    "bullets": {"0": "Built Excel reports for stakeholders"},
+                    "tech_stacks": "Python, Excel, SAP, Teams, Miro",
+                    "bullets": {"0": "Built Excel reports for stakeholders in Miro"},
                 }
             },
             "skills": [
                 {
                     "label": "Tools",
-                    "values": ["Python", "Excel", "JIRA", "SAP", "Confluence", "Notion"],
+                    "values": [
+                        "Python",
+                        "Excel",
+                        "JIRA",
+                        "SAP",
+                        "Confluence",
+                        "Notion",
+                        "Miro",
+                    ],
                 },
             ],
         }
@@ -274,6 +283,22 @@ class TestApplyCompactDiff:
         assert result["workExperience"][0]["techStack"] == "Python, SAP"
         assert result["workExperience"][0]["description"][0] == base_resume["workExperience"][0]["description"][0]
         assert result["skills"]["groups"] == [{"label": "Tools", "values": ["Python", "SAP"]}]
+
+    def test_metric_units_are_normalized_in_compact_output(self, base_resume):
+        diff = {
+            "experience": {
+                "0": {
+                    "bullets": {
+                        "0": "Cut prep time from ~6 hours/week to ~45 minutes",
+                        "1": "Reduced batch runtime from 45+ minutes to ~12 minutes",
+                    }
+                }
+            }
+        }
+        result = apply_compact_diff(base_resume, diff)
+        desc = result["workExperience"][0]["description"]
+        assert desc[0] == "Cut prep time from ~6h/wk to ~45 min"
+        assert desc[1] == "Reduced batch runtime from 45+ min to ~12 min"
 
     def test_skills_regroup_applied(self, base_resume):
         new_skills = [
@@ -311,11 +336,12 @@ class TestApplyCompactDiff:
         }
         result = apply_compact_diff(base_resume, diff)
         groups = result["skills"]["groups"]
-        assert len(groups) == 6
+        assert len(groups) == 5
         flattened = [item for group in groups for item in group["values"]]
         assert flattened.count("Python") == 1
         assert flattened.count("SQL") == 1
         assert "ShouldNotAppear" not in flattened
+        assert "AWS SAA" not in flattened
 
     def test_skills_absent_key_unchanged(self, base_resume):
         diff = {"summary": "New summary."}
@@ -442,6 +468,72 @@ class TestApplyCompactDiff:
         assert project_desc == ["New project"]
         assert any("description count" in warning for warning in warnings)
 
+    def test_finalize_removes_basic_tool_leakage_from_full_payload(self):
+        original = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": ["Python, SQL", "Built APIs", "Shipped data models"],
+                }
+            ],
+            "personalProjects": [
+                {
+                    "name": "Project",
+                    "techStack": "Python",
+                    "description": ["Built project"],
+                }
+            ],
+            "skills": {"groups": [{"label": "Data", "values": ["Python", "SQL"]}]},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        improved = {
+            **original,
+            "summary": "Engineer using Excel and Miro.",
+            "workExperience": [
+                {
+                    **original["workExperience"][0],
+                    "techStack": "Python, SQL, Excel, Miro",
+                    "description": [
+                        "Python, SQL, Excel, Miro",
+                        "Built Excel workflows in Miro",
+                        "Reduced batch time from 45 minutes to 12 minutes",
+                    ],
+                }
+            ],
+            "skills": {
+                "groups": [
+                    {"label": "Tools", "values": ["Python", "Excel", "Miro", "SQL"]}
+                ]
+            },
+        }
+        payload = TailoringResumePayload.from_resume_data(improved)
+        assert payload is not None
+
+        result, warnings, _location_source, _location_value = finalize_tailored_resume(
+            payload=payload,
+            original_resume_data=original,
+            original_resume_markdown="",
+            cleanup_source_data=None,
+            job_content="",
+            job_keywords={},
+            prompt_id="full",
+        )
+
+        entry = result["workExperience"][0]
+        assert entry["techStack"] == "Python, SQL"
+        assert "Excel" not in result["summary"]
+        assert entry["highlights"] == [
+            "Built APIs",
+            "Reduced batch time from 45 min to 12 min",
+        ]
+        assert result["skills"]["groups"][0]["label"] == "Tools"
+        assert result["skills"]["groups"][0]["values"] == ["Python", "SQL"]
+        assert any("blocked low-signal" in warning.lower() for warning in warnings)
+
 
 class TestAllSkillValues:
     def test_extracts_all_values(self, base_resume):
@@ -455,3 +547,10 @@ class TestAllSkillValues:
         resume = {"additional": {"groups": [{"label": "Tech", "values": ["Go", "Rust"]}]}}
         vals = _all_skill_values(resume)
         assert vals == {"Go", "Rust"}
+
+
+def test_normalize_metric_units_compacts_time_phrases() -> None:
+    assert (
+        normalize_metric_units("from ~6 hours/week to 45 minutes and 200 milliseconds")
+        == "from ~6h/wk to 45 min and 200 ms"
+    )

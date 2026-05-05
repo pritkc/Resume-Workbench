@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import yaml
 
+from app.prompts.prompt_policy import low_signal_bold_keywords
 from app.services.additional_groups import (
     DEFAULT_SKILL_GROUP_LABELS_BY_ID,
     coerce_string_list,
@@ -25,6 +26,7 @@ from app.rendering.theme_profiles import (
     build_settings,
     theme_settings_from_rendercv_sections,
 )
+from app.services.tailoring.jd_intel_blob import is_basic_resume_term
 
 _LINK_PREFIX_RE = re.compile(r"^(https?://)?(www\.)?", re.IGNORECASE)
 _NON_DIGIT_RE = re.compile(r"\D+")
@@ -33,7 +35,6 @@ _MARKDOWN_LINK_INLINE_RE = re.compile(r"(?<!\\)\[(?P<label>(?:\\.|[^\]])+)\]\((?
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _FA_CLASS_TOKEN_RE = re.compile(r"\s+")
 _BOLD_BOUNDARY_CLASS = r"A-Za-z0-9"
-
 _KNOWN_SECTION_KEYS = {
     "summary",
     "experience",
@@ -402,6 +403,8 @@ def _resolve_bold_keywords(theme_settings: RenderThemeSettings) -> list[str]:
             continue
         keyword = " ".join(item.split()).strip()
         if len(keyword) < 2:
+            continue
+        if is_basic_resume_term(keyword) or keyword.casefold() in low_signal_bold_keywords():
             continue
         key = keyword.casefold()
         if key in seen:

@@ -1,7 +1,11 @@
 """Tests for TailoringResponseContract prompt-facing output."""
 
 from app.services.tailoring.contracts import build_response_contract
-from app.services.tailoring.models import TailoringResumePayload, TailoringExperience
+from app.services.tailoring.models import (
+    TailoringExperience,
+    TailoringProject,
+    TailoringResumePayload,
+)
 
 
 def _make_payload_with_experience() -> TailoringResumePayload:
@@ -20,32 +24,20 @@ def _make_payload_with_experience() -> TailoringResumePayload:
                 description=["Did X", "Did Y"],
             ),
         ],
+        personalProjects=[
+            TailoringProject(name="Dashboard", description=["Built UI"]),
+        ],
     )
 
 
 class TestResponseContractPromptDict:
-    def test_mode_rules_visible_to_llm(self):
-        """mode_rules must appear in to_prompt_dict() so the LLM sees constraints."""
+    def test_prompt_dict_does_not_duplicate_prompt_rules(self):
+        """Prompt instructions live in .txt prompt files, not response-contract metadata."""
         payload = _make_payload_with_experience()
         rc = build_response_contract(payload, prompt_id="full")
         d = rc.to_prompt_dict()
-        assert "rules" in d, "mode_rules must be exposed via 'rules' key"
-        assert isinstance(d["rules"], list) and len(d["rules"]) > 0
-
-    def test_full_mode_rules_reference_diff_shape(self):
-        """Full mode rules point at shipped diff rules / indexing (not hard applicator coupling)."""
-        payload = _make_payload_with_experience()
-        rc = build_response_contract(payload, prompt_id="full")
-        d = rc.to_prompt_dict()
-        rules_text = " ".join(d.get("rules", [])).lower()
-        assert "resume_diff_rules" in rules_text or "index" in rules_text
-
-    def test_lite_mode_rules_reference_diff_shape(self):
-        payload = _make_payload_with_experience()
-        rc = build_response_contract(payload, prompt_id="lite")
-        d = rc.to_prompt_dict()
-        rules_text = " ".join(d.get("rules", [])).lower()
-        assert "resume_diff_rules" in rules_text or "title" in rules_text
+        assert "rules" not in d
+        assert "index_note" not in d
 
     def test_bullet_counts_per_entry_visible(self):
         """bullet_counts must be present so LLM knows valid index ranges."""
@@ -56,20 +48,31 @@ class TestResponseContractPromptDict:
         assert "bullet_counts" in d["experience"]
         assert d["experience"]["bullet_counts"] == [3, 2]
 
-    def test_index_mapping_note_present(self):
-        """to_prompt_dict must explain that output keys are 0-based integers."""
+    def test_full_mode_budget_fields_visible(self):
+        """Full mode exposes edit budgets so validators and prompts share constraints."""
         payload = _make_payload_with_experience()
         rc = build_response_contract(payload, prompt_id="full")
         d = rc.to_prompt_dict()
-        has_note = (
-            "index_note" in d
-            or "index_mapping" in d
-            or any("0-based" in str(v) or "contract order" in str(v) for v in d.values())
-        )
-        assert has_note, (
-            "to_prompt_dict() must document that experience/projects keys are "
-            "0-based integer strings matching response_contract entry order"
-        )
+        assert d["experience"]["direct_jd_bullet_budget"] == [2, 1]
+        assert d["experience"]["preserve_story_min"] == [1, 1]
+        assert d["projects"]["max_changed_entries"] == 2
+        assert d["projects"]["rename_allowed"] is False
+
+    def test_two_bullet_roles_have_one_direct_jd_bullet_budget(self):
+        """Short roles must not become 100% JD rewrites."""
+        payload = _make_payload_with_experience()
+        rc = build_response_contract(payload, prompt_id="full")
+        assert rc.direct_jd_bullet_budget == [2, 1]
+
+    def test_index_mapping_note_lives_in_diff_rules(self):
+        """The existing output_diff prompt owns index mapping prose."""
+        from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+
+        payload = _make_payload_with_experience()
+        rc = build_response_contract(payload, prompt_id="full")
+        d = rc.to_prompt_dict()
+        assert "index_note" not in d
+        assert "0-based" in RESUME_DIFF_RULES
 
     def test_locked_fields_visible(self):
         """Locked (immutable) fields must be communicated in the diff rules."""
@@ -91,9 +94,10 @@ class TestResponseContractPromptDict:
         assert d["experience"]["bullet_counts"] == [3, 2]
         assert d["experience"]["entries"] == ["Acme", "StartupCo"]
 
-    def test_empty_payload_still_exposes_rules(self):
-        """Rules must appear even when no experience/project entries are present."""
+    def test_empty_payload_still_exposes_shape_without_prompt_rules(self):
+        """Empty contracts still provide machine shape, not duplicated prose."""
         payload = TailoringResumePayload()
         rc = build_response_contract(payload, prompt_id="full")
         d = rc.to_prompt_dict()
-        assert "rules" in d and len(d["rules"]) > 0
+        assert d["output_keys"] == ["summary", "experience", "projects", "skills", "bold_keywords"]
+        assert "rules" not in d

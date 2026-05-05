@@ -10,43 +10,19 @@ import json
 import re
 from typing import Any
 
+from app.prompts.prompt_policy import resume_basic_terms
 from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
 
 _JD_PLACEHOLDER = re.compile(
     r"(?<!\$)\$extract_jd_intel_output(?P<path>(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)"
 )
-_BASIC_RESUME_TERMS = frozenset(
-    {
-        "excel",
-        "microsoft excel",
-        "google sheets",
-        "microsoft office",
-        "ms office",
-        "word",
-        "microsoft word",
-        "powerpoint",
-        "microsoft powerpoint",
-        "outlook",
-        "microsoft outlook",
-        "email",
-        "e-mail",
-        "slack",
-        "teams",
-        "microsoft teams",
-        "jira",
-        "confluence",
-        "notion",
-    }
-)
-
-
 def _term_key(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip().casefold())
 
 
 def is_basic_resume_term(value: str) -> bool:
     """Return true for table-stakes office tools that should not consume resume space."""
-    return _term_key(value) in _BASIC_RESUME_TERMS
+    return _term_key(value) in resume_basic_terms()
 
 
 def contains_basic_resume_term(value: str) -> bool:
@@ -54,7 +30,7 @@ def contains_basic_resume_term(value: str) -> bool:
     text = value.casefold()
     return any(
         re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text)
-        for term in _BASIC_RESUME_TERMS
+        for term in resume_basic_terms()
     )
 
 
@@ -80,7 +56,7 @@ def filter_basic_resume_terms(values: Any) -> list[str]:
 
 def filter_resume_keyword_sources(blob: dict[str, Any]) -> None:
     """Strip low-signal office tools from JD keyword lists used for tailoring."""
-    for key in ("resume_technical_keywords", "resume_bold_keyword_sources"):
+    for key in ("resume_technical_keywords", "resume_bold_keyword_sources", "keyword_must_match"):
         if key in blob:
             blob[key] = filter_basic_resume_terms(blob.get(key))
 

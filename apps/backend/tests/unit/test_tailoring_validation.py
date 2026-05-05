@@ -15,7 +15,7 @@ _RESUME_DATA: dict[str, Any] = {
         {
             "position": "Engineer",
             "company": "Acme",
-            "highlights": ["Built APIs.", "Optimized queries."],
+            "highlights": ["Built APIs.", "Optimized queries.", "Shipped alerts."],
             "techStack": "Python, FastAPI",
         },
         {
@@ -29,7 +29,15 @@ _RESUME_DATA: dict[str, Any] = {
         {
             "name": "Dashboard",
             "highlights": ["Built UI.", "Added auth."],
-        }
+        },
+        {
+            "name": "Pipeline",
+            "highlights": ["Built ETL."],
+        },
+        {
+            "name": "LogLens",
+            "highlights": ["Parsed logs."],
+        },
     ],
 }
 
@@ -167,6 +175,71 @@ def test_project_bullet_beyond_count_rejected() -> None:
     result = validate_compact_diff(diff, contract)
     assert result.valid is False
     assert any("out of range" in e for e in result.errors)
+
+
+def test_experience_rewriting_more_than_two_bullets_rejected() -> None:
+    contract = _make_contract()
+    diff = {
+        "experience": {
+            "0": {
+                "bullets": {
+                    "0": "First rewrite",
+                    "1": "Second rewrite",
+                    "2": "Third rewrite",
+                }
+            }
+        }
+    }
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("too many bullets" in e.lower() for e in result.errors)
+
+
+def test_short_experience_rewriting_more_than_budget_rejected() -> None:
+    contract = _make_contract()
+    diff = {
+        "experience": {
+            "1": {
+                "bullets": {
+                    "0": "First intern rewrite",
+                    "1": "Second intern rewrite",
+                }
+            }
+        }
+    }
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("direct jd bullet budget" in e.lower() for e in result.errors)
+
+
+def test_more_than_two_changed_projects_rejected() -> None:
+    contract = _make_contract()
+    diff = {
+        "projects": {
+            "0": {"bullets": {"0": "A"}},
+            "1": {"bullets": {"0": "B"}},
+            "2": {"bullets": {"0": "C"}},
+        }
+    }
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("at most two projects" in e.lower() for e in result.errors)
+
+
+def test_generic_jd_project_suffix_rejected() -> None:
+    contract = _make_contract()
+    diff = {"projects": {"0": {"name": "Dashboard (Workflow Visualization)"}}}
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("project name" in e.lower() for e in result.errors)
+
+
+def test_generic_jd_project_parenthetical_rejected() -> None:
+    contract = _make_contract()
+    diff = {"projects": {"0": {"name": "Dashboard (Data Analysis)"}}}
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("project name" in e.lower() for e in result.errors)
 
 
 # ── DiffValidationResult ──────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.prompts.prompt_policy import generic_project_labels
 from app.services.tailoring.models import TailoringResponseContract
 
 _LOCKED_FIELDS = frozenset([
@@ -12,8 +13,6 @@ _LOCKED_FIELDS = frozenset([
     "github", "website", "customSections",
 ])
 _VALID_TOP_LEVEL = frozenset(["summary", "experience", "projects", "skills", "bold_keywords"])
-
-
 @dataclass
 class DiffValidationResult:
     valid: bool
@@ -55,6 +54,16 @@ def validate_compact_diff(
                 # Check bullet indexes
                 bullets = entry.get("bullets", {})
                 if isinstance(bullets, dict):
+                    budget = (
+                        contract.direct_jd_bullet_budget[idx]
+                        if idx < len(contract.direct_jd_bullet_budget)
+                        else 2
+                    )
+                    if len(bullets) > budget:
+                        errors.append(
+                            f"experience[{key}] rewrites too many bullets and exceeds direct JD bullet budget "
+                            f"({len(bullets)} > {budget})"
+                        )
                     for bkey in bullets:
                         if not bkey.isdigit():
                             errors.append(
@@ -70,6 +79,15 @@ def validate_compact_diff(
     # Projects section
     proj = diff.get("projects", {})
     if isinstance(proj, dict):
+        changed_projects = [
+            entry for entry in proj.values()
+            if isinstance(entry, dict) and entry
+        ]
+        if len(changed_projects) > contract.max_changed_projects:
+            errors.append(
+                f"full mode may edit at most two projects "
+                f"(got {len(changed_projects)})"
+            )
         for key, entry in proj.items():
             if not key.isdigit():
                 errors.append(f"projects key '{key}' is not a stringified integer")
@@ -85,6 +103,11 @@ def validate_compact_diff(
                 locked = set(entry.keys()) & _LOCKED_FIELDS
                 if locked:
                     errors.append(f"projects[{key}] emits locked fields: {sorted(locked)}")
+                name = entry.get("name")
+                if isinstance(name, str) and _looks_like_generic_project_label(name):
+                    errors.append(
+                        f"projects[{key}] project name adds generic JD label; keep project names stable"
+                    )
                 bullets = entry.get("bullets", {})
                 if isinstance(bullets, dict):
                     for bkey in bullets:
@@ -100,3 +123,8 @@ def validate_compact_diff(
                             )
 
     return DiffValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
+
+
+def _looks_like_generic_project_label(value: str) -> bool:
+    normalized = value.strip().casefold()
+    return any(label in normalized for label in generic_project_labels())

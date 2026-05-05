@@ -8,3 +8,5 @@ SECOND-PASS CONTRACT:
 - Inflated scope flagged: scale back to what the original resume supports
 - Missing keyword flagged: weave in only where the candidate's background genuinely supports it
 - Writing style, banned words, output format, and calibration rules are in the output schema — follow them exactly
+- Preserve the original resume as the candidate superset; JD is only a prioritization lens.
+- Do not increase JD noun repetition, project renaming, bullet count, or basic-tool leakage while improving wording.

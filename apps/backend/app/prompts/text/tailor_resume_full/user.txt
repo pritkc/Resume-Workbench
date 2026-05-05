@@ -1,25 +1,29 @@
 EDITORIAL SEQUENCE (work in this order):
-1. BULLETS — selective rewrite: keep most source bullets; add direct JD framing to only 1-2 bullets per experience
-2. ROLE TITLES — scope-enhance position fields
-3. SKILLS — restructure after seeing summary direction
-4. ATS — verify keyword placement across summary, stacks, bullets
-5. SUMMARY — fit-check rewrite first
+1. CAREER STORY — preserve the candidate's base resume narrative first. The JD is a subset lens, not the resume's identity.
+2. BULLETS — rewrite only the bullets needed for fit; keep at least half of each role's original stories intact or lightly polished.
+3. ROLE TITLES — scope-enhance position fields
+4. SKILLS — restructure after seeing summary direction
+5. ATS — verify targeted keyword placement where the candidate story supports it
+6. SUMMARY — fit-check rewrite first
 
 EDIT SCOPE (default full run — modify here for custom targeting):
-- Summary: full rewrite
-- Skills: restructure into exactly 5 groups; preserve impressive superset skills after JD-critical groups
-- Experience: per role, rewrite at most 1-2 bullets per experience for direct JD alignment; keep the rest unchanged or broadened with impressive adjacent work
+- Summary: full rewrite, but preserve the candidate identity from ORIGINAL RESUME; never rebrand into the JD title.
+- Skills: restructure into 4-5 dense groups; preserve impressive superset skills after JD-critical groups
+- Experience: emit only changed bullet indexes. At most 1-2 bullets per experience may carry direct JD-specific terms; for roles with 2 or fewer bullets, touch at most one bullet. All other emitted bullets must preserve the role's existing technical story or adjacent stronger engineering work.
+- Story retention: each role should keep at least one recognizable original interview story unless the role has only one bullet.
 - Projects: edit at most the closest two projects; keep names stable; use light JD context only when it naturally fits
 - Titles: add only broad scope qualifiers; do not copy JD titles or secondary role labels. When in doubt, keep the existing qualifier or omit.
-- Tech stacks: emit tech_stacks for every changed experience and project entry; keep only evidenced tools, ordered by JD relevance
+- Tech stacks: Tech stack values must be named tools, languages, platforms, or frameworks only; never paradigms or methodologies like "Process Optimization" or "Data Analysis".
 
 EXTRACTED JD INTELLIGENCE:
 $extract_jd_intel_output
 
-  Rewrite angles (one per role; every bullet connects to at least one): $extract_jd_intel_output.responsibility_themes
-  ATS keyword list (translation candidates, not mandatory insertions):    $extract_jd_intel_output.resume_technical_keywords
+  JD coverage themes (competency hooks, not resume copy):                $extract_jd_intel_output.responsibility_themes
+  Use these to select the 1-2 bullets per role that most naturally map to JD themes. Do not force every bullet to connect, and do not paraphrase these themes into summary, titles, skills, or bullets.
+  JD terms (translation candidates, not mandatory insertions):           $extract_jd_intel_output.resume_technical_keywords
   Bold keyword source (short, high-visibility ATS terms only):           $extract_jd_intel_output.resume_bold_keyword_sources
-  Domain/product terms (weave into summary and bullets naturally):       $extract_jd_intel_output.resume_domain_keywords
+  Domain/product context (coverage signals, not phrases to weave):       $extract_jd_intel_output.resume_domain_keywords
+  Use these to check coverage and prioritize wording. A term belongs in the resume only when it fits the candidate's broader story, not because the JD said it.
   Level ceiling (do not exceed this scope for any bullet):               $extract_jd_intel_output.calibration.level_expectations
 
 ORIGINAL RESUME:
@@ -29,11 +33,11 @@ RESPONSE CONTRACT:
 $response_contract
 
 FULL-RUN SHAPE GUARDS:
-- Omit unchanged bullet indexes; do not emit all bullets just to show work was considered.
-- Do not compress project bullets: if a project has 3 source bullets, return bullets "0", "1", and "2" as separate lines, not one combined paragraph.
+- Experience: omit unchanged bullet indexes; only emit the selected rewrites.
+- Projects: preserve source bullet count and shape for every edited project. If a project has 3 source bullets, return "0", "1", and "2" as separate lines, including lightly unchanged bullets when needed to prevent compression.
 - Do not drop stack lines from changed entries: emit tech_stacks when rewriting bullets for that role or project.
 - Position qualifiers must reinforce the JD's primary domain; avoid generic labels unless source evidence and JD both justify them. When in doubt, keep the existing qualifier or omit.
-- Keep summary render-fit: summary 120-155 characters.
+- Keep summary render-fit: summary 105-135 characters.
 
 OUTPUT SCHEMA:
 $resume_diff_rules

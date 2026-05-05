@@ -4,8 +4,8 @@ $critique_resume_output
 JD INTELLIGENCE:
 $extract_jd_intel_output
 
-  ATS keyword list (exact forms, exact capitalization): $extract_jd_intel_output.resume_technical_keywords
-  Level ceiling (do not exceed for any bullet):         $extract_jd_intel_output.calibration.level_expectations
+  JD terms to check as coverage candidates, not mandatory insertions: $extract_jd_intel_output.resume_technical_keywords
+  Level ceiling (do not exceed for any bullet):                      $extract_jd_intel_output.calibration.level_expectations
 
 ORIGINAL RESUME (source of truth for scope):
 $original_resume

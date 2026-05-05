@@ -59,6 +59,32 @@ def test_tailor_build_messages_fills_template() -> None:
     assert "JD INTELLIGENCE:" in user
 
 
+def test_second_pass_prompts_preserve_anti_mirror_guards() -> None:
+    """Critique/rewrite pass must not undo primary anti-JD-mirror constraints."""
+    critique = get_prompt("critique_resume")
+    rewrite = get_prompt("rewrite_resume")
+
+    critique_system, critique_user = critique.build_messages(
+        original_resume="{}",
+        tailor_resume_full_output="{}",
+        jd_intel_blob={},
+    )
+    rewrite_system, rewrite_user = rewrite.build_messages(
+        original_resume="{}",
+        tailor_resume_full_output="{}",
+        critique_resume_output="{}",
+        jd_intel_blob={},
+        response_contract="{}",
+    )
+    combined = "\n".join([critique_system, critique_user, rewrite_system, rewrite_user]).lower()
+
+    assert "jd is only a prioritization lens" in combined
+    assert "do not introduce named vendor products" in combined
+    assert "do not increase jd noun repetition" in combined
+    assert "must appear in diff" not in combined
+    assert "exact forms, exact capitalization" not in combined
+
+
 def test_composer_override_takes_precedence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from app.prompts import extract_jd_intel as mod
     from app.prompts import _prompt_loader as pl

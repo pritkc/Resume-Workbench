@@ -37,6 +37,9 @@ Shape (output keys exactly as below; values shown are illustrative only):
     "instrument distributed tracing across service boundaries"
   ],
   "resume_technical_keywords": ["Python", "FastAPI", "Kafka", "AWS", "Kubernetes"],
+  "keyword_must_match": ["Python", "Kafka"],
+  "transferable_themes": ["high-throughput processing", "service reliability"],
+  "low_signal_terms": ["Excel", "Slack"],
   "resume_bold_keyword_sources": ["Python", "Kafka", "AWS", "Kubernetes", "PCI"],
   "resume_domain_keywords": ["payments", "ledger", "PCI", "settlement"],
   "calibration": {
@@ -52,10 +55,13 @@ Rules:
 - requirements.years_min / years_max: ints from JD (e.g. 3–5 → min 3 max 5); unknown → null.
 - technical_requirements.required_needs: hard must-haves. nice_to_have_needs: preferred. other_needs: misc demands not captured above.
 - programming_languages / frameworks / infrastructure / paradigms: split literals from JD; use JD's own abbreviations.
-- responsibility_themes: exactly 6 action-oriented hooks written as "[verb] [specific what]" fragments the resume must demonstrate — not single-word theme labels. Each hook names a concrete capability or outcome the role requires.
-- resume_technical_keywords: dedupe union of required_needs, programming_languages, frameworks, infrastructure, and paradigms — ordered by JD priority. Include exact high-signal ATS terms, not responsibility phrases or basic office tools.
-- resume_bold_keyword_sources: 8–12 short bold_keywords source terms for visual highlighting. Use 1-3 word non-basic tools, languages, platforms, products, data methods, and technical domains only. Exclude responsibility phrases, soft skills, generic business phrases, full sentences, and basic/table-stakes tools such as Excel, Google Sheets, Microsoft Office, Word, PowerPoint, Outlook, email, Slack, Teams, Jira, Confluence, and Notion.
-- resume_domain_keywords: industry, product, regulatory, and business terms to mirror. Dedupe.
+- responsibility_themes: exactly 6 neutral competency hooks (verb + object), deduped from the JD. Phrase each as a capability category, not a copy-paste responsibility line. Downstream prompts must treat these as a coverage checklist, not prose to reuse.
+- resume_technical_keywords: high-signal ATS terms only. Split JD terms into keyword_must_match, transferable_themes, and low_signal_terms. Include exact technical terms, not responsibility phrases or basic office tools.
+- keyword_must_match: specific systems, products, languages, platforms, and data methods worth matching if credible.
+- transferable_themes: responsibility ideas to translate naturally without copying JD language.
+- low_signal_terms: basic tools and generic business phrases that must not enter the resume.
+- resume_bold_keyword_sources: 6–10 short bold_keywords source terms for visual highlighting. Use 1-3 word non-basic tools, languages, platforms, products, data methods, and technical domains only. Exclude responsibility phrases, soft skills, generic business phrases, full sentences, and basic/table-stakes tools such as Excel, Google Sheets, Microsoft Office, Word, PowerPoint, Outlook, email, Slack, Teams, Jira, Confluence, Notion, Miro, and spreadsheets.
+- resume_domain_keywords: industry, product, regulatory, and business terms the JD cares about; dedupe. These are context for tailoring, not mandatory mirror phrases. Downstream prompts must not repeat them across summary, stacks, skills, and bullets unless the candidate's work clearly touches that context.
 - calibration.level_expectations: one sentence describing ownership footprint — what the person owns outright vs. contributes to, and the expected decision-making scope. No title-ladder guessing.
 - Lists: dedupe; cap scale_signals at 5.
 

@@ -26,26 +26,6 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
     return ordered_keys
 
 
-def _mode_rules(prompt_id: str) -> list[str]:
-    """Return concise structural reminders included beside per-resume indexes."""
-    rules = [
-        "Return raw valid JSON only: no markdown fences, no prose, start with { and end with }.",
-        "Use only the compact diff keys listed in output_keys; omit unchanged sections.",
-        "experience/projects keys are stringified 0-based indexes matching entries order.",
-        "Do not emit locked identity fields such as id, title, company, location, dates, schools, github, or website.",
-    ]
-    if prompt_id == "full":
-        rules.extend(
-            [
-                "For changed experience/project entries, emit tech_stacks when evidenced by the source resume.",
-                "Preserve project bullet count in full runs; retain closest two projects with only light JD-aware reframing.",
-                "Keep summaries render-fit: summary 120-155 chars.",
-                "Scope-enhanced position qualifiers must align with the target role domain without copying JD labels.",
-            ]
-        )
-    return rules
-
-
 def _immutable_fields(entry_keys: list[str], editable_fields: set[str]) -> list[str]:
     return [key for key in entry_keys if key not in editable_fields]
 
@@ -124,7 +104,6 @@ def build_response_contract(
         return TailoringResponseContract(
             prompt_mode=prompt_id,
             top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
-            mode_rules=_mode_rules(prompt_id),
             sections=sections,
         )
 
@@ -174,13 +153,19 @@ def build_response_contract(
     return TailoringResponseContract(
         prompt_mode=prompt_id,
         top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
-        mode_rules=_mode_rules(prompt_id),
         sections=sections,
         experience_entries=[e.company for e in work_entries],
         experience_bullet_counts=[len(e.description) for e in work_entries],
         experience_positions=[e.position or e.title for e in work_entries],
         experience_tech_stacks=[e.tech_stacks or "" for e in work_entries],
+        direct_jd_bullet_budget=[
+            2 if index == 0 and len(entry.description) > 2 else 1
+            for index, entry in enumerate(work_entries)
+        ],
+        preserve_story_min=[max(1, len(e.description) - (2 if index == 0 else 1)) for index, e in enumerate(work_entries)],
         project_entries=[e.name for e in project_entries],
         project_bullet_counts=[len(e.description) for e in project_entries],
         project_tech_stacks=[e.tech_stacks or "" for e in project_entries],
+        max_changed_projects=2,
+        project_rename_allowed=False,
     )

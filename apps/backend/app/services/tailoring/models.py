@@ -480,9 +480,13 @@ class TailoringResponseContract(BaseModel):
     experience_bullet_counts: list[int] = Field(default_factory=list)
     experience_positions: list[str] = Field(default_factory=list)
     experience_tech_stacks: list[str] = Field(default_factory=list)
+    direct_jd_bullet_budget: list[int] = Field(default_factory=list)
+    preserve_story_min: list[int] = Field(default_factory=list)
     project_entries: list[str] = Field(default_factory=list)
     project_bullet_counts: list[int] = Field(default_factory=list)
     project_tech_stacks: list[str] = Field(default_factory=list)
+    max_changed_projects: int = 2
+    project_rename_allowed: bool = False
 
     def to_prompt_dict(self) -> dict[str, Any]:
         """Return compact address contract for the LLM prompt.
@@ -494,26 +498,25 @@ class TailoringResponseContract(BaseModel):
         """
         out: dict[str, Any] = {
             "mode": self.prompt_mode,
-            "rules": self.mode_rules,
             "output_keys": ["summary", "experience", "projects", "skills", "bold_keywords"],
-            "index_note": (
-                "experience and projects keys are stringified 0-based integers. "
-                "Key '0' = entries[0] in this contract, '1' = entries[1], etc. "
-                "Job titles, tech stack lines, and bullet text: use ORIGINAL RESUME / "
-                "workExperience and personalProjects only — not repeated here."
-            ),
         }
+        if self.mode_rules:
+            out["rules"] = self.mode_rules
 
         if self.experience_entries:
             out["experience"] = {
                 "entries": self.experience_entries,
                 "bullet_counts": self.experience_bullet_counts,
+                "direct_jd_bullet_budget": self.direct_jd_bullet_budget,
+                "preserve_story_min": self.preserve_story_min,
             }
 
         if self.project_entries:
             out["projects"] = {
                 "entries": self.project_entries,
                 "bullet_counts": self.project_bullet_counts,
+                "max_changed_entries": self.max_changed_projects,
+                "rename_allowed": self.project_rename_allowed,
             }
 
         return out

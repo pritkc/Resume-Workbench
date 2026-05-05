@@ -28,6 +28,7 @@ async def run_primary_tailoring(
         metadata={
             "prompt_id": prompt_context.prompt_id,
             "prompt_version": PROMPT_VERSIONS.get("tailoring_user", "unknown"),
+            "prompt_hash": prompt_context.prompt_hash,
             "job_description_chars": len(job_description),
             "structured_resume_input": prompt_context.used_structured_resume_input,
         },

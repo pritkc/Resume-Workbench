@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from hashlib import sha256
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -18,7 +19,6 @@ from app.services.tailoring.models import (
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass(frozen=True)
 class TailoringPromptContext:
     prompt_id: str
@@ -26,10 +26,25 @@ class TailoringPromptContext:
     extract_jd_intel_output_json: str
     jd_intel_blob: dict[str, Any]
     original_resume_json: str
-    retry_hint: str
+    retry_hint: str | None
+    prompt_hash: str
     system_prompt: str
     user_prompt: str
     used_structured_resume_input: bool
+
+
+def validate_prompt_canaries(
+    user_prompt: str,
+    canaries: tuple[str, ...] | None = None,
+) -> None:
+    if canaries is None:
+        return
+    missing = [canary for canary in canaries if canary not in user_prompt]
+    if missing:
+        raise RuntimeError(
+            "Tailoring prompt is missing required current-rule canaries: "
+            + ", ".join(missing)
+        )
 
 
 def assemble_tailoring_system_prompt(mode: str) -> str:
@@ -58,16 +73,9 @@ def render_tailoring_user_prompt(
     return user
 
 
-def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> str:
-    return (
-        'Output a JSON object with keys "summary", "experience", "projects", "skills", "bold_keywords". '
-        "summary: one sentence. "
-        "experience/projects: object keyed by 0-based entry index with a bullets sub-object. "
-        "skills: array of {label, values} objects. "
-        "bold_keywords: array of 8-12 short technical ATS terms, 1-3 words each. "
-        "Do not include personalInfo, sectionMeta, education, id, company, location, or dates. "
-        "Start with { and end with }."
-    )
+def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> str | None:
+    _ = response_contract
+    return None
 
 
 def _resolve_mode(prompt_id: str | None) -> str:
@@ -112,7 +120,6 @@ def build_prompt_context(
         jd_intel_blob=jd_intel_blob,
         response_contract=response_contract_json,
     )
-
     return TailoringPromptContext(
         prompt_id=selected_mode,
         response_contract_json=response_contract_json,
@@ -120,6 +127,7 @@ def build_prompt_context(
         jd_intel_blob=jd_intel_blob,
         original_resume_json=resume_input,
         retry_hint=build_tailoring_retry_hint(response_contract),
+        prompt_hash=sha256(user_prompt.encode()).hexdigest()[:12],
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         used_structured_resume_input=resume_payload is not None,

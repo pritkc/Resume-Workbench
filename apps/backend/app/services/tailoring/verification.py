@@ -16,6 +16,8 @@ from app.services.tailoring.jd_intel_blob import contains_basic_resume_term
 from app.services.tailoring.models import split_experience_bullets_for_llm_indexing
 
 _METRIC_RE = re.compile(r"\d+%|\d+x|\$\d+")
+_WORD_RE = re.compile(r"[a-z0-9]+")
+_CLAUSE_BREAK_RE = re.compile(r"\b(?:sql|python|postgresql|bigquery|java)\s+a\s+multi-day\b", re.IGNORECASE)
 
 
 def _clean_text(value: Any) -> str:
@@ -58,6 +60,88 @@ def _entry_date(entry: dict[str, Any]) -> str:
 def _experience_bullets(entry: dict[str, Any]) -> list[str]:
     _prefix, bullets = split_experience_bullets_for_llm_indexing(entry)
     return bullets
+
+
+def _tokens(value: str) -> list[str]:
+    return _WORD_RE.findall(value.casefold())
+
+
+def _ngrams(value: str, size: int = 5) -> set[str]:
+    words = _tokens(value)
+    return {" ".join(words[index:index + size]) for index in range(len(words) - size + 1)}
+
+
+def _keyword_families(job_keywords: dict[str, Any]) -> list[str]:
+    families: list[str] = []
+    seen: set[str] = set()
+    for keyword in collect_job_keywords(job_keywords):
+        if not isinstance(keyword, str):
+            continue
+        words = _tokens(keyword)
+        if not words:
+            continue
+        family = words[0]
+        if family in {"data", "analysis", "tools", "systems"} and len(words) > 1:
+            family = words[-1]
+        if len(family) < 4 or family in seen:
+            continue
+        seen.add(family)
+        families.append(family)
+    return families
+
+
+def _warn_on_jd_phrase_copy(result: dict[str, Any], job_description: str | None) -> list[str]:
+    if not job_description:
+        return []
+    result_ngrams = _ngrams(extract_resume_text(result))
+    jd_ngrams = _ngrams(job_description)
+    overlap = sorted(result_ngrams & jd_ngrams)
+    if not overlap:
+        return []
+    return [
+        "JD phrase copy detected: "
+        + "; ".join(overlap[:3])
+        + " - translate JD language into the candidate's own story"
+    ]
+
+
+def _warn_on_repeated_jd_noun_families(
+    result: dict[str, Any],
+    job_keywords: dict[str, Any],
+) -> list[str]:
+    text = extract_resume_text(result).casefold()
+    warnings: list[str] = []
+    for family in _keyword_families(job_keywords):
+        count = len(re.findall(rf"(?<![a-z0-9]){re.escape(family)}[a-z]*(?![a-z0-9])", text))
+        if count >= 4:
+            warnings.append(
+                f"Repeated JD noun family '{family}' appears {count} times; avoid JD-mirror saturation"
+            )
+    return warnings
+
+
+def _warn_on_missing_clause_punctuation(result: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    for section_key in ("workExperience", "personalProjects"):
+        entries = result.get(section_key, [])
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            bullets = (
+                _experience_bullets(entry)
+                if section_key == "workExperience"
+                else entry.get("description") or entry.get("highlights") or []
+            )
+            if not isinstance(bullets, list):
+                continue
+            for bullet_index, bullet in enumerate(bullets):
+                if isinstance(bullet, str) and _CLAUSE_BREAK_RE.search(bullet):
+                    warnings.append(
+                        f"Possible missing punctuation in {section_key}[{index}].description[{bullet_index}]"
+                    )
+    return warnings
 
 
 def _warn_on_jd_saturation(
@@ -109,6 +193,7 @@ def verify_generated_resume_result(
     job_keywords: dict[str, Any],
     *,
     prompt_id: str | None = None,
+    job_description: str | None = None,
 ) -> list[str]:
     """Run local quality checks on the primary full-resume output."""
 
@@ -185,8 +270,8 @@ def verify_generated_resume_result(
 
     if contains_basic_resume_term(extract_resume_text(result)):
         warnings.append(
-            "Basic office tools appear in final resume text; remove table-stakes "
-            "tools such as Excel, Microsoft Office, Slack, and Jira"
+            "CRITICAL: Basic office tools appear in final resume text; remove table-stakes "
+            "tools such as Excel, Microsoft Office, Slack, Jira, and Miro"
         )
 
     for change in changes:
@@ -220,6 +305,9 @@ def verify_generated_resume_result(
 
     if prompt_id == "full":
         warnings.extend(_warn_on_jd_saturation(original, result, job_keywords))
+        warnings.extend(_warn_on_jd_phrase_copy(result, job_description))
+        warnings.extend(_warn_on_repeated_jd_noun_families(result, job_keywords))
+        warnings.extend(_warn_on_missing_clause_punctuation(result))
 
         ats_keywords = collect_job_keywords(job_keywords)
         if ats_keywords:
@@ -240,4 +328,18 @@ def verify_generated_resume_result(
                     + ", ".join(missing_keywords[:8])
                 )
 
+    return warnings
+
+
+def verify_rendered_resume_text(
+    extracted_text: str,
+    *,
+    job_description: str | None = None,
+) -> list[str]:
+    """QA checks for text extracted from the final rendered PDF."""
+    pseudo_resume = {"summary": extracted_text}
+    warnings: list[str] = []
+    if contains_basic_resume_term(extracted_text):
+        warnings.append("CRITICAL: blocked low-signal term leaked into PDF text")
+    warnings.extend(_warn_on_jd_phrase_copy(pseudo_resume, job_description))
     return warnings
