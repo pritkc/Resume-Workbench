@@ -62,6 +62,8 @@
     "deleteResume": "Delete Resume",
     "downloadPdf": "Download PDF",
     "tailorResume": "Tailor for Job",
+    "llmTraceMenu": "AI generation trace",
+    "llmTraceMenuUnavailable": "No AI generation trace for this copy (duplicates and uploads have no linked trace).",
     "selectModule": "Select Module",
     "masterResume": "Active resume",
     "tailoredResume": "Tailored Resume",

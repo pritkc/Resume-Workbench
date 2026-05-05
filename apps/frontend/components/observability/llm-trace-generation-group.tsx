@@ -74,6 +74,8 @@ export function LlmTraceGenerationGroup({
           {!isSingleTraceQuery ? (
             <Link
               href={`/llm-traces?trace_id=${encodeURIComponent(traceKey)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block pt-1 text-[11px] font-medium text-blue-700 underline-offset-2 hover:underline"
             >
               Open only this generation

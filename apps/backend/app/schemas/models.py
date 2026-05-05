@@ -924,6 +924,7 @@ class ResumeSummary(BaseModel):
     target_company: str | None = None
     target_role: str | None = None
     target_location: str | None = None
+    llm_trace_id: str | None = None
 
 
 class ResumeListResponse(BaseModel):

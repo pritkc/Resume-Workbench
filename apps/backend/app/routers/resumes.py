@@ -544,6 +544,7 @@ def _resume_to_summary(
     *,
     application_packs: dict[str, dict[str, Any]],
     jobs_by_id: dict[str, dict[str, Any] | None],
+    llm_trace_id: str | None = None,
 ) -> ResumeSummary:
     application_pack = application_packs.get(resume.get("application_pack_id"))
     pack_job_id = (
@@ -596,7 +597,16 @@ def _resume_to_summary(
         target_role=target_role,
         target_company=target_company,
         target_location=target_location,
+        llm_trace_id=llm_trace_id,
     )
+
+
+def _llm_trace_id_for_resume_summary(resume_id: str) -> str | None:
+    mapped = db.map_llm_trace_ids_for_resume_ids([resume_id])
+    if not isinstance(mapped, dict):
+        return None
+    tid = mapped.get(resume_id)
+    return tid if isinstance(tid, str) and tid.strip() else None
 
 
 def _build_processed_resume(
@@ -1538,13 +1548,22 @@ async def list_resumes(include_active: bool = Query(True)) -> ResumeListResponse
     active = db.get_active_resume()
     active_resume_id = active["resume_id"] if active else None
 
+    resume_ids = [str(r["resume_id"]) for r in resumes if r.get("resume_id")]
+    trace_by_resume = db.map_llm_trace_ids_for_resume_ids(resume_ids)
+    if not isinstance(trace_by_resume, dict):
+        trace_by_resume = {}
+
     summaries: list[ResumeSummary] = []
     for resume in resumes:
+        rid = resume.get("resume_id")
+        tid_raw = trace_by_resume.get(rid) if isinstance(rid, str) else None
+        llm_tid = tid_raw if isinstance(tid_raw, str) and tid_raw.strip() else None
         summaries.append(
             _resume_to_summary(
                 resume,
                 application_packs=application_packs,
                 jobs_by_id=jobs_by_id,
+                llm_trace_id=llm_tid,
             )
         )
 
@@ -1564,10 +1583,12 @@ async def get_active_resume_endpoint() -> ResumeSummary:
         pack["pack_id"]: pack for pack in db.list_application_packs()
     }
     jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    rid = active["resume_id"]
     return _resume_to_summary(
         active,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(rid),
     )
 
 
@@ -1586,6 +1607,7 @@ async def put_active_resume(resume_id: str) -> ResumeSummary:
         updated,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(resume_id),
     )
 
 
@@ -1604,6 +1626,7 @@ async def put_resume_pin(resume_id: str, body: ResumePinRequest) -> ResumeSummar
         updated,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(resume_id),
     )
 
 
@@ -1619,14 +1642,13 @@ async def post_duplicate_resume(resume_id: str) -> ResumeSummary:
         pack["pack_id"]: pack for pack in db.list_application_packs()
     }
     jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    new_id = created["resume_id"]
     return _resume_to_summary(
         updated,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(new_id),
     )
-
-
-@router.post("/improve/preview", response_model=ImproveResumeResponse)
 async def improve_resume_preview_endpoint(
     request: ImproveResumeRequest,
 ) -> ImproveResumeResponse:

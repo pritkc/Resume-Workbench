@@ -124,7 +124,15 @@ type ResumeRowActionsProps = {
   onSetActive: () => void;
   onPin: () => void;
   onDuplicate: () => void;
-  labels: { setActive: string; pin: string; unpin: string; duplicate: string; tailor: string };
+  labels: {
+    setActive: string;
+    pin: string;
+    unpin: string;
+    duplicate: string;
+    tailor: string;
+    llmTrace: string;
+    llmTraceUnavailable: string;
+  };
 };
 
 function ResumeRowActions({
@@ -177,7 +185,7 @@ function ResumeRowActions({
           <MoreVertical className="h-3.5 w-3.5" />
         </Button>
         {menuOpen ? (
-          <div className="absolute right-0 top-full z-30 mt-0.5 min-w-[148px] border border-black bg-white py-0.5 shadow-[2px_2px_0_0_rgba(0,0,0,0.12)]">
+          <div className="absolute right-0 top-full z-30 mt-0.5 min-w-[168px] border border-black bg-white py-0.5 shadow-[2px_2px_0_0_rgba(0,0,0,0.12)]">
             <button
               type="button"
               className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1] disabled:opacity-40"
@@ -209,6 +217,25 @@ function ResumeRowActions({
             >
               {labels.duplicate}
             </button>
+            {resume.llm_trace_id ? (
+              <Link
+                href={`/llm-traces?trace_id=${encodeURIComponent(resume.llm_trace_id)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1]"
+                onClick={() => setMenuOpen(false)}
+              >
+                {labels.llmTrace}
+              </Link>
+            ) : (
+              <span
+                className="block w-full cursor-not-allowed px-2.5 py-1 text-left text-[11px] font-mono text-gray-400"
+                title={labels.llmTraceUnavailable}
+                aria-disabled="true"
+              >
+                {labels.llmTrace}
+              </span>
+            )}
           </div>
         ) : null}
       </div>
@@ -251,6 +278,8 @@ export default function DashboardPage() {
       unpin: t('dashboard.unpinAction'),
       duplicate: t('dashboard.duplicateResume'),
       tailor: t('dashboard.tailorResume'),
+      llmTrace: t('dashboard.llmTraceMenu'),
+      llmTraceUnavailable: t('dashboard.llmTraceMenuUnavailable'),
     }),
     [t]
   );

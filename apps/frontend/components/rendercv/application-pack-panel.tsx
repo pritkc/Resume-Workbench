@@ -106,6 +106,8 @@ export function ApplicationPackPanel({
               href={`/llm-traces?trace_id=${encodeURIComponent(traceId)}&request_scope=${encodeURIComponent(
                 'resumes.improve_preview'
               )}`}
+              target="_blank"
+              rel="noopener noreferrer"
             >
               <Button variant="outline" size="sm">
                 Open Trace Viewer

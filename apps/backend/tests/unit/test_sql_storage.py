@@ -191,3 +191,62 @@ def test_duplicate_resume_copies_content_and_clears_lineage(tmp_path: Path) -> N
         assert dup["is_active"] is False
         assert dup["processed_data"] == {"summary": "S"}
         assert dup["title"] == "Engineer (copy)"
+
+
+def test_map_llm_trace_ids_from_generation_run_payload(tmp_path: Path) -> None:
+    with create_test_database(tmp_path) as database:
+        master = database.create_resume(content="# M", is_active=True)
+        tailored = database.create_resume(
+            content="{}",
+            content_type="json",
+            parent_id=master["resume_id"],
+            is_active=False,
+        )
+        job = database.create_job(content="JD", resume_id=master["resume_id"])
+        preview = database.create_generation_run(
+            run_kind="application_pack_preview",
+            status="completed",
+            source_resume_id=master["resume_id"],
+            tailored_resume_id=tailored["resume_id"],
+            job_id=job["job_id"],
+            request_payload={"llm_trace_id": "trace-preview-xyz"},
+        )
+        database.create_generation_run(
+            run_kind="application_pack_confirm",
+            status="completed",
+            source_resume_id=master["resume_id"],
+            tailored_resume_id=tailored["resume_id"],
+            job_id=job["job_id"],
+            request_payload={
+                "preview_generation_run_id": preview["generation_run_id"],
+                "llm_trace_id": "trace-confirm-other",
+            },
+        )
+        assert database.map_llm_trace_ids_for_resume_ids([tailored["resume_id"]]) == {
+            tailored["resume_id"]: "trace-preview-xyz"
+        }
+        assert database.map_llm_trace_ids_for_resume_ids([master["resume_id"]]) == {}
+
+
+def test_map_llm_trace_ids_fallback_when_no_preview_link(tmp_path: Path) -> None:
+    """Confirm-only runs without ``preview_generation_run_id`` still expose their trace."""
+    with create_test_database(tmp_path) as database:
+        master = database.create_resume(content="# M", is_active=True)
+        tailored = database.create_resume(
+            content="{}",
+            content_type="json",
+            parent_id=master["resume_id"],
+            is_active=False,
+        )
+        job = database.create_job(content="JD", resume_id=master["resume_id"])
+        database.create_generation_run(
+            run_kind="application_pack_confirm",
+            status="completed",
+            source_resume_id=master["resume_id"],
+            tailored_resume_id=tailored["resume_id"],
+            job_id=job["job_id"],
+            request_payload={"llm_trace_id": "trace-legacy-only"},
+        )
+        assert database.map_llm_trace_ids_for_resume_ids([tailored["resume_id"]]) == {
+            tailored["resume_id"]: "trace-legacy-only"
+        }

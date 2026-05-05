@@ -112,3 +112,68 @@ def get_latest_improvement_for_tailored_resume(
 
 def count_generation_runs(session: Session) -> int:
     return len(list(session.scalars(select(GenerationRun.id))))
+
+
+def map_llm_trace_ids_for_tailored_resume_ids(
+    session: Session, resume_ids: list[str]
+) -> dict[str, str]:
+    """For each resume_id, resolve ``llm_trace_id`` from the newest relevant generation run.
+
+    Runs are scanned newest-first; first assignment per ``tailored_resume_id`` wins.
+
+    Application-pack **confirm** runs often carry a confirm-only trace while heavy LLM work is
+    attributed to the linked **preview** run (``preview_generation_run_id``). When that field is
+    set, this resolver prefers ``llm_trace_id`` from the preview run's payload; otherwise it uses
+    the current run's payload ``llm_trace_id``.
+    """
+    if not resume_ids:
+        return {}
+    statement = (
+        select(GenerationRun)
+        .where(GenerationRun.tailored_resume_id.in_(resume_ids))
+        .order_by(GenerationRun.created_at.desc())
+    )
+    records = list(session.scalars(statement))
+
+    preview_run_ids: set[str] = set()
+    for record in records:
+        payload = record.request_payload
+        if not isinstance(payload, dict):
+            continue
+        pgid = payload.get("preview_generation_run_id")
+        if isinstance(pgid, str) and (s := pgid.strip()):
+            preview_run_ids.add(s)
+
+    trace_by_preview_run_id: dict[str, str] = {}
+    if preview_run_ids:
+        preview_rows = list(
+            session.scalars(
+                select(GenerationRun).where(GenerationRun.generation_run_id.in_(preview_run_ids))
+            )
+        )
+        for prev in preview_rows:
+            pl = prev.request_payload
+            if isinstance(pl, dict):
+                t = pl.get("llm_trace_id")
+                if isinstance(t, str) and t.strip():
+                    trace_by_preview_run_id[prev.generation_run_id] = t.strip()
+
+    out: dict[str, str] = {}
+    for record in records:
+        rid = record.tailored_resume_id
+        if not rid or rid in out:
+            continue
+        payload = record.request_payload
+        if not isinstance(payload, dict):
+            continue
+        tid: str | None = None
+        pgid = payload.get("preview_generation_run_id")
+        if isinstance(pgid, str) and (s := pgid.strip()):
+            tid = trace_by_preview_run_id.get(s)
+        if not tid:
+            raw = payload.get("llm_trace_id")
+            if isinstance(raw, str) and raw.strip():
+                tid = raw.strip()
+        if tid:
+            out[rid] = tid
+    return out

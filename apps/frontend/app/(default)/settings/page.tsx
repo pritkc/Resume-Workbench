@@ -1429,7 +1429,12 @@ export default function SettingsPage() {
                 </h2>
               </div>
               <div className="entry-card-editor flex flex-wrap gap-1">
-                <Link href="/llm-traces" className="min-w-0 flex-1 sm:flex-none">
+                <Link
+                  href="/llm-traces"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 flex-1 sm:flex-none"
+                >
                   <Button
                     variant="builderOutline"
                     size="xs"
@@ -1440,7 +1445,12 @@ export default function SettingsPage() {
                     Traces
                   </Button>
                 </Link>
-                <Link href="/run-timing" className="min-w-0 flex-1 sm:flex-none">
+                <Link
+                  href="/run-timing"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 flex-1 sm:flex-none"
+                >
                   <Button
                     variant="builderOutline"
                     size="xs"

@@ -395,6 +395,8 @@ export interface ResumeListItem {
   target_company?: string | null;
   target_role?: string | null;
   target_location?: string | null;
+  /** Present when this resume was saved from an application-pack confirm run with LLM tracing. */
+  llm_trace_id?: string | null;
   // Legacy metadata keys from older payloads/backfills.
   company?: string | null;
   role?: string | null;

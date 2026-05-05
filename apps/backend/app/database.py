@@ -575,6 +575,15 @@ class Database:
             )
             return [_serialize_generation_run(record) for record in records]
 
+    def map_llm_trace_ids_for_resume_ids(self, resume_ids: list[str]) -> dict[str, str]:
+        """Resolve ``llm_trace_id`` from generation runs keyed by ``tailored_resume_id``."""
+        if not resume_ids:
+            return {}
+        with self._session() as session:
+            return generation_run_repo.map_llm_trace_ids_for_tailored_resume_ids(
+                session, resume_ids
+            )
+
     def get_latest_generation_run(
         self,
         *,
