@@ -38,6 +38,35 @@ def test_render_user_prompt_fills_slots() -> None:
     assert "OUTPUT FORMAT:" in text
 
 
+def test_render_user_prompt_injects_custom_instructions_before_full_run_rules() -> None:
+    text = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+        custom_prompt_instructions="Prioritize fintech platform experience.",
+    )
+
+    assert "CUSTOM HIGH-PRIORITY INSTRUCTIONS" in text
+    assert "override all other tailoring instructions for this run" in text
+    assert "Prioritize fintech platform experience." in text
+    assert text.index("Prioritize fintech platform experience.") < text.index(
+        "EDITORIAL SEQUENCE"
+    )
+
+
+def test_render_user_prompt_omits_custom_instruction_section_when_blank() -> None:
+    text = render_tailoring_user_prompt(
+        mode_id="lite",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+        custom_prompt_instructions="   ",
+    )
+
+    assert "CUSTOM HIGH-PRIORITY INSTRUCTIONS" not in text
+
+
 def test_tailoring_response_contract_extensions() -> None:
     c = TailoringResponseContract(prompt_mode="full", extensions={"future": True})
     assert c.extensions.get("future") is True

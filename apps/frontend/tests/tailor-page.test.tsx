@@ -231,15 +231,23 @@ describe('TailorPage', () => {
           'Senior backend role focused on FastAPI, architecture, APIs, testing, metrics, and ATS alignment for one-page resume tailoring.',
       },
     });
+    fireEvent.change(screen.getByPlaceholderText('tailor.customInstructionsPlaceholder'), {
+      target: {
+        value: '  Prioritize fintech platform experience and do not add Kubernetes claims.  ',
+      },
+    });
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'tailor.generateTailored' })).not.toBeDisabled()
+      expect(screen.getByDisplayValue('Test (Active)')).toHaveValue('master-123')
     );
+    const generateButton = screen.getByRole('button', { name: 'tailor.generateTailored' });
+    await waitFor(() => expect(generateButton).toBeEnabled());
 
-    fireEvent.click(screen.getByRole('button', { name: 'tailor.generateTailored' }));
+    fireEvent.click(generateButton);
 
+    await waitFor(() => expect(previewImproveResume).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('tailor.diffModal.title')).toBeInTheDocument();
-    expect(screen.getAllByAltText('preview.png').length).toBeGreaterThan(0);
+    expect(screen.getByText('Preview Snapshot')).toBeInTheDocument();
     expect(updateGenerationDefaults).toHaveBeenCalledWith({
       prompt_id: 'full',
     });
@@ -248,6 +256,8 @@ describe('TailorPage', () => {
       'job-123',
       expect.objectContaining({
         promptId: 'full',
+        customPromptInstructions:
+          'Prioritize fintech platform experience and do not add Kubernetes claims.',
         includeCoverLetter: false,
         includeOutreachMessage: false,
       })

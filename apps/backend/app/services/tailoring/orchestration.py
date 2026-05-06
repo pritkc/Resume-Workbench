@@ -71,6 +71,7 @@ async def generate_tailored_resume(
     prompt_id: str | None = None,
     original_resume_data: dict[str, Any] | None = None,
     cleanup_source_data: dict[str, Any] | None = None,
+    custom_prompt_instructions: str | None = None,
 ) -> TailoringResult:
     """Run the primary tailoring prompt and return the full locally restored resume."""
 
@@ -91,6 +92,7 @@ async def generate_tailored_resume(
         resume_payload=prompt_resume_data,
         original_resume_markdown=original_resume,
         original_resume_data=original_resume_data,
+        custom_prompt_instructions=custom_prompt_instructions,
     )
     result = await run_primary_tailoring(
         prompt_context,
@@ -261,5 +263,6 @@ async def improve_resume(
         prompt_id=prompt_id,
         original_resume_data=original_resume_data,
         cleanup_source_data=original_resume_data,
+        custom_prompt_instructions=None,
     )
     return result.resume_data

@@ -1166,9 +1166,20 @@ class ImproveResumeRequest(BaseModel):
     resume_id: str
     job_id: str
     prompt_id: str | None = None
+    custom_prompt_instructions: str | None = Field(default=None, max_length=4000)
     include_cover_letter: bool | None = None
     include_outreach_message: bool | None = None
     theme_settings: RenderThemeSettings | None = None
+
+    @field_validator("custom_prompt_instructions", mode="before")
+    @classmethod
+    def normalize_custom_prompt_instructions(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        return stripped or None
 
 
 class ImprovementSuggestion(BaseModel):

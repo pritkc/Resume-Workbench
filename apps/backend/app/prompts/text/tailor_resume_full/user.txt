@@ -1,3 +1,5 @@
+$custom_prompt_instructions
+
 EDITORIAL SEQUENCE (work in this order):
 1. CAREER STORY — preserve the candidate's base resume narrative first. The JD is a subset lens, not the resume's identity.
 2. BULLETS — rewrite only the bullets needed for fit; keep at least half of each role's original stories intact or lightly polished.

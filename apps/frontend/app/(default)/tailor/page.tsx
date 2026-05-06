@@ -183,6 +183,7 @@ function appendFrontendPipelineTiming(
 function TailorPageContent() {
   const { t } = useTranslations();
   const [jobDescription, setJobDescription] = useState('');
+  const [customPromptInstructions, setCustomPromptInstructions] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sourceResumeId, setSourceResumeId] = useState<string | null>(null);
@@ -446,6 +447,7 @@ function TailorPageContent() {
       previewRequestStartedAt = new Date().toISOString();
       const result = await previewImproveResume(resumeId, jobId, {
         promptId: selectedPromptId,
+        customPromptInstructions: customPromptInstructions.trim() || null,
         includeCoverLetter: false,
         includeOutreachMessage: false,
         signal: generationAbortRef.current?.signal,
@@ -669,9 +671,6 @@ function TailorPageContent() {
             <h1 className="font-serif text-2xl font-bold uppercase tracking-tight">
               {t('tailor.heroTitle')}
             </h1>
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">
-              {t('tailor.pasteJobDescriptionBelow')}
-            </p>
           </div>
           <div className="rounded-none border border-black bg-white px-2.5 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
             {promptLoading ? t('common.loading') : selectedPromptId}
@@ -706,7 +705,7 @@ function TailorPageContent() {
         <div className="space-y-4 p-4">
           <div className="border border-black bg-[#F8F7F1] p-3">
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
-              Source resume
+              {t('tailor.selectResume')}
             </p>
             <select
               className="mt-2 h-10 w-full border border-black bg-white px-3 font-mono text-sm"
@@ -730,7 +729,7 @@ function TailorPageContent() {
             <div className="border border-black bg-[#F0F0E8] p-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
-                  Job Description
+                  {t('tailor.pasteJobDescription')}
                 </p>
                 <span className="font-mono text-[11px] text-gray-400">
                   {t('tailor.charactersCount', { count: jobDescription.length })}
@@ -775,9 +774,27 @@ function TailorPageContent() {
                     setSelectedPromptId(value);
                   }}
                   label={t('tailor.promptLabel')}
-                  description={t('tailor.promptDescription')}
                   disabled={isLoading || promptLoading}
                   density="compact"
+                />
+              </div>
+
+              <div className="border border-black bg-[#F8F7F1] p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
+                    {t('tailor.customInstructionsLabel')}
+                  </p>
+                  <span className="font-mono text-[11px] text-gray-400">
+                    {t('tailor.charactersCount', { count: customPromptInstructions.length })}
+                  </span>
+                </div>
+                <Textarea
+                  placeholder={t('tailor.customInstructionsPlaceholder')}
+                  className="min-h-[220px] border border-black bg-white font-mono text-xs focus:ring-0 focus:border-blue-700 resize-none rounded-none"
+                  value={customPromptInstructions}
+                  onChange={(e) => setCustomPromptInstructions(e.target.value)}
+                  onKeyDown={handleTextareaKeyDown}
+                  disabled={isLoading}
                 />
               </div>
 

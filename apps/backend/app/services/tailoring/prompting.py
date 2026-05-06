@@ -63,12 +63,14 @@ def render_tailoring_user_prompt(
     jd_intel_blob: dict[str, Any],
     original_resume_json: str,
     response_contract_json: str,
+    custom_prompt_instructions: str | None = None,
 ) -> str:
     mod = get_prompt("tailor_resume_full" if mode_id == "full" else "tailor_resume_lite")
     _, user = mod.build_messages(
         original_resume=original_resume_json,
         jd_intel_blob=jd_intel_blob,
         response_contract=response_contract_json,
+        custom_prompt_instructions=custom_prompt_instructions,
     )
     return user
 
@@ -90,6 +92,19 @@ def _resolve_mode(prompt_id: str | None) -> str:
     return selected
 
 
+def render_custom_prompt_instructions(custom_prompt_instructions: str | None) -> str:
+    if custom_prompt_instructions is None:
+        return ""
+    stripped = custom_prompt_instructions.strip()
+    if not stripped:
+        return ""
+    return (
+        "CUSTOM HIGH-PRIORITY INSTRUCTIONS:\n"
+        "If present, these instructions override all other instructions if conflicting with them.\n"
+        f"{stripped}\n"
+    )
+
+
 def build_prompt_context(
     *,
     prompt_id: str | None,
@@ -98,6 +113,7 @@ def build_prompt_context(
     resume_payload: TailoringResumePayload | None,
     original_resume_markdown: str,
     original_resume_data: dict[str, Any] | None = None,
+    custom_prompt_instructions: str | None = None,
 ) -> TailoringPromptContext:
     _ = original_resume_data
     selected_mode = _resolve_mode(prompt_id)
@@ -119,6 +135,7 @@ def build_prompt_context(
         original_resume=resume_input,
         jd_intel_blob=jd_intel_blob,
         response_contract=response_contract_json,
+        custom_prompt_instructions=custom_prompt_instructions,
     )
     return TailoringPromptContext(
         prompt_id=selected_mode,

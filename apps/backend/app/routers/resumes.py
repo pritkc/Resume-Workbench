@@ -1043,6 +1043,7 @@ async def _generate_tailored_resume_data(
     job: dict[str, Any],
     job_keywords: dict[str, Any],
     prompt_id: str,
+    custom_prompt_instructions: str | None = None,
     stage_state: dict[str, str] | None = None,
 ) -> Any:
     """Generate tailored resume data through the primary full-resume prompt."""
@@ -1056,6 +1057,7 @@ async def _generate_tailored_resume_data(
         prompt_id=prompt_id,
         original_resume_data=original_resume_data,
         cleanup_source_data=cleanup_source_data,
+        custom_prompt_instructions=custom_prompt_instructions,
     )
     return tailoring_result
 
@@ -1757,6 +1759,7 @@ async def _improve_preview_flow(
             job=job,
             job_keywords=job_keywords,
             prompt_id=prompt_id,
+            custom_prompt_instructions=request.custom_prompt_instructions,
             stage_state=stage_state,
         )
     improved_data = tailoring_result.resume_data
@@ -2323,6 +2326,7 @@ async def improve_resume_endpoint(
                 job=job,
                 job_keywords=job_keywords,
                 prompt_id=prompt_id,
+                custom_prompt_instructions=request.custom_prompt_instructions,
                 stage_state=stage_state,
             )
             improved_data = tailoring_result.resume_data

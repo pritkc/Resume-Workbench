@@ -598,13 +598,16 @@
   "tailor": {
     "title": "Tailor Resume",
     "subtitle": "Optimize your resume for a specific job",
-    "heroTitle": "Tailor Your Resume",
-    "selectResume": "Select Resume",
-    "pasteJobDescription": "Paste Job Description",
-    "pasteJobDescriptionBelow": "Paste Job Description Below",
+    "heroTitle": "Tailor resume",
+    "selectResume": "Resume",
+    "pasteJobDescription": "Job description",
+    "pasteJobDescriptionBelow": "Job description",
     "jobDescriptionPlaceholder": "Paste the job description here...",
-    "promptLabel": "Tailoring intensity",
-    "promptDescription": "Choose how strongly to align your resume to the job description.",
+    "promptLabel": "Prompt",
+    "promptDescription": "",
+    "customInstructionsLabel": "JD override",
+    "customInstructionsPlaceholder": "Optional: add instructions for this job only, such as claims to avoid, sections to emphasize, or tone requirements.",
+    "customInstructionsDescription": "",
     "promptOptions": {
       "full": {
         "label": "Full tailor",

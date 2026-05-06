@@ -29,6 +29,7 @@ USER_TEMPLATE = read_shipped_txt("tailor_resume_lite/user.txt")
 DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
+    "custom_prompt_instructions": "Optional high-priority per-run instructions from the tailor page",
     "original_resume": "Structured resume JSON or markdown",
     "response_contract": "Allowed response shape for this resume",
     "resume_diff_rules": "Shared compact JSON output schema (resume_diff; DB override supported)",
@@ -47,9 +48,11 @@ def build_messages(
     original_resume: str,
     jd_intel_blob: dict[str, Any],
     response_contract: str,
+    custom_prompt_instructions: str | None = None,
 ) -> tuple[str, str]:
     from app.prompts import load_override, load_shared_rules_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
+    from app.services.tailoring.prompting import render_custom_prompt_instructions
 
     diff = (
         load_override(STEP_NAME, "rules")
@@ -63,6 +66,9 @@ def build_messages(
         return comp["system"], render_user_template(
             comp["user"],
             jd_intel_blob=jd_intel_blob,
+            custom_prompt_instructions=render_custom_prompt_instructions(
+                custom_prompt_instructions
+            ),
             original_resume=original_resume,
             response_contract=response_contract,
             resume_diff_rules=resume_diff_rules,
@@ -73,6 +79,9 @@ def build_messages(
     user = render_user_template(
         USER_TEMPLATE,
         jd_intel_blob=jd_intel_blob,
+        custom_prompt_instructions=render_custom_prompt_instructions(
+            custom_prompt_instructions
+        ),
         original_resume=original_resume,
         response_contract=response_contract,
         resume_diff_rules=resume_diff_rules,

@@ -1,3 +1,5 @@
+$custom_prompt_instructions
+
 Tailor this resume with conservative edits (keep job titles and overall structure).
 
 REWRITING EXAMPLE:

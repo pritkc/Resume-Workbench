@@ -35,6 +35,7 @@ def test_full_user_message_matches_module() -> None:
     old = render_user_template(
         TAILORING_USER_SHELL_FULL,
         jd_intel_blob={},
+        custom_prompt_instructions="",
         original_resume="{}",
         response_contract="{}",
         resume_diff_rules=RESUME_DIFF_RULES.strip(),
@@ -52,6 +53,7 @@ def test_lite_user_message_matches_module() -> None:
     old = render_user_template(
         TAILORING_USER_SHELL_LITE,
         jd_intel_blob={},
+        custom_prompt_instructions="",
         original_resume="{}",
         response_contract="{}",
         resume_diff_rules=RESUME_DIFF_RULES.strip(),

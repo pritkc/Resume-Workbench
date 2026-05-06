@@ -455,7 +455,7 @@ export async function improveResume(
   resumeId: string,
   jobId: string,
   promptId?: string,
-  options: { signal?: AbortSignal } = {}
+  options: { customPromptInstructions?: string | null; signal?: AbortSignal } = {}
 ): Promise<ImprovedResult> {
   return postImprove(
     '/resumes/improve',
@@ -463,6 +463,7 @@ export async function improveResume(
       resume_id: resumeId,
       job_id: jobId,
       prompt_id: promptId ?? null,
+      custom_prompt_instructions: options.customPromptInstructions?.trim() || null,
     },
     options.signal
   );
@@ -474,6 +475,7 @@ export async function previewImproveResume(
   jobId: string,
   options: {
     promptId?: string;
+    customPromptInstructions?: string | null;
     includeCoverLetter?: boolean;
     includeOutreachMessage?: boolean;
     themeSettings?: RenderThemeSettings | null;
@@ -486,6 +488,7 @@ export async function previewImproveResume(
       resume_id: resumeId,
       job_id: jobId,
       prompt_id: options.promptId ?? null,
+      custom_prompt_instructions: options.customPromptInstructions?.trim() || null,
       include_cover_letter: options.includeCoverLetter ?? null,
       include_outreach_message: options.includeOutreachMessage ?? null,
       theme_settings: options.themeSettings
