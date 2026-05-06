@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import re
-from typing import Any
+from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -35,6 +35,12 @@ _MARKDOWN_LINK_INLINE_RE = re.compile(r"(?<!\\)\[(?P<label>(?:\\.|[^\]])+)\]\((?
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _FA_CLASS_TOKEN_RE = re.compile(r"\s+")
 _BOLD_BOUNDARY_CLASS = r"A-Za-z0-9"
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+SummaryAlignment = Literal["left", "center", "justify"]
+
+_SUMMARY_ALIGN_WRAPPER_RE = re.compile(
+    r'^<div data-summary-align="(?P<alignment>left|center|justify)">(?P<body>[\s\S]*)</div>$'
+)
 _KNOWN_SECTION_KEYS = {
     "summary",
     "experience",
@@ -114,6 +120,27 @@ def _clean_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _clean_summary_text(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    wrapper = _SUMMARY_ALIGN_WRAPPER_RE.match(cleaned)
+    if wrapper:
+        cleaned = wrapper.group("body").strip()
+    cleaned = re.sub(r"\s+", " ", _HTML_TAG_RE.sub("", cleaned)).strip()
+    return cleaned or None
+
+
+def summary_alignment_for_rendering(value: str | None) -> SummaryAlignment | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    wrapper = _SUMMARY_ALIGN_WRAPPER_RE.match(cleaned)
+    if not wrapper:
+        return None
+    return cast(SummaryAlignment, wrapper.group("alignment"))
 
 
 def _extract_social_username(value: str | None) -> str | None:
@@ -355,7 +382,7 @@ def _normalize_phone_number(value: str | None) -> str | None:
 
 
 def _summary_section(summary: str | None) -> list[str] | None:
-    cleaned = _clean_text(summary)
+    cleaned = _clean_summary_text(summary)
     return [cleaned] if cleaned else None
 
 

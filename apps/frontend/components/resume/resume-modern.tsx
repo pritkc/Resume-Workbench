@@ -22,6 +22,7 @@ import {
 } from '@/lib/utils/rendercv-fields';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
+import { SummaryHtml } from './summary-html';
 import baseStyles from './styles/_base.module.css';
 import styles from './styles/modern.module.css';
 
@@ -124,7 +125,7 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
             {showSummaryHeading ? (
               <h3 className={styles['section-title-accent']}>{section.displayName}</h3>
             ) : null}
-            <p className={`text-justify ${baseStyles['resume-text']}`}>{summary}</p>
+            <SummaryHtml summary={summary} className={baseStyles['resume-text']} />
           </div>
         );
 

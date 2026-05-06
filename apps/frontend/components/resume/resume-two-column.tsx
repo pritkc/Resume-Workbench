@@ -23,6 +23,7 @@ import {
 import { DynamicResumeSection } from './dynamic-resume-section';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
+import { SummaryHtml } from './summary-html';
 import baseStyles from './styles/_base.module.css';
 import styles from './styles/swiss-two-column.module.css';
 
@@ -212,7 +213,7 @@ export const ResumeTwoColumn: React.FC<ResumeTwoColumnProps> = ({
                   {getSectionDisplayName('summary', headingFallbacks.summary)}
                 </h3>
               ) : null}
-              <p className={`text-justify ${baseStyles['resume-text-sm']}`}>{summary}</p>
+              <SummaryHtml summary={summary} className={baseStyles['resume-text-sm']} />
             </div>
           )}
 

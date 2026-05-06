@@ -7,6 +7,7 @@ import {
   getAdditionalGroupsWithContent,
   getAdditionalGroupDisplayLabel,
 } from '@/lib/utils/additional-groups';
+import { summaryPlainText } from '@/lib/utils/summary-format';
 import {
   getEducationCredential,
   getEducationDate,
@@ -57,7 +58,7 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
         {/* Summary */}
         {resumeData.summary && (
           <Section title={t('resume.sections.summary')} icon={<FileUser className="w-4 h-4" />}>
-            <HighlightedText text={resumeData.summary} keywords={keywords} />
+            <HighlightedText text={summaryPlainText(resumeData.summary)} keywords={keywords} />
           </Section>
         )}
 

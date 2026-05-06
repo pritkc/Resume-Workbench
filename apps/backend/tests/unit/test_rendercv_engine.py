@@ -306,6 +306,38 @@ def test_rendercv_engine_controls_summary_section_and_heading_in_typst(
     assert "== Summary" not in hidden_section_typst
 
 
+def test_rendercv_engine_applies_summary_alignment_to_typst(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    resume = {
+        "personalInfo": {"name": "Test User", "email": "test@example.com"},
+        "summary": (
+            '<div data-summary-align="center">'
+            "<strong>Centered summary</strong> content for preview."
+            "</div>"
+        ),
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+
+    bundle = render_resume_bundle(
+        resume,
+        RenderThemeSettings(theme_id="classic"),
+        identifier="summary_alignment_center",
+    )
+
+    typst = bundle.typst_path.read_text(encoding="utf-8")
+    assert "Centered summary content for preview." in typst
+    assert "#set align(center)" in typst
+    assert "#set par(justify: false)" in typst
+    assert "data-summary-align" not in typst
+
+
 def test_rendercv_engine_is_deterministic_for_same_input(
     sample_resume: dict,
     tmp_path: Path,

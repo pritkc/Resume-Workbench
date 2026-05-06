@@ -25,7 +25,10 @@ from rendercv.renderer.typst import generate_typst
 from rendercv.schema.rendercv_model_builder import build_rendercv_dictionary_and_model
 
 from app.config import settings
-from app.rendering.rendercv_adapter import resume_to_rendercv_payload
+from app.rendering.rendercv_adapter import (
+    resume_to_rendercv_payload,
+    summary_alignment_for_rendering,
+)
 from app.rendering.theme_profiles import RenderThemeSettings
 
 logger = logging.getLogger(__name__)
@@ -39,6 +42,9 @@ _PREVIEW_RENDERCV_IMPORT_RE = re.compile(
 )
 _PAGE_SIZE_LINE_RE = re.compile(r"^(\s*)(page-size:\s*\"[^\"]+\",)\s*$", re.MULTILINE)
 _SUMMARY_HEADING_RE = re.compile(r"(?im)^==\s+summary[:\s]*\r?\n(?:\r?\n)?")
+_SUMMARY_SECTION_RE = re.compile(
+    r"(?ims)(?P<prefix>^==\s+summary[:\s]*\r?\n(?:\r?\n)?)(?P<body>.*?)(?=\r?\n==\s+|\Z)"
+)
 _TYPST_DIMENSION_RE = re.compile(r"^\d+(?:\.\d+)?(?:cm|mm|in|pt|em|ex)$")
 
 
@@ -196,6 +202,46 @@ def _strip_summary_heading_from_typst(typst_path: Path, *, heading_gap: str) -> 
         typst_path.write_text(updated, encoding="utf-8")
 
 
+def _summary_alignment_block(body: str, alignment: str) -> str:
+    cleaned_body = body.strip()
+    if not cleaned_body:
+        return body
+
+    align_value = "center" if alignment == "center" else "left"
+    justify_value = "true" if alignment == "justify" else "false"
+    indented_body = "\n".join(
+        f"  {line}" if line else "" for line in cleaned_body.splitlines()
+    )
+    return (
+        "#block(width: 100%)[\n"
+        f"  #set align({align_value})\n"
+        f"  #set par(justify: {justify_value})\n"
+        f"{indented_body}\n"
+        "]\n"
+    )
+
+
+def _apply_summary_alignment_to_typst(
+    typst_path: Path, *, alignment: str | None
+) -> None:
+    if alignment not in {"left", "center", "justify"}:
+        return
+    try:
+        original = typst_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+
+    def replace(match: re.Match[str]) -> str:
+        return (
+            match.group("prefix")
+            + _summary_alignment_block(match.group("body"), alignment)
+        )
+
+    updated = _SUMMARY_SECTION_RE.sub(replace, original, count=1)
+    if updated != original:
+        typst_path.write_text(updated, encoding="utf-8")
+
+
 def render_resume_bundle(
     resume_data: dict[str, Any],
     theme_settings: RenderThemeSettings,
@@ -209,6 +255,7 @@ def render_resume_bundle(
     _reset_rendercv_typst_caches()
 
     payload = resume_to_rendercv_payload(resume_data, theme_settings)
+    summary_alignment = summary_alignment_for_rendering(resume_data.get("summary"))
     yaml_path = work_dir / f"{bundle_id}.yaml"
     typst_path = work_dir / f"{bundle_id}.typ"
     pdf_path = work_dir / f"{bundle_id}.pdf"
@@ -230,6 +277,11 @@ def render_resume_bundle(
             html_path=str(html_path),
         )
         generated_typst = generate_typst(model)
+        if generated_typst is not None:
+            _apply_summary_alignment_to_typst(
+                generated_typst,
+                alignment=summary_alignment,
+            )
         if generated_typst is not None and not _show_summary_heading(theme_settings):
             _strip_summary_heading_from_typst(
                 generated_typst,

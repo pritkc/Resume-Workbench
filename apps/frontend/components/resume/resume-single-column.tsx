@@ -23,6 +23,7 @@ import {
 import { DynamicResumeSection } from './dynamic-resume-section';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
+import { SummaryHtml } from './summary-html';
 import baseStyles from './styles/_base.module.css';
 import styles from './styles/swiss-single.module.css';
 
@@ -124,7 +125,7 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
             {showSummaryHeading ? (
               <h3 className={baseStyles['resume-section-title']}>{section.displayName}</h3>
             ) : null}
-            <p className={`text-justify ${baseStyles['resume-text']}`}>{summary}</p>
+            <SummaryHtml summary={summary} className={baseStyles['resume-text']} />
           </div>
         );
 

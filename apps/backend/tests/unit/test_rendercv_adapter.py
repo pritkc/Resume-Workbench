@@ -7,6 +7,7 @@ from app.rendering.rendercv_adapter import (
     parse_rendercv_yaml_sections,
     rendercv_payload_to_yaml_sections,
     resume_to_rendercv_payload,
+    summary_alignment_for_rendering,
 )
 from app.rendering.theme_profiles import RenderThemeSettings
 from app.schemas import ResumeData, normalize_resume_data
@@ -252,6 +253,24 @@ def test_rendercv_adapter_keeps_summary_content_and_strips_summary_heading_runti
 
     assert payload["cv"]["sections"]["summary"] == ["Platform engineer focused on reliability."]
     assert "show_summary_heading" not in payload.get("settings", {})
+
+
+def test_rendercv_adapter_strips_browser_only_summary_formatting(
+    sample_resume_copy: dict,
+) -> None:
+    sample_resume_copy["summary"] = (
+        '<div data-summary-align="center"><strong>Platform engineer</strong> focused on reliability.</div>'
+    )
+
+    payload = resume_to_rendercv_payload(
+        sample_resume_copy,
+        RenderThemeSettings(theme_id="classic"),
+    )
+
+    assert payload["cv"]["sections"]["summary"] == [
+        "Platform engineer focused on reliability."
+    ]
+    assert summary_alignment_for_rendering(sample_resume_copy["summary"]) == "center"
 
 
 def test_rendercv_adapter_honors_summary_section_visibility_from_section_meta(
