@@ -1,9 +1,14 @@
+import copy
+
+from app.schemas import ResumeChange
 from app.services.tailoring.change_manifest import (
     build_change_manifest,
     build_stage_breakdown,
+    enrich_change_manifest_with_tailored_cells,
+    supplement_change_manifest_with_unchanged_cell_rationales,
     validate_declared_changes,
 )
-from app.schemas import ResumeChange
+from app.services.tailoring.models import CompactBulletDiff, TailoredCell, TailoringLLMResponseV2
 
 
 def test_build_change_manifest_captures_summary_bullets_and_skills() -> None:
@@ -52,6 +57,109 @@ def test_build_change_manifest_captures_summary_bullets_and_skills() -> None:
         for change in changes
     )
     assert any(change.path == "skills.groups" and change.action == "regroup" for change in changes)
+
+
+def test_build_change_manifest_includes_bold_keywords_when_list_changes() -> None:
+    original = {"summary": "S", "workExperience": [], "personalProjects": [], "skills": {"groups": []}}
+    updated = {
+        **original,
+        "bold_keywords": ["Go", "Python"],
+    }
+    changes = build_change_manifest(original, updated)
+    row = next(c for c in changes if c.path == "bold_keywords")
+    assert row.action == "replace"
+    assert "Go" in (row.value or "")
+    assert "Python" in (row.value or "")
+
+
+def test_supplement_manifest_adds_unchanged_paths_with_cell_rationale() -> None:
+    original = {
+        "summary": "Same summary text.",
+        "workExperience": [
+            {
+                "company": "Acme",
+                "position": "Engineer",
+                "techStack": "Python, AWS",
+                "description": ["Shipped product", "Mentored interns"],
+            }
+        ],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    applied = copy.deepcopy(original)
+    llm = TailoringLLMResponseV2(
+        summary=TailoredCell(value="Same summary text.", why="Kept summary; focused edits below."),
+        experience={
+            "0": CompactBulletDiff(
+                position=TailoredCell(value="Engineer", why="Title already JD-aligned."),
+                tech_stacks=TailoredCell(value="Python, AWS", why="Stack already matched posting."),
+                bullets={
+                    "0": TailoredCell(value="Shipped product", why="Preserved strong win."),
+                    "1": TailoredCell(value="Mentored interns", why="Soft skill signal retained."),
+                },
+            )
+        },
+        bold_keywords=[],
+    )
+    base = build_change_manifest(original, applied)
+    assert not any(c.path == "summary" for c in base)
+
+    merged = supplement_change_manifest_with_unchanged_cell_rationales(base, llm, original, applied)
+    paths = {c.path for c in merged}
+    assert "summary" in paths
+    assert "workExperience[0].position" in paths
+    assert "workExperience[0].techStack" in paths
+    assert "workExperience[0].description[0]" in paths
+    assert "workExperience[0].description[1]" in paths
+
+
+def test_enrich_change_manifest_sets_reason_from_tailored_cells() -> None:
+    original = {"summary": "Old", "workExperience": [], "personalProjects": [], "skills": {"groups": []}}
+    updated = {"summary": "New", "workExperience": [], "personalProjects": [], "skills": {"groups": []}}
+    changes = build_change_manifest(original, updated)
+    summary_change = next(c for c in changes if c.path == "summary")
+    assert summary_change.reason == "Updated summary for job alignment."
+
+    llm = TailoringLLMResponseV2(
+        summary=TailoredCell(value="New", why="Matched cloud JD keywords."),
+        experience={},
+        projects={},
+        bold_keywords=[],
+    )
+    enriched = enrich_change_manifest_with_tailored_cells(changes, llm)
+    summary_enriched = next(c for c in enriched if c.path == "summary")
+    assert summary_enriched.reason == "Matched cloud JD keywords."
+
+
+def test_enrich_maps_description_path_to_bullet_why() -> None:
+    original = {
+        "summary": "S",
+        "workExperience": [{"company": "Acme", "description": ["keep", "old b1"]}],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    updated = {
+        "summary": "S",
+        "workExperience": [{"company": "Acme", "description": ["keep", "new b1"]}],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    changes = build_change_manifest(original, updated)
+    bullet_change = next(c for c in changes if c.path == "workExperience[0].description[1]")
+    llm = TailoringLLMResponseV2(
+        summary=None,
+        experience={
+            "0": CompactBulletDiff(
+                bullets={
+                    "1": TailoredCell(value="new text", why="Tightened metric framing for JD."),
+                },
+            )
+        },
+        bold_keywords=[],
+    )
+    enriched = enrich_change_manifest_with_tailored_cells(changes, llm)
+    bullet_enriched = next(c for c in enriched if c.path == "workExperience[0].description[1]")
+    assert bullet_enriched.reason == "Tightened metric framing for JD."
 
 
 def test_validate_declared_changes_rejects_blocked_paths() -> None:
@@ -108,3 +216,4 @@ def test_build_stage_breakdown_counts_numeric_and_location_metadata() -> None:
     assert breakdown.numeric_claim_changes == 1
     assert breakdown.location_source == "jd"
     assert breakdown.location_value == "Remote"
+

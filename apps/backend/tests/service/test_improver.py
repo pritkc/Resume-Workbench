@@ -185,11 +185,8 @@ class TestImproveResume:
         )
 
         assert mock_llm.call_args.kwargs["retries"] == 1
-        retry_hint = mock_llm.call_args.kwargs["retry_hint"]
-        assert "summary" in retry_hint
-        assert "experience" in retry_hint
-        assert "bullet_counts" in retry_hint or "bullets" in retry_hint
-        assert "Do not include personalInfo" in retry_hint or "personalInfo" in retry_hint
+        # Retry hints are reserved for future structured recovery; primary run passes None today.
+        assert mock_llm.call_args.kwargs.get("retry_hint") is None
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -372,7 +369,9 @@ class TestImproveResume:
         assert result.resume_data["personalInfo"]["location"] == sample_resume["personalInfo"]["location"]
         assert result.stage_breakdown.llm_applied_changes >= 1
         assert result.stage_breakdown.location_source == "master"
-        assert any(change.path == "summary" for change in result.change_manifest)
+        assert any(
+            change.path.startswith("workExperience[0].description") for change in result.change_manifest
+        )
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)

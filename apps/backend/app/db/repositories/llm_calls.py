@@ -46,6 +46,37 @@ def list_llm_calls(
     return list(session.scalars(statement))
 
 
+def attach_compact_diff_validation_to_latest_call(
+    session: Session,
+    *,
+    trace_id: str,
+    operation: str,
+    envelope_validation: dict[str, Any],
+) -> bool:
+    """Merge ``compact_diff_validation`` into the newest LLM row for trace + operation."""
+
+    stmt = (
+        select(LLMCall)
+        .where(LLMCall.trace_id == trace_id)
+        .where(LLMCall.operation == operation)
+        .order_by(
+            desc(LLMCall.completed_at),
+            desc(LLMCall.created_at),
+            desc(LLMCall.id),
+        )
+        .limit(1)
+    )
+    record = session.scalars(stmt).first()
+    if record is None:
+        return False
+    ctx = dict(record.request_context or {})
+    ctx["compact_diff_validation"] = envelope_validation
+    record.request_context = ctx or None
+    session.commit()
+    session.refresh(record)
+    return True
+
+
 def summarize_llm_calls(
     session: Session,
     *,

@@ -67,7 +67,9 @@ export interface ResumeFieldDiff {
     | 'experience_title'
     | 'education'
     | 'project'
-    | 'project_title';
+    | 'project_title'
+    | 'personal_info'
+    | 'bold_keywords';
   change_type: 'added' | 'removed' | 'modified';
   original_value?: string;
   new_value?: string;

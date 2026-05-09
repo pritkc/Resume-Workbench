@@ -250,3 +250,81 @@ def test_map_llm_trace_ids_fallback_when_no_preview_link(tmp_path: Path) -> None
         assert database.map_llm_trace_ids_for_resume_ids([tailored["resume_id"]]) == {
             tailored["resume_id"]: "trace-legacy-only"
         }
+
+
+def test_compact_diff_validation_merges_into_latest_matching_llm_trace_row(tmp_path: Path) -> None:
+    """``attach_compact_diff_validation_to_latest_llm_call`` updates the newest matching row."""
+
+    from datetime import datetime, timezone
+
+    with create_test_database(tmp_path) as database:
+        ts_early = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        ts_late = datetime(2025, 2, 1, tzinfo=timezone.utc)
+
+        database.create_llm_call(
+            llm_call_id=f"a-{uuid4().hex}",
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-env",
+            request_scope="unit",
+            operation="resume_generate_full",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="json",
+            success=True,
+            json_mode=True,
+            prompt_chars=10,
+            request_context={"note": "older"},
+            completed_at=ts_early,
+        )
+        database.create_llm_call(
+            llm_call_id=f"b-{uuid4().hex}",
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-env",
+            request_scope="unit",
+            operation="resume_generate_full",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="json",
+            success=True,
+            json_mode=True,
+            prompt_chars=11,
+            request_context={"note": "target"},
+            completed_at=ts_late,
+        )
+
+        envelope = {
+            "phase": "primary_tailor",
+            "valid": False,
+            "errors": ["x: why missing"],
+            "warnings": [],
+            "error_count": 1,
+            "warning_count": 0,
+            "origin": "test fixture",
+        }
+        merged = database.attach_compact_diff_validation_to_latest_llm_call(
+            trace_id="trace-env",
+            operation="resume_generate_full",
+            envelope_validation=envelope,
+        )
+        assert merged is True
+
+        refreshed = database.list_llm_calls(
+            trace_id="trace-env", operation="resume_generate_full", limit=10
+        )
+        by_llm_call = {r["llm_call_id"]: r["request_context"] or {} for r in refreshed}
+
+        with_envelope = [
+            ctx for ctx in by_llm_call.values() if isinstance(ctx.get("compact_diff_validation"), dict)
+        ]
+        assert len(with_envelope) == 1
+        assert with_envelope[0]["note"] == "target"
+        assert with_envelope[0]["compact_diff_validation"] == envelope
+
+        without_envelope = [
+            ctx
+            for ctx in by_llm_call.values()
+            if ctx.get("note") == "older" and "compact_diff_validation" not in ctx
+        ]
+        assert len(without_envelope) == 1

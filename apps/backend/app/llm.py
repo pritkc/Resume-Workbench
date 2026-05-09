@@ -246,6 +246,16 @@ def llm_trace_scope(
         _LLM_TRACE_CONTEXT.reset(token)
 
 
+def get_llm_trace_id() -> str | None:
+    """Best-effort ``trace_id`` from the innermost ``llm_trace_scope``."""
+
+    ctx = _LLM_TRACE_CONTEXT.get()
+    if not ctx:
+        return None
+    tid = ctx.get("trace_id")
+    return tid.strip() if isinstance(tid, str) and tid.strip() else None
+
+
 def _estimate_tokens_from_text(text: str | None) -> int | None:
     if not text:
         return 0

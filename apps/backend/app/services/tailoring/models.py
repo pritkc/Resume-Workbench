@@ -407,15 +407,108 @@ class TailoringLLMResponse(TailoringResumePayload):
     changes: list[ResumeChange] = Field(default_factory=list)
 
 
+_LEGACY_RATIONALE = "Legacy compact output omitted per-cell rationale."
+
+
+class TailoredCell(BaseModel):
+    """Single editable cell: ``value`` null means retain source; ``why`` always explains intent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: str | None = None
+    why: str
+
+    @field_validator("why", mode="before")
+    @classmethod
+    def _normalize_why(cls, value: Any) -> str:
+        text = _coerce_text(value)
+        if not text:
+            raise ValueError("TailoredCell.why must be non-empty")
+        return text
+
+
+def _coerce_tailored_cell(v: Any, *, legacy_label: str) -> Any:
+    if isinstance(v, TailoredCell):
+        return v
+    if isinstance(v, dict) and "why" in v:
+        return v
+    if isinstance(v, str):
+        stripped = v.strip()
+        return {"value": stripped if stripped else None, "why": legacy_label}
+    if v is None:
+        return {"value": None, "why": legacy_label}
+    return v
+
+
+class TailoredSkillsGroup(BaseModel):
+    """One skill group as full cells (label + indexed values)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    label: TailoredCell
+    values: dict[str, TailoredCell] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_groups(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        raw_label = data.get("label", "")
+        if not isinstance(raw_label, dict):
+            data["label"] = _coerce_tailored_cell(raw_label, legacy_label=_LEGACY_RATIONALE)
+        raw_values = data.get("values")
+        if isinstance(raw_values, list):
+            mapped: dict[str, Any] = {}
+            for index, item in enumerate(raw_values):
+                mapped[str(index)] = _coerce_tailored_cell(item, legacy_label=_LEGACY_RATIONALE)
+            data["values"] = mapped
+        elif raw_values is None:
+            data["values"] = {}
+        return data
+
+
 class CompactBulletDiff(BaseModel):
     """Per-entry diff in the compact addressed output format."""
 
     model_config = ConfigDict(extra="ignore")
 
-    position: str | None = None
-    name: str | None = None
-    tech_stacks: str | None = None
-    bullets: dict[str, str] = Field(default_factory=dict)
+    position: TailoredCell | None = None
+    name: TailoredCell | None = None
+    tech_stacks: TailoredCell | None = None
+    bullets: dict[str, TailoredCell] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_compact_entry(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        for key in ("position", "name", "tech_stacks"):
+            if key not in out:
+                continue
+            val = out[key]
+            if not isinstance(val, dict) or "why" not in val:
+                out[key] = _coerce_tailored_cell(val, legacy_label=_LEGACY_RATIONALE)
+        raw_bullets = out.get("bullets")
+        if raw_bullets is None:
+            raw_bullets = out.get("description") or out.get("highlights")
+        if isinstance(raw_bullets, list):
+            cell_map: dict[str, Any] = {}
+            for index, item in enumerate(raw_bullets):
+                cell_map[str(index)] = _coerce_tailored_cell(item, legacy_label=_LEGACY_RATIONALE)
+            out["bullets"] = cell_map
+        elif isinstance(raw_bullets, dict):
+            cell_map = {}
+            for bkey, item in raw_bullets.items():
+                if isinstance(item, dict) and "why" in item:
+                    cell_map[str(bkey)] = item
+                else:
+                    cell_map[str(bkey)] = _coerce_tailored_cell(
+                        item, legacy_label=_LEGACY_RATIONALE
+                    )
+            out["bullets"] = cell_map
+        return out
 
 
 class TailoringLLMResponseV2(BaseModel):
@@ -427,19 +520,37 @@ class TailoringLLMResponseV2(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    summary: str = ""
+    summary: TailoredCell | None = None
     experience: dict[str, CompactBulletDiff] = Field(default_factory=dict)
     projects: dict[str, CompactBulletDiff] = Field(default_factory=dict)
-    skills: list[dict[str, Any]] | None = None
+    skills: list[TailoredSkillsGroup] | None = None
     bold_keywords: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_top_level(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        summary_val = out.get("summary")
+        if summary_val is not None and not isinstance(summary_val, dict):
+            if isinstance(summary_val, str) and not summary_val.strip():
+                out["summary"] = None
+            else:
+                out["summary"] = _coerce_tailored_cell(summary_val, legacy_label=_LEGACY_RATIONALE)
+        return out
 
     @field_validator("skills", mode="before")
     @classmethod
     def _normalize_skills(cls, v: Any) -> Any:
-        """Accept {"groups": [...]} dict shape in addition to a bare list."""
+        """Accept {"groups": [...]} dict shape, bare list, or TailoredSkillsGroup list."""
+        if v is None:
+            return None
         if isinstance(v, dict):
-            return v.get("groups") or None
-        return v
+            v = v.get("groups")
+        if not isinstance(v, list):
+            return None
+        return [TailoredSkillsGroup.model_validate(g) if not isinstance(g, TailoredSkillsGroup) else g for g in v]
 
 
 class TailoringSectionContract(BaseModel):
@@ -485,6 +596,7 @@ class TailoringResponseContract(BaseModel):
     project_entries: list[str] = Field(default_factory=list)
     project_bullet_counts: list[int] = Field(default_factory=list)
     project_tech_stacks: list[str] = Field(default_factory=list)
+    skill_group_value_counts: list[int] = Field(default_factory=list)
     max_changed_projects: int = 2
     project_rename_allowed: bool = False
 

@@ -436,3 +436,15 @@ def test_unchanged_titles_produce_no_title_diff() -> None:
     _, changes = calculate_resume_diff(original, improved)
 
     assert not any(c.field_type in {"experience_title", "project_title"} for c in changes)
+
+
+def test_bold_keywords_list_change_emits_keywords_row() -> None:
+    original = {"bold_keywords": ["Rust", "Go"]}
+    improved = {"bold_keywords": ["Go", "Python", "Rust"]}
+
+    _, changes = calculate_resume_diff(original, improved)
+
+    row = next(c for c in changes if c.field_type == "bold_keywords")
+    assert row.change_type == "modified"
+    assert "Python" in (row.new_value or "")
+    assert "Go" in (row.original_value or "")

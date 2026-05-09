@@ -11,6 +11,7 @@ import type {
   ResumeChange,
   ResumeDiffSummary,
   ResumeFieldDiff,
+  ResumePreview,
   TailoringStageBreakdown,
 } from '@/components/common/resume_previewer_context';
 import type { ArtifactSummary } from '@/lib/types/render-theme';
@@ -29,10 +30,19 @@ interface DiffPreviewModalProps {
   pipelineTiming?: PipelineTimingSummary | null;
   artifacts?: ArtifactSummary[];
   errorMessage?: string;
+  resumePreview?: ResumePreview | null;
 }
 
 type ChangeSource = 'ai' | 'system';
-type ResumeSectionKey = 'summary' | 'experience' | 'education' | 'project' | 'skills' | 'other';
+type ResumeSectionKey =
+  | 'summary'
+  | 'keywords'
+  | 'personal'
+  | 'experience'
+  | 'education'
+  | 'project'
+  | 'skills'
+  | 'other';
 
 interface ParsedChangePath {
   section: ResumeSectionKey;
@@ -50,13 +60,17 @@ interface DisplayChange {
   source: ChangeSource;
   contextLabel: string;
   needsVerification: boolean;
+  /** Present when applied text equals the prior value but a model note explains retention. */
+  semanticUnchanged: boolean;
   parsed: ParsedChangePath;
   cleanupNote?: CleanupNote;
+  /** From change manifest (LLM per-cell ``why``) when path matches. */
+  aiRationale?: string;
 }
 
 interface OrderedSection {
   key: string;
-  title: string;
+  title: ReactNode;
   items: DisplayChange[];
 }
 
@@ -67,6 +81,246 @@ interface ManifestCandidate {
 
 const WORK_INDEX_PATTERNS = [/workExperience\[(\d+)\]/, /experience\[(\d+)\]/];
 const PROJECT_INDEX_PATTERNS = [/personalProjects\[(\d+)\]/, /projects\[(\d+)\]/];
+
+function stringifyManifestValue(value: ResumeChange['value']): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    try {
+      return JSON.stringify(value, null, 0);
+    } catch {
+      return String(value);
+    }
+  }
+  if (value && typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return '';
+}
+
+/** When final resume matches the source (localization/cleanup), line diffs omit summary — surface manifest row anyway. */
+function augmentDetailedChangesFromManifest(
+  detailedChanges: ResumeFieldDiff[],
+  changeManifest?: ResumeChange[]
+): ResumeFieldDiff[] {
+  let next = detailedChanges;
+  const hasSummary = detailedChanges.some((c) => c.field_path === 'summary');
+  const summaryManifest = changeManifest?.find((c) => c.path === 'summary');
+  if (!hasSummary && summaryManifest?.action === 'replace') {
+    const orig = summaryManifest.original?.trim() ?? '';
+    const nw = stringifyManifestValue(summaryManifest.value).trim();
+    const change_type: ResumeFieldDiff['change_type'] =
+      orig && !nw ? 'removed' : !orig && nw ? 'added' : 'modified';
+    next = [
+      {
+        field_path: 'summary',
+        field_type: 'summary',
+        change_type,
+        original_value: orig || undefined,
+        new_value: nw || undefined,
+        confidence: 'medium',
+      },
+      ...detailedChanges,
+    ];
+  }
+  return next;
+}
+
+function inferFieldTypeForManifestPath(rawPath: string): ResumeFieldDiff['field_type'] | null {
+  const canonical = normalizeComparablePath(rawPath);
+  const pl = rawPath.trim().toLowerCase();
+
+  if (canonical === 'summary') return 'summary';
+  if (canonical === 'bold_keywords') return 'bold_keywords';
+  if (canonical === 'skills.groups') return 'additional_group';
+  if (/skills\.groups\[[^\]]+\]\.values$/i.test(pl)) return 'additional_item';
+
+  if (/^personalinfo\./i.test(pl)) return 'personal_info';
+
+  if (/personalprojects\[\d+\]\.name$/i.test(pl)) return 'project_title';
+  if (/personalprojects\[\d+\]\.(?:techstack|tech_stacks|summary|role)$/i.test(pl)) return 'project';
+  if (/personalprojects\[\d+\]\.description\[\d+\]$/i.test(pl)) return 'description';
+
+  if (/workexperience\[\d+\]\.(?:company|(?:start|end)(?:_|)?date(?:s)?)$/i.test(pl)) {
+    return 'experience';
+  }
+  if (/workexperience\[\d+\]\.(?:position|title)$/i.test(pl)) return 'experience_title';
+  if (/workexperience\[\d+\]\.(?:techstack|tech_stacks|summary)$/i.test(pl)) return 'experience';
+  if (/workexperience\[\d+\]\.description\[\d+\]$/i.test(pl)) return 'description';
+
+  if (/education\[\d+\]\.description\[\d+\]$/i.test(pl)) return 'description';
+  if (/^education\[\d+\]$/i.test(pl)) return 'education';
+  if (/education\[\d+\]\.(?:degree|area|institution|date|years|start_date|end_date|startdate|enddate)$/i.test(pl)) {
+    return 'education';
+  }
+
+  return null;
+}
+
+function augmentChangesFromManifestOnlyPaths(
+  detailedChanges: ResumeFieldDiff[],
+  changeManifest?: ResumeChange[]
+): ResumeFieldDiff[] {
+  if (!changeManifest?.length) {
+    return detailedChanges;
+  }
+
+  const extras: ResumeFieldDiff[] = [];
+
+  const alreadyHas = (path: string): boolean =>
+    detailedChanges.some((d) => pathsMatchForManifest(d.field_path, path)) ||
+    extras.some((e) => pathsMatchForManifest(e.field_path, path));
+
+  for (const row of changeManifest) {
+    const p = row.path.trim();
+    if (!p || alreadyHas(p)) continue;
+
+    const field_type = inferFieldTypeForManifestPath(p);
+    if (!field_type) continue;
+
+    const reasonStr = typeof row.reason === 'string' ? row.reason.trim() : '';
+
+    const orig = typeof row.original === 'string' ? row.original.trim() : '';
+    const next = stringifyManifestValue(row.value).trim();
+
+    if (!orig && !next && !reasonStr) continue;
+
+    const change_type: ResumeFieldDiff['change_type'] = orig && !next
+      ? 'removed'
+      : !orig && next
+        ? 'added'
+        : 'modified';
+
+    extras.push({
+      field_path: p,
+      field_type,
+      change_type,
+      original_value: orig || undefined,
+      new_value: next || undefined,
+      confidence: 'medium',
+    });
+  }
+
+  if (!extras.length) {
+    return detailedChanges;
+  }
+  return [...detailedChanges, ...extras];
+}
+
+function experienceRowHeading(resumePreview: ResumePreview | null | undefined, index: number): string {
+  const exp = resumePreview?.workExperience?.[index];
+  if (!exp) return `Experience ${index + 1}`;
+  const title = exp.title?.trim();
+  const company = exp.company?.trim();
+  if (company && title) return `${company} — ${title}`;
+  return company || title || `Experience ${index + 1}`;
+}
+
+function projectRowHeading(resumePreview: ResumePreview | null | undefined, index: number): string {
+  const proj = resumePreview?.personalProjects?.[index];
+  const name = proj?.name?.trim();
+  return name || `Project ${index + 1}`;
+}
+
+function educationRowHeading(resumePreview: ResumePreview | null | undefined, index: number): string {
+  const ed = resumePreview?.education?.[index];
+  const institution = ed?.institution?.trim();
+  const degree = ed?.degree?.trim();
+  if (institution && degree) return `${institution} — ${degree}`;
+  return institution || degree || `Education ${index + 1}`;
+}
+
+function ExperienceSectionTitle({
+  resumePreview,
+  index,
+}: {
+  resumePreview: ResumePreview | null | undefined;
+  index: number;
+}): ReactNode {
+  const exp = resumePreview?.workExperience?.[index];
+  if (!exp) {
+    return (
+      <span className="text-sm font-semibold text-slate-900">Experience {index + 1}</span>
+    );
+  }
+  const company = exp.company?.trim();
+  const title = exp.title?.trim();
+  if (!company && !title) {
+    return (
+      <span className="text-sm font-semibold text-slate-900">Experience {index + 1}</span>
+    );
+  }
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-px">
+      {company ? (
+        <span className="text-base font-semibold tracking-tight text-slate-900">{company}</span>
+      ) : null}
+      {title ? (
+        <span
+          className={`text-[13px] font-normal text-slate-500 ${
+            !company ? 'text-base font-semibold text-slate-900' : ''
+          }`}
+        >
+          {title}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function ProjectSectionTitle({
+  resumePreview,
+  index,
+}: {
+  resumePreview: ResumePreview | null | undefined;
+  index: number;
+}): ReactNode {
+  const proj = resumePreview?.personalProjects?.[index];
+  const name = proj?.name?.trim();
+  return (
+    <span className="text-base font-semibold tracking-tight text-slate-900">
+      {name || `Project ${index + 1}`}
+    </span>
+  );
+}
+
+function EducationSectionTitle({
+  resumePreview,
+  index,
+}: {
+  resumePreview: ResumePreview | null | undefined;
+  index: number;
+}): ReactNode {
+  const ed = resumePreview?.education?.[index];
+  const institution = ed?.institution?.trim();
+  const degree = ed?.degree?.trim();
+  if (!institution && !degree) {
+    return (
+      <span className="text-sm font-semibold text-slate-900">Education {index + 1}</span>
+    );
+  }
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-px">
+      {institution ? (
+        <span className="text-[15px] font-semibold text-slate-900">{institution}</span>
+      ) : null}
+      {degree ? (
+        <span
+          className={`text-[13px] text-slate-500 ${
+            institution ? 'font-normal' : 'text-base font-semibold text-slate-900'
+          }`}
+        >
+          {degree}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 function canonicalizePath(path: string): string {
   return path
@@ -124,6 +378,10 @@ function parseChangePath(change: ResumeFieldDiff): ParsedChangePath {
   switch (change.field_type) {
     case 'summary':
       return { section: 'summary' };
+    case 'bold_keywords':
+      return { section: 'keywords' };
+    case 'personal_info':
+      return { section: 'personal' };
     case 'experience_title':
     case 'experience':
       return { section: 'experience', entryIndex: workIndex, bulletIndex };
@@ -139,6 +397,9 @@ function parseChangePath(change: ResumeFieldDiff): ParsedChangePath {
       if (projectIndex !== undefined) {
         return { section: 'project', entryIndex: projectIndex, bulletIndex };
       }
+      if (educationIndex !== undefined) {
+        return { section: 'education', entryIndex: educationIndex, bulletIndex };
+      }
       return { section: 'other', bulletIndex };
     case 'additional_item':
     case 'additional_group':
@@ -148,38 +409,70 @@ function parseChangePath(change: ResumeFieldDiff): ParsedChangePath {
   }
 }
 
-function buildContextLabel(change: ResumeFieldDiff, parsed: ParsedChangePath): string {
+function buildContextLabel(
+  change: ResumeFieldDiff,
+  parsed: ParsedChangePath,
+  resumePreview?: ResumePreview | null
+): string {
   const groupId = change.field_path.match(/skills\.groups\[([^\]]+)\]/)?.[1];
-  const bulletLabel =
-    parsed.bulletIndex !== undefined ? `bullet ${parsed.bulletIndex + 1}` : 'section content';
 
   switch (parsed.section) {
     case 'summary':
       return 'Resume summary';
-    case 'experience':
-      if (change.field_path.includes('.techStack')) {
-        return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} tech stack`;
+    case 'keywords':
+      return 'Bold keywords';
+    case 'personal': {
+      const key = change.field_path.replace(/^personalInfo\./i, '');
+      const human: Record<string, string> = {
+        name: 'Name',
+        title: 'Headline title',
+        email: 'Email',
+        phone: 'Phone',
+        location: 'Location',
+        website: 'Website',
+        linkedin: 'LinkedIn',
+        github: 'GitHub',
+      };
+      return human[key] ?? key;
+    }
+    case 'experience': {
+      const idx = parsed.entryIndex ?? 0;
+      const labelBase = resumePreview ? experienceRowHeading(resumePreview, idx) : null;
+      const n = idx + 1;
+      if (change.field_path.toLowerCase().includes('.techstack')) {
+        return labelBase ? `${labelBase} — tech stack` : `Experience ${n} tech stack`;
       }
       if (change.field_type === 'experience_title') {
-        return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} title`;
+        return labelBase ? `${labelBase} — role title` : `Experience ${n} role`;
       }
       if (change.field_type === 'description') {
-        return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} ${bulletLabel}`;
+        return `Bullet ${(parsed.bulletIndex ?? 0) + 1}`;
       }
-      return `Experience ${((parsed.entryIndex ?? 0) + 1).toString()} entry`;
-    case 'project':
-      if (change.field_path.includes('.techStack')) {
-        return `Project ${((parsed.entryIndex ?? 0) + 1).toString()} tech stack`;
+      return labelBase ?? `Experience ${n} entry`;
+    }
+    case 'project': {
+      const idx = parsed.entryIndex ?? 0;
+      const labelBase = resumePreview ? projectRowHeading(resumePreview, idx) : null;
+      const n = idx + 1;
+      if (change.field_path.toLowerCase().includes('.techstack')) {
+        return labelBase ? `${labelBase} — tech stack` : `Project ${n} tech stack`;
       }
       if (change.field_type === 'project_title') {
-        return `Project ${((parsed.entryIndex ?? 0) + 1).toString()} title`;
+        return labelBase ? `${labelBase} — name` : `Project ${n} name`;
       }
       if (change.field_type === 'description') {
-        return `Project ${((parsed.entryIndex ?? 0) + 1).toString()} ${bulletLabel}`;
+        return `Bullet ${(parsed.bulletIndex ?? 0) + 1}`;
       }
-      return `Project ${((parsed.entryIndex ?? 0) + 1).toString()} entry`;
-    case 'education':
-      return `Education ${((parsed.entryIndex ?? 0) + 1).toString()} entry`;
+      return labelBase ?? `Project ${n} entry`;
+    }
+    case 'education': {
+      if (change.field_type === 'description') {
+        return `Bullet ${(parsed.bulletIndex ?? 0) + 1}`;
+      }
+      return resumePreview
+        ? educationRowHeading(resumePreview, parsed.entryIndex ?? 0)
+        : `Education ${(parsed.entryIndex ?? 0) + 1} entry`;
+    }
     case 'skills':
       return groupId ? `Skills group: ${groupId}` : 'Skills';
     default:
@@ -270,7 +563,8 @@ function extractManifestValue(candidate: ResumeChange, fieldPath: string): strin
 function buildDisplayChanges(
   detailedChanges: ResumeFieldDiff[],
   changeManifest: ResumeChange[] | undefined,
-  includeSystemCleanupNotes: boolean
+  includeSystemCleanupNotes: boolean,
+  resumePreview?: ResumePreview | null
 ): DisplayChange[] {
   const manifestCandidates: ManifestCandidate[] = (changeManifest ?? []).map((change) => ({
     raw: change,
@@ -331,29 +625,44 @@ function buildDisplayChanges(
       }
     }
 
+    let aiRationale: string | undefined;
+    if (exactCandidate?.raw.reason?.trim()) {
+      aiRationale = exactCandidate.raw.reason.trim();
+    }
+
+    const semanticUnchanged =
+      change.change_type === 'modified' &&
+      normalizeTextForCompare(change.original_value ?? '') ===
+        normalizeTextForCompare(change.new_value ?? '');
+
     return {
       change,
       source,
-      contextLabel: buildContextLabel(change, parsed),
+      contextLabel: buildContextLabel(change, parsed, resumePreview),
       needsVerification: isVerificationChange(change),
+      semanticUnchanged,
       parsed,
       cleanupNote,
+      aiRationale,
     };
   });
 }
 
 function compareWithinEntry(a: DisplayChange, b: DisplayChange): number {
   const fieldPriority = (item: DisplayChange): number => {
+    const fp = item.change.field_path.toLowerCase();
     switch (item.change.field_type) {
       case 'experience_title':
       case 'project_title':
         return 0;
-      case 'description':
-        return 1;
       case 'experience':
-      case 'education':
       case 'project':
+        if (fp.includes('.techstack') || fp.includes('.tech_stack')) return 1;
+        return 3;
+      case 'description':
         return 2;
+      case 'education':
+        return 3;
       default:
         return 3;
     }
@@ -373,12 +682,43 @@ function compareWithinEntry(a: DisplayChange, b: DisplayChange): number {
   return a.change.field_path.localeCompare(b.change.field_path);
 }
 
-function buildOrderedSections(displayChanges: DisplayChange[]): OrderedSection[] {
+function buildOrderedSections(
+  displayChanges: DisplayChange[],
+  resumePreview?: ResumePreview | null
+): OrderedSection[] {
   const sections: OrderedSection[] = [];
 
   const summaryItems = displayChanges.filter((item) => item.parsed.section === 'summary');
   if (summaryItems.length > 0) {
-    sections.push({ key: 'summary', title: 'Summary', items: summaryItems });
+    sections.push({
+      key: 'summary',
+      title: (
+        <span className="text-sm font-semibold text-slate-900">Professional summary</span>
+      ),
+      items: summaryItems,
+    });
+  }
+
+  const keywordItems = displayChanges.filter((item) => item.parsed.section === 'keywords');
+  if (keywordItems.length > 0) {
+    sections.push({
+      key: 'keywords',
+      title: <span className="text-sm font-semibold text-slate-900">Bold keywords</span>,
+      items: keywordItems.sort((a, b) =>
+        a.change.field_path.localeCompare(b.change.field_path)
+      ),
+    });
+  }
+
+  const personalItems = displayChanges.filter((item) => item.parsed.section === 'personal');
+  if (personalItems.length > 0) {
+    sections.push({
+      key: 'personal',
+      title: <span className="text-sm font-semibold text-slate-900">Contact</span>,
+      items: personalItems.sort((a, b) =>
+        a.change.field_path.localeCompare(b.change.field_path)
+      ),
+    });
   }
 
   const experienceIndices = Array.from(
@@ -395,7 +735,32 @@ function buildOrderedSections(displayChanges: DisplayChange[]): OrderedSection[]
     const items = displayChanges
       .filter((item) => item.parsed.section === 'experience' && item.parsed.entryIndex === index)
       .sort(compareWithinEntry);
-    sections.push({ key: `experience-${index}`, title: `Experience ${index + 1}`, items });
+    sections.push({
+      key: `experience-${index}`,
+      title: <ExperienceSectionTitle resumePreview={resumePreview} index={index} />,
+      items,
+    });
+  }
+
+  const projectIndices = Array.from(
+    new Set(
+      displayChanges
+        .filter(
+          (item) => item.parsed.section === 'project' && item.parsed.entryIndex !== undefined
+        )
+        .map((item) => item.parsed.entryIndex as number)
+    )
+  ).sort((a, b) => a - b);
+
+  for (const index of projectIndices) {
+    const items = displayChanges
+      .filter((item) => item.parsed.section === 'project' && item.parsed.entryIndex === index)
+      .sort(compareWithinEntry);
+    sections.push({
+      key: `project-${index}`,
+      title: <ProjectSectionTitle resumePreview={resumePreview} index={index} />,
+      items,
+    });
   }
 
   const educationIndices = Array.from(
@@ -412,36 +777,33 @@ function buildOrderedSections(displayChanges: DisplayChange[]): OrderedSection[]
     const items = displayChanges
       .filter((item) => item.parsed.section === 'education' && item.parsed.entryIndex === index)
       .sort(compareWithinEntry);
-    sections.push({ key: `education-${index}`, title: `Education ${index + 1}`, items });
-  }
-
-  const projectIndices = Array.from(
-    new Set(
-      displayChanges
-        .filter((item) => item.parsed.section === 'project' && item.parsed.entryIndex !== undefined)
-        .map((item) => item.parsed.entryIndex as number)
-    )
-  ).sort((a, b) => a - b);
-
-  for (const index of projectIndices) {
-    const items = displayChanges
-      .filter((item) => item.parsed.section === 'project' && item.parsed.entryIndex === index)
-      .sort(compareWithinEntry);
-    sections.push({ key: `project-${index}`, title: `Project ${index + 1}`, items });
+    sections.push({
+      key: `education-${index}`,
+      title: <EducationSectionTitle resumePreview={resumePreview} index={index} />,
+      items,
+    });
   }
 
   const skillsItems = displayChanges
     .filter((item) => item.parsed.section === 'skills')
     .sort((a, b) => a.change.field_path.localeCompare(b.change.field_path));
   if (skillsItems.length > 0) {
-    sections.push({ key: 'skills', title: 'Skills', items: skillsItems });
+    sections.push({
+      key: 'skills',
+      title: <span className="text-sm font-semibold text-slate-900">Skills</span>,
+      items: skillsItems,
+    });
   }
 
   const otherItems = displayChanges
     .filter((item) => item.parsed.section === 'other')
     .sort((a, b) => a.change.field_path.localeCompare(b.change.field_path));
   if (otherItems.length > 0) {
-    sections.push({ key: 'other', title: 'Other', items: otherItems });
+    sections.push({
+      key: 'other',
+      title: <span className="text-sm font-semibold text-slate-900">Other</span>,
+      items: otherItems,
+    });
   }
 
   return sections;
@@ -546,6 +908,8 @@ export interface TailorDiffReadonlyBodyProps {
   artifactGalleryTitle?: string;
   errorMessage?: string;
   emptyFallback?: ReactNode;
+  /** Tailored preview (improved snapshot) — used for human-readable section titles. */
+  resumePreview?: ResumePreview | null;
 }
 
 export function TailorDiffReadonlyBody({
@@ -556,23 +920,44 @@ export function TailorDiffReadonlyBody({
   artifactGalleryTitle = 'Preview Snapshot',
   errorMessage,
   emptyFallback,
+  resumePreview = null,
 }: TailorDiffReadonlyBodyProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [showMetaDetails, setShowMetaDetails] = useState(false);
 
-  const displayChanges = useMemo(
-    () =>
-      detailedChanges?.length
-        ? buildDisplayChanges(
-            detailedChanges,
-            changeManifest,
-            (changeBreakdown?.cleanup_only_changes ?? 0) > 0
-          )
-        : [],
-    [changeBreakdown?.cleanup_only_changes, changeManifest, detailedChanges]
+  const mergedDetailedChanges = useMemo(() => {
+    let next = augmentDetailedChangesFromManifest(detailedChanges, changeManifest);
+    next = augmentChangesFromManifestOnlyPaths(next, changeManifest);
+    return next;
+  }, [detailedChanges, changeManifest]);
+
+  const skillsAggregateRationale = useMemo(
+    () => changeManifest?.find((c) => c.path === 'skills.groups')?.reason?.trim(),
+    [changeManifest]
   );
 
-  const orderedSections = useMemo(() => buildOrderedSections(displayChanges), [displayChanges]);
+  const displayChanges = useMemo(
+    () =>
+      mergedDetailedChanges?.length
+        ? buildDisplayChanges(
+            mergedDetailedChanges,
+            changeManifest,
+            (changeBreakdown?.cleanup_only_changes ?? 0) > 0,
+            resumePreview
+          )
+        : [],
+    [
+      changeBreakdown?.cleanup_only_changes,
+      changeManifest,
+      mergedDetailedChanges,
+      resumePreview,
+    ]
+  );
+
+  const orderedSections = useMemo(
+    () => buildOrderedSections(displayChanges, resumePreview),
+    [displayChanges, resumePreview]
+  );
 
   useEffect(() => {
     if (orderedSections.length === 0) {
@@ -593,12 +978,12 @@ export function TailorDiffReadonlyBody({
     });
   }, []);
 
-  if (!detailedChanges.length) {
+  if (!mergedDetailedChanges.length) {
     if (emptyFallback) {
       return <>{emptyFallback}</>;
     }
     return (
-      <div className="border-2 border-dashed border-black/30 bg-white p-6 font-mono text-sm text-gray-700">
+      <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-[13px] text-slate-600">
         No line-level tailoring changes recorded for this view.
       </div>
     );
@@ -607,9 +992,12 @@ export function TailorDiffReadonlyBody({
   const stats = {
     total: displayChanges.length,
     summaryChanged: displayChanges.filter((item) => item.parsed.section === 'summary').length,
+    personalChanged: displayChanges.filter((item) => item.parsed.section === 'personal').length,
     experienceChanged: displayChanges.filter((item) => item.parsed.section === 'experience').length,
     educationChanged: displayChanges.filter((item) => item.parsed.section === 'education').length,
     projectChanged: displayChanges.filter((item) => item.parsed.section === 'project').length,
+    keywordRows: displayChanges.filter((item) => item.parsed.section === 'keywords').length,
+    unchangedSemantics: displayChanges.filter((item) => item.semanticUnchanged).length,
     skillsAdded: displayChanges.filter(
       (item) => item.change.field_type === 'additional_item' && item.change.change_type === 'added'
     ).length,
@@ -624,41 +1012,53 @@ export function TailorDiffReadonlyBody({
 
   return (
     <>
-      <div className="mt-3 border-2 border-black bg-white px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-2">
-            <InlineStat label="Total" value={stats.total} variant="info" />
-            <InlineStat label="AI" value={stats.ai} variant="success" />
-            <InlineStat label="System" value={stats.system} variant="warning" />
-          </div>
+      <div className="mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 text-[13px] text-slate-600">
+          <p className="m-0 min-w-[12rem]">
+            <span className="tabular-nums text-lg font-semibold text-slate-900">{stats.total}</span>{' '}
+            <span className="text-slate-500">
+              row{stats.total === 1 ? '' : 's'} changed
+            </span>
+            {stats.verify > 0 ? (
+              <span className="ml-3 inline-flex items-center gap-1 text-amber-700">
+                <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> {stats.verify} to verify
+              </span>
+            ) : null}
+          </p>
           <Button
-            variant="outline"
+            variant="ghost"
             size="xs"
+            className="text-slate-600"
             onClick={() => setShowMetaDetails((value) => !value)}
           >
-            {showMetaDetails ? 'Hide details' : 'Show details'}
+            {showMetaDetails ? 'Hide breakdown' : 'Breakdown'}
           </Button>
         </div>
-        {showMetaDetails && (
-          <div className="mt-2 flex flex-wrap gap-2">
+        {showMetaDetails ? (
+          <div className="flex flex-wrap gap-1.5 pt-2">
             <InlineStat label="Summary" value={stats.summaryChanged} variant="info" />
+            <InlineStat label="Keywords" value={stats.keywordRows} variant="info" />
+            <InlineStat label="Contact" value={stats.personalChanged} variant="info" />
             <InlineStat label="Experience" value={stats.experienceChanged} variant="info" />
             <InlineStat label="Projects" value={stats.projectChanged} variant="info" />
             <InlineStat label="Education" value={stats.educationChanged} variant="info" />
             <InlineStat label="Skills +" value={stats.skillsAdded} variant="success" />
-            <InlineStat label="Skills -" value={stats.skillsRemoved} variant="danger" />
-            <InlineStat label="Needs verification" value={stats.verify} variant="warning" />
+            <InlineStat label="Skills −" value={stats.skillsRemoved} variant="danger" />
+            <InlineStat label="Model-attributed rows" value={stats.ai} variant="success" />
+            <InlineStat label="Cleanup / other rows" value={stats.system} variant="warning" />
+            <InlineStat label="Unchanged (with note)" value={stats.unchangedSemantics} variant="info" />
+            <InlineStat label="Skills verify" value={stats.verify} variant="warning" />
           </div>
-        )}
+        ) : null}
       </div>
 
       {errorMessage && (
-        <div className="mt-4 border-2 border-red-600 bg-red-50 p-3 font-mono text-xs text-red-700">
+        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {errorMessage}
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4">
+      <div className="mt-3 space-y-2 pb-2">
         {artifacts && artifacts.length > 0 && (
           <ArtifactGallery artifacts={artifacts} title={artifactGalleryTitle} />
         )}
@@ -672,7 +1072,7 @@ export function TailorDiffReadonlyBody({
             onToggle={() => toggleSection(section.key)}
           >
             {section.key === 'skills' ? (
-              <SkillsGroupedView items={section.items} />
+              <SkillsGroupedView items={section.items} aggregateRationale={skillsAggregateRationale} />
             ) : (
               section.items.map((item, index) => (
                 <ChangeItem key={`${section.key}-${index}`} item={item} />
@@ -696,6 +1096,7 @@ export function DiffPreviewModal({
   changeManifest,
   artifacts,
   errorMessage,
+  resumePreview = null,
 }: DiffPreviewModalProps) {
   const { t } = useTranslations();
 
@@ -730,22 +1131,22 @@ export function DiffPreviewModal({
           }
         }}
       >
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-6 bg-[#F0F0E8] border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
-          <DialogHeader className="border-b-2 border-black pb-4 bg-white -mx-6 -mt-6 px-6 pt-6">
-            <DialogTitle className="font-serif text-2xl font-bold uppercase tracking-tight">
+        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden border border-slate-200 bg-white p-0 shadow-lg">
+          <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4">
+            <DialogTitle className="text-lg font-semibold tracking-tight text-slate-900">
               {t('tailor.missingDiffDialog.title')}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="mt-6 border-2 border-black bg-white p-4 font-mono text-xs text-gray-700">
+          <div className="px-5 py-4 text-[13px] leading-relaxed text-slate-700">
             {t('tailor.missingDiffDialog.description')}
           </div>
-          <div className="mt-3 flex items-center gap-2 font-mono text-xs text-amber-700">
-            <AlertTriangle className="w-4 h-4" />
+          <div className="flex items-start gap-2 px-5 pb-1 text-[12px] text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{t('tailor.missingDiffDialog.confirmLabel')}</span>
           </div>
 
-          <div className="flex justify-end items-center gap-3 pt-4 border-t-2 border-black bg-white -mx-6 -mb-6 px-6 py-4">
+          <div className="mt-auto flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
             <Button variant="outline" onClick={onClose} disabled={isConfirming} className="gap-2">
               {t('common.cancel')}
             </Button>
@@ -774,23 +1175,26 @@ export function DiffPreviewModal({
         }
       }}
     >
-      <DialogContent className="max-w-6xl w-[92vw] max-h-[95vh] overflow-hidden flex flex-col p-6 bg-[#F0F0E8] border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
-        <DialogHeader className="border-b-2 border-black pb-3 bg-white -mx-6 -mt-6 px-6 pt-4">
-          <DialogTitle className="font-serif text-xl font-bold uppercase tracking-tight">
+      <DialogContent className="flex max-h-[95vh] w-[92vw] max-w-6xl flex-col gap-0 overflow-hidden border border-slate-200 bg-slate-50 p-0 shadow-xl">
+        <DialogHeader className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+          <DialogTitle className="text-base font-semibold tracking-tight text-slate-900">
             {t('tailor.diffModal.title')}
           </DialogTitle>
-          <p className="font-mono text-xs text-gray-600 mt-1">{'// '}Review in resume order.</p>
+          <p className="mt-0.5 text-[12px] text-slate-500">Reads top-to-bottom like your résumé.</p>
         </DialogHeader>
 
-        <TailorDiffReadonlyBody
-          detailedChanges={detailedChanges}
-          changeManifest={changeManifest}
-          changeBreakdown={changeBreakdown ?? null}
-          artifacts={artifacts}
-          errorMessage={errorMessage}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-3 sm:px-4">
+          <TailorDiffReadonlyBody
+            detailedChanges={detailedChanges}
+            changeManifest={changeManifest}
+            changeBreakdown={changeBreakdown ?? null}
+            artifacts={artifacts}
+            errorMessage={errorMessage}
+            resumePreview={resumePreview}
+          />
+        </div>
 
-        <div className="flex justify-between items-center pt-4 border-t-2 border-black bg-white -mx-6 -mb-6 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
           <Button variant="outline" onClick={onReject} disabled={isConfirming} className="gap-2">
             <X className="w-4 h-4" />
             {t('tailor.diffModal.rejectButton')}
@@ -802,7 +1206,7 @@ export function DiffPreviewModal({
             <Button
               onClick={onConfirm}
               disabled={isConfirming}
-              className="gap-2 bg-[#15803D] hover:bg-[#166534]"
+              className="gap-2 bg-emerald-700 hover:bg-emerald-800"
             >
               {isConfirming ? (
                 <>
@@ -831,22 +1235,24 @@ interface StatCardProps {
 
 function InlineStat({ label, value, variant }: StatCardProps) {
   const colors = {
-    success: 'border-[#15803D] bg-[#F0FDF4] text-[#15803D]',
-    warning: 'border-[#F97316] bg-[#FFF7ED] text-[#F97316]',
-    danger: 'border-[#DC2626] bg-[#FEF2F2] text-[#DC2626]',
-    info: 'border-[#1D4ED8] bg-[#EFF6FF] text-[#1D4ED8]',
+    success: 'border-emerald-200 bg-emerald-50/70 text-emerald-900',
+    warning: 'border-amber-200 bg-amber-50/70 text-amber-900',
+    danger: 'border-red-200 bg-red-50/70 text-red-900',
+    info: 'border-slate-200 bg-slate-50 text-slate-800',
   };
 
   return (
-    <div className={`border px-2 py-0.5 flex items-center gap-1.5 ${colors[variant]}`}>
-      <span className="font-mono text-sm font-bold">{value}</span>
-      <span className="font-mono text-xs uppercase tracking-wide opacity-75">{label}</span>
+    <div
+      className={`flex items-center gap-2 rounded px-2 py-1 text-[11px] leading-none ${colors[variant]}`}
+    >
+      <span className="tabular-nums font-semibold">{value}</span>
+      <span className="opacity-85">{label}</span>
     </div>
   );
 }
 
 interface ChangeSectionProps {
-  title: string;
+  title: React.ReactNode;
   count: number;
   isExpanded: boolean;
   onToggle: () => void;
@@ -855,97 +1261,177 @@ interface ChangeSectionProps {
 
 function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeSectionProps) {
   return (
-    <div className="border-2 border-black bg-white">
+    <section className="rounded-lg border border-slate-200/90 bg-white">
       <button
+        type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 hover:bg-gray-50"
+        className="flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50"
       >
-        <div className="flex items-center gap-2">
-          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          <span className="font-mono text-sm font-bold uppercase tracking-wider">
-            {title} ({count})
-          </span>
-        </div>
+        <span className="flex min-w-0 flex-1 items-start gap-2">
+          {isExpanded ? (
+            <ChevronDown className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+          ) : (
+            <ChevronRight className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+          )}
+          <span className="min-w-0 flex-1 text-[15px] leading-snug">{title}</span>
+        </span>
+        <span className="shrink-0 tabular-nums text-xs font-medium text-slate-400">{count}</span>
       </button>
 
-      {isExpanded && <div className="border-t-2 border-black p-4 space-y-3">{children}</div>}
-    </div>
+      {isExpanded ? (
+        <div className="divide-y divide-slate-100 border-t border-slate-100">{children}</div>
+      ) : null}
+    </section>
   );
 }
 
 function ChangeItem({ item }: { item: DisplayChange }) {
   const { change } = item;
+  const bulletPos =
+    item.parsed.bulletIndex !== undefined && change.field_type === 'description'
+      ? item.parsed.bulletIndex + 1
+      : null;
 
-  const typeBadgeClass = {
-    added: 'border-[#15803D] bg-[#F0FDF4] text-[#15803D]',
-    removed: 'border-[#B91C1C] bg-[#FEF2F2] text-[#B91C1C]',
-    modified: 'border-[#1D4ED8] bg-[#EFF6FF] text-[#1D4ED8]',
-  }[change.change_type];
+  const unchangedFlag = item.semanticUnchanged;
 
-  return (
-    <div className="border border-black/20 p-3 bg-white space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className={`border px-2 py-0.5 font-mono text-xs uppercase tracking-wide ${typeBadgeClass}`}
-        >
-          {change.change_type}
-        </span>
-        <span
-          className={`border px-2 py-0.5 font-mono text-xs uppercase tracking-wide ${
-            item.source === 'ai'
-              ? 'border-[#15803D] bg-[#F0FDF4] text-[#15803D]'
-              : 'border-[#92400E] bg-[#FFFBEB] text-[#92400E]'
-          }`}
-        >
-          {item.source === 'ai' ? 'AI' : 'System'}
-        </span>
-        {item.needsVerification && (
-          <span className="border border-[#F97316] bg-[#FFF7ED] text-[#C2410C] px-2 py-0.5 font-mono text-xs uppercase tracking-wide inline-flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3" /> Verify
-          </span>
-        )}
-        <span className="font-mono text-[11px] text-gray-500">{item.contextLabel}</span>
-      </div>
+  const rowTone = unchangedFlag
+    ? 'border-l-slate-300 bg-slate-50/50'
+    : change.change_type === 'added'
+      ? 'border-l-emerald-500 bg-emerald-50/25'
+      : change.change_type === 'removed'
+        ? 'border-l-red-500 bg-red-50/25'
+        : 'border-l-slate-400 bg-white';
+
+  const rationaleBlock =
+    item.aiRationale && item.aiRationale.length > 0 ? (
+      <details open className="rounded-md border border-slate-100 bg-white px-2 py-1.5 text-[12px] text-slate-600">
+        <summary className="cursor-pointer select-none text-[11px] font-medium text-slate-600">
+          Model note
+        </summary>
+        <p className="mt-1.5 whitespace-pre-wrap break-words text-[13px] text-slate-800">
+          {item.aiRationale}
+        </p>
+      </details>
+    ) : null;
+
+  const attributionHint =
+    unchangedFlag ? 'unchanged' : item.source === 'system'
+      ? 'post-tailor delta'
+      : item.needsVerification ? 'verify' : null;
+
+  const displayLine =
+    (change.original_value ?? change.new_value)?.trim() || '';
+
+  const bodyContent = (
+    <>
+      {rationaleBlock ? <div>{rationaleBlock}</div> : null}
 
       {change.change_type === 'added' && change.new_value && (
-        <DiffValueBox label="After" value={change.new_value} tone="added" />
+        <DiffValueBox label="New" value={change.new_value} tone="added" />
       )}
 
       {change.change_type === 'removed' && change.original_value && (
-        <DiffValueBox label="Before" value={change.original_value} tone="removed" />
+        <DiffValueBox label="Removed" value={change.original_value} tone="removed" />
       )}
 
       {change.change_type === 'modified' &&
-        (() => {
-          const { before, after } = displayValuesForModifiedField(
-            change.original_value,
-            change.new_value
-          );
-          return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <DiffValueBox label="Before" value={before} tone="removed" />
-              <DiffValueBox label="After" value={after} tone="added" />
-            </div>
-          );
-        })()}
+        (unchangedFlag ? (
+          displayLine ? (
+            <DiffValueBox label="Resume text (unchanged)" value={displayLine} tone="system" />
+          ) : (
+            <p className="text-[13px] leading-snug text-slate-600">
+              No textual change on this row — retained as-is.
+            </p>
+          )
+        ) : (
+          (() => {
+            const { before, after } = displayValuesForModifiedField(
+              change.original_value,
+              change.new_value
+            );
+            return (
+              <div className="grid grid-cols-1 gap-1.5 sm:gap-2 md:grid-cols-2">
+                <DiffValueBox label="Before" value={before} tone="removed" />
+                <DiffValueBox label="After" value={after} tone="added" />
+              </div>
+            );
+          })()
+        ))}
 
-      {item.cleanupNote && (
-        <div className="border border-[#92400E] bg-[#FFFBEB] p-2">
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#92400E] mb-1">
-            System cleanup on the same item
+      {item.cleanupNote && !unchangedFlag ? (
+        <div className="rounded-md border border-amber-100 bg-amber-50/60 px-2 py-1.5 text-[12px] text-amber-950">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-amber-800/85">
+            Post-tailor tweak
           </p>
-          <p className="font-mono text-xs text-[#78350F] whitespace-pre-wrap break-words">
-            <span className="font-bold">old</span>: {item.cleanupNote.oldFragment}
-            {' -> '}
-            <span className="font-bold">new</span>: {item.cleanupNote.newFragment}
+          <p className="mt-1 leading-snug">
+            − {item.cleanupNote.oldFragment}
+            <span className="mx-2 text-slate-400">→</span>+ {item.cleanupNote.newFragment}
           </p>
         </div>
-      )}
+      ) : null}
+    </>
+  );
+
+  return (
+    <div className={`border-l-[3px] px-2.5 py-1.5 sm:px-3 sm:py-2 ${rowTone}`}>
+      <div className="flex items-start gap-2">
+        {bulletPos !== null ? (
+          <span
+            className="w-11 shrink-0 pt-0.5 text-center text-xl font-semibold tabular-nums tracking-tight text-slate-900 sm:text-[1.35rem]"
+            aria-label={`Bullet ${bulletPos}`}
+          >
+            #{bulletPos}
+          </span>
+        ) : null}
+        <div className="min-w-0 flex-1 space-y-1.5">
+          {bulletPos === null ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-[13px] font-medium text-slate-900">{item.contextLabel}</span>
+                {unchangedFlag ? (
+                  <span className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-violet-900">
+                    same text
+                  </span>
+                ) : null}
+              </span>
+              {attributionHint ? (
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-slate-400">
+                  {attributionHint}
+                </span>
+              ) : unchangedFlag ? null : (
+                <span className="sr-only">
+                  Attributed to {item.source === 'ai' ? 'model' : 'cleanup'}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1">
+              {unchangedFlag ? (
+                <span className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-violet-900">
+                  same text
+                </span>
+              ) : attributionHint ? (
+                <span className="text-[10px] uppercase tracking-wide text-slate-400">{attributionHint}</span>
+              ) : (
+                <span className="sr-only">Attributed to model tailoring</span>
+              )}
+            </div>
+          )}
+
+          {bodyContent}
+        </div>
+      </div>
     </div>
   );
 }
 
-function SkillsGroupedView({ items }: { items: DisplayChange[] }) {
+function SkillsGroupedView({
+  items,
+  aggregateRationale,
+}: {
+  items: DisplayChange[];
+  aggregateRationale?: string;
+}) {
   const grouped = useMemo(() => {
     const buckets = new Map<
       string,
@@ -986,26 +1472,34 @@ function SkillsGroupedView({ items }: { items: DisplayChange[] }) {
   }, [items]);
 
   return (
-    <div className="space-y-3">
-      {grouped.map((entry) => (
-        <div key={entry.group} className="border border-black/20 p-3 bg-white">
-          <p className="font-mono text-xs font-bold uppercase tracking-wider text-gray-700">
-            {entry.group}
+    <div className="space-y-2">
+      {aggregateRationale ? (
+        <details open className="rounded-md border border-slate-200 bg-slate-50/80 px-3 py-2">
+          <summary className="cursor-pointer text-[12px] font-medium text-slate-700">
+            Skills — model note
+          </summary>
+          <p className="mt-2 whitespace-pre-wrap break-words text-[13px] text-slate-700">
+            {aggregateRationale}
           </p>
-          <div className="mt-2 space-y-1">
+        </details>
+      ) : null}
+      {grouped.map((entry) => (
+        <div key={entry.group} className="rounded-md border border-slate-200/80 bg-white px-3 py-2">
+          <p className="text-[13px] font-semibold text-slate-900">{entry.group}</p>
+          <div className="mt-1.5 space-y-1 text-[12px] leading-snug">
             {entry.added.length > 0 && (
-              <p className="font-mono text-xs text-[#14532D]">
-                + Added ({entry.added.length}): {entry.added.join(', ')}
+              <p className="text-emerald-800">
+                <span className="font-medium">+</span> {entry.added.join(', ')}
               </p>
             )}
             {entry.removed.length > 0 && (
-              <p className="font-mono text-xs text-[#7F1D1D]">
-                - Removed ({entry.removed.length}): {entry.removed.join(', ')}
+              <p className="text-red-800">
+                <span className="font-medium">−</span> {entry.removed.join(', ')}
               </p>
             )}
             {entry.modified.length > 0 && (
-              <p className="font-mono text-xs text-[#1D4ED8]">
-                ~ Updated ({entry.modified.length}): {entry.modified.join(' | ')}
+              <p className="text-sky-950">
+                <span className="font-medium">±</span> {entry.modified.join(' · ')}
               </p>
             )}
           </div>
@@ -1026,15 +1520,15 @@ function DiffValueBox({
 }) {
   const toneClass =
     tone === 'added'
-      ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
+      ? 'border-emerald-200/90 bg-white text-emerald-950'
       : tone === 'removed'
-        ? 'border-[#B91C1C] bg-[#FEF2F2] text-[#7F1D1D]'
-        : 'border-[#92400E] bg-[#FFFBEB] text-[#78350F]';
+        ? 'border-red-200/90 bg-white text-red-950'
+        : 'border-amber-200/90 bg-white text-amber-950';
 
   return (
-    <div className={`border p-2 ${toneClass}`}>
-      <p className="font-mono text-[10px] uppercase tracking-[0.12em] opacity-70 mb-1">{label}</p>
-      <p className="font-mono text-xs whitespace-pre-wrap break-words">{value || '(empty)'}</p>
+    <div className={`rounded-md border px-2.5 py-2 text-[13px] leading-snug ${toneClass}`}>
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="whitespace-pre-wrap break-words text-slate-900">{value || '(empty)'}</p>
     </div>
   );
 }

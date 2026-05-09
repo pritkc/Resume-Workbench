@@ -1203,6 +1203,8 @@ class ResumeFieldDiff(BaseModel):
         "education",
         "project",
         "project_title",
+        "personal_info",
+        "bold_keywords",
     ]
     change_type: Literal["added", "removed", "modified"]
     original_value: str | None = None

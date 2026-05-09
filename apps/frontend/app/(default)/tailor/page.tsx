@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
-import type { ImprovedResult } from '@/components/common/resume_previewer_context';
+import type { ImprovedResult, ResumePreview } from '@/components/common/resume_previewer_context';
 import type { ResumeData } from '@/components/dashboard/resume-component';
 import {
   uploadJobDescriptions,
@@ -866,6 +866,7 @@ function TailorPageContent() {
           pipelineTiming={pendingResult?.data?.pipeline_timing}
           artifacts={pendingResult?.data?.artifacts}
           errorMessage={diffConfirmError ?? undefined}
+          resumePreview={pendingResult?.data?.resume_preview ?? null}
         />
       )}
 

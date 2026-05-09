@@ -88,7 +88,7 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.getByRole('button', { name: /Skills/i })).toBeInTheDocument();
-    expect(screen.getByText('+ Added (1): Go')).toBeInTheDocument();
+    expect(screen.getByText('Go')).toBeInTheDocument();
   });
 
   it('toggles section visibility on header click', () => {
@@ -104,7 +104,7 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.getByText('new')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Summary/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Professional summary/i }));
     expect(screen.queryByText('new summary')).not.toBeInTheDocument();
   });
 
@@ -126,11 +126,11 @@ describe('DiffPreviewModal', () => {
     expect(
       screen.queryByText('Pipeline: 2 AI-applied, 1 cleanup-only, 0 rejected.')
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show details' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(screen.getByRole('button', { name: 'Breakdown' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Breakdown' }));
     expect(screen.getByText('Summary')).toBeInTheDocument();
-    expect(screen.getByText('Needs verification')).toBeInTheDocument();
-    expect(screen.getAllByText('AI').length).toBeGreaterThan(0);
+    expect(screen.getByText('Skills verify')).toBeInTheDocument();
+    expect(screen.getByText('Model-attributed rows')).toBeInTheDocument();
   });
 
   it('attributes title changes to AI when manifest has same entry paths', () => {
@@ -165,9 +165,9 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    const context = screen.getByText('Experience 1 title').closest('div');
+    const context = screen.getByText('Experience 1 role').closest('div');
     expect(context).not.toBeNull();
-    expect(within(context as HTMLElement).getByText('AI')).toBeInTheDocument();
+    expect(within(context as HTMLElement).getByText('Attributed to model')).toBeInTheDocument();
   });
 
   it('shows project diffs when project path uses alias form', () => {
@@ -194,7 +194,7 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.getByRole('button', { name: /Project 1/i })).toBeInTheDocument();
-    expect(screen.getByText('Project 1 bullet 2')).toBeInTheDocument();
+    expect(screen.getByText('#2')).toBeInTheDocument();
   });
 
   it('fires confirm and reject handlers', () => {
@@ -288,7 +288,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.queryByText('System cleanup on the same item')).not.toBeInTheDocument();
+    expect(screen.queryByText('Post-tailor tweak')).not.toBeInTheDocument();
   });
 
   it('shows system cleanup only when a manifest path exactly matches the diff row', () => {
@@ -330,7 +330,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.queryAllByText('System cleanup on the same item')).toHaveLength(1);
+    expect(screen.queryAllByText('Post-tailor tweak')).toHaveLength(1);
     expect(
       screen.getByText(new RegExp(ragSnippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     ).toBeInTheDocument();

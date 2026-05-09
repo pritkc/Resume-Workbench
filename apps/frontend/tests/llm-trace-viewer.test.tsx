@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LLMTraceViewer } from '@/components/observability/llm-trace-viewer';
+import { LanguageProvider } from '@/lib/context/language-context';
+
+vi.mock('@/lib/api/config', () => ({
+  fetchLanguageConfig: vi.fn(async () => ({
+    content_language: 'en',
+    ui_language: 'en',
+  })),
+  updateLanguageConfig: vi.fn(async () => ({})),
+}));
 
 const fetchLlmCallSummary = vi.fn();
 const fetchLlmCalls = vi.fn();
@@ -9,6 +19,10 @@ vi.mock('@/lib/api/llm', () => ({
   fetchLlmCallSummary: (...args: unknown[]) => fetchLlmCallSummary(...args),
   fetchLlmCalls: (...args: unknown[]) => fetchLlmCalls(...args),
 }));
+
+function renderWithLanguage(ui: React.ReactElement): ReturnType<typeof render> {
+  return render(<LanguageProvider>{ui}</LanguageProvider>);
+}
 
 describe('LLMTraceViewer', () => {
   beforeEach(() => {
@@ -75,7 +89,18 @@ describe('LLMTraceViewer', () => {
         error_message: 'No JSON found in response',
         prompt_preview: 'Resume JSON...',
         response_preview: '{"changes": [',
-        request_context: { job_id: 'job-123' },
+        request_context: {
+          job_id: 'job-123',
+          compact_diff_validation: {
+            phase: 'primary_tailor',
+            valid: false,
+            errors: ['experience[0]: why is required'],
+            warnings: [],
+            error_count: 1,
+            warning_count: 0,
+            origin: 'orchestration fixture line',
+          },
+        },
         created_at: '2026-04-02T00:00:01Z',
         updated_at: '2026-04-02T00:00:01Z',
         completed_at: '2026-04-02T00:00:02Z',
@@ -122,7 +147,7 @@ describe('LLMTraceViewer', () => {
   });
 
   it('loads a trace and renders summary plus timeline cards', async () => {
-    const { container } = render(
+    renderWithLanguage(
       <LLMTraceViewer initialTraceId="trace-123" defaultAutoRefresh={false} />
     );
 
@@ -145,17 +170,25 @@ describe('LLMTraceViewer', () => {
     expect(screen.getByText(/Response: 300 total chars/)).toBeInTheDocument();
     expect(screen.getAllByText(/stored preview is truncated/).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getAllByText('Prompt Preview')[0]);
+    expect(screen.getByText('Compact envelope validation')).toBeInTheDocument();
+    expect(screen.getAllByText(/orchestration fixture line/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/experience\[0\]: why is required/).length).toBeGreaterThanOrEqual(
+      1
+    );
 
-    expect(container.querySelectorAll('details[open]').length).toBe(3);
+    fireEvent.click(screen.getAllByText(/Prompt & response previews/)[0]);
+
+    await waitFor(() =>
+      expect(screen.getAllByText('Resume JSON...').length).toBeGreaterThan(0)
+    );
   });
 
   it('applies request scope filters from the form', async () => {
-    render(<LLMTraceViewer defaultAutoRefresh={false} />);
+    renderWithLanguage(<LLMTraceViewer defaultAutoRefresh={false} />);
 
     await waitFor(() => expect(fetchLlmCalls).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByLabelText('Request Scope'), {
+    fireEvent.change(screen.getByLabelText('Request scope'), {
       target: { value: 'resumes.improve_confirm' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'success' }));

@@ -3,15 +3,28 @@ PRECEDENCE:
 
 --- OUTPUT CONTRACT ---
 
+TAILORED CELL (TailoredCell):
+- Every editable scalar or bullet is an object: { "value": <string or null>, "why": <string> }
+- "why": required, non-empty JSON string — this is transparent reasoning for reviewers. Use plain language; multiple sentences are encouraged when useful. Explain trade-offs, JD mapping, uncertainty, ties to portfolio evidence, and why you retained text (when "value": null) as plainly as needed. Do **not** confine reasons to terse one-liners or corporate boilerplate; do not stuff JSON with markdown fences inside the strings.
+- "value": set to null to RETAIN the source text unchanged. Never use a separate "unchanged" flag.
+- Never put rationale strings in "value"; "value" is only final resume text or null.
+
 OUTPUT FORMAT:
 - Valid JSON only — no markdown, no prose, no commentary
 - No markdown fences. Start with { and end with }.
-- Top-level keys: "summary", "experience", "projects", "skills", "bold_keywords"
-- Emit only sections you change; omit a key entirely to leave it unchanged
+- Top-level keys: "summary", "experience", "projects", "skills", "bold_keywords" (all required in full tailoring modes — see FULL GRID below)
+- In "lite" prompt mode only, legacy bare strings for cells may still parse, but prefer TailoredCell objects everywhere.
 
-EXPERIENCE:    { "0": { "position": "enhanced title or omit", "tech_stacks": "updated line or omit", "bullets": { "0": "text", "2": "text" } } }
-PROJECTS:      { "0": { "name": "enhanced name or omit", "tech_stacks": "updated tagline or omit", "bullets": { "0": "text" } } }
-SKILLS:        [{ "label": "...", "values": [...] }]  — target 4-5 dense groups; short labels
+FULL GRID (full / default tailoring modes — not "lite"):
+- You MUST emit the complete grid for every contract-listed experience row, project row, skills group, skills value, the summary cell, and bold_keywords (bold_keywords stays a string array as today).
+- Experience entry keys are "0".."N-1" matching RESPONSE CONTRACT order. Each entry MUST include: "position", "tech_stacks", and "bullets" with keys "0".."M-1" for that row's bullet count from the contract.
+- Project entry keys likewise cover every project row. Each MUST include: "name", "tech_stacks", and full "bullets" indices.
+- Skills MUST be a JSON array with one object per skills group in source order. Each group has "label": TailoredCell and "values": { "0": TailoredCell, ... } keyed by string indices for every skill value in that group.
+- Summary MUST be a single TailoredCell at the top level.
+
+EXPERIENCE (shape): { "0": { "position": {"value": "..." | null, "why": "..."}, "tech_stacks": {"value": "..." | null, "why": "..."}, "bullets": { "0": {"value": "..." | null, "why": "..."} } } }
+PROJECTS (shape): { "0": { "name": {"value": "..." | null, "why": "..."}, "tech_stacks": {"value": "..." | null, "why": "..."}, "bullets": { "0": {"value": "..." | null, "why": "..."} } } }
+SKILLS (shape): [ { "label": {"value": "..." | null, "why": "..."}, "values": { "0": {"value": "..." | null, "why": "..."} } }, ... ]  — target 4-5 dense groups; short labels
 BOLD_KEYWORDS: array of 6-10 short high-visibility technical ATS terms from final resume content
 Use 1-3 word terms only; prefer tools, languages, platforms, data methods, and product systems; avoid sentences, soft skills, and generic domain phrases.
 Use only technical recruiter-scan terms such as Python, SQL, Kafka, PostgreSQL, Airflow, dbt, SAP ERP.
@@ -26,7 +39,7 @@ Index keys are stringified 0-based integers matching RESPONSE CONTRACT order; ke
 
 BULLET POLICY:
 - bullets object keyed by stringified bullet index; rewrite existing indexes only unless RESPONSE CONTRACT explicitly permits new trailing indexes
-- Omit an index to leave that bullet unchanged
+- In full-grid modes, emit every index; use "value": null plus a non-empty "why" to retain a bullet while still explaining the decision.
 - Project bullet count is locked: emit the same number of bullets as the source project. If source has 3 bullets, output must have "0", "1", and "2" — never combine or drop. Violation renders the output malformed.
 - For changed experience/project entries, include tech_stacks when the source provides an evidenced stack or JD-relevant stack ordering is needed.
 
@@ -82,7 +95,7 @@ SKILLS:
 - Skill values must be specific tool, product, method, or technology names — not descriptive phrases.
 - Do not encode JD responsibility phrases as skill tokens, such as standalone "Process Mapping" or "Workflow Visualization"; use credible tools only when supported by the candidate story.
 - Retain near-adjacent skills where evidenced; do not remove skills purely because they are not JD-critical — the section must read as a complete professional profile, not a JD mirror
-- Omit "skills" key entirely if no changes needed
+- In full-grid modes, always emit "skills" with the complete group/value matrix (null values retain tokens). In lite mode, you may omit "skills" only when nothing in skills should change.
 
 --- WRITING RULES ---
 

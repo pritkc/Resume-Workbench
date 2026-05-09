@@ -30,7 +30,7 @@ import {
   Sparkles,
   Loader2,
 } from 'lucide-react';
-import { useResumePreview } from '@/components/common/resume_previewer_context';
+import { type ResumePreview, useResumePreview } from '@/components/common/resume_previewer_context';
 import { TailorDiffReadonlyBody } from '@/components/tailor/diff-preview-modal';
 import { RenderThemeControls } from '@/components/rendercv/render-theme-controls';
 import { RenderLocaleControls } from '@/components/rendercv/render-locale-controls';
@@ -2075,8 +2075,15 @@ const ResumeBuilderContent = () => {
                 isDesktop && paneMode === 'split' ? 'shrink-0' : 'flex-1'
               )}
             >
-              <div className="editor-panel h-full min-h-0 overflow-y-auto overscroll-contain px-1.5 pb-2 pt-0 md:px-2">
-                <div className="flex w-full max-w-none flex-col gap-1.5 pt-0.5 md:pt-1">
+              <div className="editor-panel flex h-full min-h-0 flex-col overflow-hidden overscroll-contain px-1.5 pb-2 pt-0 md:px-2">
+                <div
+                  className={cn(
+                    'flex w-full max-w-none flex-col gap-1.5 pt-0.5 md:pt-1',
+                    activeTab === 'jd-tailor-diff'
+                      ? 'min-h-0 flex-1 overflow-hidden'
+                      : 'min-h-0 flex-1 overflow-y-auto'
+                  )}
+                >
                   {activeTab === 'resume' && (
                     <div className="shrink-0 border-b border-black/15 bg-white">
                       <div className="flex h-8 items-stretch">
@@ -2268,8 +2275,8 @@ const ResumeBuilderContent = () => {
                   )}
 
                   {activeTab === 'jd-tailor-diff' && (
-                    <div className="space-y-3 border border-black/15 bg-[#F0F0E8] pb-4">
-                      <section className="border-b border-black/10 bg-white px-3 py-2">
+                    <div className="flex min-h-0 flex-1 flex-col gap-0 border border-black/15 bg-[#F0F0E8] pb-2">
+                      <section className="shrink-0 border-b border-black/10 bg-white px-3 py-2">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
                           {t('builder.jdTailorDiff.aboutTitle')}
                         </h3>
@@ -2278,37 +2285,38 @@ const ResumeBuilderContent = () => {
                         </p>
                       </section>
                       {jdTailorDiffLoading && (
-                        <div className="flex items-center gap-2 px-3 py-4 font-mono text-xs text-gray-600">
+                        <div className="flex shrink-0 items-center gap-2 px-3 py-4 font-mono text-xs text-gray-600">
                           <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
                           {t('common.loading')}
                         </div>
                       )}
                       {!jdTailorDiffLoading && jdTailorDiffError && (
-                        <div className="mx-3 border border-amber-600/40 bg-amber-50 px-3 py-2 font-mono text-[11px] leading-snug text-amber-950">
+                        <div className="mx-3 shrink-0 border border-amber-600/40 bg-amber-50 px-3 py-2 font-mono text-[11px] leading-snug text-amber-950">
                           {jdTailorDiffError}
                         </div>
                       )}
                       {!jdTailorDiffLoading && jdTailorDiffPayload && (
-                        <>
-                          <p className="px-3 font-mono text-[10px] uppercase tracking-wide text-gray-600">
+                        <div className="flex min-h-0 flex-1 flex-col px-0 pt-1">
+                          <p className="shrink-0 px-3 pb-2 font-mono text-[10px] uppercase tracking-wide text-gray-600">
                             {jdTailorDiffPayload.diff_source === 'stored_detailed_changes'
                               ? t('builder.jdTailorDiff.sourceStoredDetailed')
                               : jdTailorDiffPayload.diff_source === 'recomputed_confirmation_snapshot'
                                 ? t('builder.jdTailorDiff.sourceRecomputedConfirmation')
                                 : t('builder.jdTailorDiff.sourceLiveVsMaster')}
                           </p>
-                          <div className="mx-3 min-h-[120px] overflow-hidden border border-black/20 bg-[#F0F0E8]">
-                            <div className="max-h-[min(70vh,720px)] min-h-0 overflow-y-auto px-1 py-2 md:px-2 md:py-3">
+                          <div className="mx-3 flex min-h-0 flex-1 flex-col overflow-hidden border border-black/20 bg-[#F0F0E8]">
+                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-2 md:px-2 md:py-3">
                               <TailorDiffReadonlyBody
                                 detailedChanges={jdTailorDiffPayload.detailed_changes ?? []}
                                 changeManifest={jdTailorDiffPayload.change_manifest}
                                 changeBreakdown={jdTailorDiffPayload.change_breakdown ?? null}
                                 artifacts={jdTailorDiffPayload.artifacts}
                                 artifactGalleryTitle={t('builder.jdTailorDiff.artifactTitle')}
+                                resumePreview={resumeData as unknown as ResumePreview}
                               />
                             </div>
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
                   )}

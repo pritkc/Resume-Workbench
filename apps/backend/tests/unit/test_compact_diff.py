@@ -1,5 +1,8 @@
 """Unit tests for apply_compact_diff and related helpers in preservation.py."""
 
+import copy
+import json
+
 import pytest
 
 from app.services.tailoring.preservation import (
@@ -65,6 +68,35 @@ def base_resume():
 
 
 class TestApplyCompactDiff:
+    def test_tailored_cell_null_retains_bullet(self, base_resume):
+        diff = {
+            "experience": {
+                "0": {
+                    "bullets": {
+                        "0": {"value": None, "why": "Original bullet already optimal."},
+                    }
+                }
+            }
+        }
+        result = apply_compact_diff(base_resume, diff)
+        assert (
+            result["workExperience"][0]["description"][0]
+            == base_resume["workExperience"][0]["description"][0]
+        )
+
+    def test_tailored_values_apply_and_rationale_not_in_resume_json(self, base_resume):
+        diff = {
+            "summary": {"value": "New summary text.", "why": "Aligned to JD."},
+            "experience": {
+                "0": {"bullets": {"0": {"value": "Rewritten bullet.", "why": "Stronger hook."}}}
+            },
+        }
+        result = apply_compact_diff(base_resume, diff)
+        dumped = json.dumps(result)
+        assert "why" not in dumped
+        assert result["summary"] == "New summary text."
+        assert result["workExperience"][0]["description"][0] == "Rewritten bullet."
+
     def test_summary_rewritten(self, base_resume):
         diff = {"summary": "5+ years in Python backend, specialising in APIs."}
         result = apply_compact_diff(base_resume, diff)
@@ -400,7 +432,6 @@ class TestApplyCompactDiff:
         assert result["workExperience"][0].get("name") is None
 
     def test_original_not_mutated(self, base_resume):
-        import copy
         original_copy = copy.deepcopy(base_resume)
         diff = {"summary": "Changed.", "experience": {"0": {"bullets": {"0": "New"}}}}
         apply_compact_diff(base_resume, diff)

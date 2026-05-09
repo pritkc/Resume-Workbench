@@ -67,6 +67,12 @@ export function LlmTraceCallCard({
         : 'No request context stored.',
     [call.request_context]
   );
+  const compactEnvelope =
+    typeof call.request_context?.compact_diff_validation === 'object' &&
+    call.request_context.compact_diff_validation !== null &&
+    !Array.isArray(call.request_context.compact_diff_validation)
+      ? (call.request_context.compact_diff_validation as Record<string, unknown>)
+      : null;
 
   return (
     <article
@@ -192,6 +198,67 @@ export function LlmTraceCallCard({
           </div>
         </div>
       </div>
+
+      {compactEnvelope ? (
+        <div
+          className={`mt-4 rounded-md border p-3 ${
+            compactEnvelope.valid === false
+              ? 'border-amber-200 bg-amber-50/90'
+              : 'border-emerald-200 bg-emerald-50/70'
+          }`}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-mono text-xs font-semibold uppercase tracking-wide text-slate-800">
+              Compact envelope validation
+            </p>
+            <span
+              className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${
+                compactEnvelope.valid === false
+                  ? 'border-amber-300 bg-white text-amber-900'
+                  : 'border-emerald-300 bg-white text-emerald-900'
+              }`}
+            >
+              {compactEnvelope.valid === false ? 'issues' : 'ok'}
+            </span>
+            {typeof compactEnvelope.phase === 'string' && compactEnvelope.phase ? (
+              <span className="rounded border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] uppercase text-slate-700">
+                {compactEnvelope.phase}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 font-mono text-[11px] leading-snug text-slate-600">
+            {typeof compactEnvelope.origin === 'string' ? compactEnvelope.origin : 'Origin unknown'}
+          </p>
+          <p className="mt-1 font-mono text-[11px] text-slate-700">
+            {typeof compactEnvelope.error_count === 'number' ? compactEnvelope.error_count : 0} error
+            {(typeof compactEnvelope.error_count === 'number' ? compactEnvelope.error_count : 0) === 1
+              ? ''
+              : 's'}
+            {' · '}
+            {typeof compactEnvelope.warning_count === 'number'
+              ? compactEnvelope.warning_count
+              : 0}{' '}
+            warning
+            {(typeof compactEnvelope.warning_count === 'number' ? compactEnvelope.warning_count : 0) === 1
+              ? ''
+              : 's'}
+          </p>
+          {Array.isArray(compactEnvelope.errors) && compactEnvelope.errors.length > 0 ? (
+            <ul className="mt-2 max-h-[min(32dvh,18rem)] list-disc space-y-1 overflow-auto pl-4 font-mono text-[11px] text-slate-800">
+              {compactEnvelope.errors.map((line, idx) => (
+                <li key={idx}>{String(line)}</li>
+              ))}
+            </ul>
+          ) : null}
+          {Array.isArray(compactEnvelope.warnings) && compactEnvelope.warnings.length > 0 ? (
+            <ul className="mt-2 max-h-[min(20dvh,12rem)] list-disc space-y-1 overflow-auto pl-4 font-mono text-[11px] text-slate-700">
+              {compactEnvelope.warnings.map((line, idx) => (
+                <li key={`w-${idx}`}>{String(line)}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {(call.error_type || call.error_message) && (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50/90 p-3">

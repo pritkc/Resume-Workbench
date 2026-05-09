@@ -8,14 +8,16 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.config import get_enable_critique, get_step_llm_config
-from app.llm import complete_json
+from app.config import get_enable_critique, get_step_llm_config, settings
+from app.llm import complete_json, get_llm_trace_id
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, PROMPT_VERSIONS
 from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
 
 from app.services.tailoring.change_manifest import (
     build_change_manifest,
     build_stage_breakdown,
+    enrich_change_manifest_with_tailored_cells,
+    supplement_change_manifest_with_unchanged_cell_rationales,
     validate_declared_changes,
 )
 from app.services.tailoring.contracts import build_response_contract
@@ -31,7 +33,7 @@ from app.services.tailoring.preservation import (
     finalize_tailored_resume,
     rehydrate_tailoring_resume,
 )
-from app.services.tailoring.validation import validate_compact_diff
+from app.services.tailoring.validation import DiffValidationResult, validate_compact_diff
 from app.prompts.critique_resume import build_messages as build_critique_messages
 from app.prompts.rewrite_resume import build_messages as build_rewrite_messages
 from app.services.tailoring.llm_calls import run_primary_tailoring
@@ -39,6 +41,78 @@ from app.services.tailoring.prompting import build_prompt_context
 from app.services.tailoring.jd_intel_blob import filter_basic_resume_terms
 
 logger = logging.getLogger(__name__)
+
+# Attached to persisted LLM trace rows (request_context.compact_diff_validation) for UX/debug.
+_ORIGIN_COMPACT_VALIDATE_PRIMARY = (
+    "orchestration.generate_tailored_resume — after run_primary_tailoring / complete_json "
+    "(operation resume_generate_full); validate_compact_diff at orchestration.py ~175–187"
+)
+_ORIGIN_COMPACT_VALIDATE_REWRITE = (
+    "orchestration.generate_tailored_resume — after rewrite complete_json "
+    "(operation rewrite_resume); validate_compact_diff at orchestration.py ~232–243"
+)
+
+
+def _trace_attach_compact_validation(
+    *,
+    operation: str,
+    phase_display: str,
+    validation_result: DiffValidationResult,
+    origin_note: str,
+) -> None:
+    if not settings.llm_trace_enabled:
+        return
+    trace_id = get_llm_trace_id()
+    if not trace_id:
+        return
+
+    envelope: dict[str, Any] = {
+        "phase": phase_display,
+        "valid": validation_result.valid,
+        "errors": list(validation_result.errors),
+        "warnings": list(validation_result.warnings),
+        "error_count": len(validation_result.errors),
+        "warning_count": len(validation_result.warnings),
+        "origin": origin_note,
+    }
+    try:
+        from app.database import db
+
+        ok = db.attach_compact_diff_validation_to_latest_llm_call(
+            trace_id=trace_id,
+            operation=operation,
+            envelope_validation=envelope,
+        )
+        if not ok:
+            logger.debug(
+                "No LLM trace row found to attach compact_diff_validation (%s %s)",
+                trace_id,
+                operation,
+            )
+    except Exception:
+        logger.debug(
+            "Failed to persist compact_diff_validation on LLM trace (non-fatal)",
+            exc_info=True,
+        )
+
+
+def _log_compact_validation(phase: str, validation_result: DiffValidationResult) -> None:
+    """Keep operator logs terse; emit full validator output at DEBUG."""
+
+    if validation_result.valid:
+        return
+    logger.debug(
+        "%s compact diff validation issues (non-fatal): %s",
+        phase,
+        validation_result.errors,
+    )
+    logger.warning(
+        "%s tailoring output deviates from strict compact envelope (%d issue(s)); "
+        "bullet/project/skills quotas are often the trigger — enable DEBUG on %s for the full list",
+        phase,
+        len(validation_result.errors),
+        __name__,
+    )
 
 
 def _check_for_truncation(data: dict[str, Any]) -> None:
@@ -102,13 +176,16 @@ async def generate_tailored_resume(
     # Validate compact diff before applying (log only, don't hard-fail for P1)
     llm_response_v2_pre = TailoringLLMResponseV2.model_validate(result)
     validation_result = validate_compact_diff(
-        llm_response_v2_pre.model_dump(exclude_none=True),
+        llm_response_v2_pre.model_dump(exclude_none=False),
         response_contract,
     )
-    if not validation_result.valid:
-        logger.warning(
-            "Compact diff validation errors (non-fatal): %s", validation_result.errors
-        )
+    _log_compact_validation("Primary tailor", validation_result)
+    _trace_attach_compact_validation(
+        operation="resume_generate_full",
+        phase_display="primary_tailor",
+        validation_result=validation_result,
+        origin_note=_ORIGIN_COMPACT_VALIDATE_PRIMARY,
+    )
 
     critique_analysis: dict[str, object] | None = None
     if resolved_prompt_id == "full" and get_enable_critique():
@@ -153,6 +230,18 @@ async def generate_tailored_resume(
             },
             retry_hint=prompt_context.retry_hint,
         )
+        llm_response_v2_post = TailoringLLMResponseV2.model_validate(result)
+        vr_post = validate_compact_diff(
+            llm_response_v2_post.model_dump(exclude_none=False),
+            response_contract,
+        )
+        _log_compact_validation("Critique rewrite", vr_post)
+        _trace_attach_compact_validation(
+            operation="rewrite_resume",
+            phase_display="critique_rewrite",
+            validation_result=vr_post,
+            origin_note=_ORIGIN_COMPACT_VALIDATE_REWRITE,
+        )
 
     _check_for_truncation(result)
 
@@ -171,7 +260,7 @@ async def generate_tailored_resume(
     if has_compact_content and not legacy_full_body_response and original_resume_data is not None:
         raw_llm_resume_data = apply_compact_diff(
             original_resume_data,
-            llm_response_v2.model_dump(exclude_none=True),
+            llm_response_v2.model_dump(exclude_none=False),
         )
     else:
         if not has_compact_content:
@@ -211,6 +300,17 @@ async def generate_tailored_resume(
     )
     computed_llm_changes = build_change_manifest(original_resume_data, raw_llm_resume_data)
     applied_changes = build_change_manifest(original_resume_data, resume_data)
+    if has_compact_content and not legacy_full_body_response:
+        applied_changes = enrich_change_manifest_with_tailored_cells(
+            applied_changes,
+            llm_response_v2,
+        )
+        applied_changes = supplement_change_manifest_with_unchanged_cell_rationales(
+            applied_changes,
+            llm_response_v2,
+            original_resume_data,
+            resume_data,
+        )
     _, cleanup_changes = calculate_resume_diff(raw_llm_resume_data, resume_data)
     _accepted_declared_changes, rejected_declared_changes = validate_declared_changes(
         original_resume_data,

@@ -703,6 +703,21 @@ class Database:
                 request_scope=request_scope,
             )
 
+    def attach_compact_diff_validation_to_latest_llm_call(
+        self,
+        *,
+        trace_id: str,
+        operation: str,
+        envelope_validation: dict[str, Any],
+    ) -> bool:
+        with self._session() as session:
+            return llm_call_repo.attach_compact_diff_validation_to_latest_call(
+                session,
+                trace_id=trace_id,
+                operation=operation,
+                envelope_validation=envelope_validation,
+            )
+
     def get_stats(self) -> dict[str, Any]:
         with self._session() as session:
             total_resumes = len(resume_repo.list_resumes(session))
