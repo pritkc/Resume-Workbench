@@ -217,6 +217,8 @@
       "coverLetter": "COVER LETTER",
       "outreach": "OUTREACH MAIL",
       "jdMatch": "JD MATCH",
+      "jdTailorDiff": "TAILOR DIFF",
+      "jdTailorDiffShort": "DIFF",
       "additionalQuestions": "ADDITIONAL QUESTIONS",
       "additionalQuestionsShort": "+QUESTIONS"
     },
@@ -352,6 +354,15 @@
         "matchesFound": "{count} matches found",
         "matchRateLabel": "Match Rate:"
       }
+    },
+    "jdTailorDiff": {
+      "aboutTitle": "About this view",
+      "aboutBody": "This is the same line-level diff you reviewed when you confirmed tailoring. It stays here for reference while you edit.",
+      "artifactTitle": "Confirm snapshot",
+      "loadError": "Could not load tailoring diff.",
+      "sourceStoredDetailed": "Stored from your confirmation (line-level diff).",
+      "sourceRecomputedConfirmation": "Rebuilt from your confirmed snapshot.",
+      "sourceLiveVsMaster": "Compared to your master resume using the CV saved here — edits after tailoring show up."
     },
     "genericItemForm": {
       "itemLabel": "Item",

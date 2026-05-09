@@ -1435,6 +1435,34 @@ class ImproveResumeResponse(BaseModel):
     data: ImproveResumeData
 
 
+class JdTailorDiffData(BaseModel):
+    """Persisted tailoring diff surfaced in the resume builder."""
+
+    generation_run_id: str
+    diff_source: Literal[
+        "stored_detailed_changes",
+        "recomputed_confirmation_snapshot",
+        "live_vs_master",
+    ]
+    diff_summary: ResumeDiffSummary | None = None
+    detailed_changes: list[ResumeFieldDiff] = Field(default_factory=list)
+    change_manifest: list[ResumeChange] = Field(default_factory=list)
+    change_breakdown: TailoringStageBreakdown | None = None
+    pipeline_timing: PipelineTimingSummary | None = None
+    artifacts: list[ArtifactSummary] = Field(default_factory=list)
+
+
+class JdTailorDiffResponse(BaseModel):
+    """Tailoring diff lookup for JD-generated (tailored) resumes."""
+
+    request_id: str
+    data: JdTailorDiffData | None = None
+    unavailable_reason: str | None = Field(
+        default=None,
+        description="Why data is absent (non-tailored resume, missing structured data, etc.).",
+    )
+
+
 class ImproveResumeConfirmRequest(BaseModel):
     """Request to confirm and save a tailored resume."""
 

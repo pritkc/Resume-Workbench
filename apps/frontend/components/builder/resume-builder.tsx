@@ -31,6 +31,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
+import { TailorDiffReadonlyBody } from '@/components/tailor/diff-preview-modal';
 import { RenderThemeControls } from '@/components/rendercv/render-theme-controls';
 import { RenderLocaleControls } from '@/components/rendercv/render-locale-controls';
 import { RenderRuntimeSettingsControls } from '@/components/rendercv/render-runtime-settings-controls';
@@ -46,6 +47,7 @@ import {
   updateOutreachMessage,
   generateAuxiliaryPackage,
   fetchJobDescription,
+  fetchJdTailorDiff,
   normalizeResumeDraft,
   renameResume,
   saveResumeDraft,
@@ -54,6 +56,7 @@ import {
   type RawYamlSections,
   type ResumeDraftRequest,
   type ResumeDraftResponse,
+  type JdTailorDiffData,
 } from '@/lib/api/resume';
 import { JDComparisonView } from './jd-comparison-view';
 import { RegenerateWizard } from './regenerate-wizard';
@@ -94,7 +97,7 @@ import {
   parseCvMetadataYaml,
 } from '@/lib/cv-metadata';
 
-type TabId = 'resume' | 'utilities' | 'jd-match' | 'additional-questions';
+type TabId = 'resume' | 'utilities' | 'jd-match' | 'jd-tailor-diff' | 'additional-questions';
 type EditorSection = 'cv' | 'design' | 'locale' | 'settings' | 'metadata';
 type EditorMode = 'visual' | 'raw';
 type PaneMode = 'editor' | 'split' | 'preview';
@@ -731,6 +734,9 @@ const ResumeBuilderContent = () => {
   /** Job + pack context for application question answers (tailored resumes). */
   const [jobId, setJobId] = useState<string | null>(null);
   const [applicationPackId, setApplicationPackId] = useState<string | null>(null);
+  const [jdTailorDiffPayload, setJdTailorDiffPayload] = useState<JdTailorDiffData | null>(null);
+  const [jdTailorDiffLoading, setJdTailorDiffLoading] = useState(false);
+  const [jdTailorDiffError, setJdTailorDiffError] = useState<string | null>(null);
 
   // AI Regenerate wizard
   const regenerateWizard = useRegenerateWizard({
@@ -1070,6 +1076,54 @@ const ResumeBuilderContent = () => {
       cancelled = true;
     };
   }, [isTailoredResume, resumeId]);
+
+  useEffect(() => {
+    if (!isTailoredResume || !resumeId) {
+      setJdTailorDiffPayload(null);
+      setJdTailorDiffError(null);
+      setJdTailorDiffLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setJdTailorDiffLoading(true);
+    setJdTailorDiffError(null);
+
+    void fetchJdTailorDiff(resumeId)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setJdTailorDiffPayload(payload.data);
+        if (!payload.data && payload.unavailable_reason) {
+          setJdTailorDiffError(payload.unavailable_reason);
+        } else {
+          setJdTailorDiffError(null);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return;
+        }
+        setJdTailorDiffPayload(null);
+        setJdTailorDiffError(err instanceof Error ? err.message : t('builder.jdTailorDiff.loadError'));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setJdTailorDiffLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTailoredResume, resumeId, t]);
+
+  useEffect(() => {
+    if (!isTailoredResume && activeTab === 'jd-tailor-diff') {
+      setActiveTab('resume');
+    }
+  }, [activeTab, isTailoredResume]);
 
   const syncRawYamlFromStructured = useCallback(async () => {
     setIsPreparingRawMode(true);
@@ -1680,29 +1734,39 @@ const ResumeBuilderContent = () => {
     }
   }, []);
 
-  const topLevelTabs = [
-    { id: 'resume', label: t('builder.previewTabs.resume') },
-    {
-      id: 'utilities',
-      label: t('builder.previewTabs.utilities'),
-      shortLabel: t('builder.previewTabs.utilitiesShort'),
-    },
-    {
-      id: 'additional-questions',
-      label: t('builder.previewTabs.additionalQuestions'),
-      shortLabel: t('builder.previewTabs.additionalQuestionsShort'),
-    },
-    {
-      id: 'jd-match',
-      label: t('builder.previewTabs.jdMatch'),
-      shortLabel: t('builder.previewTabs.jdMatch'),
-    },
-  ] satisfies Array<{
-    id: TabId;
-    label: string;
-    shortLabel?: string;
-    disabled?: boolean;
-  }>;
+  const topLevelTabs = useMemo(() => {
+    const tabs: Array<{
+      id: TabId;
+      label: string;
+      shortLabel?: string;
+      disabled?: boolean;
+    }> = [
+      { id: 'resume', label: t('builder.previewTabs.resume') },
+      {
+        id: 'utilities',
+        label: t('builder.previewTabs.utilities'),
+        shortLabel: t('builder.previewTabs.utilitiesShort'),
+      },
+      {
+        id: 'additional-questions',
+        label: t('builder.previewTabs.additionalQuestions'),
+        shortLabel: t('builder.previewTabs.additionalQuestionsShort'),
+      },
+      {
+        id: 'jd-match',
+        label: t('builder.previewTabs.jdMatch'),
+        shortLabel: t('builder.previewTabs.jdMatch'),
+      },
+    ];
+    if (isTailoredResume) {
+      tabs.push({
+        id: 'jd-tailor-diff',
+        label: t('builder.previewTabs.jdTailorDiff'),
+        shortLabel: t('builder.previewTabs.jdTailorDiffShort'),
+      });
+    }
+    return tabs;
+  }, [isTailoredResume, t]);
 
   const resumeEditorTabs = [
     { id: 'cv', label: 'CV' },
@@ -2202,6 +2266,52 @@ const ResumeBuilderContent = () => {
                       </section>
                     </div>
                   )}
+
+                  {activeTab === 'jd-tailor-diff' && (
+                    <div className="space-y-3 border border-black/15 bg-[#F0F0E8] pb-4">
+                      <section className="border-b border-black/10 bg-white px-3 py-2">
+                        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-900">
+                          {t('builder.jdTailorDiff.aboutTitle')}
+                        </h3>
+                        <p className="mt-1 font-mono text-[11px] leading-relaxed text-gray-600">
+                          {t('builder.jdTailorDiff.aboutBody')}
+                        </p>
+                      </section>
+                      {jdTailorDiffLoading && (
+                        <div className="flex items-center gap-2 px-3 py-4 font-mono text-xs text-gray-600">
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                          {t('common.loading')}
+                        </div>
+                      )}
+                      {!jdTailorDiffLoading && jdTailorDiffError && (
+                        <div className="mx-3 border border-amber-600/40 bg-amber-50 px-3 py-2 font-mono text-[11px] leading-snug text-amber-950">
+                          {jdTailorDiffError}
+                        </div>
+                      )}
+                      {!jdTailorDiffLoading && jdTailorDiffPayload && (
+                        <>
+                          <p className="px-3 font-mono text-[10px] uppercase tracking-wide text-gray-600">
+                            {jdTailorDiffPayload.diff_source === 'stored_detailed_changes'
+                              ? t('builder.jdTailorDiff.sourceStoredDetailed')
+                              : jdTailorDiffPayload.diff_source === 'recomputed_confirmation_snapshot'
+                                ? t('builder.jdTailorDiff.sourceRecomputedConfirmation')
+                                : t('builder.jdTailorDiff.sourceLiveVsMaster')}
+                          </p>
+                          <div className="mx-3 min-h-[120px] overflow-hidden border border-black/20 bg-[#F0F0E8]">
+                            <div className="max-h-[min(70vh,720px)] min-h-0 overflow-y-auto px-1 py-2 md:px-2 md:py-3">
+                              <TailorDiffReadonlyBody
+                                detailedChanges={jdTailorDiffPayload.detailed_changes ?? []}
+                                changeManifest={jdTailorDiffPayload.change_manifest}
+                                changeBreakdown={jdTailorDiffPayload.change_breakdown ?? null}
+                                artifacts={jdTailorDiffPayload.artifacts}
+                                artifactGalleryTitle={t('builder.jdTailorDiff.artifactTitle')}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2230,7 +2340,7 @@ const ResumeBuilderContent = () => {
               )}
             >
               <div className="preview-panel-scroll h-full min-h-0 overflow-y-auto overscroll-contain px-1.5 md:px-2">
-                {activeTab === 'resume' && (
+                {(activeTab === 'resume' || activeTab === 'jd-tailor-diff') && (
                   <RenderPreviewPanel
                     resumeId={resumeId}
                     settings={themeSettings}

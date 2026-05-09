@@ -1,8 +1,16 @@
-import { ImprovedResult } from '@/components/common/resume_previewer_context';
+import type {
+  ImprovedResult,
+  PipelineTimingSummary,
+  ResumeChange,
+  ResumeDiffSummary,
+  ResumeFieldDiff,
+  TailoringStageBreakdown,
+} from '@/components/common/resume_previewer_context';
 import type { ResumeData, SkillGroup } from '@/components/dashboard/resume-component';
 import {
   type RenderThemeSettings,
   type RenderPreviewResponse,
+  type ArtifactSummary,
   DEFAULT_RENDER_THEME_SETTINGS,
   renderThemeSettingsToQuery,
   serializeRenderThemeSettings,
@@ -773,6 +781,38 @@ export async function fetchJobDescription(
     throw new Error(`Failed to fetch job description (status ${res.status}): ${text}`);
   }
   return res.json();
+}
+
+export type JdTailorDiffSource =
+  | 'stored_detailed_changes'
+  | 'recomputed_confirmation_snapshot'
+  | 'live_vs_master';
+
+export interface JdTailorDiffData {
+  generation_run_id: string;
+  diff_source: JdTailorDiffSource;
+  diff_summary?: ResumeDiffSummary | null;
+  detailed_changes: ResumeFieldDiff[];
+  change_manifest: ResumeChange[];
+  change_breakdown?: TailoringStageBreakdown | null;
+  pipeline_timing?: PipelineTimingSummary | null;
+  artifacts?: ArtifactSummary[];
+}
+
+export interface JdTailorDiffResponse {
+  request_id: string;
+  data: JdTailorDiffData | null;
+  unavailable_reason?: string | null;
+}
+
+/** Line-level JD tailoring diff persisted at confirmation (reference view in builder). */
+export async function fetchJdTailorDiff(resumeId: string): Promise<JdTailorDiffResponse> {
+  const res = await apiFetch(`/resumes/${encodeURIComponent(resumeId)}/jd-tailor-diff`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch tailoring diff (status ${res.status}): ${text}`);
+  }
+  return res.json() as Promise<JdTailorDiffResponse>;
 }
 
 export async function fetchResumeRenderPreview(

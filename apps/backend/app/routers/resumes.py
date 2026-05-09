@@ -11,7 +11,7 @@ import re
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Literal, NoReturn
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -49,17 +49,21 @@ from app.services.tailoring.change_manifest import (
     build_stage_breakdown,
 )
 from app.schemas import (
+    ArtifactSummary,
     GenerateAuxiliaryPackageResponse,
     GenerateContentResponse,
     ImproveResumeConfirmRequest,
     ImproveResumeRequest,
     ImproveResumeResponse,
     ImproveResumeData,
+    JdTailorDiffData,
+    JdTailorDiffResponse,
     RawResume,
     RawYamlSections,
     PipelineTimingSummary,
     RefinementStats,
     RenderResumeRequest,
+    ResumeChange,
     ResumeData,
     ResumeDiffSummary,
     ResumeDraftNormalizedResponse,
@@ -70,6 +74,7 @@ from app.schemas import (
     ResumeListResponse,
     ResumePinRequest,
     ResumeSummary,
+    TailoringStageBreakdown,
     ResumeUpdateRequest,
     ResumeUploadResponse,
     UpdateCoverLetterRequest,
@@ -2167,6 +2172,7 @@ async def improve_resume_confirm_endpoint(
             result_payload={
                 "llm_summary": llm_summary,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                "detailed_changes": [item.model_dump() for item in (detailed_changes or [])],
                 "change_manifest": change_manifest,
                 "declared_changes": preview_tailoring_payload.get("declared_changes", []),
                 "rejected_declared_changes": preview_tailoring_payload.get(
@@ -2216,6 +2222,7 @@ async def improve_resume_confirm_endpoint(
                 "result_payload": {
                     "llm_summary": llm_summary,
                     "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                    "detailed_changes": [item.model_dump() for item in (detailed_changes or [])],
                     "change_manifest": change_manifest,
                     "declared_changes": preview_tailoring_payload.get("declared_changes", []),
                     "rejected_declared_changes": preview_tailoring_payload.get(
@@ -3049,6 +3056,248 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     return GenerateContentResponse(
         content=outreach_content,
         message="Outreach message generated successfully",
+    )
+
+
+def _artifact_public_url(artifact_id: str) -> str:
+    return f"/api/v1/artifacts/{artifact_id}"
+
+
+def _artifacts_from_confirm_payload(payload: dict[str, Any]) -> list[ArtifactSummary]:
+    artifact_ids = payload.get("artifact_ids")
+    summaries: list[ArtifactSummary] = []
+    if not isinstance(artifact_ids, list):
+        return summaries
+
+    for raw_id in artifact_ids:
+        if not isinstance(raw_id, str):
+            continue
+        record = db.get_artifact(raw_id)
+        if not record:
+            continue
+
+        summaries.append(
+            ArtifactSummary(
+                artifact_id=record["artifact_id"],
+                kind=record["kind"],
+                mime_type=record["mime_type"],
+                file_name=record["file_name"],
+                url=_artifact_public_url(record["artifact_id"]),
+                metadata=record.get("metadata"),
+            )
+        )
+
+    return summaries
+
+
+def _parse_resume_field_diff_list(raw: Any) -> list[ResumeFieldDiff]:
+    if not isinstance(raw, list):
+        return []
+
+    parsed: list[ResumeFieldDiff] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            parsed.append(ResumeFieldDiff.model_validate(item))
+        except ValidationError:
+            continue
+
+    return parsed
+
+
+def _parse_resume_change_manifest(raw: Any) -> list[ResumeChange]:
+    if not isinstance(raw, list):
+        return []
+
+    parsed: list[ResumeChange] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            parsed.append(ResumeChange.model_validate(item))
+        except ValidationError:
+            continue
+
+    return parsed
+
+
+def _maybe_resume_diff_summary(raw: Any) -> ResumeDiffSummary | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return ResumeDiffSummary.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def _maybe_tailoring_stage_breakdown(raw: Any) -> TailoringStageBreakdown | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return TailoringStageBreakdown.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def _maybe_pipeline_timing_summary(raw: Any) -> PipelineTimingSummary | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return PipelineTimingSummary.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def _build_jd_tailor_diff_data(*, tailored_resume: dict[str, Any]) -> tuple[JdTailorDiffData | None, str | None]:
+    """Return tailoring diff snapshot for a JD-tailored resume, if available."""
+
+    parent_id = tailored_resume.get("parent_id")
+    if not isinstance(parent_id, str) or not parent_id.strip():
+        return None, "not_tailored_resume"
+
+    master = db.get_resume(parent_id)
+    if not master:
+        return None, "master_resume_missing"
+
+    confirm_run = db.get_latest_generation_run(
+        run_kind="application_pack_confirm",
+        status="completed",
+        tailored_resume_id=tailored_resume.get("resume_id"),
+    )
+
+    payload: dict[str, Any] = {}
+    generation_run_id: str | None = None
+
+    if confirm_run:
+        generation_run_id = confirm_run.get("generation_run_id")
+        result_payload = confirm_run.get("result_payload")
+        if isinstance(result_payload, dict):
+            payload = result_payload
+
+    if not isinstance(generation_run_id, str):
+        generation_run_id = None
+
+    if generation_run_id and isinstance(payload.get("final_resume_data"), dict):
+        diff_summary = _maybe_resume_diff_summary(payload.get("diff_summary"))
+        detailed_stored = _parse_resume_field_diff_list(payload.get("detailed_changes"))
+        change_manifest = _parse_resume_change_manifest(payload.get("change_manifest"))
+        change_breakdown = _maybe_tailoring_stage_breakdown(payload.get("change_breakdown"))
+        pipeline_timing = _maybe_pipeline_timing_summary(payload.get("pipeline_timing"))
+
+        artifacts = _artifacts_from_confirm_payload(payload)
+
+        final_snapshot = payload.get("final_resume_data")
+        canon_final = _canonicalize_improved_resume_data(final_snapshot)
+        recalc_summary, detailed_recalc, calc_error = _calculate_diff_from_resume(master, canon_final)
+        if calc_error:
+            logger.warning(
+                "Could not recreate tailoring diff (%s tailored=%s)",
+                calc_error,
+                tailored_resume.get("resume_id"),
+            )
+
+        if detailed_stored:
+            detailed_changes_final = detailed_stored
+            diff_source_confirm: Literal[
+                "stored_detailed_changes",
+                "recomputed_confirmation_snapshot",
+            ] = "stored_detailed_changes"
+        elif detailed_recalc:
+            detailed_changes_final = detailed_recalc
+            diff_source_confirm = "recomputed_confirmation_snapshot"
+        else:
+            detailed_changes_final = []
+            diff_source_confirm = "recomputed_confirmation_snapshot"
+
+        diff_summary_final = diff_summary if diff_summary is not None else recalc_summary
+
+        return (
+            JdTailorDiffData(
+                generation_run_id=generation_run_id,
+                diff_source=diff_source_confirm,
+                diff_summary=diff_summary_final,
+                detailed_changes=detailed_changes_final,
+                change_manifest=change_manifest,
+                change_breakdown=change_breakdown,
+                pipeline_timing=pipeline_timing,
+                artifacts=artifacts,
+            ),
+            None,
+        )
+
+    processed = tailored_resume.get("processed_data")
+    if isinstance(processed, dict):
+        canon_tailored = _canonicalize_improved_resume_data(processed)
+        summary, detailed_live, calc_error = _calculate_diff_from_resume(master, canon_tailored)
+        if calc_error:
+            return None, f"diff_calculation_failed:{calc_error}"
+
+        legacy_run = db.get_improvement_by_tailored_resume(tailored_resume.get("resume_id", ""))
+
+        inferred_run_id = None
+        if legacy_run:
+            inferred_run_id = legacy_run.get("generation_run_id")
+
+        if not isinstance(inferred_run_id, str):
+            inferred_run_id = f"livediff:{tailored_resume.get('resume_id')}"
+
+        master_snapshot = _get_original_resume_data(master)
+        canonical_manifest_changes = []
+        if master_snapshot:
+            canonical_manifest_changes = build_change_manifest(master_snapshot, processed)
+
+        return (
+            JdTailorDiffData(
+                generation_run_id=inferred_run_id,
+                diff_source="live_vs_master",
+                diff_summary=summary,
+                detailed_changes=detailed_live or [],
+                change_manifest=list(canonical_manifest_changes),
+                change_breakdown=None,
+                pipeline_timing=None,
+                artifacts=[],
+            ),
+            None,
+        )
+
+    return None, "missing_structured_resume"
+
+
+@router.get(
+    "/{resume_id}/jd-tailor-diff",
+    response_model=JdTailorDiffResponse,
+    summary="Tailoring diff snapshot for reference",
+)
+async def get_jd_tailor_diff_snapshot(resume_id: str) -> JdTailorDiffResponse:
+    """Expose the JD tailoring diff for the builder after confirmation.
+
+    Confirmed application packs persist diff metadata on the finalize generation run.
+    When line-level ``detailed_changes`` are missing from older snapshots, values are
+    recomputed against the master's structured data vs the persisted confirmation JSON.
+    If no finalize run exists, the API falls back to a live structural diff versus the
+    master resume (labeled via ``live_vs_master``).
+    """
+
+    resume = db.get_resume(resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    bundle, unavailable = _build_jd_tailor_diff_data(tailored_resume=resume)
+
+    request_id_str = str(uuid4())
+    if bundle:
+        return JdTailorDiffResponse(request_id=request_id_str, data=bundle)
+
+    logger.info(
+        "JD tailor diff unavailable for resume %s: %s",
+        resume_id,
+        unavailable,
+    )
+    return JdTailorDiffResponse(
+        request_id=request_id_str,
+        data=None,
+        unavailable_reason=unavailable,
     )
 
 

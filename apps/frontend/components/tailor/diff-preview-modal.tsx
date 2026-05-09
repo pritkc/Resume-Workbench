@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -537,6 +538,153 @@ function displayValuesForModifiedField(
   return { before: focused.oldFragment, after: focused.newFragment };
 }
 
+export interface TailorDiffReadonlyBodyProps {
+  detailedChanges: ResumeFieldDiff[];
+  changeManifest?: ResumeChange[];
+  changeBreakdown?: TailoringStageBreakdown | null;
+  artifacts?: ArtifactSummary[];
+  artifactGalleryTitle?: string;
+  errorMessage?: string;
+  emptyFallback?: ReactNode;
+}
+
+export function TailorDiffReadonlyBody({
+  detailedChanges,
+  changeManifest,
+  changeBreakdown,
+  artifacts,
+  artifactGalleryTitle = 'Preview Snapshot',
+  errorMessage,
+  emptyFallback,
+}: TailorDiffReadonlyBodyProps) {
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [showMetaDetails, setShowMetaDetails] = useState(false);
+
+  const displayChanges = useMemo(
+    () =>
+      detailedChanges?.length
+        ? buildDisplayChanges(
+            detailedChanges,
+            changeManifest,
+            (changeBreakdown?.cleanup_only_changes ?? 0) > 0
+          )
+        : [],
+    [changeBreakdown?.cleanup_only_changes, changeManifest, detailedChanges]
+  );
+
+  const orderedSections = useMemo(() => buildOrderedSections(displayChanges), [displayChanges]);
+
+  useEffect(() => {
+    if (orderedSections.length === 0) {
+      return;
+    }
+    setExpandedSections(new Set(orderedSections.map((section) => section.key)));
+  }, [orderedSections]);
+
+  const toggleSection = useCallback((sectionKey: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionKey)) {
+        next.delete(sectionKey);
+      } else {
+        next.add(sectionKey);
+      }
+      return next;
+    });
+  }, []);
+
+  if (!detailedChanges.length) {
+    if (emptyFallback) {
+      return <>{emptyFallback}</>;
+    }
+    return (
+      <div className="border-2 border-dashed border-black/30 bg-white p-6 font-mono text-sm text-gray-700">
+        No line-level tailoring changes recorded for this view.
+      </div>
+    );
+  }
+
+  const stats = {
+    total: displayChanges.length,
+    summaryChanged: displayChanges.filter((item) => item.parsed.section === 'summary').length,
+    experienceChanged: displayChanges.filter((item) => item.parsed.section === 'experience').length,
+    educationChanged: displayChanges.filter((item) => item.parsed.section === 'education').length,
+    projectChanged: displayChanges.filter((item) => item.parsed.section === 'project').length,
+    skillsAdded: displayChanges.filter(
+      (item) => item.change.field_type === 'additional_item' && item.change.change_type === 'added'
+    ).length,
+    skillsRemoved: displayChanges.filter(
+      (item) =>
+        item.change.field_type === 'additional_item' && item.change.change_type === 'removed'
+    ).length,
+    verify: displayChanges.filter((item) => item.needsVerification).length,
+    ai: displayChanges.filter((item) => item.source === 'ai').length,
+    system: displayChanges.filter((item) => item.source === 'system').length,
+  };
+
+  return (
+    <>
+      <div className="mt-3 border-2 border-black bg-white px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            <InlineStat label="Total" value={stats.total} variant="info" />
+            <InlineStat label="AI" value={stats.ai} variant="success" />
+            <InlineStat label="System" value={stats.system} variant="warning" />
+          </div>
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => setShowMetaDetails((value) => !value)}
+          >
+            {showMetaDetails ? 'Hide details' : 'Show details'}
+          </Button>
+        </div>
+        {showMetaDetails && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <InlineStat label="Summary" value={stats.summaryChanged} variant="info" />
+            <InlineStat label="Experience" value={stats.experienceChanged} variant="info" />
+            <InlineStat label="Projects" value={stats.projectChanged} variant="info" />
+            <InlineStat label="Education" value={stats.educationChanged} variant="info" />
+            <InlineStat label="Skills +" value={stats.skillsAdded} variant="success" />
+            <InlineStat label="Skills -" value={stats.skillsRemoved} variant="danger" />
+            <InlineStat label="Needs verification" value={stats.verify} variant="warning" />
+          </div>
+        )}
+      </div>
+
+      {errorMessage && (
+        <div className="mt-4 border-2 border-red-600 bg-red-50 p-3 font-mono text-xs text-red-700">
+          {errorMessage}
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4">
+        {artifacts && artifacts.length > 0 && (
+          <ArtifactGallery artifacts={artifacts} title={artifactGalleryTitle} />
+        )}
+
+        {orderedSections.map((section) => (
+          <ChangeSection
+            key={section.key}
+            title={section.title}
+            count={section.items.length}
+            isExpanded={expandedSections.has(section.key)}
+            onToggle={() => toggleSection(section.key)}
+          >
+            {section.key === 'skills' ? (
+              <SkillsGroupedView items={section.items} />
+            ) : (
+              section.items.map((item, index) => (
+                <ChangeItem key={`${section.key}-${index}`} item={item} />
+              ))
+            )}
+          </ChangeSection>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export function DiffPreviewModal({
   isOpen,
   isConfirming = false,
@@ -550,8 +698,6 @@ export function DiffPreviewModal({
   errorMessage,
 }: DiffPreviewModalProps) {
   const { t } = useTranslations();
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-  const [showMetaDetails, setShowMetaDetails] = useState(false);
 
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -573,27 +719,6 @@ export function DiffPreviewModal({
       }
     };
   }, [isConfirming]);
-
-  const displayChanges = useMemo(
-    () =>
-      detailedChanges
-        ? buildDisplayChanges(
-            detailedChanges,
-            changeManifest,
-            (changeBreakdown?.cleanup_only_changes ?? 0) > 0
-          )
-        : [],
-    [changeBreakdown?.cleanup_only_changes, detailedChanges, changeManifest]
-  );
-
-  const orderedSections = useMemo(() => buildOrderedSections(displayChanges), [displayChanges]);
-
-  useEffect(() => {
-    if (orderedSections.length === 0) {
-      return;
-    }
-    setExpandedSections(new Set(orderedSections.map((section) => section.key)));
-  }, [orderedSections]);
 
   if (!detailedChanges) {
     return (
@@ -640,34 +765,6 @@ export function DiffPreviewModal({
     );
   }
 
-  const stats = {
-    total: displayChanges.length,
-    summaryChanged: displayChanges.filter((item) => item.parsed.section === 'summary').length,
-    experienceChanged: displayChanges.filter((item) => item.parsed.section === 'experience').length,
-    educationChanged: displayChanges.filter((item) => item.parsed.section === 'education').length,
-    projectChanged: displayChanges.filter((item) => item.parsed.section === 'project').length,
-    skillsAdded: displayChanges.filter(
-      (item) => item.change.field_type === 'additional_item' && item.change.change_type === 'added'
-    ).length,
-    skillsRemoved: displayChanges.filter(
-      (item) =>
-        item.change.field_type === 'additional_item' && item.change.change_type === 'removed'
-    ).length,
-    verify: displayChanges.filter((item) => item.needsVerification).length,
-    ai: displayChanges.filter((item) => item.source === 'ai').length,
-    system: displayChanges.filter((item) => item.source === 'system').length,
-  };
-
-  const toggleSection = (sectionKey: string) => {
-    const next = new Set(expandedSections);
-    if (next.has(sectionKey)) {
-      next.delete(sectionKey);
-    } else {
-      next.add(sectionKey);
-    }
-    setExpandedSections(next);
-  };
-
   return (
     <Dialog
       open={isOpen}
@@ -685,63 +782,13 @@ export function DiffPreviewModal({
           <p className="font-mono text-xs text-gray-600 mt-1">{'// '}Review in resume order.</p>
         </DialogHeader>
 
-        <div className="mt-3 border-2 border-black bg-white px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
-              <InlineStat label="Total" value={stats.total} variant="info" />
-              <InlineStat label="AI" value={stats.ai} variant="success" />
-              <InlineStat label="System" value={stats.system} variant="warning" />
-            </div>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => setShowMetaDetails((value) => !value)}
-            >
-              {showMetaDetails ? 'Hide details' : 'Show details'}
-            </Button>
-          </div>
-          {showMetaDetails && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <InlineStat label="Summary" value={stats.summaryChanged} variant="info" />
-              <InlineStat label="Experience" value={stats.experienceChanged} variant="info" />
-              <InlineStat label="Projects" value={stats.projectChanged} variant="info" />
-              <InlineStat label="Education" value={stats.educationChanged} variant="info" />
-              <InlineStat label="Skills +" value={stats.skillsAdded} variant="success" />
-              <InlineStat label="Skills -" value={stats.skillsRemoved} variant="danger" />
-              <InlineStat label="Needs verification" value={stats.verify} variant="warning" />
-            </div>
-          )}
-        </div>
-
-        {errorMessage && (
-          <div className="mt-4 border-2 border-red-600 bg-red-50 p-3 font-mono text-xs text-red-700">
-            {errorMessage}
-          </div>
-        )}
-
-        <div className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4">
-          {artifacts && artifacts.length > 0 && (
-            <ArtifactGallery artifacts={artifacts} title="Preview Snapshot" />
-          )}
-
-          {orderedSections.map((section) => (
-            <ChangeSection
-              key={section.key}
-              title={section.title}
-              count={section.items.length}
-              isExpanded={expandedSections.has(section.key)}
-              onToggle={() => toggleSection(section.key)}
-            >
-              {section.key === 'skills' ? (
-                <SkillsGroupedView items={section.items} />
-              ) : (
-                section.items.map((item, index) => (
-                  <ChangeItem key={`${section.key}-${index}`} item={item} />
-                ))
-              )}
-            </ChangeSection>
-          ))}
-        </div>
+        <TailorDiffReadonlyBody
+          detailedChanges={detailedChanges}
+          changeManifest={changeManifest}
+          changeBreakdown={changeBreakdown ?? null}
+          artifacts={artifacts}
+          errorMessage={errorMessage}
+        />
 
         <div className="flex justify-between items-center pt-4 border-t-2 border-black bg-white -mx-6 -mb-6 px-6 py-4">
           <Button variant="outline" onClick={onReject} disabled={isConfirming} className="gap-2">
