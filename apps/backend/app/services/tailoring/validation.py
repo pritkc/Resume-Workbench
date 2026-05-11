@@ -56,6 +56,45 @@ def _tailored_cell_errors(cell: Any, path: str, *, strict: bool) -> list[str]:
     return errs
 
 
+def _skill_tailored_label_errors(cell: Any, path: str, *, strict: bool) -> list[str]:
+    errs: list[str] = []
+    if isinstance(cell, str):
+        if strict:
+            errs.append(
+                f"{path}: legacy string form not allowed in full envelope "
+                f'(use object with \"value\": null|string and \"why\" ... )'
+            )
+        return errs
+    if not isinstance(cell, dict):
+        return [f"{path}: expected object or string, got {type(cell).__name__}"]
+    if "unchanged" in cell:
+        errs.append(f"{path}: disallowed key 'unchanged' (use value: null to retain)")
+    if strict:
+        if "value" not in cell:
+            errs.append(f"{path}: value key is required (use null to retain group label)")
+        why = cell.get("why")
+        if not isinstance(why, str) or not why.strip():
+            errs.append(f"{path}: label.why is required — one concise line for overall group strategy")
+    return errs
+
+
+def _skill_value_cell_errors(cell: Any, path: str, *, strict: bool) -> list[str]:
+    errs: list[str] = []
+    if isinstance(cell, str):
+        if strict:
+            errs.append(
+                f'{path}: skill values use only {{"value"}} (null to retain); rationale goes in label.why'
+            )
+        return errs
+    if not isinstance(cell, dict):
+        return [f"{path}: expected object or string, got {type(cell).__name__}"]
+    if "unchanged" in cell:
+        errs.append(f"{path}: disallowed key 'unchanged' (use value: null to retain)")
+    if "value" not in cell:
+        errs.append(f"{path}: value key is required (use null to retain source token)")
+    return errs
+
+
 def _non_retain_bullet_count(bullets: dict[str, Any]) -> int:
     n = 0
     for cell in bullets.values():
@@ -294,7 +333,7 @@ def validate_compact_diff(
                 if not isinstance(g, dict):
                     errors.append(f"skills[{gi}] must be an object")
                     continue
-                errors.extend(_tailored_cell_errors(g.get("label"), f"skills[{gi}].label", strict=True))
+                errors.extend(_skill_tailored_label_errors(g.get("label"), f"skills[{gi}].label", strict=True))
                 vals = g.get("values")
                 if not isinstance(vals, dict):
                     errors.append(f"skills[{gi}].values must be an object keyed by index string")
@@ -307,7 +346,7 @@ def validate_compact_diff(
                         )
                     else:
                         errors.extend(
-                            _tailored_cell_errors(vals[vk], f"skills[{gi}].values[{vk}]", strict=True)
+                            _skill_value_cell_errors(vals[vk], f"skills[{gi}].values[{vk}]", strict=True)
                         )
 
     # Summary cell

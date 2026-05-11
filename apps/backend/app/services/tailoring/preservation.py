@@ -10,6 +10,7 @@ from typing import Any
 from app.schemas import ResumeData, normalize_resume_data
 from app.services.additional_groups import (
     coerce_string_list,
+    generate_skill_group_id,
     normalize_additional_groups,
     normalize_skill_groups,
     restore_missing_additional_items,
@@ -226,6 +227,7 @@ def _simplify_skills_groups(value: Any) -> dict[str, Any]:
             continue
 
         label = str(raw_group.get("label", "")).strip() or "Skills"
+        gid_store = str(raw_group.get("id") or "").strip()
         values: list[str] = []
         for item in filter_basic_resume_terms(coerce_string_list(raw_group.get("values"))):
             key = item.casefold()
@@ -238,7 +240,10 @@ def _simplify_skills_groups(value: Any) -> dict[str, Any]:
 
         if not values:
             continue
-        simplified.append({"label": label, "values": values})
+        row: dict[str, Any] = {"label": label, "values": values}
+        if gid_store:
+            row["id"] = gid_store
+        simplified.append(row)
 
     return {"groups": simplified}
 
@@ -277,7 +282,7 @@ def _skills_list_is_tailored(groups: list[Any]) -> bool:
     if not isinstance(sample, dict):
         return False
     label = sample.get("label")
-    if isinstance(label, dict) and "why" in label:
+    if isinstance(label, dict) and ("value" in label or "why" in label):
         return True
     values = sample.get("values")
     return isinstance(values, dict)
@@ -292,15 +297,28 @@ def _apply_tailored_skills_groups(
     if not isinstance(orig_groups, list):
         orig_groups = []
 
+    orig_by_id: dict[str, dict[str, Any]] = {}
+    for g in orig_groups:
+        if not isinstance(g, dict):
+            continue
+        gid = str(g.get("id") or "").strip()
+        if gid:
+            orig_by_id[gid] = g
+
     plain_groups: list[dict[str, Any]] = []
+    assigned_ids: set[str] = set()
+
     for gi, raw_group in enumerate(groups):
         if not isinstance(raw_group, dict):
             continue
-        orig_g: dict[str, Any] = (
-            orig_groups[gi]
-            if gi < len(orig_groups) and isinstance(orig_groups[gi], dict)
-            else {}
-        )
+        ref_gid = str(raw_group.get("group_id") or raw_group.get("id") or "").strip()
+
+        orig_g: dict[str, Any] = {}
+        if ref_gid and ref_gid in orig_by_id:
+            orig_g = orig_by_id[ref_gid]
+        elif gi < len(orig_groups) and isinstance(orig_groups[gi], dict):
+            orig_g = orig_groups[gi]
+
         orig_label = str(orig_g.get("label", "")).strip()
         orig_vals = [
             v for v in coerce_string_list(orig_g.get("values")) if str(v).strip()
@@ -347,7 +365,12 @@ def _apply_tailored_skills_groups(
                     merged.extend([""] * (idx - len(merged)))
                     merged.append(new_text)
 
-        plain_groups.append({"label": label or "Skills", "values": merged})
+        id_out = str(orig_g.get("id") or "").strip() or ref_gid
+        if not id_out:
+            id_out = generate_skill_group_id(assigned_ids, label or "Skills")
+        assigned_ids.add(id_out)
+
+        plain_groups.append({"id": id_out, "label": label or "Skills", "values": merged})
 
     return _simplify_skills_groups({"groups": plain_groups})
 

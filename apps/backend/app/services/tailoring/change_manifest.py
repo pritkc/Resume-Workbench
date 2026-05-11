@@ -321,14 +321,10 @@ def _skills_tailored_reason(resp: TailoringLLMResponseV2) -> str | None:
         return None
     parts: list[str] = []
     for group in resp.skills:
-        parts.append(group.label.why)
-        for vk in sorted(
-            group.values.keys(),
-            key=lambda x: int(x) if str(x).isdigit() else 0,
-        ):
-            parts.append(group.values[vk].why)
-    text = "; ".join(p for p in parts if p)
-    # Allow long-form candid rationales across many skill cells (no restrictive cap).
+        lw = getattr(getattr(group, "label", None), "why", None)
+        if isinstance(lw, str) and lw.strip():
+            parts.append(lw.strip())
+    text = "; ".join(parts)
     return text if text else None
 
 

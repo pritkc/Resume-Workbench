@@ -130,6 +130,12 @@ def build_response_contract(
     skill_group_value_counts = (
         [len(g.values) for g in resume_payload.skills.groups] if resume_payload.skills.groups else []
     )
+    skill_group_ids: list[str] = []
+    for g in resume_payload.skills.groups:
+        gid = str(g.id or "").strip()
+        if not gid:
+            gid = f"__index_{len(skill_group_ids)}"
+        skill_group_ids.append(gid)
     sections["skills"] = TailoringSectionContract(
         type="object",
         entry_count=len(groups) if isinstance(groups, list) else 0,
@@ -169,6 +175,7 @@ def build_response_contract(
         project_entries=[e.name for e in project_entries],
         project_bullet_counts=[len(e.description) for e in project_entries],
         project_tech_stacks=[e.tech_stacks or "" for e in project_entries],
+        skill_group_ids=skill_group_ids,
         skill_group_value_counts=skill_group_value_counts,
         max_changed_projects=2,
         project_rename_allowed=False,

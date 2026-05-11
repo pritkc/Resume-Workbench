@@ -1252,6 +1252,11 @@ def _read_preview_tailoring_payload(
         "cleanup_changes": result_payload.get("cleanup_changes", []),
         "change_breakdown": result_payload.get("change_breakdown"),
         "raw_llm_resume_data": result_payload.get("raw_llm_resume_data"),
+        "skills_observability": (
+            result_payload["skills_observability"]
+            if isinstance(result_payload.get("skills_observability"), dict)
+            else None
+        ),
     }
 
 
@@ -1870,6 +1875,7 @@ async def _improve_preview_flow(
                 "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
                 "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
                 "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
+                "skills_observability": tailoring_result.skills_observability,
                 "final_resume_data": improved_data,
                 "auxiliary": {
                     "title": generated_title,
@@ -1920,6 +1926,7 @@ async def _improve_preview_flow(
                 "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
                 "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
                 "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
+                "skills_observability": tailoring_result.skills_observability,
                 "final_resume_data": improved_data,
                 "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
                 "auxiliary": {
@@ -1964,6 +1971,7 @@ async def _improve_preview_flow(
             refinement_attempted=refinement_attempted,
             refinement_successful=refinement_successful,
             pipeline_timing=pipeline_timing,
+            skills_observability=tailoring_result.skills_observability,
         ),
     )
 
@@ -2181,6 +2189,11 @@ async def improve_resume_confirm_endpoint(
                 "cleanup_changes": preview_tailoring_payload.get("cleanup_changes", []),
                 "change_breakdown": change_breakdown,
                 "raw_llm_resume_data": preview_tailoring_payload.get("raw_llm_resume_data"),
+                "skills_observability": (
+                    preview_tailoring_payload["skills_observability"]
+                    if isinstance(preview_tailoring_payload.get("skills_observability"), dict)
+                    else None
+                ),
                 "final_resume_data": improved_data,
                 "auxiliary": {
                     "title": title,
@@ -2231,6 +2244,11 @@ async def improve_resume_confirm_endpoint(
                     "cleanup_changes": preview_tailoring_payload.get("cleanup_changes", []),
                     "change_breakdown": change_breakdown,
                     "raw_llm_resume_data": preview_tailoring_payload.get("raw_llm_resume_data"),
+                    "skills_observability": (
+                        preview_tailoring_payload["skills_observability"]
+                        if isinstance(preview_tailoring_payload.get("skills_observability"), dict)
+                        else None
+                    ),
                     "final_resume_data": improved_data,
                     "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
                     "auxiliary": {
@@ -2262,6 +2280,11 @@ async def improve_resume_confirm_endpoint(
                 detailed_changes=detailed_changes,
                 change_manifest=change_manifest,
                 change_breakdown=change_breakdown,
+                skills_observability=(
+                    preview_tailoring_payload["skills_observability"]
+                    if isinstance(preview_tailoring_payload.get("skills_observability"), dict)
+                    else None
+                ),
                 warnings=response_warnings,
             ),
         )
@@ -2422,6 +2445,7 @@ async def improve_resume_endpoint(
                 warnings=response_warnings,
                 refinement_attempted=refinement_attempted,
                 refinement_successful=refinement_successful,
+                skills_observability=tailoring_result.skills_observability,
             ),
         )
 
@@ -3212,6 +3236,9 @@ def _build_jd_tailor_diff_data(*, tailored_resume: dict[str, Any]) -> tuple[JdTa
 
         diff_summary_final = diff_summary if diff_summary is not None else recalc_summary
 
+        skills_obs_payload = payload.get("skills_observability")
+        skills_obs_final = skills_obs_payload if isinstance(skills_obs_payload, dict) else None
+
         return (
             JdTailorDiffData(
                 generation_run_id=generation_run_id,
@@ -3222,6 +3249,7 @@ def _build_jd_tailor_diff_data(*, tailored_resume: dict[str, Any]) -> tuple[JdTa
                 change_breakdown=change_breakdown,
                 pipeline_timing=pipeline_timing,
                 artifacts=artifacts,
+                skills_observability=skills_obs_final,
             ),
             None,
         )

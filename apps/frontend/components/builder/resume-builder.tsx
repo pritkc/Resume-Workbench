@@ -2313,6 +2313,7 @@ const ResumeBuilderContent = () => {
                                 artifacts={jdTailorDiffPayload.artifacts}
                                 artifactGalleryTitle={t('builder.jdTailorDiff.artifactTitle')}
                                 resumePreview={resumeData as unknown as ResumePreview}
+                                skillsObservation={jdTailorDiffPayload.skills_observability}
                               />
                             </div>
                           </div>

@@ -314,7 +314,9 @@ class TestApplyCompactDiff:
         assert result["summary"] == base_resume["summary"]
         assert result["workExperience"][0]["techStack"] == "Python, SAP"
         assert result["workExperience"][0]["description"][0] == base_resume["workExperience"][0]["description"][0]
-        assert result["skills"]["groups"] == [{"label": "Tools", "values": ["Python", "SAP"]}]
+        g0 = result["skills"]["groups"][0]
+        assert g0["label"] == "Tools"
+        assert g0["values"] == ["Python", "SAP"]
 
     def test_metric_units_are_normalized_in_compact_output(self, base_resume):
         diff = {
@@ -339,7 +341,10 @@ class TestApplyCompactDiff:
         ]
         diff = {"skills": new_skills}
         result = apply_compact_diff(base_resume, diff)
-        assert result["skills"]["groups"] == new_skills
+        assert len(result["skills"]["groups"]) == len(new_skills)
+        for i, ng in enumerate(new_skills):
+            assert result["skills"]["groups"][i]["label"] == ng["label"]
+            assert result["skills"]["groups"][i]["values"] == ng["values"]
 
     def test_skills_dict_shape_with_groups_is_supported(self, base_resume):
         diff = {

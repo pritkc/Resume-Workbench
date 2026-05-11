@@ -1,5 +1,6 @@
 """Tests for TailoringResponseContract prompt-facing output."""
 
+from app.schemas.models import SkillGroup, SkillsSection
 from app.services.tailoring.contracts import build_response_contract
 from app.services.tailoring.models import (
     TailoringExperience,
@@ -101,3 +102,29 @@ class TestResponseContractPromptDict:
         d = rc.to_prompt_dict()
         assert d["output_keys"] == ["summary", "experience", "projects", "skills", "bold_keywords"]
         assert "rules" not in d
+
+    def test_prompt_dict_includes_skill_group_ids_when_groups_present(self) -> None:
+        payload = TailoringResumePayload(
+            summary="Engineer.",
+            skills=SkillsSection(
+                groups=[
+                    SkillGroup(id="languages", label="Languages", values=["Python"]),
+                    SkillGroup(id="tools", label="Tools", values=["Docker", "Compose"]),
+                ]
+            ),
+            workExperience=[
+                TailoringExperience(
+                    position="Engineer",
+                    company="Acme",
+                    description=["Shipped APIs"],
+                ),
+            ],
+            personalProjects=[],
+        )
+        rc = build_response_contract(payload, prompt_id="full")
+        d = rc.to_prompt_dict()
+        expected_ids = [g.id for g in payload.skills.groups]
+        expected_counts = [len(g.values) for g in payload.skills.groups]
+        assert "skills" in d
+        assert d["skills"]["group_ids"] == expected_ids
+        assert d["skills"]["value_counts"] == expected_counts

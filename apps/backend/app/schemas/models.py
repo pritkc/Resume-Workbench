@@ -1417,6 +1417,11 @@ class ImproveResumeData(BaseModel):
     change_manifest: list[ResumeChange] | None = None
     change_breakdown: TailoringStageBreakdown | None = None
 
+    skills_observability: dict[str, Any] | None = Field(
+        default=None,
+        description="Sparse skills QA/training projection (not used for rendering).",
+    )
+
     # Refinement metadata (multi-pass refinement stats)
     refinement_stats: "RefinementStats | None" = None
 
@@ -1452,6 +1457,10 @@ class JdTailorDiffData(BaseModel):
     change_breakdown: TailoringStageBreakdown | None = None
     pipeline_timing: PipelineTimingSummary | None = None
     artifacts: list[ArtifactSummary] = Field(default_factory=list)
+    skills_observability: dict[str, Any] | None = Field(
+        default=None,
+        description="Sparse skills QA/training projection when stored on confirmation run.",
+    )
 
 
 class JdTailorDiffResponse(BaseModel):

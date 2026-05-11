@@ -4,6 +4,7 @@ import type {
   ResumeChange,
   ResumeDiffSummary,
   ResumeFieldDiff,
+  SkillsObservationPayload,
   TailoringStageBreakdown,
 } from '@/components/common/resume_previewer_context';
 import type { ResumeData, SkillGroup } from '@/components/dashboard/resume-component';
@@ -797,6 +798,7 @@ export interface JdTailorDiffData {
   change_breakdown?: TailoringStageBreakdown | null;
   pipeline_timing?: PipelineTimingSummary | null;
   artifacts?: ArtifactSummary[];
+  skills_observability?: SkillsObservationPayload | Record<string, unknown> | null;
 }
 
 export interface JdTailorDiffResponse {

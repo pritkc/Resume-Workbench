@@ -33,6 +33,7 @@ from app.services.tailoring.preservation import (
     finalize_tailored_resume,
     rehydrate_tailoring_resume,
 )
+from app.services.tailoring.skills_observability import build_skills_observability_v1
 from app.services.tailoring.validation import DiffValidationResult, validate_compact_diff
 from app.prompts.critique_resume import build_messages as build_critique_messages
 from app.prompts.rewrite_resume import build_messages as build_rewrite_messages
@@ -331,6 +332,20 @@ async def generate_tailored_resume(
         else []
     )
 
+    skills_observability: dict[str, Any] | None = None
+    if (
+        has_compact_content
+        and not legacy_full_body_response
+        and original_resume_data is not None
+        and response_contract.skill_group_ids
+    ):
+        skills_observability = build_skills_observability_v1(
+            original_resume_data,
+            resume_data,
+            llm_response_v2.skills,
+            ordered_group_ids=response_contract.skill_group_ids,
+        )
+
     return TailoringResult(
         resume_data=resume_data,
         warnings=warnings,
@@ -344,6 +359,7 @@ async def generate_tailored_resume(
         stage_breakdown=stage_breakdown,
         bold_keywords=bold_keywords,
         critique_analysis=critique_analysis,
+        skills_observability=skills_observability,
     )
 
 

@@ -102,8 +102,8 @@ def _full_envelope_strict_diff() -> dict[str, Any]:
             {
                 "label": _cell("Lang", "Group label fits."),
                 "values": {
-                    "0": _cell(None, "Keep Go."),
-                    "1": _cell(None, "Keep Rust."),
+                    "0": {"value": None},
+                    "1": {"value": None},
                 },
             },
         ],
@@ -174,6 +174,15 @@ def test_full_envelope_rejects_unchanged_key() -> None:
     result = validate_compact_diff(diff, contract)
     assert result.valid is False
     assert any("unchanged" in e for e in result.errors)
+
+
+def test_full_envelope_rejects_empty_skill_label_why() -> None:
+    contract = _make_strict_contract()
+    diff = _full_envelope_strict_diff()
+    diff["skills"][0]["label"] = {"value": "Lang", "why": "   "}  # type: ignore[dict-item]
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("label.why" in e for e in result.errors)
 
 
 def test_full_envelope_requires_why() -> None:

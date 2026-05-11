@@ -12,6 +12,7 @@ import type {
   ResumeDiffSummary,
   ResumeFieldDiff,
   ResumePreview,
+  SkillsObservationPayload,
   TailoringStageBreakdown,
 } from '@/components/common/resume_previewer_context';
 import type { ArtifactSummary } from '@/lib/types/render-theme';
@@ -29,6 +30,8 @@ interface DiffPreviewModalProps {
   changeManifest?: ResumeChange[];
   pipelineTiming?: PipelineTimingSummary | null;
   artifacts?: ArtifactSummary[];
+  /** Sparse skills QA rows from tailoring pipeline (tags + optional LLM whys). */
+  skillsObservation?: SkillsObservationPayload | null;
   errorMessage?: string;
   resumePreview?: ResumePreview | null;
 }
@@ -101,6 +104,16 @@ function stringifyManifestValue(value: ResumeChange['value']): string {
     }
   }
   return '';
+}
+
+/** Accept backend JSON blobs (JD diff endpoint may omit strict typing client-side). */
+function coerceSkillsObservationPayload(
+  raw: SkillsObservationPayload | Record<string, unknown> | null | undefined
+): SkillsObservationPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as SkillsObservationPayload;
+  if (typeof candidate.version !== 'number' || !Array.isArray(candidate.groups)) return null;
+  return candidate;
 }
 
 /** When final resume matches the source (localization/cleanup), line diffs omit summary — surface manifest row anyway. */
@@ -910,6 +923,8 @@ export interface TailorDiffReadonlyBodyProps {
   emptyFallback?: ReactNode;
   /** Tailored preview (improved snapshot) — used for human-readable section titles. */
   resumePreview?: ResumePreview | null;
+  /** Deterministic chip tags (+/−/moved/unchanged) + sparse LLM whys. */
+  skillsObservation?: SkillsObservationPayload | Record<string, unknown> | null;
 }
 
 export function TailorDiffReadonlyBody({
@@ -921,9 +936,15 @@ export function TailorDiffReadonlyBody({
   errorMessage,
   emptyFallback,
   resumePreview = null,
+  skillsObservation = null,
 }: TailorDiffReadonlyBodyProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [showMetaDetails, setShowMetaDetails] = useState(false);
+
+  const skillsObsNormalized = useMemo(
+    () => coerceSkillsObservationPayload(skillsObservation),
+    [skillsObservation]
+  );
 
   const mergedDetailedChanges = useMemo(() => {
     let next = augmentDetailedChangesFromManifest(detailedChanges, changeManifest);
@@ -1072,7 +1093,11 @@ export function TailorDiffReadonlyBody({
             onToggle={() => toggleSection(section.key)}
           >
             {section.key === 'skills' ? (
-              <SkillsGroupedView items={section.items} aggregateRationale={skillsAggregateRationale} />
+              <SkillsGroupedView
+                items={section.items}
+                aggregateRationale={skillsAggregateRationale}
+                observation={skillsObsNormalized}
+              />
             ) : (
               section.items.map((item, index) => (
                 <ChangeItem key={`${section.key}-${index}`} item={item} />
@@ -1095,6 +1120,7 @@ export function DiffPreviewModal({
   changeBreakdown,
   changeManifest,
   artifacts,
+  skillsObservation = null,
   errorMessage,
   resumePreview = null,
 }: DiffPreviewModalProps) {
@@ -1191,6 +1217,7 @@ export function DiffPreviewModal({
             artifacts={artifacts}
             errorMessage={errorMessage}
             resumePreview={resumePreview}
+            skillsObservation={skillsObservation}
           />
         </div>
 
@@ -1425,12 +1452,42 @@ function ChangeItem({ item }: { item: DisplayChange }) {
   );
 }
 
+function skillObservationGlyph(changeTag: string): string {
+  switch (changeTag) {
+    case 'added':
+      return '+';
+    case 'removed':
+      return '−';
+    case 'moved':
+      return '≈';
+    case 'unchanged':
+      return '●';
+    default:
+      return '•';
+  }
+}
+
+function skillObservationTone(changeTag: string): string {
+  switch (changeTag) {
+    case 'added':
+      return 'border-emerald-200 bg-emerald-50/70 text-emerald-950';
+    case 'removed':
+      return 'border-red-200 bg-red-50/70 text-red-950';
+    case 'moved':
+      return 'border-amber-200 bg-amber-50/70 text-amber-950';
+    default:
+      return 'border-slate-200 bg-slate-50/80 text-slate-800';
+  }
+}
+
 function SkillsGroupedView({
   items,
   aggregateRationale,
+  observation,
 }: {
   items: DisplayChange[];
   aggregateRationale?: string;
+  observation?: SkillsObservationPayload | null;
 }) {
   const grouped = useMemo(() => {
     const buckets = new Map<
@@ -1470,6 +1527,70 @@ function SkillsGroupedView({
       modified: Array.from(value.modified),
     }));
   }, [items]);
+
+  if (observation?.groups?.length) {
+    return (
+      <div className="space-y-3">
+        {observation.groups.map((grp) => (
+          <div
+            key={grp.group_id}
+            className="rounded-md border border-slate-200/80 bg-white px-3 py-2 shadow-sm shadow-slate-900/5"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-[13px] font-semibold text-slate-900">{grp.group_label || grp.group_id}</p>
+              <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">
+                {grp.group_id}
+              </span>
+            </div>
+            {grp.group_why ? (
+              <p className="mt-1 text-[12px] leading-snug text-slate-700">{grp.group_why}</p>
+            ) : null}
+            <div className="mt-2 space-y-1.5">
+              {grp.values.map((cell, ix) => (
+                <div
+                  key={`${grp.group_id}-v-${ix}`}
+                  className={`flex flex-wrap items-start gap-2 rounded border px-2 py-1.5 text-[12px] leading-snug ${skillObservationTone(
+                    typeof cell.change_tag === 'string' ? cell.change_tag : ''
+                  )}`}
+                >
+                  <span className="min-w-[1.25rem] font-semibold tabular-nums">
+                    {skillObservationGlyph(typeof cell.change_tag === 'string' ? cell.change_tag : '')}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium">{cell.text}</span>
+                    {cell.why ? (
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] opacity-90">
+                        {cell.why}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-[10px] uppercase tracking-wide opacity-70">
+                    {cell.change_tag}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {(grp.removed?.length ?? 0) > 0 ? (
+              <div className="mt-2 border-t border-slate-100 pt-2">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Removed</p>
+                <div className="mt-1 space-y-1">
+                  {(grp.removed ?? []).map((r, ix) => (
+                    <div
+                      key={`${grp.group_id}-r-${ix}`}
+                      className="flex items-center gap-2 rounded border border-red-100 bg-red-50/60 px-2 py-1 text-[12px] text-red-900"
+                    >
+                      <span className="font-semibold">−</span>
+                      <span>{r.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">

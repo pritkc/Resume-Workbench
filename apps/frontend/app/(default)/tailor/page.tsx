@@ -865,6 +865,7 @@ function TailorPageContent() {
           changeManifest={pendingResult?.data?.change_manifest}
           pipelineTiming={pendingResult?.data?.pipeline_timing}
           artifacts={pendingResult?.data?.artifacts}
+          skillsObservation={pendingResult?.data?.skills_observability ?? null}
           errorMessage={diffConfirmError ?? undefined}
           resumePreview={pendingResult?.data?.resume_preview ?? null}
         />

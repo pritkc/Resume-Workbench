@@ -98,6 +98,27 @@ export interface TailoringStageBreakdown {
   location_value?: string | null;
 }
 
+export type SkillsObservationTag = 'unchanged' | 'added' | 'removed' | 'moved';
+
+export interface SkillsObservationValueRow {
+  text: string;
+  change_tag: SkillsObservationTag | string;
+  why?: string | null;
+}
+
+export interface SkillsObservationGroupRow {
+  group_id: string;
+  group_label?: string;
+  group_why?: string | null;
+  values: SkillsObservationValueRow[];
+  removed?: Array<{ text: string; change_tag?: string }>;
+}
+
+export interface SkillsObservationPayload {
+  version: number;
+  groups: SkillsObservationGroupRow[];
+}
+
 export interface PipelineTimingEntry {
   host_event: string;
   sub_event?: string | null;
@@ -159,6 +180,8 @@ export interface Data {
   change_breakdown?: TailoringStageBreakdown;
   pipeline_timing?: PipelineTimingSummary | null;
   bold_keywords?: string[];
+  /** Server-side QA projection; not rendered on PDF. */
+  skills_observability?: SkillsObservationPayload | null;
 }
 
 export interface ImprovedResult {

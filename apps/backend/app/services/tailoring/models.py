@@ -427,6 +427,64 @@ class TailoredCell(BaseModel):
         return text
 
 
+class SkillTailoredCell(BaseModel):
+    """Skill **group label** cell: rationale covers the whole group (all chips).
+
+    Skill **value** cells use ``SkillValueCell`` (value only).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: str | None = None
+    why: str | None = None
+
+    @field_validator("why", mode="before")
+    @classmethod
+    def _normalize_why_optional(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        text = _coerce_text(value)
+        return text or None
+
+
+class SkillValueCell(BaseModel):
+    """Single skill chip: ``value`` null means retain. No per-chip rationale."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    value: str | None = None
+
+
+def _coerce_skill_value_cell(v: Any) -> Any:
+    if isinstance(v, SkillValueCell):
+        return v
+    if isinstance(v, dict):
+        return {"value": v.get("value")}
+    if isinstance(v, str):
+        stripped = v.strip()
+        return {"value": stripped if stripped else None}
+    if v is None:
+        return {"value": None}
+    return v
+
+
+def _coerce_skill_tailored_cell(v: Any) -> Any:
+    if isinstance(v, SkillTailoredCell):
+        return v
+    if isinstance(v, dict):
+        data = dict(v)
+        why = data.get("why")
+        if isinstance(why, str) and not why.strip():
+            data["why"] = None
+        return data
+    if isinstance(v, str):
+        stripped = v.strip()
+        return {"value": stripped if stripped else None, "why": None}
+    if v is None:
+        return {"value": None, "why": None}
+    return v
+
+
 def _coerce_tailored_cell(v: Any, *, legacy_label: str) -> Any:
     if isinstance(v, TailoredCell):
         return v
@@ -441,12 +499,13 @@ def _coerce_tailored_cell(v: Any, *, legacy_label: str) -> Any:
 
 
 class TailoredSkillsGroup(BaseModel):
-    """One skill group as full cells (label + indexed values)."""
+    """One skill group: label rationale + value-only chips."""
 
     model_config = ConfigDict(extra="ignore")
 
-    label: TailoredCell
-    values: dict[str, TailoredCell] = Field(default_factory=dict)
+    group_id: str | None = None
+    label: SkillTailoredCell
+    values: dict[str, SkillValueCell] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -454,14 +513,29 @@ class TailoredSkillsGroup(BaseModel):
         if not isinstance(data, dict):
             return data
         data = dict(data)
+        hinted = data.get("group_id")
+        legacy_id = data.pop("id", None)
+        gid: str | None = None
+        if isinstance(hinted, str) and hinted.strip():
+            gid = hinted.strip()
+        elif isinstance(legacy_id, str) and legacy_id.strip():
+            gid = legacy_id.strip()
+        if gid:
+            data["group_id"] = gid
+
         raw_label = data.get("label", "")
         if not isinstance(raw_label, dict):
-            data["label"] = _coerce_tailored_cell(raw_label, legacy_label=_LEGACY_RATIONALE)
+            data["label"] = _coerce_skill_tailored_cell(raw_label)
+        else:
+            data["label"] = _coerce_skill_tailored_cell(raw_label)
         raw_values = data.get("values")
         if isinstance(raw_values, list):
             mapped: dict[str, Any] = {}
             for index, item in enumerate(raw_values):
-                mapped[str(index)] = _coerce_tailored_cell(item, legacy_label=_LEGACY_RATIONALE)
+                mapped[str(index)] = _coerce_skill_value_cell(item)
+            data["values"] = mapped
+        elif isinstance(raw_values, dict):
+            mapped = {str(k): _coerce_skill_value_cell(v) for k, v in raw_values.items()}
             data["values"] = mapped
         elif raw_values is None:
             data["values"] = {}
@@ -597,6 +671,7 @@ class TailoringResponseContract(BaseModel):
     project_bullet_counts: list[int] = Field(default_factory=list)
     project_tech_stacks: list[str] = Field(default_factory=list)
     skill_group_value_counts: list[int] = Field(default_factory=list)
+    skill_group_ids: list[str] = Field(default_factory=list)
     max_changed_projects: int = 2
     project_rename_allowed: bool = False
 
@@ -631,6 +706,14 @@ class TailoringResponseContract(BaseModel):
                 "rename_allowed": self.project_rename_allowed,
             }
 
+        if self.skill_group_value_counts:
+            block: dict[str, Any] = {
+                "value_counts": self.skill_group_value_counts,
+            }
+            if self.skill_group_ids:
+                block["group_ids"] = self.skill_group_ids
+            out["skills"] = block
+
         return out
 
 
@@ -651,6 +734,7 @@ class TailoringResult(BaseModel):
     cleanup_changes: list[ResumeFieldDiff] = Field(default_factory=list)
     stage_breakdown: TailoringStageBreakdown = Field(default_factory=TailoringStageBreakdown)
     bold_keywords: list[str] = Field(default_factory=list)
+    skills_observability: dict[str, Any] | None = None
 
 
 TailoringSectionContract.model_rebuild()
