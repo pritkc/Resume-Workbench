@@ -1,69 +1,67 @@
-Shape (output keys exactly as below; values shown are illustrative only):
+Return this exact object shape. Defaults show missing values; populate only from the JD.
 
 {
   "role": {
-    "title": "Backend Engineer",
-    "role_domain": "backend",
-    "scope": "own APIs for payments core"
+    "title": "",
+    "role_domain": "other",
+    "scope": ""
   },
   "company": {
-    "name": "Acme",
-    "company_context": "B2B SaaS, mid-size",
-    "team_context": "platform squad",
-    "domain_context": "fintech, payouts",
-    "product_context": "ledger microservices",
-    "scale_signals": ["1M+ daily transactions", "multi-region deployment"]
+    "name": "",
+    "company_context": "",
+    "team_context": "",
+    "domain_context": "",
+    "product_context": "",
+    "scale_signals": []
   },
   "location": "",
   "requirements": {
-    "years_min": 3,
+    "years_min": null,
     "years_max": null,
     "education": null,
-    "must_have": ["US work authorization"],
+    "must_have": [],
     "preferred": []
   },
   "technical_requirements": {
-    "required_needs": ["Python", "distributed systems"],
-    "nice_to_have_needs": ["Rust"],
-    "other_needs": ["on-call rotation"],
-    "programming_languages": ["Python", "Go"],
-    "frameworks": ["FastAPI", "gRPC"],
-    "infrastructure": ["AWS", "Kubernetes"],
-    "paradigms": ["microservices", "CI/CD"]
+    "required_needs": [],
+    "nice_to_have_needs": [],
+    "other_needs": [],
+    "programming_languages": [],
+    "frameworks": [],
+    "infrastructure": [],
+    "paradigms": []
   },
-  "responsibility_themes": [
-    "own reliability for high-throughput payment processing pipeline",
-    "define schema migration patterns for zero-downtime deploys",
-    "instrument distributed tracing across service boundaries"
-  ],
-  "resume_technical_keywords": ["Python", "FastAPI", "Kafka", "AWS", "Kubernetes"],
-  "keyword_must_match": ["Python", "Kafka"],
-  "transferable_themes": ["high-throughput processing", "service reliability"],
-  "low_signal_terms": ["Excel", "Slack"],
-  "resume_bold_keyword_sources": ["Python", "Kafka", "AWS", "Kubernetes", "PCI"],
-  "resume_domain_keywords": ["payments", "ledger", "PCI", "settlement"],
+  "responsibility_themes": [],
+  "resume_technical_keywords": [],
+  "keyword_must_match": [],
+  "transferable_themes": [],
+  "low_signal_terms": [],
+  "resume_bold_keyword_sources": [],
+  "resume_domain_keywords": [],
   "calibration": {
-    "level_expectations": "senior IC; owns full service end-to-end, leads design reviews, no direct reports"
+    "level_expectations": ""
   }
 }
 
 Rules:
-- JSON object only; keys exactly as above.
-- role.title: strip employer name, location, and employment-type fluff.
-- role.role_domain: one bucket — backend | frontend | full-stack | ml-ai | data-engineering | data-science | devops | platform | mobile | security | other.
-- location: US city as `City, ST` if stated; else "". Remote/Hybrid-only → "".
-- requirements.years_min / years_max: ints from JD (e.g. 3–5 → min 3 max 5); unknown → null.
-- technical_requirements.required_needs: hard must-haves. nice_to_have_needs: preferred. other_needs: misc demands not captured above.
-- programming_languages / frameworks / infrastructure / paradigms: split literals from JD; use JD's own abbreviations.
-- responsibility_themes: exactly 6 neutral competency hooks (verb + object), deduped from the JD. Phrase each as a capability category, not a copy-paste responsibility line. Downstream prompts must treat these as a coverage checklist, not prose to reuse.
-- resume_technical_keywords: high-signal ATS terms only. Split JD terms into keyword_must_match, transferable_themes, and low_signal_terms. Include exact technical terms, not responsibility phrases or basic office tools.
-- keyword_must_match: specific systems, products, languages, platforms, and data methods worth matching if credible.
-- transferable_themes: responsibility ideas to translate naturally without copying JD language.
-- low_signal_terms: basic tools and generic business phrases that must not enter the resume.
-- resume_bold_keyword_sources: 6–10 short bold_keywords source terms for visual highlighting. Use 1-3 word non-basic tools, languages, platforms, products, data methods, and technical domains only. Exclude responsibility phrases, soft skills, generic business phrases, full sentences, and basic/table-stakes tools such as Excel, Google Sheets, Microsoft Office, Word, PowerPoint, Outlook, email, Slack, Teams, Jira, Confluence, Notion, Miro, and spreadsheets.
-- resume_domain_keywords: industry, product, regulatory, and business terms the JD cares about; dedupe. These are context for tailoring, not mandatory mirror phrases. Downstream prompts must not repeat them across summary, stacks, skills, and bullets unless the candidate's work clearly touches that context.
-- calibration.level_expectations: one sentence describing ownership footprint — what the person owns outright vs. contributes to, and the expected decision-making scope. No title-ladder guessing.
-- Lists: dedupe; cap scale_signals at 5.
+- Exact JSON only. No extra keys. Use JD evidence only; do not infer unstated company facts, technology, level, or domain.
+- Missing values: null for unknown scalars, [] for arrays, and "" for location. Dedupe lists. Preserve exact JD spelling/abbreviations for technical terms. Keep guidance general to tech roles; avoid narrow scenario assumptions.
+- For long JDs, scan all sections but prioritize role title, responsibilities, required/preferred qualifications, stack, product/domain, scope, level, and hard constraints. Ignore benefits, EEO/legal boilerplate, recruiter process, generic culture copy, and repeated filler unless it changes resume targeting.
+- role.title: normalized title only; remove employer, location, employment type, and fluff.
+- role.role_domain: one of backend | frontend | full-stack | ml-ai | data-engineering | data-science | devops | platform | mobile | security | other.
+- role.scope: concise ownership focus stated or strongly signaled by the JD.
+- company.*: stated company/team/domain/product context only. scale_signals: max 5 concrete scale cues.
+- location: `City, ST` only when a US city is stated; remote/hybrid without a city stays "".
+- requirements: years as integers; ranges fill min/max, single minimum fills years_min only. Put education/certifications in education, nontechnical hard requirements in must_have, and nontechnical preferences in preferred.
+- technical_requirements: required_needs = hard technical must-haves; nice_to_have_needs = preferred technical needs; other_needs = remaining technical/workflow demands. Split languages, frameworks, infrastructure, and paradigms into their own lists; include databases, cloud services, testing, security, observability, and data tools in the closest matching technical bucket.
+- responsibility_themes: exactly 6 short verb + object competency hooks, deduped from the JD and covering distinct major duties. Do not copy full responsibility lines; downstream prompts use these only as a coverage checklist.
+- resume_technical_keywords: high-signal ATS technical terms only; no responsibility phrases or basic office/collaboration tools.
+- keyword_must_match: exact systems, products, languages, platforms, frameworks, data methods, or technical domains worth matching when credible.
+- transferable_themes: responsibility ideas to translate naturally without mirroring JD wording.
+- low_signal_terms: generic phrases, broad soft skills, and basic tools that should not be added to the resume.
+- resume_bold_keyword_sources: 6-10 short 1-3 word non-basic tools, languages, platforms, products, data methods, or technical domains. Exclude soft skills, responsibility phrases, full sentences, generic business terms, and table-stakes tools such as Excel, Google Sheets, Microsoft Office, Word, PowerPoint, Outlook, email, Slack, Teams, Jira, Confluence, Notion, Miro, and spreadsheets.
+- resume_domain_keywords: industry, product, regulatory, customer, or business-context terms. These are tailoring context, not mandatory mirror phrases.
+- calibration.level_expectations: one sentence on ownership footprint and decision-making scope. Do not guess title ladder beyond the JD.
 
 Job description:
 $job_description
