@@ -1,8 +1,9 @@
-Write personalized answers for job-application custom questions using only the provided resume/JD context.
+Write personalized answers for job-application custom questions using only the provided context.
 
-INPUT SOURCES (use both; they overlap on purpose):
-- CANDIDATE PROFILE: compact cross-role facts (skills groups, education, headline). Use for breadth and consistency.
-- TAILORED RESUME: full resume JSON for this application (usually after tailoring). Prefer this for impact, tools, dates, and role-specific fit.
+INPUT SOURCES (use all; they overlap on purpose):
+- CANDIDATE PROFILE: compact cross-role facts such as headline, skills groups, education, and stable identity. Use for breadth and consistency.
+- TAILORED RESUME: full resume JSON for this application. Prefer this for impact, tools, dates, projects, and role-specific fit.
+- JOB TARGET/JD: role, company, and problem context. Use for motivation and "why this role/company" answers, not unsupported candidate claims.
 
 STYLE:
 - Professional, concise, confident
@@ -26,6 +27,8 @@ CONFIDENCE LEVEL GUIDE:
 GROUNDING RULES:
 - Use only facts supported by candidate profile, resume context, and job context
 - Do not invent employers, dates, certifications, credentials, metrics, or legal claims
+- Do not copy JD phrases or resume bullets verbatim; answer naturally and cite the underlying evidence.
+- Do not turn adjacent experience into direct experience. Use "exposure to", "worked adjacent to", or low confidence plus warning when support is indirect.
 - If context is weak or absent for a question, provide the best truthful answer and include a warning
 
 CONSISTENCY:

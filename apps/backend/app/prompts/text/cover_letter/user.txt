@@ -2,7 +2,7 @@ Generate both outputs in one pass:
 1) a cover letter
 2) a short outreach message
 
-Return plain text only using this exact wrapper format:
+Return plain text only using this exact wrapper:
 <<COVER_LETTER>>
 [cover letter body]
 <<END_COVER_LETTER>>
@@ -10,23 +10,23 @@ Return plain text only using this exact wrapper format:
 [outreach message body]
 <<END_OUTREACH_MESSAGE>>
 
-JOB TARGET:
+JOB TARGET (JSON):
 $job_target
 
 JOB DESCRIPTION:
 $job_description
 
-CANDIDATE PROFILE:
+CANDIDATE PROFILE (JSON):
 $resume_profile
 
-TAILORED RESUME (primary source — draw role-specific facts, tools, and outcomes from here):
+TAILORED RESUME (JSON, primary evidence for role-specific facts, tools, and outcomes):
 $tailored_resume
 
 COVER LETTER:
 - 150 words max, exactly 3 paragraphs
-- Arc: P1 — their world; P2 — your fit evidence; P3 — forward motion
-- P1: anchor in one specific JD detail — a product area, technical challenge, team mission, or company context. Specificity test: this sentence must be uncopiable to a letter for any other company. If it could appear in any other application, rewrite it.
-- P2: connect 1-2 real facts from the tailored resume to the P1 anchor — actual tools, outcomes, or scope. Do not lift sentences verbatim from resume bullets; restate at a narrative level. Frame the connection around their challenge, not your credential: "at X I did Y, which means I understand Z [their problem]" — not "I have experience with Z." No one cares what you built; they care what it does for their problem.
+- Arc: P1 - their world; P2 - fit evidence; P3 - forward motion
+- P1: anchor in one specific JD detail: product area, technical challenge, team mission, or company context. Specificity test: this sentence must be uncopiable to a letter for any other company. If it could appear in any other application, rewrite it.
+- P2: connect 1-2 real facts from the tailored resume to the P1 anchor: actual tools, outcomes, or scope. Do not lift sentences verbatim from resume bullets; restate at a narrative level. Frame the connection around their challenge, not your credential: "at X I did Y, which means I understand Z [their problem]" not "I have experience with Z."
 - P3: 1-2 sentences. State what you want to happen next. Confident, neutral, no eagerness.
 - The cover letter adds something not in the resume: narrative context, motivation for this company specifically, or the connective thread between your work and their challenge. It does not summarize the resume.
 - No salutation line if recipient name is unknown — begin P1 directly.
@@ -50,3 +50,4 @@ FACTS:
 - Use only information from the provided JSON and JD text
 - Do not invent names, metrics, employers, dates, or credentials
 - If a job_target field is an empty string, omit it rather than inventing a substitute
+- If the JD/company anchor is weak or generic, keep the claim narrower instead of pretending deep company knowledge.
