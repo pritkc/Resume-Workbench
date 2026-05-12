@@ -1,12 +1,13 @@
-ORIGINAL MASTER RESUME (source of truth — all scope claims must be supportable from this):
+ORIGINAL RESUME:
 $original_resume
 
-TAILORED OUTPUT (compact JSON diff from tailor_resume_full):
+TAILORED DIFF:
 $tailor_resume_full_output
 
-JOB DESCRIPTION INTELLIGENCE:
+JD INTELLIGENCE:
 $extract_jd_intel_output
 
-  JD terms to check as coverage candidates, not mandatory insertions: $extract_jd_intel_output.resume_technical_keywords
-  Responsibility themes to check as neutral coverage hooks:           $extract_jd_intel_output.responsibility_themes
-  Level ceiling to check scope against:                               $extract_jd_intel_output.calibration.level_expectations
+JD CHECKLIST:
+- Technical terms to check, not force: $extract_jd_intel_output.resume_technical_keywords
+- Responsibility themes as neutral coverage hooks: $extract_jd_intel_output.responsibility_themes
+- Level ceiling for scope calibration: $extract_jd_intel_output.calibration.level_expectations
