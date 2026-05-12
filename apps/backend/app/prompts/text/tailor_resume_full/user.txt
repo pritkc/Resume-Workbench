@@ -21,6 +21,9 @@ $extract_jd_intel_output
 JD INTELLIGENCE GUIDE:
 - Competency hooks: $extract_jd_intel_output.responsibility_themes
 - Technical terms to consider, not force: $extract_jd_intel_output.resume_technical_keywords
+- Exact-match candidates when credible: $extract_jd_intel_output.keyword_must_match
+- Transferable themes to translate naturally: $extract_jd_intel_output.transferable_themes
+- Low-signal terms to avoid or demote: $extract_jd_intel_output.low_signal_terms
 - Bold keyword candidates: $extract_jd_intel_output.resume_bold_keyword_sources
 - Domain/product context: $extract_jd_intel_output.resume_domain_keywords
 - Level ceiling: $extract_jd_intel_output.calibration.level_expectations

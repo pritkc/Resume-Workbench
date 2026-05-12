@@ -58,8 +58,8 @@ Rules:
 - resume_technical_keywords: high-signal ATS technical terms only; no responsibility phrases or basic office/collaboration tools.
 - keyword_must_match: exact systems, products, languages, platforms, frameworks, data methods, or technical domains worth matching when credible.
 - transferable_themes: responsibility ideas to translate naturally without mirroring JD wording.
-- low_signal_terms: generic phrases, broad soft skills, and basic tools that should not be added to the resume.
-- resume_bold_keyword_sources: 6-10 short 1-3 word non-basic tools, languages, platforms, products, data methods, or technical domains. Exclude soft skills, responsibility phrases, full sentences, generic business terms, and table-stakes tools such as Excel, Google Sheets, Microsoft Office, Word, PowerPoint, Outlook, email, Slack, Teams, Jira, Confluence, Notion, Miro, and spreadsheets.
+- low_signal_terms: generic responsibility phrases, broad soft skills, weak umbrella terms, generic business/domain labels, and basic tools that should not be added to summary, skills, tech stacks, or bold keywords.
+- resume_bold_keyword_sources: 6-10 short source terms for final bold_keywords; use 1-3 word non-basic tools, languages, platforms, products, data methods, or technical domains. Exclude responsibility phrases, soft skills, full sentences, generic business terms, and table-stakes tools. It it supposed to be an elite SWE resume, so no basic bolierplate tools.
 - resume_domain_keywords: industry, product, regulatory, customer, or business-context terms. These are tailoring context, not mandatory mirror phrases.
 - calibration.level_expectations: one sentence on ownership footprint and decision-making scope. Do not guess title ladder beyond the JD.
 

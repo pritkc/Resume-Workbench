@@ -92,6 +92,7 @@ def test_filter_resume_keyword_sources_removes_basic_tools() -> None:
             "SAP",
             "Excel",
             "Power BI",
+            "Data Analysis",
             "Jira",
             "Teams",
             "Miro",
@@ -101,13 +102,17 @@ def test_filter_resume_keyword_sources_removes_basic_tools() -> None:
             "Excel",
             "SAP",
             "Power BI",
+            "Process Mapping",
+            "Workflow Visualization",
+            "Process Optimization",
+            "Supply Chain",
             "Microsoft Office",
             "Confluence",
             "Notion",
             "Miro",
         ],
         "transferable_themes": ["process mapping", "workflow visualization"],
-        "low_signal_terms": ["Excel", "Miro"],
+        "low_signal_terms": ["Excel", "Miro", "Supply Chain"],
     }
 
     filter_resume_keyword_sources(blob)
@@ -115,4 +120,4 @@ def test_filter_resume_keyword_sources_removes_basic_tools() -> None:
     assert blob["resume_technical_keywords"] == ["SAP", "Power BI"]
     assert blob["resume_bold_keyword_sources"] == ["SAP", "Power BI"]
     assert blob["transferable_themes"] == ["process mapping", "workflow visualization"]
-    assert blob["low_signal_terms"] == ["Excel", "Miro"]
+    assert blob["low_signal_terms"] == ["Excel", "Miro", "Supply Chain"]

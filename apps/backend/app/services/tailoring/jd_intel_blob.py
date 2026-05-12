@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any
 
-from app.prompts.prompt_policy import resume_basic_terms
+from app.prompts.prompt_policy import low_signal_bold_keywords, resume_basic_terms
 from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
 
 _JD_PLACEHOLDER = re.compile(
@@ -25,6 +25,11 @@ def is_basic_resume_term(value: str) -> bool:
     return _term_key(value) in resume_basic_terms()
 
 
+def is_low_signal_resume_keyword(value: str) -> bool:
+    """Return true for broad responsibility/domain phrases that should not be bolded."""
+    return _term_key(value) in low_signal_bold_keywords()
+
+
 def contains_basic_resume_term(value: str) -> bool:
     """Return true when free text mentions a blocked basic/table-stakes tool."""
     text = value.casefold()
@@ -34,17 +39,31 @@ def contains_basic_resume_term(value: str) -> bool:
     )
 
 
-def filter_basic_resume_terms(values: Any) -> list[str]:
-    """Return a deduped list without basic/table-stakes resume terms."""
+def filter_basic_resume_terms(
+    values: Any,
+    *,
+    extra_low_signal_terms: Any = None,
+) -> list[str]:
+    """Return a deduped list without basic or low-signal resume terms."""
     if not isinstance(values, list):
         return []
+    extra_low_signal = {
+        _term_key(value)
+        for value in extra_low_signal_terms
+        if isinstance(value, str) and value.strip()
+    } if isinstance(extra_low_signal_terms, list) else set()
     out: list[str] = []
     seen: set[str] = set()
     for value in values:
         if not isinstance(value, str):
             continue
         text = value.strip()
-        if not text or is_basic_resume_term(text):
+        if (
+            not text
+            or is_basic_resume_term(text)
+            or is_low_signal_resume_keyword(text)
+            or _term_key(text) in extra_low_signal
+        ):
             continue
         key = text.casefold()
         if key in seen:
@@ -56,9 +75,13 @@ def filter_basic_resume_terms(values: Any) -> list[str]:
 
 def filter_resume_keyword_sources(blob: dict[str, Any]) -> None:
     """Strip low-signal office tools from JD keyword lists used for tailoring."""
+    low_signal_terms = blob.get("low_signal_terms")
     for key in ("resume_technical_keywords", "resume_bold_keyword_sources", "keyword_must_match"):
         if key in blob:
-            blob[key] = filter_basic_resume_terms(blob.get(key))
+            blob[key] = filter_basic_resume_terms(
+                blob.get(key),
+                extra_low_signal_terms=low_signal_terms,
+            )
 
 
 def deep_get(obj: Any, dotted_path: str, default: Any = None) -> Any:

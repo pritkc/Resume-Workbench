@@ -51,7 +51,7 @@ ATS AND KEYWORDS:
 - Never keyword-stuff, write hollow ATS bait, or add basic office/chat/project tools to summary, bullets, tech_stacks, skills, or bold_keywords.
 - BOLD_KEYWORDS: use 1-3 word terms only; prefer tools, languages, platforms, frameworks, data methods, and product systems; avoid sentences, soft skills, and generic domain phrases.
 - Do not include basic tools, generic role/domain labels, responsibility phrases, or weak umbrella terms in bold_keywords.
-- Examples of low-signal bold terms to exclude: Data Analysis, Process Mapping, Workflow Visualization.
+- Examples of low-signal bold terms to exclude: Data Analysis, Process Mapping, Workflow Visualization, Process Optimization.
 
 TECH STACKS:
 - tech_stacks values contain only named tools, languages, platforms, frameworks, or products.
