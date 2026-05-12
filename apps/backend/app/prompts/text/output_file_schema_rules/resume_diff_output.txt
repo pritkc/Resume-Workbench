@@ -5,6 +5,7 @@ PRECEDENCE:
 
 OUTPUT FORMAT:
 - Return valid JSON only. No markdown, prose, comments, or fences. Start with { and end with }.
+- Minify output: compact JSON — no pretty-printing, avoid line breaks inside objects/arrays unless a string literal requires them; pack skills ``values[]`` on one line when possible (shorter payloads).
 - Full/default tailoring modes require top-level keys: "summary", "experience", "projects", "skills", "bold_keywords".
 - Lite mode may return a partial diff and may still parse legacy bare strings, but TailoredCell objects are preferred.
 
@@ -15,11 +16,11 @@ TAILORED CELL:
 
 FULL ENVELOPE:
 - Emit the complete grid for every contract-listed experience row, project row, skills group/value, the summary cell, and bold_keywords.
-- Experience keys are "0".."N-1" matching RESPONSE CONTRACT order. Each entry includes "position", "tech_stacks", and "bullets" with every bullet index "0".."M-1".
+- Experience keys are stringified 0-based indices "0".."N-1" matching RESPONSE CONTRACT order. Each entry includes "position", "tech_stacks", and "bullets" with every bullet index "0".."M-1".
 - Project keys follow the same rule. Each entry includes "name", "tech_stacks", and every source bullet index.
 - Do not add, combine, drop, or renumber bullet indices unless RESPONSE CONTRACT explicitly allows it.
 - Retained cells still appear with "value": null and a useful "why".
-- Skills are an array of groups: {"group_id"?, "label": {"value", "why"}, "values": {"0": {"value"}}}. Skill value cells contain only {"value"}; rationale for the group goes in label.why. Echo group_id when RESPONSE CONTRACT.skills.group_ids lists ids.
+- Skills are an array of groups: {"label": {"value", "why"}, "values": [<string|null>, ...]}. ``skills[k]`` is the k-th row in RESPONSE CONTRACT.skills ``value_counts`` order; lengths must match ``value_counts[k]``. null in ``values[j]`` retains the j-th chip. Prefer that compact ``values[]`` array; optional legacy keyed form "values": {"0": {"value"}, …}. Single ``label.why`` must briefly cover every chip in **positional order** (retain vs edit vs add-for-JD — one dense prose line joined with semicolons, not separate lines).
 - bold_keywords is an array of 6-10 short high-visibility technical ATS terms from final resume content.
 
 SHAPES:
@@ -64,6 +65,7 @@ SKILLS:
 - Add only a few JD-specific values across the skills section unless already present.
 - Skill values must be specific tools, products, methods, or technologies, not responsibility phrases.
 - Retain adjacent evidenced skills even when they are not JD-critical; avoid turning skills into a JD mirror.
+- Do not emit group ids; alignment is RESPONSE CONTRACT ordering only. Explain all chips inside ``label.why`` compactly — no rationale fields on individual ``values[]`` entries.
 
 --- WRITING POLICY ---
 

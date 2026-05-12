@@ -7,7 +7,7 @@ import math
 import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 from app.schemas import (
     CustomSection,
@@ -468,6 +468,27 @@ def _coerce_skill_value_cell(v: Any) -> Any:
     return v
 
 
+def _dict_skill_values_to_ordered_slots(d: dict[str, Any]) -> list[Any]:
+    """Expand ``{\"0\": …, \"1\": …}`` into a list; gaps use explicit ``None``."""
+
+    if not d:
+        return []
+    int_keys = [int(k) for k in d if str(k).isdigit()]
+    if not int_keys:
+        return []
+    last_idx = max(int_keys)
+    return [d.get(str(i)) for i in range(last_idx + 1)]
+
+
+def _normalize_skill_value_slot(item: Any) -> dict[str, Any]:
+    coerced = _coerce_skill_value_cell(item)
+    if isinstance(coerced, SkillValueCell):
+        return {"value": coerced.value}
+    if isinstance(coerced, dict):
+        return {"value": coerced.get("value")}
+    return {"value": None}
+
+
 def _coerce_skill_tailored_cell(v: Any) -> Any:
     if isinstance(v, SkillTailoredCell):
         return v
@@ -499,13 +520,16 @@ def _coerce_tailored_cell(v: Any, *, legacy_label: str) -> Any:
 
 
 class TailoredSkillsGroup(BaseModel):
-    """One skill group: label rationale + value-only chips."""
+    """One skill group: label rationale + value-only chips.
+
+    Groups align with RESPONSE CONTRACT.skills ``value_counts`` order by array index only.
+    Legacy ``group_id`` / ``id`` keys in payloads are ignored.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
-    group_id: str | None = None
     label: SkillTailoredCell
-    values: dict[str, SkillValueCell] = Field(default_factory=dict)
+    values: list[SkillValueCell] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -513,15 +537,6 @@ class TailoredSkillsGroup(BaseModel):
         if not isinstance(data, dict):
             return data
         data = dict(data)
-        hinted = data.get("group_id")
-        legacy_id = data.pop("id", None)
-        gid: str | None = None
-        if isinstance(hinted, str) and hinted.strip():
-            gid = hinted.strip()
-        elif isinstance(legacy_id, str) and legacy_id.strip():
-            gid = legacy_id.strip()
-        if gid:
-            data["group_id"] = gid
 
         raw_label = data.get("label", "")
         if not isinstance(raw_label, dict):
@@ -529,17 +544,19 @@ class TailoredSkillsGroup(BaseModel):
         else:
             data["label"] = _coerce_skill_tailored_cell(raw_label)
         raw_values = data.get("values")
-        if isinstance(raw_values, list):
-            mapped: dict[str, Any] = {}
-            for index, item in enumerate(raw_values):
-                mapped[str(index)] = _coerce_skill_value_cell(item)
-            data["values"] = mapped
-        elif isinstance(raw_values, dict):
-            mapped = {str(k): _coerce_skill_value_cell(v) for k, v in raw_values.items()}
-            data["values"] = mapped
+        if isinstance(raw_values, dict):
+            data["values"] = [_normalize_skill_value_slot(x) for x in _dict_skill_values_to_ordered_slots(raw_values)]
+        elif isinstance(raw_values, list):
+            data["values"] = [_normalize_skill_value_slot(x) for x in raw_values]
         elif raw_values is None:
-            data["values"] = {}
+            data["values"] = []
+        else:
+            data["values"] = []
         return data
+
+    @field_serializer("values")
+    def _serialize_skill_values(self, values: list[SkillValueCell]) -> list[str | None]:
+        return [cell.value for cell in values]
 
 
 class CompactBulletDiff(BaseModel):
@@ -707,12 +724,9 @@ class TailoringResponseContract(BaseModel):
             }
 
         if self.skill_group_value_counts:
-            block: dict[str, Any] = {
-                "value_counts": self.skill_group_value_counts,
-            }
-            if self.skill_group_ids:
-                block["group_ids"] = self.skill_group_ids
-            out["skills"] = block
+            # Order is positional only (`skills[0]`, …); stable ids stay server-side
+            # (``skill_group_ids`` on this model) for observability, not echoed in prompts.
+            out["skills"] = {"value_counts": self.skill_group_value_counts}
 
         return out
 

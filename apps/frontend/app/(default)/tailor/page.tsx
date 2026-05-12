@@ -12,6 +12,7 @@ import {
   uploadJobDescriptions,
   previewImproveResume,
   confirmImproveResume,
+  ImproveApiError,
   fetchResumeList,
   getActiveResume,
   type ResumeListItem,
@@ -33,6 +34,11 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 const ACTIVE_RESUME_STORAGE_KEY = 'active_resume_id';
 const LEGACY_MASTER_RESUME_STORAGE_KEY = 'master_resume_id';
+
+function messageFromImproveFailure(err: unknown, fallback: string): string {
+  if (err instanceof ImproveApiError) return err.message;
+  return fallback;
+}
 
 function migrateLegacyTailorStorage(): void {
   if (typeof window === 'undefined') return;
@@ -490,7 +496,24 @@ function TailorPageContent() {
         return;
       }
       console.error(err);
-      // Check for common error patterns
+      if (err instanceof ImproveApiError) {
+        const msgLower = err.message.toLowerCase();
+        if (
+          msgLower.includes('api key') ||
+          msgLower.includes('authentication') ||
+          msgLower.includes('unauthorized') ||
+          err.status === 401
+        ) {
+          setError(t('tailor.errors.apiKeyError'));
+          return;
+        }
+        if (err.status === 429 || msgLower.includes('rate limit')) {
+          setError(t('tailor.errors.rateLimit'));
+          return;
+        }
+        setError(err.message);
+        return;
+      }
       const errorMessage = err instanceof Error ? err.message : '';
       if (
         errorMessage.toLowerCase().includes('api key') ||
@@ -558,7 +581,7 @@ function TailorPageContent() {
       setPendingResult(null);
     } catch (err) {
       console.error(err);
-      const errorMessage = t('tailor.errors.failedToConfirm');
+      const errorMessage = messageFromImproveFailure(err, t('tailor.errors.failedToConfirm'));
       setError(errorMessage);
       setDiffConfirmError(errorMessage);
     } finally {
@@ -598,7 +621,7 @@ function TailorPageContent() {
       handleCloseMissingDiffDialog();
     } catch (err) {
       console.error(err);
-      const errorMessage = t('tailor.errors.failedToConfirm');
+      const errorMessage = messageFromImproveFailure(err, t('tailor.errors.failedToConfirm'));
       setError(errorMessage);
       setMissingDiffError(errorMessage);
     } finally {
@@ -799,7 +822,7 @@ function TailorPageContent() {
               </div>
 
               {error && (
-                <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
+                <div className="whitespace-pre-wrap border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
                   {error}
                 </div>
               )}

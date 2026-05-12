@@ -20,6 +20,74 @@ import { type Locale } from '@/i18n/config';
 import { normalizeResumeSkills } from '@/lib/utils/additional-groups';
 import { API_BASE, apiPost, apiPatch, apiPut, apiDelete, apiFetch } from './client';
 
+/** Non-OK response from improve / preview / confirm endpoints, with parsed FastAPI `detail`. */
+export class ImproveApiError extends Error {
+  readonly status: number;
+  readonly detail: unknown;
+  constructor(message: string, status: number, detail?: unknown) {
+    super(message);
+    this.name = 'ImproveApiError';
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+function formatImproveErrorResponse(
+  status: number,
+  bodyText: string
+): { message: string; detail: unknown } {
+  let detail: unknown;
+  try {
+    const parsed = JSON.parse(bodyText) as { detail?: unknown };
+    detail = parsed.detail;
+  } catch {
+    detail = undefined;
+  }
+
+  if (typeof detail === 'string') {
+    const msg = detail.trim();
+    return { message: msg || `Request failed (${status}).`, detail };
+  }
+
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const d = detail as Record<string, unknown>;
+    const lines: string[] = [];
+    if (typeof d.stage_label === 'string' && d.stage_label.trim()) {
+      lines.push(d.stage_label.trim());
+    }
+    if (typeof d.message === 'string' && d.message.trim()) {
+      lines.push(d.message.trim());
+    }
+    if (Array.isArray(d.hints)) {
+      for (const h of d.hints) {
+        if (typeof h === 'string' && h.trim()) {
+          lines.push(`• ${h.trim()}`);
+        }
+      }
+    }
+    if (typeof d.technical_detail === 'string' && d.technical_detail.trim()) {
+      lines.push(`Details: ${d.technical_detail.trim()}`);
+    }
+    if (lines.length) {
+      return { message: lines.join('\n\n'), detail };
+    }
+  }
+
+  if (Array.isArray(detail)) {
+    const first = detail[0] as Record<string, unknown> | undefined;
+    const msg =
+      first && typeof first === 'object' && typeof first.msg === 'string' ? first.msg : null;
+    if (msg) return { message: msg, detail };
+  }
+
+  const trimmed = bodyText.trim();
+  const suffix = trimmed ? trimmed.slice(0, 600) : '';
+  return {
+    message: suffix ? `Request failed (${status}).\n\n${suffix}` : `Request failed (${status}).`,
+    detail,
+  };
+}
+
 // Matches backend schemas/models.py ResumeData
 interface ProcessedResume {
   personalInfo?: {
@@ -428,7 +496,8 @@ async function postImprove(
   const text = await response.text();
   if (!response.ok) {
     console.error('Improve failed response body:', text);
-    throw new Error(`Improve failed with status ${response.status}: ${text}`);
+    const { message, detail } = formatImproveErrorResponse(response.status, text);
+    throw new ImproveApiError(message, response.status, detail);
   }
 
   try {

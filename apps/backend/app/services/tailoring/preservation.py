@@ -285,7 +285,11 @@ def _skills_list_is_tailored(groups: list[Any]) -> bool:
     if isinstance(label, dict) and ("value" in label or "why" in label):
         return True
     values = sample.get("values")
-    return isinstance(values, dict)
+    if isinstance(values, dict):
+        return True
+    if isinstance(values, list):
+        return any(isinstance(item, dict) for item in values)
+    return False
 
 
 def _apply_tailored_skills_groups(

@@ -101,10 +101,7 @@ def _full_envelope_strict_diff() -> dict[str, Any]:
         "skills": [
             {
                 "label": _cell("Lang", "Group label fits."),
-                "values": {
-                    "0": {"value": None},
-                    "1": {"value": None},
-                },
+                "values": [None, None],
             },
         ],
         "bold_keywords": ["Go", "Python"],
@@ -156,6 +153,23 @@ def test_full_envelope_valid() -> None:
     result = validate_compact_diff(_full_envelope_strict_diff(), contract)
     assert result.valid is True
     assert result.errors == []
+
+
+def test_full_envelope_skills_values_legacy_dict_still_valid() -> None:
+    contract = _make_strict_contract()
+    diff = dict(_full_envelope_strict_diff())
+    diff["skills"][0]["values"] = {"0": {"value": None}, "1": {"value": None}}  # type: ignore[index]
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is True
+
+
+def test_full_envelope_skills_values_wrong_array_length_rejected() -> None:
+    contract = _make_strict_contract()
+    diff = dict(_full_envelope_strict_diff())
+    diff["skills"][0]["values"] = [None]  # type: ignore[index]
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("length" in e for e in result.errors)
 
 
 def test_full_envelope_missing_summary_rejected() -> None:
@@ -370,4 +384,14 @@ def test_diff_validation_result_valid_false_with_errors() -> None:
     result = DiffValidationResult(valid=False, errors=["err1"])
     assert result.valid is False
     assert "err1" in result.errors
+
+
+def test_tailored_skills_group_serializes_values_as_compact_array() -> None:
+    from app.services.tailoring.models import SkillTailoredCell, SkillValueCell, TailoredSkillsGroup
+
+    g = TailoredSkillsGroup(
+        label=SkillTailoredCell(value="Testing", why="Group strategy."),
+        values=[SkillValueCell(value="Test Planning"), SkillValueCell(value=None)],
+    )
+    assert g.model_dump(exclude_none=False)["values"] == ["Test Planning", None]
 

@@ -103,7 +103,7 @@ class TestResponseContractPromptDict:
         assert d["output_keys"] == ["summary", "experience", "projects", "skills", "bold_keywords"]
         assert "rules" not in d
 
-    def test_prompt_dict_includes_skill_group_ids_when_groups_present(self) -> None:
+    def test_prompt_dict_skills_uses_counts_only_ordering_not_group_ids(self) -> None:
         payload = TailoringResumePayload(
             summary="Engineer.",
             skills=SkillsSection(
@@ -123,8 +123,8 @@ class TestResponseContractPromptDict:
         )
         rc = build_response_contract(payload, prompt_id="full")
         d = rc.to_prompt_dict()
-        expected_ids = [g.id for g in payload.skills.groups]
         expected_counts = [len(g.values) for g in payload.skills.groups]
         assert "skills" in d
-        assert d["skills"]["group_ids"] == expected_ids
+        assert "group_ids" not in d["skills"]
+        assert len(rc.skill_group_ids) == len(payload.skills.groups)
         assert d["skills"]["value_counts"] == expected_counts

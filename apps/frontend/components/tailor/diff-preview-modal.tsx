@@ -1074,7 +1074,7 @@ export function TailorDiffReadonlyBody({
       </div>
 
       {errorMessage && (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="mt-3 whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {errorMessage}
         </div>
       )}

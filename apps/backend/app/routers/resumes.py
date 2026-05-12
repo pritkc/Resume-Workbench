@@ -21,6 +21,7 @@ import yaml
 
 from app.config_cache import get_content_language, load_config as _load_config
 from app.database import db
+from app.improve_pipeline_errors import http_exception_for_improve_pipeline_failure
 from app.llm import llm_trace_scope
 from app.pdf import render_resume_pdf, PDFRenderError
 from app.config import settings
@@ -846,7 +847,12 @@ def _raise_improve_error(
     detail: str,
 ) -> NoReturn:
     logger.error("Resume %s failed during %s: %s", action, stage, error)
-    raise HTTPException(status_code=500, detail=detail)
+    raise http_exception_for_improve_pipeline_failure(
+        action=action,
+        stage=stage,
+        error=error,
+        fallback_message=detail,
+    )
 
 
 def _get_original_resume_data(resume: dict[str, Any]) -> dict[str, Any] | None:

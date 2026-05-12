@@ -74,17 +74,18 @@ def _skill_tailored_label_errors(cell: Any, path: str, *, strict: bool) -> list[
             errs.append(f"{path}: value key is required (use null to retain group label)")
         why = cell.get("why")
         if not isinstance(why, str) or not why.strip():
-            errs.append(f"{path}: label.why is required — one concise line for overall group strategy")
+            errs.append(
+                f"{path}: label.why is required — one compact line naming each values[] slot in order "
+                f"(retain vs edit/JD rationale), no separate per-chip rationales."
+            )
     return errs
 
 
 def _skill_value_cell_errors(cell: Any, path: str, *, strict: bool) -> list[str]:
     errs: list[str] = []
+    if cell is None:
+        return []
     if isinstance(cell, str):
-        if strict:
-            errs.append(
-                f'{path}: skill values use only {{"value"}} (null to retain); rationale goes in label.why'
-            )
         return errs
     if not isinstance(cell, dict):
         return [f"{path}: expected object or string, got {type(cell).__name__}"]
@@ -335,19 +336,37 @@ def validate_compact_diff(
                     continue
                 errors.extend(_skill_tailored_label_errors(g.get("label"), f"skills[{gi}].label", strict=True))
                 vals = g.get("values")
-                if not isinstance(vals, dict):
-                    errors.append(f"skills[{gi}].values must be an object keyed by index string")
-                    continue
-                for vi in range(expected_n_vals):
-                    vk = str(vi)
-                    if vk not in vals:
+                if isinstance(vals, list):
+                    if len(vals) != expected_n_vals:
                         errors.append(
-                            f"skills[{gi}].values[{vk}] missing (expected indices 0..{expected_n_vals - 1})"
+                            f"skills[{gi}].values must have length {expected_n_vals} (got {len(vals)})"
                         )
                     else:
-                        errors.extend(
-                            _skill_value_cell_errors(vals[vk], f"skills[{gi}].values[{vk}]", strict=True)
-                        )
+                        for vi, cell in enumerate(vals):
+                            errors.extend(
+                                _skill_value_cell_errors(
+                                    cell, f"skills[{gi}].values[{vi}]", strict=True
+                                )
+                            )
+                elif isinstance(vals, dict):
+                    for vi in range(expected_n_vals):
+                        vk = str(vi)
+                        if vk not in vals:
+                            errors.append(
+                                f"skills[{gi}].values[{vk}] missing "
+                                f"(expected indices 0..{expected_n_vals - 1})"
+                            )
+                        else:
+                            errors.extend(
+                                _skill_value_cell_errors(
+                                    vals[vk], f"skills[{gi}].values[{vk}]", strict=True
+                                )
+                            )
+                else:
+                    errors.append(
+                        f"skills[{gi}].values must be an array of length {expected_n_vals} "
+                        f'or an object with keys "0".."N-1"'
+                    )
 
     # Summary cell
     if "summary" in diff:
