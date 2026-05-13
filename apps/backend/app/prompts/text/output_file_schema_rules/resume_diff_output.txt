@@ -57,7 +57,7 @@ TECH STACKS:
 - tech_stacks values contain only named tools, languages, platforms, frameworks, or products.
 - Include tools used in the source evidence or required by the rewritten action; do not add JD-only tools because the JD names them.
 - Do not promote tools from tech_stacks into bullet text unless the source bullet names the tool or the action logically requires it.
-- Basic/commodity tools are banned in tech_stacks: Excel, Microsoft Excel, spreadsheet, spreadsheets, Google Sheets, Microsoft Office, MS Office, Word, Microsoft Word, PowerPoint, Microsoft PowerPoint, Outlook, Microsoft Outlook, email, e-mail, Slack, Teams, Microsoft Teams, Jira, Confluence, Notion, Miro.
+- Exclude from tech_stacks any tool that is an assumed baseline for the role's level and domain. Ask: would a technical recruiter scanning resumes for this posting find this tool a differentiator, or an expected given? Productivity suites, generic project trackers, collaboration apps, and commodity document tools are excluded regardless of whether the JD names them.
 
 SKILLS:
 - Target 4-5 dense groups only when the source skills support them; do not pad.

@@ -51,3 +51,23 @@ IMPROVE_PROMPT_OPTIONS = [
 ]
 
 DEFAULT_IMPROVE_PROMPT_ID = "full"
+
+# Programmatic filter: tools excluded from tech_stacks, bold_keywords, and skill values
+# regardless of whether the JD names them. Kept here so prompt_policy.py can derive
+# is_basic_resume_term() without hardcoding names inside model-facing prompt text.
+BASIC_RESUME_TOOLS: frozenset[str] = frozenset({
+    "excel", "microsoft excel",
+    "spreadsheet", "spreadsheets",
+    "google sheets",
+    "microsoft office", "ms office",
+    "word", "microsoft word",
+    "powerpoint", "microsoft powerpoint",
+    "outlook", "microsoft outlook",
+    "email", "e-mail",
+    "slack",
+    "teams", "microsoft teams",
+    "jira",
+    "confluence",
+    "notion",
+    "miro",
+})

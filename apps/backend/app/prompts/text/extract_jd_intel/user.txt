@@ -50,7 +50,7 @@ Rules:
 - role.title: normalized title only; remove employer, location, employment type, and fluff.
 - role.role_domain: one of backend | frontend | full-stack | ml-ai | data-engineering | data-science | devops | platform | mobile | security | other.
 - role.scope: concise ownership focus stated or strongly signaled by the JD.
-- company.*: stated company/team/domain/product context only. scale_signals: max 5 concrete scale cues.
+- company.*: stated company/team/domain/product context only. scale_signals: max 5 concrete, quantitative or scope-defined signals (e.g. "500M+ daily events", "multi-region deployment"); emit [] when the JD provides no such data — qualitative environment labels ("fast-paced", "regulated", "global") belong in company_context, not scale_signals.
 - location: `City, ST` only when a US city is stated; remote/hybrid without a city stays "".
 - requirements: years as integers; ranges fill min/max, single minimum fills years_min only. Put education/certifications in education, nontechnical hard requirements in must_have, and nontechnical preferences in preferred.
 - technical_requirements: required_needs = hard technical must-haves; nice_to_have_needs = preferred technical needs; other_needs = remaining technical/workflow demands. Split languages, frameworks, infrastructure, and paradigms into their own lists; include databases, cloud services, testing, security, observability, and data tools in the closest matching technical bucket.

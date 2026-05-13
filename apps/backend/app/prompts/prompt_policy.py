@@ -1,10 +1,11 @@
-"""Runtime helpers that derive enforcement policy from existing prompt text."""
+"""Runtime helpers that derive enforcement policy from prompt text and constants."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 import re
 
+from app.prompts._constants import BASIC_RESUME_TOOLS
 from app.prompts._text_prompts import read_shipped_txt
 
 _QUOTED_PHRASE_RE = re.compile(r'"([^"]+)"')
@@ -35,7 +36,7 @@ def _comma_terms_after_colon(line: str) -> frozenset[str]:
 
 
 def resume_basic_terms() -> frozenset[str]:
-    return _comma_terms_after_colon(_line_containing("Basic/commodity tools are banned"))
+    return BASIC_RESUME_TOOLS
 
 
 def low_signal_bold_keywords() -> frozenset[str]:

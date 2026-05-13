@@ -3,15 +3,17 @@
 from pathlib import Path
 
 
-def test_runtime_policy_is_derived_from_existing_prompt_files() -> None:
+def test_runtime_policy_returns_expected_terms() -> None:
     from app.prompts.prompt_policy import (
         low_signal_bold_keywords,
         generic_project_labels,
         resume_basic_terms,
     )
 
+    # basic tools come from _constants.BASIC_RESUME_TOOLS
     assert "excel" in resume_basic_terms()
     assert "miro" in resume_basic_terms()
+    # low-signal bold terms still parsed from resume_diff_output.txt
     assert "workflow visualization" in low_signal_bold_keywords()
     assert "compliance workflow" in generic_project_labels()
 

@@ -85,15 +85,16 @@ class TestResponseContractPromptDict:
         )
 
     def test_prompt_dict_omits_resume_duplicate_fields(self):
-        """tech_stacks and titles belong on the resume only — omit from contract JSON."""
+        """tech_stacks, titles, and company names belong on the resume only — omit from contract JSON."""
         payload = _make_payload_with_experience()
         rc = build_response_contract(payload, prompt_id="full")
         d = rc.to_prompt_dict()
         assert "experience" in d
         assert "tech_stacks" not in d["experience"]
         assert "positions" not in d["experience"]
+        assert "entries" not in d["experience"]
+        assert "entries" not in d.get("projects", {})
         assert d["experience"]["bullet_counts"] == [3, 2]
-        assert d["experience"]["entries"] == ["Acme", "StartupCo"]
 
     def test_empty_payload_still_exposes_shape_without_prompt_rules(self):
         """Empty contracts still provide machine shape, not duplicated prose."""

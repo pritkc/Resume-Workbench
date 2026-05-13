@@ -709,7 +709,6 @@ class TailoringResponseContract(BaseModel):
 
         if self.experience_entries:
             out["experience"] = {
-                "entries": self.experience_entries,
                 "bullet_counts": self.experience_bullet_counts,
                 "direct_jd_bullet_budget": self.direct_jd_bullet_budget,
                 "preserve_story_min": self.preserve_story_min,
@@ -717,7 +716,6 @@ class TailoringResponseContract(BaseModel):
 
         if self.project_entries:
             out["projects"] = {
-                "entries": self.project_entries,
                 "bullet_counts": self.project_bullet_counts,
                 "max_changed_entries": self.max_changed_projects,
                 "rename_allowed": self.project_rename_allowed,
