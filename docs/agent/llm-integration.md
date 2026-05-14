@@ -12,6 +12,7 @@
 | `apps/backend/app/prompts/*.py` | Step modules (`build_messages`, …) — see [llm-prompt-inventory.md](llm-prompt-inventory.md) |
 | `apps/backend/app/prompts/__init__.py` | re-exports, valid steps, optional `prompt_overrides/` |
 | `apps/backend/app/prompts/enrichment.py` | enrichment and regenerate prompts |
+| `apps/backend/app/prompts/critique_resume.py`, `rewrite_resume.py` | optional full-mode critique/rewrite pass after the primary compact diff |
 | `apps/backend/app/prompts/refinement.py` | older refinement prompt plus local cleanup constants; not part of the active tailoring runtime |
 
 ## Provider Configuration
@@ -31,6 +32,11 @@ Configuration is resolved from:
 2. `apps/backend/data/config.json`
 3. provider-specific API-key storage in `config.json["api_keys"]`
 4. request updates through `/api/v1/config/llm-api-key` and `/api/v1/config/api-keys`
+
+Per-step model overrides live in `config.json["model_overrides"]` and are exposed through
+`/api/v1/config/model-overrides`. Values may be either `model` or `provider/model`.
+The optional full-mode critique pass is controlled by `/api/v1/config/critique`
+(`enable_critique`, default `true`).
 
 ## Router Model
 
@@ -103,7 +109,7 @@ Top-level flows attach request context with `llm_trace_scope()`. See [llm-observ
 
 ## Prompt Selection
 
-Only the resume-tailoring strategy is currently runtime-configurable:
+The resume-tailoring strategy is runtime-configurable:
 
 - `full`
 - `lite`
@@ -124,16 +130,27 @@ See [llm-prompt-inventory.md](llm-prompt-inventory.md) for the full prompt map.
 The active tailoring path is now:
 
 1. `extract_jd_intel_output` — returns arbitrary JSON cached as `job_keywords` (no typed `JDIntelligence` model); **`LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT`** in code
-2. `resume_generate_full`
-3. local cleanup and validation
-4. local diff generation for preview UI
-5. optional cover letter / outreach generation with compact candidate-profile prompt payloads
+2. `resume_generate_full` — despite the operation name, both `full` and `lite` prompt modes return a compact addressed diff (`summary`, `experience`, `projects`, `skills`, `bold_keywords`)
+3. non-fatal compact-diff validation; the latest matching `llm_calls.request_context` row gets `compact_diff_validation`
+4. optional `critique_resume` then `rewrite_resume` when `prompt_id == "full"` and critique is enabled
+5. apply the compact diff to the original resume locally, with a legacy full-body fallback for older/invalid outputs
+6. local restoration, cleanup, low-signal filtering, description-count enforcement, and verification
+7. local diff, change manifest, stage breakdown, skills observability, and RenderCV artifact generation for preview UI
 
 Notably, the active runtime no longer does:
 
 - `resume_generate_diffs`
 - diff-first fallback orchestration
 - LLM keyword-injection refinement after tailoring
+- cover letter / outreach generation inside the Tailor preview or confirm path
+
+Cover letter and outreach generation now happens on demand after a tailored resume exists:
+
+- `POST /api/v1/resumes/{resume_id}/generate-auxiliary-package`
+- `POST /api/v1/resumes/{resume_id}/generate-cover-letter`
+- `POST /api/v1/resumes/{resume_id}/generate-outreach`
+
+All three use the merged `cover_letter_outreach_generate` call and compact candidate-profile prompt payloads.
 
 ## Current Guidance For New LLM Work
 

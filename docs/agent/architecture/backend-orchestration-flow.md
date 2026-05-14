@@ -133,7 +133,7 @@ If you want the main happy path only, read these steps in order:
   What it does: loads the resume + JD, resolves prompt mode, sets trace scope, and runs the preview pipeline with a timeout.
 
 - Main preview flow: [`_improve_preview_flow()`](apps/backend/app/routers/resumes.py#L1179)
-  What it does: fetches/caches **JD intelligence JSON** (`job_keywords`), generates the tailored resume preview, computes diffs, generates auxiliary documents, creates the application pack, and renders preview artifacts.
+  What it does: fetches/caches **JD intelligence JSON** (`job_keywords`), generates the tailored resume preview, computes diffs and change-manifest metadata, creates the application pack, and renders preview artifacts.
 
 ## 9. Extract JD Intelligence And Build Tailoring Context
 
@@ -149,7 +149,7 @@ If you want the main happy path only, read these steps in order:
 ## 10. Run The Main Tailoring LLM Call
 
 - Main orchestration service: [`generate_tailored_resume()`](apps/backend/app/services/tailoring/orchestration.py#L34)
-  What it does: resolves prompt mode, builds the LLM-facing resume payload, creates a response contract, assembles the prompt, calls the LLM, then restores the full resume locally.
+  What it does: resolves prompt mode, builds the LLM-facing resume payload, creates a response contract, assembles the prompt, calls the LLM for a compact addressed diff, optionally runs critique/rewrite, then restores the full resume locally.
 
 - Tailoring response contract: [`build_response_contract()`](apps/backend/app/services/tailoring/contracts.py#L61)
   What it does: tells the LLM which top-level keys and section fields it is allowed to return.
@@ -163,13 +163,22 @@ If you want the main happy path only, read these steps in order:
 - LLM call: [`complete_json()`](apps/backend/app/llm.py#L1457)
   What it does: sends the full tailoring request as a JSON-only completion and records the attempt in `llm_calls`.
 
+- Compact-diff validation: [`validate_compact_diff()`](apps/backend/app/services/tailoring/validation.py)
+  What it does: validates the model's addressed diff against the response contract. This is currently observability-only: validation issues are logged and attached to the latest matching LLM call as `request_context.compact_diff_validation`, but P1 tailoring continues.
+
+- Optional critique/rewrite: [`critique_resume` / `rewrite_resume`](apps/backend/app/services/tailoring/orchestration.py)
+  What it does: when `prompt_id == "full"` and `/api/v1/config/critique` is enabled, the first compact diff is critiqued and rewritten before local application.
+
 ## 11. Rehydrate, Clean Up, And Verify The Tailored Resume
+
+- Apply compact diff: [`apply_compact_diff()`](apps/backend/app/services/tailoring/preservation.py)
+  What it does: applies the model's compact `summary` / `experience` / `projects` / `skills` / `bold_keywords` response to the original resume using indexed contract addresses. It preserves prefix tech-stack lines, ignores out-of-range indices, filters low-signal terms, and supports older list/string shapes where possible.
 
 - Rebuild the full resume shape: [`rehydrate_tailoring_resume()`](apps/backend/app/services/tailoring/preservation.py#L258)
   What it does: takes the smaller tailoring payload and rebuilds a complete `ResumeData` object by reattaching `personalInfo`, `education`, and `sectionMeta`.
 
 - Finalize the tailored payload: [`finalize_tailored_resume()`](apps/backend/app/services/tailoring/preservation.py#L282)
-  What it does: preserves personal info, restores dates, restores skills, protects custom sections, runs cleanup, verifies the output, and returns the final structured resume plus warnings.
+  What it does: preserves personal info, restores dates, restores or simplifies skills, protects custom sections, rehydrates `sectionMeta`, runs cleanup, filters low-signal terms, enforces original description counts, verifies the output, and returns the final structured resume plus warnings.
 
 - Local cleanup: [`apply_local_resume_cleanup()`](apps/backend/app/services/tailoring/preservation.py#L225)
   What it does: removes AI-sounding phrasing and strips unsupported additions against the source resume.
@@ -177,11 +186,8 @@ If you want the main happy path only, read these steps in order:
 - Final verification: [`verify_generated_resume_result()`](apps/backend/app/services/tailoring/verification.py#L49)
   What it does: checks for identity changes, invented metrics, size bloat, and missed supported keywords.
 
-- [ISSUE] Shared schema aliasing after the refactor:
-  [`TailoringResumePayload`](apps/backend/app/services/tailoring/models.py#L29) still uses shared `Experience` and `Project` models, and the shared normalizer in [`Experience._normalize_experience()`](apps/backend/app/schemas/models.py#L336) can let legacy `highlights` overwrite the LLM’s returned `description`.
-
-- [NOTE] This is the main bug behind the recent “LLM changed it, but final resume didn’t show it” behavior.
-  Detailed write-up: [phase-3.2-repair-llm-pipe.md](docs/plans/phase-3.2-repair-llm-pipe.md)
+- Tailoring-specific models: [`TailoringExperience`](apps/backend/app/services/tailoring/models.py) and [`TailoringProject`](apps/backend/app/services/tailoring/models.py)
+  What they do: isolate the LLM-facing shape from shared resume-schema aliases so `description`, `highlights`, and `techStack` do not overwrite each other during tailoring.
 
 ## 12. Compute Diff Summary And Human-Facing Improvement Hints
 
@@ -194,25 +200,25 @@ If you want the main happy path only, read these steps in order:
 - Suggestion generator: [`generate_improvements()`](apps/backend/app/services/tailoring/suggestions.py#L8)
   What it does: creates simple keyword-alignment suggestions for the frontend to show.
 
-- [ISSUE] Diffing still prefers legacy `highlights` over `description`:
-  [`_extract_description_list()`](apps/backend/app/services/tailoring/diffing.py#L208)
-  What it means: even if the LLM changed `description`, the diff can still read stale `highlights` first and under-report or misreport real tailoring.
+- Change manifest: [`build_change_manifest()`](apps/backend/app/services/tailoring/change_manifest.py)
+  What it does: builds indexed path-level change rows, enriches reasons from compact `why` cells, and can add unchanged-cell rationales that are useful for review/training even when the final text is retained.
 
-- [NOTE] Because cleanup also edits text, some diffs can look “successful” even when the true LLM rewrite was lost earlier.
+- Stage breakdown: [`build_stage_breakdown()`](apps/backend/app/services/tailoring/change_manifest.py)
+  What it does: accounts for declared, computed, applied, rejected, cleanup-only, skill, numeric-claim, and final-render changes plus whether location came from the JD, master resume, or neither.
 
-## 13. Generate Cover Letter, Outreach Message, And Title
-
-- Auxiliary-content orchestrator: [`_generate_auxiliary_messages()`](apps/backend/app/routers/resumes.py#L703)
-  What it does: generates cover letter + outreach in parallel and also derives a stable job-target title.
+## 13. Title And On-Demand Auxiliary Documents
 
 - Title generation: [`build_job_target_title()`](apps/backend/app/services/cover_letter.py#L213)
-  What it does: creates titles like `Software Engineer @ PayPal, Inc.`
+  What it does: creates titles like `Software Engineer @ PayPal, Inc.` from JD metadata locally. Preview and confirm do this without an LLM call.
+
+- Merged auxiliary endpoint: [`generate_auxiliary_package_endpoint()`](apps/backend/app/routers/resumes.py)
+  What it does: after a tailored resume exists, generates both cover letter and outreach in one LLM call and stores both on the tailored resume.
 
 - Cover letter generation: [`generate_cover_letter()`](apps/backend/app/services/cover_letter.py#L256)
-  What it does: uses the tailored resume plus JD to generate a finished letter.
+  What it does: older helper API; current public endpoints use `generate_cover_letter_and_outreach()` so one merged call can populate both fields.
 
 - Outreach generation: [`generate_outreach_message()`](apps/backend/app/services/cover_letter.py#L300)
-  What it does: generates the short networking/cold outreach message for the same JD.
+  What it does: older helper API; current public endpoints use `generate_cover_letter_and_outreach()` so one merged call can populate both fields.
 
 ## 14. Create The Preview Application Pack And Render Artifacts
 
@@ -220,7 +226,7 @@ If you want the main happy path only, read these steps in order:
   What it does: creates the package container linking base resume + JD + target metadata.
 
 - Create preview generation run: [`Database.create_generation_run()`](apps/backend/app/database.py#L440)
-  What it does: stores preview metadata like diff summary, hash, LLM summary, warnings, and auxiliary content.
+  What it does: stores preview metadata like diff summary, hash, LLM summary, warnings, change-manifest payloads, pipeline timing, target title, and any existing auxiliary content.
 
 - Render package bundle: [`render_resume_bundle()`](apps/backend/app/rendering/rendercv_engine.py#L82)
   What it does: converts structured resume JSON into RenderCV YAML, Typst, PDF, PNGs, markdown, and HTML.
@@ -244,10 +250,10 @@ If you want the main happy path only, read these steps in order:
   What it does: thin wrapper over the resume confirm flow.
 
 - Actual confirm engine: [`improve_resume_confirm_endpoint()`](apps/backend/app/routers/resumes.py#L1395)
-  What it does: validates the preview payload, recalculates diff, resolves auxiliary content, creates the final tailored resume, renders final artifacts, and marks the application pack confirmed.
+  What it does: validates the preview payload, recalculates diff, reuses existing auxiliary content if present, creates the final tailored resume, renders final artifacts, and marks the application pack confirmed.
 
-- Confirm-time auxiliary resolver: [`_resolve_confirm_auxiliary_messages()`](apps/backend/app/routers/resumes.py#L796)
-  What it does: reuses preview-generated cover letter/outreach if possible; otherwise it generates them during confirm.
+- Confirm-time auxiliary behavior:
+  What it does: confirm reuses any already stored `cover_letter` / `outreach_message` from the source resume, but the current Tailor page sends auxiliary flags as `false` and confirm does not generate new auxiliary text. Users generate cover letter/outreach later from the builder.
 
 - Confirm payload validation: [`_validate_confirm_payload()`](apps/backend/app/routers/resumes.py#L668)
   What it does: makes sure the confirmed payload did not mutate protected personal info fields.
@@ -256,7 +262,7 @@ If you want the main happy path only, read these steps in order:
   What it does: persists the confirmed tailored resume as a child of the master resume and links it to the application pack.
 
 - Improvement/job-context storage: [`Database.create_improvement()`](apps/backend/app/database.py#L515)
-  What it does: stores the suggestion list and the JD link so later endpoints can regenerate cover letters/outreach and fetch the source JD.
+  What it does: stores the suggestion list and the JD link so later builder endpoints can generate cover letters/outreach and fetch the source JD.
 
 - [NOTE] Confirm currently trusts preview-hash validation more than server-side stored preview content:
   [`improve_resume_confirm_endpoint()`](apps/backend/app/routers/resumes.py#L1425)
@@ -305,10 +311,13 @@ If you want the main happy path only, read these steps in order:
   What it does: saves the user-facing title for the tailored resume/package.
 
 - Generate cover letter later: [`generate_cover_letter_endpoint()`](apps/backend/app/routers/resumes.py#L2257)
-  What it does: generates a cover letter later for an already-tailored resume.
+  What it does: generates the merged cover-letter/outreach package for an already-tailored resume, stores both fields, and returns the cover letter field.
 
 - Generate outreach later: [`generate_outreach_endpoint()`](apps/backend/app/routers/resumes.py#L2330)
-  What it does: generates outreach later for an already-tailored resume.
+  What it does: generates the merged cover-letter/outreach package for an already-tailored resume, stores both fields, and returns the outreach field.
+
+- Generate both later: [`generate_auxiliary_package_endpoint()`](apps/backend/app/routers/resumes.py)
+  What it does: generates and returns both cover letter and outreach for an already-tailored resume.
 
 - Fetch the JD used for a tailored resume: [`get_job_description_for_resume()`](apps/backend/app/routers/resumes.py#L2401)
   What it does: walks through the stored improvement record and returns the original JD.
@@ -335,30 +344,17 @@ If you want the main happy path only, read these steps in order:
 4. User optionally edits/enriches the master resume.
 5. User uploads a JD.
 6. Backend extracts JD keywords/metadata.
-7. Backend builds a compact tailoring prompt and calls the LLM.
-8. Backend rehydrates and cleans the LLM response into a full resume.
-9. Backend computes diff + suggestions.
-10. Backend generates cover letter/outreach/title.
+7. Backend builds a compact tailoring prompt and calls the LLM for an addressed diff.
+8. Optional full-mode critique/rewrite may produce a second-pass addressed diff.
+9. Backend applies the compact diff, rehydrates, cleans, and verifies a full resume.
+10. Backend computes diff, change manifest, stage breakdown, suggestions, and local title.
 11. Backend creates an application pack preview and renders artifacts.
 12. User confirms the preview.
 13. Backend creates the final tailored child resume, final artifacts, and package records.
-14. User downloads or edits the final package outputs.
+14. User generates cover letter/outreach on demand or edits/downloads the final package outputs.
 
 ## Current Refactor Risk Points To Remember
 
-- [ISSUE] Tailoring currently mixes canonical `description` with legacy `highlights`, which can drop real LLM changes.
-  Main references:
-  [`TailoringResumePayload`](apps/backend/app/services/tailoring/models.py#L29)
-  [`Experience._normalize_experience()`](apps/backend/app/schemas/models.py#L336)
-
-- [ISSUE] Diffing still reads `highlights` first, so some real changes can disappear from the reported diff.
-  Main reference:
-  [`_extract_description_list()`](apps/backend/app/services/tailoring/diffing.py#L208)
-
-- [NOTE] Cleanup can make the pipeline look like it changed content even when the true LLM rewrite was lost earlier.
-  Main references:
-  [`apply_local_resume_cleanup()`](apps/backend/app/services/tailoring/preservation.py#L225)
-  [`remove_ai_phrases()`](apps/backend/app/services/refiner.py#L208)
-
-- [NOTE] The full incident analysis and repair roadmap are here:
-  [phase-3.2-repair-llm-pipe.md](docs/plans/phase-3.2-repair-llm-pipe.md)
+- The active flow now uses tailoring-specific `TailoringExperience` / `TailoringProject` models plus compact-diff application to avoid the old shared-schema `description` / `highlights` aliasing bug.
+- Compact-diff validation is intentionally non-fatal. Use `request_context.compact_diff_validation`, `change_manifest`, `cleanup_changes`, and `change_breakdown` together when debugging whether a model edit was applied, rejected, or later cleaned.
+- Preview hashes are still persisted on the job and are last-write-wins for concurrent previews of the same JD.

@@ -13,7 +13,7 @@ Use this document as **compact context** for an external advisor (or LLM) that c
 | Estimated tailoring runs / day (full pipeline) | 20-30 | Preview + confirm separately if needed |
 | Estimated JD extractions / day (cache misses) | 20-30 | Often fewer than tailors if JD is reused |
 | Estimated resume parses / day | 0/ just one time to build up | Upload / re-upload |
-| Cover+outreach combined generations / day | 10-20 | Single LLM call returns both |
+| Cover+outreach combined generations / day | 10-20 | On-demand builder action; single LLM call returns both |
 | Application-question fills / day | 20-25 | |
 | Enrichment LLM calls / day (all ops) | 0-2 | Analyze / enhance / regenerate |
 | Health checks / connection tests / day | 1-2 | Low tokens; may run often if automated |
@@ -70,7 +70,7 @@ Rewrite still includes the same **~7.7 KB** rules block as tailoring.
 | Default JSON completion budget when not specialized | **4,096** tokens |
 | Health check completion | **64** tokens |
 
-**Tailoring vs cover:** JD extraction is called with the **full pasted job description** (not the 4k-trimmed helper). The **tailor** prompt is driven mainly by **derived JD-intel JSON**, not the raw JD text.
+**Tailoring vs cover:** JD extraction is called with the **full pasted job description** (not the 4k-trimmed helper). The **tailor** prompt is driven mainly by **derived JD-intel JSON**, not the raw JD text. Cover/outreach generation is not part of Tailor preview/confirm; it is triggered later from the builder.
 
 ### 3.3 Stored resumes — order of magnitude
 
@@ -94,7 +94,7 @@ If you need **measured** percentiles for your traffic, sample **serialized resum
 | `llm_health_check` | text | **64** | Connectivity smoke |
 | `resume_parse_json` | JSON | **6144** | Unstructured resume → structured JSON |
 | `extract_jd_intel_output` | JSON | **4096** (config may override) | Job description → intel JSON for tailoring |
-| `resume_generate_full` | JSON | **15000** | Primary tailor: resume diff JSON (**full** or **lite** prompt variant) |
+| `resume_generate_full` | JSON | **15000** | Primary tailor: compact addressed diff JSON (**full** or **lite** prompt variant) |
 | `critique_resume` | JSON | **4096** | Critique of first-pass diff |
 | `rewrite_resume` | JSON | **15000** | Second-pass diff using critique |
 | `cover_letter_outreach_generate` | text | **2600** | One call: cover letter + outreach |
@@ -123,7 +123,7 @@ Use **`{{...}}`** where you plug in **your** token estimates from real traces. S
 | Enrichment ops | **~0.7–1.3 KB** + section/item JSON + **`{{ENRICH_INPUT_TOKENS}}`** | JSON (see §4 caps) | Medium | Lower than tailor |
 | `llm_health_check` | Minimal | **64** | Low | Low |
 
-**Full tailoring chain:** JD extract (often cached) → **`resume_generate_full`** → **`critique_resume`** → **`rewrite_resume`** = **up to four** JSON-heavy calls per application pack (fewer with lite mode or critique disabled).
+**Full tailoring chain:** JD extract (often cached) → **`resume_generate_full`** → optional **`critique_resume`** → optional **`rewrite_resume`** = **up to four** JSON-heavy calls per application pack (fewer with lite mode or critique disabled). Confirm does not re-run the tailor chain.
 
 ---
 

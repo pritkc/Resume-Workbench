@@ -9,9 +9,10 @@ This folder is the working map for agents operating in the current `resume-workk
 - Resume preview and resume PDF generation come from **RenderCV artifacts**, not a legacy frontend-only print path for resumes.
 - **Cover-letter PDF** generation still uses **Playwright** via `apps/backend/app/pdf.py` and the frontend print route for that document type.
 - The main JD flow is `application-packs/preview` → local diff review → `application-packs/confirm`.
-- Resume tailoring centers on **`resume_generate_full`** (with **`full` / `lite`** prompt modes in config).
+- Resume tailoring centers on **`resume_generate_full`** (with **`full` / `lite`** prompt modes in config), which now returns a compact addressed diff that is applied locally.
+- Full-mode tailoring can optionally run **`critique_resume`** + **`rewrite_resume`** when `/api/v1/config/critique` is enabled.
 - `sectionMeta` stays local to rendering/storage flows and is rehydrated after tailoring instead of being sent to the LLM.
-- Cover-letter and outreach prompts use **compact candidate-profile payloads**, not the full stored resume JSON.
+- Cover-letter and outreach prompts use **compact candidate-profile payloads**, not the full stored resume JSON, and are generated on demand from the builder after a tailored resume exists.
 - LLM calls are persisted to the **`llm_calls`** table and surfaced at **`/llm-traces`**.
 - **`additional.groups`** and raw RenderCV YAML editing are live features.
 - **Prompts:** shipped copy under `apps/backend/app/prompts/text/` (`.txt`); loaders and `build_messages` in `apps/backend/app/prompts/*.py`. See [llm-prompt-inventory.md](llm-prompt-inventory.md) and `apps/backend/app/prompts/text/README.md`.

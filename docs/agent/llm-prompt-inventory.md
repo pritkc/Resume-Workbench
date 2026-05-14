@@ -34,7 +34,7 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | `answer_questions.py` | Application-question prompts |
 | `enrichment.py` | Loads enrichment / regenerate user + system strings from `text/enrichment/{op}/system.txt` and `user.txt`; callers use `str.format` on user templates |
 | `refinement.py` | Older refinement helpers; not the active tailoring path |
-| `critique_resume.py`, `rewrite_resume.py` | Critique / rewrite flows |
+| `critique_resume.py`, `rewrite_resume.py` | Optional full-mode critique/rewrite pass, gated by `/config/critique` |
 | `_rules/resume_diff.py` | Shared resume-diff JSON rules; shipped body under `text/output_file_schema_rules/resume_diff_output.txt` |
 | `text/` | **Shipped** prompt `.txt` files (see `text/README.md`) |
 
@@ -45,7 +45,8 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 | Parse | `PARSE_RESUME_PROMPT` | `services/parser.py` | `resume_parse_json` |
 | JD | `extract_jd_intel` prompts, `jd_intel_blob` helpers | `services/tailoring/analysis.py`, `services/tailoring/jd_intel_blob.py` | `extract_jd_intel_output` (`LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT`) |
 | Tailor | `IMPROVE_RESUME_PROMPT`, tailoring blocks | `services/tailoring/prompting.py` | `resume_generate_full` |
-| Cover + outreach (single call) | `COMBINED_MESSAGES_SYSTEM_PROMPT`, `COVER_LETTER_OUTREACH_PROMPT` | `services/cover_letter.py` | `cover_letter_outreach_generate` |
+| Critique / rewrite | `critique_resume`, `rewrite_resume` prompts | `services/tailoring/orchestration.py` | `critique_resume`, `rewrite_resume` |
+| Cover + outreach (single call) | `COMBINED_MESSAGES_SYSTEM_PROMPT`, `COVER_LETTER_OUTREACH_PROMPT` | `services/cover_letter.py`, on-demand resume endpoints | `cover_letter_outreach_generate` |
 | Enrichment | prompts in `enrichment.py` | `routers/enrichment.py` | enrichment operations |
 | Refinement | `KEYWORD_INJECTION_PROMPT` (legacy) | `services/refiner.py` | experiments only |
 
@@ -54,15 +55,21 @@ Selection precedence in `apps/backend/app/routers/resumes.py`:
 ### Application-pack preview / direct improve
 
 1. JD intelligence extraction when needed — LLM returns JSON stored as `job_keywords`; prompts inject it via **`$extract_jd_intel_output`** and optional **`.path.to.key`** (see `apps/backend/app/prompts/text/README.md`)
-2. `resume_generate_full` with compact tailoring payload + response contract (`personalInfo` / `sectionMeta` excluded from LLM contract)
-3. Local post-processing: preserve fields, rebuild `sectionMeta`, verification, diff
-4. Optional auxiliary generation: title, cover letter, outreach with compact profiles
+2. `resume_generate_full` with compact tailoring payload + response contract (`personalInfo` / `education` / `sectionMeta` excluded from LLM contract)
+3. Compact-diff validation runs for observability only; validation errors are logged/attached to the trace but do not hard-fail P1 tailoring
+4. In `full` mode, if `/api/v1/config/critique` is enabled, `critique_resume` reviews the first compact diff and `rewrite_resume` emits the second-pass compact diff
+5. Local post-processing applies the compact diff to the original resume, preserves protected fields, rebuilds `sectionMeta`, verifies output, filters low-signal terms, and generates diff/change-manifest metadata
+6. Title is derived locally from JD metadata; cover letter/outreach are generated later from the builder via explicit on-demand endpoints
 
 ## Config Surfaces
 
 `/api/v1/config/prompts` — default tailor `prompt_id` and Settings selector.
 
-`/api/v1/config/generation-defaults` — last-used tailor options and cover/outreach flags.
+`/api/v1/config/generation-defaults` — last-used tailor defaults (`prompt_id`, legacy cover/outreach flags). The current Tailor page sends cover/outreach flags as `false`; auxiliary documents are generated on demand after confirmation.
+
+`/api/v1/config/critique` — toggles the optional full-mode `critique_resume` + `rewrite_resume` add-on; default is enabled when unset.
+
+`/api/v1/config/model-overrides` — optional per-step model map. Supported step names include `parse_resume`, `extract_jd_intel`, `tailor_resume_full`, `tailor_resume_lite`, `critique_resume`, `rewrite_resume`, `cover_letter`, and `answer_questions`.
 
 `/api/v1/config/prompts/catalog/master-resume-preview` — JSON body `{ "serialized_original_resume": string, "truncated": boolean }`: the same compact JSON (or markdown fallback) the tailoring user prompt uses for `$original_resume`, capped at **256 KiB** with `truncated: true` when cut. Resolution rule is implemented in `app/services/tailoring/master_resume_preview.py` (active resume, else first resume without `parent_id`, else first listed row).
 

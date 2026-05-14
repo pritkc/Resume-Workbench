@@ -59,12 +59,16 @@ Touch:
 
 Important current behavior:
 
-- one primary `resume_generate_full` tailoring call
+- one primary `resume_generate_full` tailoring call returns a compact addressed diff
 - compact typed tailoring payload plus a JSON response contract in the prompt
 - `personalInfo` and `sectionMeta` are excluded from the tailoring LLM contract
+- `education` is also locally preserved rather than edited by the tailoring LLM
+- full-mode critique/rewrite is optional and controlled by `/api/v1/config/critique`
+- compact-diff validation is observability-only and is attached to `llm_calls.request_context.compact_diff_validation`
 - local cleanup and verification after tailoring
 - local restoration of `personalInfo`, `sectionMeta`, dates, additional items, and custom sections
 - local diff generation for preview UI
+- change manifests, stage breakdowns, bold keywords, and skills observability are generated/persisted with preview/confirm runs
 - preview/confirm hash validation for application packs
 
 ### Cover letter or outreach generation
@@ -78,6 +82,8 @@ Touch:
 
 Important current behavior:
 
+- cover letter/outreach are generated on demand after a tailored resume exists, not during the Tailor preview/confirm path
+- `generate-auxiliary-package`, `generate-cover-letter`, and `generate-outreach` all use one merged LLM call and persist both generated fields
 - cover letter and outreach use compact prompt payloads, not the full stored resume JSON
 - plain-text generation is protected by truncation-aware retries in `complete()`
 - title derivation is local from extracted job metadata, not a separate LLM prompt
