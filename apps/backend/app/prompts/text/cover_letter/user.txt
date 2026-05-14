@@ -13,13 +13,10 @@ Return plain text only using this exact wrapper:
 JOB TARGET (JSON):
 $job_target
 
-JOB DESCRIPTION:
-$job_description
+JD INTELLIGENCE (JSON — role, company, responsibility themes, level expectations):
+$jd_extract_slice
 
-CANDIDATE PROFILE (JSON):
-$resume_profile
-
-TAILORED RESUME (JSON, primary evidence for role-specific facts, tools, and outcomes):
+RESUME (JSON — full career evidence):
 $tailored_resume
 
 COVER LETTER:
@@ -47,7 +44,7 @@ BANNED (applies to both outputs):
 - Filler: results-driven, team player, passionate professional, dedicated, dynamic, self-starter
 
 FACTS:
-- Use only information from the provided JSON and JD text
+- Use only information from the provided JSON and JD intelligence
 - Do not invent names, metrics, employers, dates, or credentials
 - If a job_target field is an empty string, omit it rather than inventing a substitute
 - If the JD/company anchor is weak or generic, keep the claim narrower instead of pretending deep company knowledge.

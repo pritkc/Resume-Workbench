@@ -244,14 +244,13 @@ Open to a quick intro call this week?
         kwargs = mock_complete.call_args.kwargs
         prompt = kwargs["prompt"]
         assert "JOB TARGET (JSON):" in prompt
-        assert "CANDIDATE PROFILE (JSON):" in prompt
-        assert "TAILORED RESUME (JSON" in prompt
+        assert "JD INTELLIGENCE (JSON" in prompt
+        assert "RESUME (JSON" in prompt
         assert "personalInfo" in prompt or "summary" in prompt
         assert kwargs["operation"] == "cover_letter_outreach_generate"
-        assert kwargs["max_tokens"] == 2600
+        assert kwargs["max_tokens"] == 800
         assert kwargs["retries"] == 2
-        assert kwargs["retry_max_tokens"] == 3200
-        assert kwargs["metadata"]["candidate_profile_chars"] < 900
+        assert kwargs["retry_max_tokens"] == 1200
         assert kwargs["metadata"].get("tailored_resume_chars", 0) > 0
         assert cover_letter == "Thanks for considering my application."
         assert outreach == "Open to a quick intro call this week?"

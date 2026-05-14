@@ -24,17 +24,15 @@ DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip() + ("\n\n" + RULES.strip() if RULES.strip() else "")
 VARIABLES = {
     "job_target": "Role/company JSON",
-    "job_description": "JD excerpt",
-    "resume_profile": "Stable compact candidate profile JSON (skills, education breadth)",
-    "tailored_resume": "Full current resume JSON (typically the tailored output) for role-specific facts",
+    "jd_extract_slice": "JD intelligence JSON (role, company, responsibility_themes, calibration)",
+    "tailored_resume": "Full career evidence JSON (all experience, stripped of duplicate header fields)",
 }
 
 
 def build_messages(
     *,
     job_target: str,
-    job_description: str,
-    resume_profile: str,
+    jd_extract_slice: str,
     tailored_resume: str = "",
 ) -> tuple[str, str]:
     from app.prompts import load_override
@@ -45,8 +43,7 @@ def build_messages(
         return comp["system"], render_user_template(
             comp["user"],
             job_target=job_target,
-            job_description=job_description,
-            resume_profile=resume_profile,
+            jd_extract_slice=jd_extract_slice,
             tailored_resume=tailored_resume,
         )
 
@@ -58,8 +55,7 @@ def build_messages(
     user = render_user_template(
         USER_TEMPLATE,
         job_target=job_target,
-        job_description=job_description,
-        resume_profile=resume_profile,
+        jd_extract_slice=jd_extract_slice,
         tailored_resume=tailored_resume,
     )
     return system, user

@@ -52,6 +52,7 @@ ATS AND KEYWORDS:
 - BOLD_KEYWORDS: use 1-3 word terms only; prefer tools, languages, platforms, frameworks, data methods, and product systems; avoid sentences, soft skills, and generic domain phrases.
 - Do not include basic tools, generic role/domain labels, responsibility phrases, or weak umbrella terms in bold_keywords.
 - Examples of low-signal bold terms to exclude: Data Analysis, Process Mapping, Workflow Visualization, Process Optimization.
+- Also exclude: methodology and process labels (SDLC, Agile, Scrum, CI/CD pipeline, test automation), generic infrastructure categories (Relational Databases, Cloud Storage, Distributed Systems, Message Queue), and competency phrases (Test Case Design, Project Management, Stakeholder Communication, Defect Tracking). When the JD names no high-signal tools, draw bold_keywords only from tools, languages, and platforms present in the resume evidence.
 
 TECH STACKS:
 - tech_stacks values contain only named tools, languages, platforms, frameworks, or products.

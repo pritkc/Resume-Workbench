@@ -59,6 +59,29 @@ def _build_custom_section_contract(
     return TailoringSectionContract(type=section_type)
 
 
+def compute_adaptive_max_tokens(contract: TailoringResponseContract, mode: str) -> int:
+    """Compute an output cap based on empirical resume cell count.
+
+    Formula: max(floor, min(8000, total_cells * 34 * 1.25 * 1.40))
+    - 34 tok/cell: empirical from calibration test run
+    - 1.25×: pretty-print overhead vs minified
+    - 1.40×: safety headroom
+    """
+    n_exp = len(contract.experience_bullet_counts)
+    n_proj = len(contract.project_bullet_counts)
+    n_skill_groups = len(contract.skill_group_value_counts)
+
+    exp_bullets = sum(contract.experience_bullet_counts)
+    proj_bullets = sum(contract.project_bullet_counts)
+    skill_values = sum(contract.skill_group_value_counts)
+
+    section_headers = n_exp * 2 + n_proj * 2 + n_skill_groups + 2
+    total_cells = exp_bullets + proj_bullets + skill_values + section_headers
+
+    floor = 6000 if mode == "full" else 4096
+    return max(floor, min(8000, int(total_cells * 34 * 1.25 * 1.40)))
+
+
 def build_response_contract(
     resume_payload: TailoringResumePayload | None,
     *,

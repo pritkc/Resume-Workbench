@@ -103,6 +103,8 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
         prompt=prompt,
         system_prompt=system_prompt,
         config=get_step_llm_config("extract_jd_intel"),
+        max_tokens=2500,
+        timeout_seconds=90,
         operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
         metadata={
             "job_description_chars": len(job_description),

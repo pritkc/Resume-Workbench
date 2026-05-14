@@ -20,7 +20,7 @@ from app.services.tailoring.change_manifest import (
     supplement_change_manifest_with_unchanged_cell_rationales,
     validate_declared_changes,
 )
-from app.services.tailoring.contracts import build_response_contract
+from app.services.tailoring.contracts import build_response_contract, compute_adaptive_max_tokens
 from app.services.tailoring.diffing import calculate_resume_diff
 from app.services.tailoring.models import (
     TailoringLLMResponse,
@@ -169,9 +169,11 @@ async def generate_tailored_resume(
         original_resume_data=original_resume_data,
         custom_prompt_instructions=custom_prompt_instructions,
     )
+    adaptive_max_tokens = compute_adaptive_max_tokens(response_contract, resolved_prompt_id)
     result = await run_primary_tailoring(
         prompt_context,
         job_description=job_description,
+        max_tokens=adaptive_max_tokens,
     )
 
     # Validate compact diff before applying (log only, don't hard-fail for P1)
@@ -202,6 +204,7 @@ async def generate_tailored_resume(
             system_prompt=c_sys,
             config=get_step_llm_config("critique_resume"),
             max_tokens=4096,
+            timeout_seconds=90,
             retries=1,
             operation="critique_resume",
             metadata={
@@ -222,12 +225,14 @@ async def generate_tailored_resume(
             prompt=r_user,
             system_prompt=r_sys,
             config=get_step_llm_config("rewrite_resume"),
-            max_tokens=15000,
+            max_tokens=adaptive_max_tokens,
+            timeout_seconds=170,
             retries=1,
             operation="rewrite_resume",
             metadata={
                 "prompt_version": PROMPT_VERSIONS.get("rewrite_resume", "unknown"),
                 "prompt_id": prompt_context.prompt_id,
+                "adaptive_max_tokens": adaptive_max_tokens,
             },
             retry_hint=prompt_context.retry_hint,
         )

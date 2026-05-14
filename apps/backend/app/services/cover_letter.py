@@ -11,8 +11,6 @@ from app.llm import complete
 from app.prompts import PROMPT_VERSIONS
 from app.prompts.cover_letter import build_messages as cover_letter_build_messages
 from app.schemas import normalize_resume_data
-from app.services.message_profiles import CandidatePromptProfile
-from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
 _ROLE_AT_COMPANY_RE = re.compile(
     r"\bAs an?\s+(?P<role>.+?)\s+at\s+(?P<company>[^,\n\.]+)",
@@ -200,9 +198,8 @@ _TITLE_TRAILING_QUALIFIER_RE = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-MAX_MESSAGE_JOB_DESCRIPTION_CHARS = 2200
-COMBINED_MESSAGE_TIMEOUT_SECONDS = 150
-COMBINED_MESSAGE_MAX_TOKENS = 2600
+COMBINED_MESSAGE_TIMEOUT_SECONDS = 45
+COMBINED_MESSAGE_MAX_TOKENS = 800
 _COMBINED_COVER_START = "<<COVER_LETTER>>"
 _COMBINED_COVER_END = "<<END_COVER_LETTER>>"
 _COMBINED_OUTREACH_START = "<<OUTREACH_MESSAGE>>"
@@ -490,32 +487,89 @@ def _tailored_resume_json(resume_data: dict[str, Any]) -> str:
     )
 
 
+# Fields stripped from personalInfo — contact details not needed for CL body
+_PI_KEEP = {"name", "location", "title", "headline"}
+# Redundant per-entry fields: title=position, date/years=start/end formatted, description=highlights
+_EXP_REMOVE = {"id", "title", "date", "years", "description"}
+# Projects: role=techStack, date/years empty, github/website irrelevant to CL body
+_PROJ_REMOVE = {"id", "role", "date", "years", "github", "website", "description"}
+# JD extract fields relevant for cover letter narrative (skip ATS/keyword targeting fields)
+_JD_EXTRACT_NARRATIVE_KEYS = {"role", "company", "responsibility_themes", "calibration"}
+
+
+def _tailored_resume_evidence_json(resume_data: dict[str, Any]) -> str:
+    """Serialize resume for cover-letter prompts: all entries, redundant fields stripped.
+
+    Keeps the full career breadth (all experience + project entries) but removes
+    duplicate representations (title==position, date==years==start+end formatted,
+    description==highlights, personalInfo contact fields, sectionMeta).
+    """
+    normalized = normalize_resume_data(copy.deepcopy(resume_data))
+
+    def _clean_exp(entry: dict[str, Any]) -> dict[str, Any]:
+        return {k: v for k, v in entry.items() if k not in _EXP_REMOVE}
+
+    def _clean_proj(entry: dict[str, Any]) -> dict[str, Any]:
+        return {k: v for k, v in entry.items() if k not in _PROJ_REMOVE}
+
+    def _clean_pi(pi: dict[str, Any]) -> dict[str, Any]:
+        return {k: v for k, v in pi.items() if k in _PI_KEEP and v}
+
+    output: dict[str, Any] = {}
+    if "personalInfo" in normalized:
+        cleaned_pi = _clean_pi(normalized["personalInfo"])
+        if cleaned_pi:
+            output["personalInfo"] = cleaned_pi
+    if normalized.get("summary"):
+        output["summary"] = normalized["summary"]
+    if "workExperience" in normalized:
+        output["workExperience"] = [_clean_exp(e) for e in normalized["workExperience"]]
+    if "personalProjects" in normalized:
+        output["personalProjects"] = [_clean_proj(p) for p in normalized["personalProjects"]]
+    if "education" in normalized:
+        output["education"] = normalized["education"]
+    if "skills" in normalized:
+        output["skills"] = normalized["skills"]
+
+    return json.dumps(output, separators=(",", ":"), ensure_ascii=True)
+
+
+def _jd_extract_slice_json(job_keywords: dict[str, Any] | None) -> str:
+    """Return a narrative-only slice of the JD extract for cover letter prompts.
+
+    Includes role, company, responsibility_themes, and calibration — the fields
+    useful for writing company-specific narrative. Excludes ATS keyword lists
+    (resume_technical_keywords, keyword_must_match, etc.) which are resume-tailoring fields.
+    Falls back to empty dict when job_keywords is unavailable.
+    """
+    if not isinstance(job_keywords, dict) or not job_keywords:
+        return "{}"
+    sliced = {k: v for k, v in job_keywords.items() if k in _JD_EXTRACT_NARRATIVE_KEYS}
+    return json.dumps(sliced, separators=(",", ":"), ensure_ascii=True)
+
+
 def _build_message_prompt_inputs(
     resume_data: dict[str, Any],
     job_description: str,
     *,
     job_keywords: dict[str, Any] | None = None,
 ) -> dict[str, str]:
-    """Build compact prompt inputs for cover-letter and outreach generation."""
+    """Build prompt inputs for cover-letter and outreach generation.
 
-    profile = CandidatePromptProfile.from_resume_data(resume_data)
-    job_target = extract_job_target_metadata(
-        job_description,
-        job_keywords=job_keywords,
-    )
-    sanitized_jd = trim_job_description_for_prompt(
-        sanitize_user_input(job_description),
-        max_chars=MAX_MESSAGE_JOB_DESCRIPTION_CHARS,
-    )
+    Produces three keys: job_target, jd_extract_slice, tailored_resume.
+    - job_target: structured role/company/location JSON for the header block.
+    - jd_extract_slice: narrative JD extract (role, company, themes, calibration).
+    - tailored_resume: full career history with duplicate fields stripped.
+    """
+    job_target = extract_job_target_metadata(job_description, job_keywords=job_keywords)
     return {
         "job_target": json.dumps(
             {key: value for key, value in job_target.items() if value},
-            separators=(',', ':'),
+            separators=(",", ":"),
             ensure_ascii=True,
         ),
-        "job_description": sanitized_jd,
-        "resume_profile": profile.to_prompt_json(),
-        "tailored_resume": _tailored_resume_json(resume_data),
+        "jd_extract_slice": _jd_extract_slice_json(job_keywords),
+        "tailored_resume": _tailored_resume_evidence_json(resume_data),
     }
 
 
@@ -642,8 +696,7 @@ def _build_message_metadata(
 ) -> dict[str, Any]:
     return {
         "job_description_chars": len(job_description),
-        "prompt_job_description_chars": len(prompt_inputs["job_description"]),
-        "candidate_profile_chars": len(prompt_inputs["resume_profile"]),
+        "jd_extract_slice_chars": len(prompt_inputs.get("jd_extract_slice", "")),
         "tailored_resume_chars": len(prompt_inputs.get("tailored_resume", "")),
         "prompt_version": prompt_version,
     }
@@ -663,8 +716,7 @@ async def generate_cover_letter_and_outreach(
     )
     system, user = cover_letter_build_messages(
         job_target=prompt_inputs["job_target"],
-        job_description=prompt_inputs["job_description"],
-        resume_profile=prompt_inputs["resume_profile"],
+        jd_extract_slice=prompt_inputs["jd_extract_slice"],
         tailored_resume=prompt_inputs["tailored_resume"],
     )
     content = await asyncio.wait_for(
@@ -675,7 +727,7 @@ async def generate_cover_letter_and_outreach(
             max_tokens=COMBINED_MESSAGE_MAX_TOKENS,
             retries=2,
             retry_hint=_COMBINED_MESSAGES_RETRY_HINT,
-            retry_max_tokens=3200,
+            retry_max_tokens=1200,
             operation="cover_letter_outreach_generate",
             metadata=_build_message_metadata(
                 job_description=job_description,

@@ -1185,6 +1185,7 @@ async def complete(
     metadata: dict[str, Any] | None = None,
     retry_hint: str | None = None,
     retry_max_tokens: int | None = None,
+    timeout_seconds: int | None = None,
 ) -> str:
     """Make a completion request to the LLM.
 
@@ -1219,7 +1220,7 @@ async def complete(
                 "model": "primary",
                 "messages": messages,
                 "max_tokens": current_max_tokens,
-                "timeout": _calculate_timeout(
+                "timeout": timeout_seconds if timeout_seconds is not None else _calculate_timeout(
                     "completion",
                     current_max_tokens,
                     config.provider,
@@ -1560,6 +1561,7 @@ async def complete_json(
     operation: str = "json_completion",
     metadata: dict[str, Any] | None = None,
     retry_hint: str | None = None,
+    timeout_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Make a completion request expecting JSON response.
 
@@ -1600,7 +1602,7 @@ async def complete_json(
                 "model": "primary",
                 "messages": messages,
                 "max_tokens": max_tokens,
-                "timeout": _calculate_timeout("json", max_tokens, config.provider),
+                "timeout": timeout_seconds if timeout_seconds is not None else _calculate_timeout("json", max_tokens, config.provider),
             }
             if _supports_temperature(config.provider, model_name):
                 # LLM-002: Increase temperature on retry for variation
@@ -1625,6 +1627,8 @@ async def complete_json(
 
             logging.debug(
                 f"LLM response (attempt {attempt + 1}): {content[:300]}")
+
+            response_had_fence = "```" in content
 
             # Extract and parse JSON
             json_str = _extract_json(content)
@@ -1669,6 +1673,12 @@ async def complete_json(
                     "Parsed JSON appears truncated on final attempt, proceeding with result"
                 )
 
+            fence_context: dict[str, Any] = {
+                "response_had_fence": response_had_fence,
+                "raw_response_chars": len(content),
+                "minified_chars": len(json_str),
+                "formatting_overhead_chars": len(content) - len(json_str),
+            }
             _record_llm_attempt(
                 call_group_id=call_group_id,
                 attempt=attempt + 1,
@@ -1686,7 +1696,7 @@ async def complete_json(
                 content=content,
                 response=response,
                 finish_reason=finish_reason,
-                extra_context=metadata,
+                extra_context={**(metadata or {}), **fence_context},
             )
             return result
 

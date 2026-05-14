@@ -54,6 +54,13 @@ export function getOutputTokens(call: LLMCallRecord): number {
   return call.usage_output_tokens ?? call.response_tokens_est ?? 0;
 }
 
+export function getCapUtilization(call: LLMCallRecord): number | null {
+  const output = call.usage_output_tokens ?? call.response_tokens_est;
+  const cap = call.max_tokens;
+  if (output == null || cap == null || cap === 0) return null;
+  return output / cap;
+}
+
 function getPreviewChars(value?: string | null): number {
   return value?.length ?? 0;
 }

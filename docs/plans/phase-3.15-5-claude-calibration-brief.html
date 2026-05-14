@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Calibration Brief — Phase 3.15.5</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #F0F0E8; color: #000; font-size: 14px; line-height: 1.55; }
+    .page { max-width: 860px; margin: 0 auto; padding: 40px 32px 80px; }
+
+    h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 6px; }
+    .subtitle { font-size: 12px; font-family: monospace; color: #555; margin-bottom: 36px; }
+    h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; margin: 32px 0 12px; border-bottom: 1px solid #000; padding-bottom: 4px; }
+
+    /* Bar chart */
+    .bar-wrap { margin: 14px 0; }
+    .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; font-size: 12px; }
+    .bar-label { width: 260px; flex-shrink: 0; }
+    .bar-track { flex: 1; background: #d8d8d0; height: 13px; }
+    .bar-fill { height: 100%; }
+    .bar-fill.ok    { background: #15803D; }
+    .bar-fill.warn  { background: #F97316; }
+    .bar-fill.waste { background: #DC2626; }
+    .bar-num { width: 46px; text-align: right; font-family: monospace; font-size: 11px; flex-shrink: 0; }
+
+    /* Issue cards */
+    .issues { display: flex; flex-direction: column; gap: 14px; }
+    .issue-card { border: 1px solid #000; padding: 14px 16px; box-shadow: 3px 3px 0 #000; }
+    .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.09em; padding: 2px 7px; margin-bottom: 9px; text-transform: uppercase; }
+    .tag.p0   { background: #DC2626; color: #fff; }
+    .tag.p1   { background: #F97316; color: #fff; }
+    .tag.p2   { background: #1D4ED8; color: #fff; }
+    .tag.data { background: #555; color: #fff; }
+    .issue-card h3 { font-size: 13px; font-weight: 700; margin-bottom: 7px; }
+    .issue-card p  { font-size: 13px; color: #222; margin-bottom: 6px; }
+    .issue-card p:last-of-type { margin-bottom: 0; }
+    .fix { margin-top: 10px; font-size: 11.5px; font-family: monospace; background: #e4e4dc; padding: 8px 10px; border-left: 3px solid #000; line-height: 1.6; }
+    .fix b { font-weight: 700; }
+
+    /* Two-column layout for CL breakdown */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
+    .col-block { border: 1px solid #bbb; padding: 12px 14px; }
+    .col-block h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; margin-bottom: 10px; color: #444; }
+
+    /* Caps table */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+    th { text-align: left; font-weight: 700; border-bottom: 2px solid #000; padding: 6px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 7px 8px; border-bottom: 1px solid #ccc; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; text-transform: uppercase; }
+    .badge.p0   { background: #DC2626; color: #fff; }
+    .badge.p1   { background: #F97316; color: #fff; }
+    .badge.p2   { background: #1D4ED8; color: #fff; }
+    .old { color: #888; text-decoration: line-through; }
+    .new { color: #15803D; font-weight: 700; }
+
+    /* Formula box */
+    .formula-box { background: #e4e4dc; border: 1px solid #aaa; padding: 12px 14px; font-family: monospace; font-size: 11.5px; line-height: 1.7; margin-top: 12px; }
+
+    /* Unchanged box */
+    .unchanged { background: #e8e8e0; border: 1px solid #bbb; padding: 12px 14px; font-size: 12px; margin-top: 8px; }
+    .unchanged strong { display: block; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .unchanged ul { padding-left: 16px; }
+    .unchanged ul li { margin-bottom: 3px; }
+
+    .footer { margin-top: 44px; font-size: 11px; font-family: monospace; color: #777; border-top: 1px solid #ccc; padding-top: 12px; }
+    code { background: #e0e0d8; padding: 1px 4px; font-size: 11px; }
+
+    .pill { display: inline-block; background: #000; color: #F0F0E8; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-right: 3px; }
+    .pill.green { background: #15803D; }
+    .pill.red   { background: #DC2626; }
+    .pill.orange { background: #F97316; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>LLM Calibration Brief</h1>
+  <div class="subtitle">Phase 3.15.5 &nbsp;·&nbsp; Test run 0a7bf7b4 &nbsp;·&nbsp; 2026-05-13 &nbsp;·&nbsp; Full report: phase-3.15-5-claude-calibration-report.md</div>
+
+  <!-- ── SECTION 1: Cap Utilization ─────────────────────────────────── -->
+  <h2>Cap utilization — observed vs. current limit</h2>
+  <p style="font-size:12px;color:#444;margin-bottom:12px;">All three operations are running at 12–24% of their cap. The caps are inflating timeout budgets and cost projections, not protecting correctness.</p>
+  <div class="bar-wrap">
+    <div class="bar-row">
+      <span class="bar-label">extract_jd_intel (cap 4,096 tokens)</span>
+      <div class="bar-track"><div class="bar-fill ok" style="width:24%"></div></div>
+      <span class="bar-num">24%</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">resume_generate_full (cap 15,000 tokens)</span>
+      <div class="bar-track"><div class="bar-fill ok" style="width:19%"></div></div>
+      <span class="bar-num">19%</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">cover_letter / outreach (cap 2,600 tokens)</span>
+      <div class="bar-track"><div class="bar-fill ok" style="width:12%"></div></div>
+      <span class="bar-num">12%</span>
+    </div>
+  </div>
+
+  <!-- ── SECTION 2: CL Input Breakdown ──────────────────────────────── -->
+  <h2>Cover letter prompt: where 19,774 bytes actually go</h2>
+  <div class="bar-wrap">
+    <div class="bar-row">
+      <span class="bar-label">TAILORED RESUME (full JSON)</span>
+      <div class="bar-track"><div class="bar-fill waste" style="width:59%"></div></div>
+      <span class="bar-num">59% ❌</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">Cover / outreach rules</span>
+      <div class="bar-track"><div class="bar-fill" style="background:#000;width:15%"></div></div>
+      <span class="bar-num">15%</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">JOB DESCRIPTION (raw)</span>
+      <div class="bar-track"><div class="bar-fill warn" style="width:11%"></div></div>
+      <span class="bar-num">11% ↩</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">System + instructions</span>
+      <div class="bar-track"><div class="bar-fill" style="background:#000;width:7%"></div></div>
+      <span class="bar-num">7%</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">CANDIDATE PROFILE (compact)</span>
+      <div class="bar-track"><div class="bar-fill warn" style="width:7%"></div></div>
+      <span class="bar-num">7% ❌</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">JOB TARGET (JSON)</span>
+      <div class="bar-track"><div class="bar-fill ok" style="width:1%"></div></div>
+      <span class="bar-num">&lt;1%</span>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="col-block">
+      <h4>What is inside TAILORED RESUME that is wasted</h4>
+      <ul style="font-size:12px;padding-left:16px;line-height:1.7;">
+        <li><code>title</code> — exact duplicate of <code>position</code></li>
+        <li><code>date</code> and <code>years</code> — two more duplicates of <code>start_date</code>+<code>end_date</code></li>
+        <li><code>description</code> array — first item is <code>techStack</code> again; rest are the same bullets as <code>highlights</code></li>
+        <li><code>role</code> in projects — duplicate of <code>techStack</code></li>
+        <li><code>personalInfo</code> — email, phone, LinkedIn URL, photo URL, socialNetworks</li>
+        <li><code>sectionMeta</code> — UI display ordering array; zero editorial value</li>
+      </ul>
+    </div>
+    <div class="col-block">
+      <h4>Why CANDIDATE PROFILE is also redundant</h4>
+      <p style="font-size:12px;">CANDIDATE PROFILE is a compact subset of TAILORED RESUME — same data, just truncated. Since TAILORED RESUME is already in the prompt, CANDIDATE PROFILE adds ~342 tokens without adding any new information. Both exist in the prompt right now.</p>
+    </div>
+  </div>
+
+  <!-- ── SECTION 3: Issues ──────────────────────────────────────────── -->
+  <h2>Issues — ranked by priority</h2>
+  <div class="issues">
+
+    <div class="issue-card">
+      <span class="tag p0">P0 — Fix Now</span>
+      <h3>Cover letter input: restructure the entire prompt payload (~54% token reduction)</h3>
+      <p>Three changes together bring the CL prompt from ~4,950 tokens to ~2,289 tokens.</p>
+      <p><strong>1. Remove CANDIDATE PROFILE.</strong> It is a redundant subset of TAILORED RESUME. Gone.</p>
+      <p><strong>2. Replace raw JD with a narrative slice of the JD extract.</strong> The <code>job_keywords</code> dict (from the first LLM call) is already passed to <code>generate_cover_letter_and_outreach</code> but only used for metadata today. Use it directly — slice to: <code>role</code>, <code>company</code>, <code>responsibility_themes</code>, <code>calibration</code>. Skip the ATS/keyword fields — those are resume-tailoring fields, not CL-writing fields. If <code>job_keywords</code> is unavailable, fall back to raw JD trimmed to 1,500 chars.</p>
+      <p><strong>3. Strip TAILORED RESUME of all duplicates.</strong> Keep all experience entries (full career breadth matters). Per entry, keep: <code>position</code>, <code>company</code>, <code>location</code>, <code>start_date</code>, <code>end_date</code>, <code>techStack</code>, <code>highlights</code>. Remove: <code>id</code>, <code>title</code>, <code>date</code>, <code>years</code>, <code>description</code>. Same pattern for projects. From personalInfo: keep <code>name</code>, <code>location</code>, <code>title/headline</code>; remove contact details. Remove <code>sectionMeta</code> entirely.</p>
+      <div class="fix">
+        Files: cover_letter.py · message_profiles.py · cover_letter/user.txt · prompts/cover_letter.py<br>
+        <b>~4,950 tokens → ~2,289 tokens</b> (all four work entries kept; duplicates removed)
+      </div>
+    </div>
+
+    <div class="issue-card">
+      <span class="tag p0">P0 — Fix Now</span>
+      <h3>Cover letter output cap is 8× the observed output</h3>
+      <p>The prompt hard-constrains the model to 150 words (cover letter) + 60 words (outreach). Observed output: 324 tokens. Even a maximally verbose provider staying within those word limits cannot exceed ~400 tokens. Current cap: 2,600 / 3,200 retry.</p>
+      <div class="fix">
+        Initial cap: <b>800 tokens</b> (2.5× observed; 2× worst-case word-bounded estimate)<br>
+        Retry cap: <b>1,200 tokens</b> (3.7× observed; safe for verbose providers)<br>
+        Timeout: <b>45 seconds</b> (text output, small; fits inside the 240s outer wall clock)
+      </div>
+    </div>
+
+    <div class="issue-card">
+      <span class="tag p1">P1 — Next Iteration</span>
+      <h3>resume_generate_full cap of 15,000 is never needed — replace with adaptive formula</h3>
+      <p>The RESPONSE CONTRACT already encodes the exact output grid before the call (bullet counts, project counts, skill value counts). From this test run: <strong>34 tokens/cell empirical</strong>, 1.24× pretty-print multiplier. The formula below produces a cap that tracks actual resume size instead of a fixed worst-case ceiling.</p>
+      <div class="fix">
+        <b>cells</b> = exp_bullets + proj_bullets + skill_values + scalar_cells<br>
+        <b>cap</b> = max(6000, min(8000, ceil(cells × 34 × 1.25 × 1.40)))<br><br>
+        This test run: 66 cells → cap = <b>6,000</b> (observed 2,809 → 2.14× headroom)<br>
+        Very large resume (131 cells) → cap = <b>7,781</b> — still within 8,000 ceiling<br>
+        Store computed cap + cell counts in trace metadata for ongoing calibration.
+      </div>
+    </div>
+
+    <div class="issue-card">
+      <span class="tag p1">P1 — Next Iteration</span>
+      <h3>Inner LLM timeout is unreachable — disconnected from 240s outer wall clock</h3>
+      <p>At <code>max_tokens=15,000</code> the inner timeout formula gives ~659 seconds. The outer preview route aborts at 240 seconds. The inner timeout is dead code. Even after the cap drops to 8,000, per-call overrides are needed to make inner timeouts enforceable.</p>
+      <div class="fix">
+        extract_jd_intel → <b>90s</b> &nbsp;|&nbsp; resume_generate_full → <b>170s</b><br>
+        critique_resume → <b>90s</b> &nbsp;|&nbsp; rewrite_resume → <b>170s</b><br>
+        cover_letter_outreach → <b>45s</b><br><br>
+        Add optional <code>timeout_seconds</code> param to <code>complete()</code> and <code>complete_json()</code> in <code>llm.py</code>.
+      </div>
+    </div>
+
+    <div class="issue-card">
+      <span class="tag p1">P1 — Next Iteration</span>
+      <h3>Bold keywords: methodology labels leaking through on low-signal JDs</h3>
+      <p>This test run produced <code>SDLC</code>, <code>Software Testing</code>, and <code>Relational Databases</code> as bold keywords — all prohibited by the schema rules ("prefer tools, languages, platforms; avoid generic labels and umbrella terms"). The failure mode is specific: when the JD names no high-signal technical tools, the model defaults to methodology labels.</p>
+      <div class="fix">
+        Add one line to <code>output_file_schema_rules/resume_diff_output.txt</code>:<br><br>
+        "Also exclude: methodology labels (SDLC, Agile, CI/CD pipeline, test automation), generic infrastructure categories (Relational Databases, Cloud Storage, Distributed Systems), and competency phrases (Test Case Design, Project Management). When the JD names no high-signal tools, draw bold_keywords only from tools, languages, and platforms in the resume evidence."
+      </div>
+    </div>
+
+    <div class="issue-card">
+      <span class="tag p2">P2 — After Telemetry</span>
+      <h3>Model ignores minification instruction — measure before tuning</h3>
+      <p>Both JSON responses came back pretty-printed inside triple-backtick fences. The prompt explicitly requests minified, fence-free JSON. Parser recovers, but this wastes ~147 tokens (extract) and ~544 tokens (tailor) per call — ~400K output tokens/month at 25 runs/day. Do not change the prompt wording without first measuring fence frequency across models.</p>
+      <div class="fix">
+        Add to every JSON call trace in <code>llm.py</code>:<br>
+        <code>response_had_fence: bool</code>, <code>raw_response_chars: int</code>,<br>
+        <code>minified_chars: int</code>, <code>formatting_overhead_chars: int</code>
+      </div>
+    </div>
+
+    <div class="issue-card">
+      <span class="tag data">Data Issue — No Action Required</span>
+      <h3>Test run prompt file is from an older prompt version — output estimates are still valid</h3>
+      <p>The <code>extract_jd_intel_output/prompt.txt</code> file (7,409 bytes) uses an older schema missing four fields. The <code>respose.txt</code> was generated by the current production prompt (with all fields). The calibration doc's input size estimate (8,475 bytes) was measured from the current <code>user.txt</code> on disk — that is the correct number for production calibration. Output estimates are unaffected. For future test run captures: save the live prompt string from the same HTTP request, not the template file from disk.</p>
+    </div>
+
+  </div>
+
+  <!-- ── SECTION 4: All Caps at a Glance ───────────────────────────── -->
+  <h2>All cap changes at a glance</h2>
+  <table>
+    <thead>
+      <tr><th>Operation</th><th>Current cap</th><th>Proposed cap</th><th>Why</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>extract_jd_intel_output</code></td>
+        <td><span class="old">4,096</span></td>
+        <td><span class="new">2,500</span></td>
+        <td>Schema bounds suggest ~2,000 max; revisit after 10+ traces</td>
+      </tr>
+      <tr>
+        <td><code>resume_generate_full</code></td>
+        <td><span class="old">15,000</span></td>
+        <td><span class="new">adaptive 6,000–8,000</span></td>
+        <td>34 tok/cell empirical; contract grid makes ceiling deterministic</td>
+      </tr>
+      <tr>
+        <td><code>rewrite_resume</code></td>
+        <td><span class="old">15,000</span></td>
+        <td><span class="new">adaptive 6,000–8,000</span></td>
+        <td>Same output shape as full primary; same formula applies</td>
+      </tr>
+      <tr>
+        <td><code>critique_resume</code></td>
+        <td>4,096</td>
+        <td>keep 4,096</td>
+        <td>No response captured yet</td>
+      </tr>
+      <tr>
+        <td><code>cover_letter_outreach</code> initial</td>
+        <td><span class="old">2,600</span></td>
+        <td><span class="new">800</span></td>
+        <td>150+60 word prompt constraint; 2.5× observed output</td>
+      </tr>
+      <tr>
+        <td><code>cover_letter_outreach</code> retry</td>
+        <td><span class="old">3,200</span></td>
+        <td><span class="new">1,200</span></td>
+        <td>3.7× observed; handles verbose providers on retry</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── SECTION 5: What Stays Unchanged ───────────────────────────── -->
+  <div class="unchanged" style="margin-top:28px;">
+    <strong>What stays unchanged</strong>
+    <ul>
+      <li><strong>critique_resume cap (4,096)</strong> — no response captured yet; do not change blindly.</li>
+      <li><strong>Shared output schema/rules block</strong> — it is large (~2,437 tokens), but the safety rules it encodes are not worth splitting. Fix the payload first.</li>
+      <li><strong>Outer 240s preview timeout</strong> — keep until post-cap latency traces show it is safe to lower.</li>
+      <li><strong>JSON fence-tolerant parsing</strong> — parser already recovers; do not break this while fixing the minification wording.</li>
+    </ul>
+  </div>
+
+  <!-- ── SECTION 6: Open Questions ─────────────────────────────────── -->
+  <h2>Open questions for your call</h2>
+  <table>
+    <thead><tr><th>#</th><th>Question</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>When <code>job_keywords</code> is a cache miss, fall back to raw JD trimmed to 1,500 chars — or always compute the extract inline?</td></tr>
+      <tr><td>2</td><td>Lower <code>extract_jd_intel_output</code> cap to 2,500 now (one sample), or wait for 10+ traces first?</td></tr>
+      <tr><td>3</td><td>Log bold keyword violations as a trace warning to measure frequency before changing the prompt?</td></tr>
+      <tr><td>4</td><td>Surface <code>computed_max_tokens</code> and cost-per-operation in the <code>/llm-traces</code> UI for self-service calibration?</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Report: docs/plans/phase-3.15-5-claude-calibration-report.md &nbsp;·&nbsp;
+    Test run: docs/plans/test_runs/0a7bf7b4-18c6-4559-a916-bd183957d962
+  </div>
+
+</div>
+</body>
+</html>

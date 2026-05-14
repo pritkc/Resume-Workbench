@@ -17,12 +17,14 @@ def tailor_step_name(prompt_id: str) -> str:
 async def run_primary_tailoring(
     prompt_context: TailoringPromptContext,
     job_description: str,
+    max_tokens: int = 9000,
 ) -> dict[str, Any]:
     return await complete_json(
         prompt=prompt_context.user_prompt,
         system_prompt=prompt_context.system_prompt,
         config=get_step_llm_config(tailor_step_name(prompt_context.prompt_id)),
-        max_tokens=15000,
+        max_tokens=max_tokens,
+        timeout_seconds=170,
         retries=1,
         operation="resume_generate_full",
         metadata={
@@ -31,6 +33,7 @@ async def run_primary_tailoring(
             "prompt_hash": prompt_context.prompt_hash,
             "job_description_chars": len(job_description),
             "structured_resume_input": prompt_context.used_structured_resume_input,
+            "adaptive_max_tokens": max_tokens,
         },
         retry_hint=prompt_context.retry_hint,
     )

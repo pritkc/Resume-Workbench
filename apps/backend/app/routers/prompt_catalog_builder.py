@@ -84,8 +84,7 @@ def _probe_system_message(step_name: str) -> str:
     if step_name == "cover_letter":
         s, _ = mod.build_messages(
             job_target="{}",
-            job_description="probe",
-            resume_profile="{}",
+            jd_extract_slice="{}",
             tailored_resume="{}",
         )
         return s

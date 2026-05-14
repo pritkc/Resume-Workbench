@@ -8,6 +8,7 @@ import {
   formatCount,
   formatLatency,
   formatTimestamp,
+  getCapUtilization,
   getInputTokens,
   getOutputTokens,
   renderPreviewStats,
@@ -113,6 +114,11 @@ export function LlmTraceCallCard({
                 json mode
               </span>
             ) : null}
+            {call.request_context?.response_had_fence === true ? (
+              <span className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 font-mono text-[11px] uppercase text-amber-800">
+                fence
+              </span>
+            ) : null}
           </div>
 
           <div className="font-mono text-xs text-slate-500">
@@ -184,6 +190,14 @@ export function LlmTraceCallCard({
             <p className="mt-0.5 font-mono text-[10px] text-slate-500">
               {formatCount(getInputTokens(call))} in / {formatCount(getOutputTokens(call))} out
             </p>
+            {(() => {
+              const util = getCapUtilization(call);
+              if (util === null) return null;
+              const pct = Math.round(util * 100);
+              const color =
+                pct >= 85 ? 'text-red-600' : pct >= 50 ? 'text-amber-600' : 'text-emerald-600';
+              return <p className={`mt-0.5 font-mono text-[10px] ${color}`}>{pct}% of cap</p>;
+            })()}
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
             <p className="font-mono text-[10px] uppercase tracking-wide text-slate-400">
@@ -230,8 +244,10 @@ export function LlmTraceCallCard({
             {typeof compactEnvelope.origin === 'string' ? compactEnvelope.origin : 'Origin unknown'}
           </p>
           <p className="mt-1 font-mono text-[11px] text-slate-700">
-            {typeof compactEnvelope.error_count === 'number' ? compactEnvelope.error_count : 0} error
-            {(typeof compactEnvelope.error_count === 'number' ? compactEnvelope.error_count : 0) === 1
+            {typeof compactEnvelope.error_count === 'number' ? compactEnvelope.error_count : 0}{' '}
+            error
+            {(typeof compactEnvelope.error_count === 'number' ? compactEnvelope.error_count : 0) ===
+            1
               ? ''
               : 's'}
             {' · '}
@@ -239,7 +255,9 @@ export function LlmTraceCallCard({
               ? compactEnvelope.warning_count
               : 0}{' '}
             warning
-            {(typeof compactEnvelope.warning_count === 'number' ? compactEnvelope.warning_count : 0) === 1
+            {(typeof compactEnvelope.warning_count === 'number'
+              ? compactEnvelope.warning_count
+              : 0) === 1
               ? ''
               : 's'}
           </p>
