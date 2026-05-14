@@ -49,6 +49,7 @@ from app.services.tailoring.change_manifest import (
     build_change_manifest,
     build_stage_breakdown,
 )
+from app.services.test_run_exporter import export_test_run_capture
 from app.schemas import (
     ArtifactSummary,
     GenerateAuxiliaryPackageResponse,
@@ -102,6 +103,39 @@ from app.services.resume_codes import (
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
 
 logger = logging.getLogger(__name__)
+
+
+def _export_test_run_best_effort(
+    *,
+    trace_id: str,
+    generation_run_id: str | None = None,
+    label: str | None = None,
+) -> None:
+    try:
+        exported_dir = export_test_run_capture(
+            trace_id=trace_id,
+            generation_run_id=generation_run_id,
+            label=label,
+        )
+        logger.info(
+            "Exported test run trace_id=%s generation_run_id=%s to %s",
+            trace_id,
+            generation_run_id,
+            exported_dir,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to export test run trace_id=%s generation_run_id=%s: %s",
+            trace_id,
+            generation_run_id,
+            exc,
+        )
+
+
+def _test_run_label_from_job(job: dict[str, Any], suffix: str | None = None) -> str | None:
+    parts = [part for part in (job.get("company"), job.get("role"), suffix) if part]
+    return " - ".join(str(part) for part in parts) if parts else None
+
 
 _URL_LIKE_RE = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
 _METADATA_NOISE_RE = re.compile(
@@ -1944,6 +1978,11 @@ async def _improve_preview_flow(
             },
         },
     )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        generation_run_id=preview_run["generation_run_id"],
+        label=_test_run_label_from_job(job) or generated_title,
+    )
 
     return ImproveResumeResponse(
         request_id=request_id,
@@ -2972,12 +3011,18 @@ async def generate_auxiliary_package_endpoint(
         feature_name="CL + message package",
     )
     job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
+    request_id = str(uuid4())
     try:
-        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
-            resume_data,
-            job["content"],
-            job_keywords=job_kw,
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.generate_auxiliary_package",
+            {"resume_id": resume_id, "job_id": job.get("job_id")},
+        ):
+            cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+                resume_data,
+                job["content"],
+                job_keywords=job_kw,
+            )
     except Exception as e:
         logger.error("CL + message package generation failed: %s", e)
         raise HTTPException(
@@ -2991,6 +3036,10 @@ async def generate_auxiliary_package_endpoint(
             "cover_letter": cover_letter_content,
             "outreach_message": outreach_content,
         },
+    )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        label=_test_run_label_from_job(job, "auxiliary"),
     )
     return GenerateAuxiliaryPackageResponse(
         cover_letter=cover_letter_content,
@@ -3017,12 +3066,18 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
     job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
 
     # Generate the shared auxiliary package once and return the requested field.
+    request_id = str(uuid4())
     try:
-        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
-            resume_data,
-            job["content"],
-            job_keywords=job_kw,
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.generate_cover_letter",
+            {"resume_id": resume_id, "job_id": job.get("job_id")},
+        ):
+            cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+                resume_data,
+                job["content"],
+                job_keywords=job_kw,
+            )
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
         raise HTTPException(
@@ -3037,6 +3092,10 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
             "cover_letter": cover_letter_content,
             "outreach_message": outreach_content,
         },
+    )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        label=_test_run_label_from_job(job, "cover_letter"),
     )
 
     return GenerateContentResponse(
@@ -3061,12 +3120,18 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
 
     # Generate the shared auxiliary package once and return the requested field.
+    request_id = str(uuid4())
     try:
-        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
-            resume_data,
-            job["content"],
-            job_keywords=job_kw,
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.generate_outreach",
+            {"resume_id": resume_id, "job_id": job.get("job_id")},
+        ):
+            cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+                resume_data,
+                job["content"],
+                job_keywords=job_kw,
+            )
     except Exception as e:
         logger.error(f"Outreach message generation failed: {e}")
         raise HTTPException(
@@ -3081,6 +3146,10 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
             "cover_letter": cover_letter_content,
             "outreach_message": outreach_content,
         },
+    )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        label=_test_run_label_from_job(job, "outreach"),
     )
 
     return GenerateContentResponse(
