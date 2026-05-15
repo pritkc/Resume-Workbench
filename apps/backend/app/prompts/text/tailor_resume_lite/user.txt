@@ -1,20 +1,25 @@
 $custom_prompt_instructions
 
-Tailor this resume with conservative edits (keep job titles and overall structure).
+Tailor this resume with conservative edits. Keep job titles and overall structure stable.
 
-REWRITING EXAMPLE:
-Original: "Worked on backend systems"
-JD needs: Kubernetes, CI/CD, microservices
-Rewritten: "Built and maintained backend microservices deployed on Kubernetes with automated CI/CD pipelines, reducing deployment time from 2 hours to 15 minutes"
+LITE-RUN EDIT SCOPE:
+- Prefer [RETAIN] unless a cell clearly improves fit, clarity, or render quality.
+- Touch at most one bullet per role.
+- Keep projects mostly stable.
+- Keep skills broad and credible; do not overfit to the JD.
 
-JOB INTELLIGENCE:
-$extract_jd_intel_output
+JD INTELLIGENCE:
+$jd_intel
 
 MASTER RESUME:
 $original_resume
 
-RESPONSE CONTRACT:
-$response_contract
+OUTPUT TEMPLATE:
+$output_template
 
-OUTPUT SCHEMA (compact JSON you must return — follow field names and nesting exactly):
-$resume_diff_rules
+OUTPUT RULES:
+- Return plain text only. No markdown fences, no JSON, no commentary.
+- Use the section headers exactly as shown in OUTPUT TEMPLATE.
+- Write [RETAIN] to keep an unchanged cell. Do not copy original unchanged text.
+- SUMMARY and BOLD KEYWORDS must always be present.
+- You may omit a whole EXPERIENCE or PROJECT section only when every cell in that section is retained.

@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from app.config import get_step_llm_config
-from app.llm import complete_json
+from app.llm import complete as complete_json
 from app.prompts import PROMPT_VERSIONS, LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT
 from app.prompts.extract_jd_intel import build_messages as build_jd_intel_messages
 from app.services.prompt_utils import sanitize_user_input
@@ -16,6 +16,11 @@ from app.services.tailoring.jd_intel_blob import (
     collect_keyword_strings_from_blob,
     enrich_jd_intel_blob,
     filter_resume_keyword_sources,
+)
+from app.services.tailoring.section_format import (
+    is_section_jd_wrapper,
+    jd_keywords_from_section_blob,
+    section_jd_wrapper,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +54,8 @@ def normalize_prompt_list(value: Any, *, limit: int = MAX_PROMPT_LIST_ITEMS) -> 
 
 def collect_job_keywords(job_keywords: dict[str, Any]) -> list[str]:
     """Return deduped strings harvested from list nodes anywhere in the JD blob."""
+    if is_section_jd_wrapper(job_keywords):
+        return jd_keywords_from_section_blob(job_keywords)
     return collect_keyword_strings_from_blob(job_keywords)
 
 
@@ -94,7 +101,7 @@ def find_supported_keywords(job_keywords: dict[str, Any], resume_source: Any) ->
 
 
 async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
-    """Extract JD intelligence JSON (arbitrary shape); enrich role/company/location when missing."""
+    """Extract JD intelligence as section-header text wrapped in a JSON-compatible dict."""
 
     sanitized_jd = sanitize_user_input(job_description)
     system_prompt, prompt = build_jd_intel_messages(sanitized_jd)
@@ -103,7 +110,7 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
         prompt=prompt,
         system_prompt=system_prompt,
         config=get_step_llm_config("extract_jd_intel"),
-        max_tokens=2500,
+        max_tokens=1200,
         timeout_seconds=90,
         operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
         metadata={
@@ -114,12 +121,13 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
             ),
         },
     )
-    if not isinstance(result, dict):
-        result = {}
-
-    enrich_jd_intel_blob(result, job_description)
-    filter_resume_keyword_sources(result)
-    return result
+    if isinstance(result, dict):
+        enrich_jd_intel_blob(result, job_description)
+        filter_resume_keyword_sources(result)
+        return result
+    if not isinstance(result, str):
+        result = ""
+    return section_jd_wrapper(result)
 
 
 async def extract_job_keywords(job_description: str) -> dict[str, Any]:

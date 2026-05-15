@@ -1,6 +1,6 @@
 """Version and option constants for LLM prompts."""
 
-# Persisted on ``llm_calls.operation`` for JD extraction; matches user-template root ``$extract_jd_intel_output``.
+# Persisted on ``llm_calls.operation`` for JD extraction.
 LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT = "extract_jd_intel_output"
 
 PROMPT_VERSIONS = {

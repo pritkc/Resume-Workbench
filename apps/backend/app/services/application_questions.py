@@ -16,6 +16,10 @@ from app.schemas import (
     normalize_resume_data,
 )
 from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
+from app.services.tailoring.section_format import (
+    is_section_jd_wrapper,
+    jd_keywords_from_section_blob,
+)
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -244,7 +248,9 @@ def _build_job_target_payload(
     location = sanitize_job_location(location_input)
 
     highlights: list[str] = []
-    if isinstance(job_keywords, dict):
+    if is_section_jd_wrapper(job_keywords):
+        highlights.extend(jd_keywords_from_section_blob(job_keywords)[:10])
+    elif isinstance(job_keywords, dict):
         for key in ("responsibility_themes", "must_have", "keywords", "ats_keywords"):
             value = job_keywords.get(key)
             if isinstance(value, list):
@@ -325,4 +331,3 @@ async def generate_application_question_answers(
     )
 
     return normalize_generated_answers(raw_result, questions)
-

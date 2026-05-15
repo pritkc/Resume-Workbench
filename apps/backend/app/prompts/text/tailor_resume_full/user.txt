@@ -5,35 +5,42 @@ RUN SEQUENCE:
 2. Choose the strongest evidence to emphasize before editing wording.
 3. Rewrite only cells needed for fit, clarity, technical specificity, or render fit.
 4. Calibrate titles, skills, ATS terms, and summary after bullet direction is clear.
-5. Final-pass the JSON against RESPONSE CONTRACT and OUTPUT SCHEMA.
+5. Fill the section-header OUTPUT TEMPLATE exactly. Do not return JSON.
 
 FULL-RUN EDIT SCOPE:
 - Summary: rewrite for fit and render length while preserving the source identity.
-- Experience: at most 1-2 substantive bullet rewrites per role; for roles with 2 or fewer bullets, rewrite at most one. Retained bullets still appear with "value": null.
+- Experience: at most 1-2 substantive bullet rewrites per role; at most 1-2 bullets per experience. For roles with 2 or fewer bullets, touch at most one bullet.
 - Story retention: each role keeps at least one recognizable original interview story unless it has only one bullet.
-- Projects: make substantive edits to at most the two closest projects; keep names stable.
+- Projects: make substantive edits to at most the two closest projects; edit at most the closest two projects; keep names stable.
+- Projects: preserve source bullet count and shape; do not compress multiple project bullets into one.
 - Skills: organize into dense groups after bullet direction is clear; preserve strong source skills after JD-critical credible groups.
-- Titles and tech stacks: edit only when the shared schema allows it and the source evidence supports it.
+- Preserve impressive superset skills; do not narrow the candidate to only JD terms.
+- Titles and tech stacks: edit only when the source evidence supports it.
+- Do not copy JD titles or secondary role labels. When in doubt, keep the existing qualifier or omit it.
 
-EXTRACTED JD INTELLIGENCE:
-$extract_jd_intel_output
+JD INTELLIGENCE:
+$jd_intel
 
 JD INTELLIGENCE GUIDE:
-- Competency hooks: $extract_jd_intel_output.responsibility_themes
-- Technical terms to consider, not force: $extract_jd_intel_output.resume_technical_keywords
-- Exact-match candidates when credible: $extract_jd_intel_output.keyword_must_match
-- Transferable themes to translate naturally: $extract_jd_intel_output.transferable_themes
-- Low-signal terms to avoid or demote: $extract_jd_intel_output.low_signal_terms
-- Bold keyword candidates: $extract_jd_intel_output.resume_bold_keyword_sources
-- Domain/product context: $extract_jd_intel_output.resume_domain_keywords
-- Level ceiling: $extract_jd_intel_output.calibration.level_expectations
-- Use these fields to prioritize evidence and wording only where the source resume supports them.
+- JD coverage themes: use HOOKS as competency hooks, not resume copy.
+- Use MUST-MATCH for exact technical terms only when credible from the resume.
+- Use KEYWORDS and BOLD-CANDS for ATS visibility, not keyword stuffing.
+- Use THEMES as translation candidates, not mandatory insertions.
+- Treat JD values as coverage signals, not phrases to weave.
+- Do not force every bullet to connect to the JD.
+- Use AVOID to demote generic or low-signal wording.
+- Use LEVEL as the seniority ceiling.
 
 ORIGINAL RESUME:
 $original_resume
 
-RESPONSE CONTRACT:
-$response_contract
+OUTPUT TEMPLATE:
+$output_template
 
-OUTPUT SCHEMA:
-$resume_diff_rules
+OUTPUT RULES:
+- Return plain text only. No markdown fences, no JSON, no commentary.
+- Use the section headers exactly as shown in OUTPUT TEMPLATE.
+- Write [RETAIN] to keep an unchanged cell. Do not copy original unchanged text.
+- SUMMARY and BOLD KEYWORDS must always be present.
+- You may omit a whole EXPERIENCE or PROJECT section only when every cell in that section is retained.
+- Preserve all bullet indexes and skill positions from the template.

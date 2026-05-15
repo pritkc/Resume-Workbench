@@ -145,7 +145,6 @@ def test_enrich_maps_description_path_to_bullet_why() -> None:
         "skills": {"groups": []},
     }
     changes = build_change_manifest(original, updated)
-    bullet_change = next(c for c in changes if c.path == "workExperience[0].description[1]")
     llm = TailoringLLMResponseV2(
         summary=None,
         experience={
@@ -216,4 +215,3 @@ def test_build_stage_breakdown_counts_numeric_and_location_metadata() -> None:
     assert breakdown.numeric_claim_changes == 1
     assert breakdown.location_source == "jd"
     assert breakdown.location_value == "Remote"
-

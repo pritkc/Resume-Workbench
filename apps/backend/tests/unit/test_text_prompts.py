@@ -1,7 +1,5 @@
 """Shipped prompt text loader (Phase 3.12.2)."""
 
-import pytest
-
 from app.prompts import VALID_STEPS
 from app.prompts._text_prompts import read_shipped_txt, text_root
 

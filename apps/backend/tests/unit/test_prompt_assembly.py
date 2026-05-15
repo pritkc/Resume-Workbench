@@ -31,11 +31,13 @@ def test_render_user_prompt_fills_slots() -> None:
         jd_intel_blob={},
         original_resume_json="{}",
         response_contract_json="{}",
+        output_template="=== PROJECT 0 ===\nSTACK: [RETAIN]",
     )
-    assert "EXTRACTED JD INTELLIGENCE:" in text
+    assert "JD INTELLIGENCE:" in text
     assert "MODE:" not in text
     assert "$extract_jd_intel_output" not in text
-    assert "OUTPUT FORMAT:" in text
+    assert "OUTPUT TEMPLATE:" in text
+    assert "Return plain text only" in text
 
 
 def test_render_user_prompt_injects_custom_instructions_before_full_run_rules() -> None:
@@ -51,7 +53,7 @@ def test_render_user_prompt_injects_custom_instructions_before_full_run_rules() 
     assert "override all other tailoring instructions for this run" in text
     assert "Prioritize fintech platform experience." in text
     assert text.index("Prioritize fintech platform experience.") < text.index(
-        "EDITORIAL SEQUENCE"
+        "RUN SEQUENCE"
     )
 
 
@@ -151,18 +153,20 @@ def test_full_system_prompt_has_role_and_goal() -> None:
     assert "ROLE & GOAL:" in system
 
 
-def test_resume_diff_rules_in_user_prompt() -> None:
-    """$resume_diff_rules must be rendered into the user message (output-format authority)."""
+def test_section_output_template_in_user_prompt() -> None:
+    """$output_template must be rendered into the user message."""
     user = render_tailoring_user_prompt(
         mode_id="full",
         jd_intel_blob={},
         original_resume_json="{}",
         response_contract_json="{}",
+        output_template="=== SUMMARY ===\n[summary]",
     )
-    assert "OUTPUT FORMAT:" in user, (
-        "$resume_diff_rules must include OUTPUT FORMAT instructions in the user message"
-    )
+    assert "OUTPUT TEMPLATE:" in user
+    assert "=== SUMMARY ===" in user
+    assert "Do not return JSON" in user
     assert "$resume_diff_rules" not in user, "Template placeholder must be substituted"
+    assert "$output_template" not in user, "Template placeholder must be substituted"
 
 
 def test_resume_diff_rules_no_years_format() -> None:
@@ -193,75 +197,83 @@ def test_resume_diff_rules_limit_summary_without_bullet_length_cap() -> None:
 
 
 def test_resume_diff_rules_do_not_allow_default_new_bullet_indexes() -> None:
-    """Work experience should rewrite existing bullets unless the contract explicitly allows additions."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
-    assert "rewrite existing indexes only" in lower
-    assert "explicitly permits new trailing indexes" in lower
+    """Section output should preserve existing indexes only."""
+    user = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
+    assert "preserve all bullet indexes" in user
+    assert "skill positions" in user
 
 
 def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
     """Tailoring should translate the JD into a broader credible candidate profile."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
-    assert "jd is a lens, not the resume's center" in lower
-    assert "broader capability first" in lower
-    assert "translate responsibility phrases" in lower
-    assert "not verbatim phrase borrowing" in lower
-    assert "paraphrased jd responsibility" in lower
-    assert "no more than 1-2 bullets per experience entry" in lower
-    assert "original resume is the superset" in lower
-    assert "do not make every section repeat the same jd nouns" in lower
+    lower = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
+    assert "jd as a lens, not a new identity" in lower
+    assert "translation candidates, not mandatory insertions" in lower
+    assert "do not force every bullet to connect" in lower
+    assert "at most 1-2 substantive bullet rewrites per role" in lower
+    assert "preserve impressive superset skills" in lower
 
 
 def test_resume_diff_rules_keep_bold_keywords_compact() -> None:
     """Bold keywords should be short technical ATS terms, not long phrases."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
-    assert "6-10 short high-visibility technical ats terms" in lower
-    assert "1-3 word terms only" in lower
-    assert "avoid sentences, soft skills, and generic domain phrases" in lower
-    assert "do not include basic tools or generic role/domain labels" in lower
+    template = TailoringResponseContract(prompt_mode="full").to_section_template().lower()
+    assert "6-10 comma-separated ats terms" in template
+    assert "tools, languages, platforms, methods only" in template
 
 
 def test_resume_diff_rules_allows_plausible_new_claims() -> None:
     """Full generation can add plausible stronger claims the user can prove later."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
+    lower = assemble_tailoring_system_prompt("full").lower()
     assert "claim policy" in lower
-    assert "strong plausible claims" in lower
-    assert "do not require exact source wording" in lower
+    assert "interview-defensible" in lower
+    assert "source evidence supports" in lower
 
 
 def test_resume_diff_rules_lock_project_count_and_limit_tool_promotion() -> None:
     """Project count and tool specificity should not drift from the source resume."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
-    assert "project bullet count is locked" in lower
-    assert "violation renders the output malformed" in lower
-    assert "do not promote tools from tech_stacks into bullet text" in lower
-    assert "source bullet already names that tool" in lower
+    lower = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
+    assert "projects: preserve source bullet count and shape" in lower
+    assert "keep names stable" in lower
+    assert "preserve all bullet indexes" in lower
 
 
 def test_resume_diff_rules_apply_bans_globally_and_keep_skills_specific() -> None:
     """Jargon bans apply everywhere, and skills should not become prose phrases."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
-    assert "apply jargon and phrases bans to summary, role titles, and bullets equally" in lower
-    assert "skill values must be specific tool, product, method, or technology names" in lower
-    assert "not descriptive phrases" in lower
-    assert "broad professional toolkit" in lower
-    assert "do not emit basic office tools" in lower
-    assert "target 4-5 dense groups" in lower
-    assert "add at most 1-2 jd-specific values" in lower
+    lower = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
+    assert "use avoid to demote generic or low-signal wording" in lower
+    assert "preserve impressive superset skills" in lower
+    assert "not keyword stuffing" in lower
 
 
 def test_resume_diff_rules_forbid_markdown_fences() -> None:
-    """LLM output must be raw JSON so local parsers do not receive markdown fences."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
+    """LLM output must be raw section text so local parsers do not receive markdown fences."""
+    lower = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
     assert "no markdown fences" in lower
-    assert "start with {" in lower and "end with }" in lower
+    assert "no json" in lower
 
 
 def test_full_prompt_preserves_project_bullet_count_and_stacks() -> None:
@@ -271,10 +283,11 @@ def test_full_prompt_preserves_project_bullet_count_and_stacks() -> None:
         jd_intel_blob={},
         original_resume_json="{}",
         response_contract_json="{}",
+        output_template="=== PROJECT 0 ===\nSTACK: [RETAIN]",
     )
     lower = user.lower()
     assert "projects: preserve source bullet count and shape" in lower
-    assert "emit tech_stacks" in lower
+    assert "stack:" in lower
 
 
 def test_full_prompt_retains_closest_two_projects_and_superset_skills() -> None:
@@ -291,7 +304,7 @@ def test_full_prompt_retains_closest_two_projects_and_superset_skills() -> None:
     assert "do not copy jd titles or secondary role labels" in lower
     assert "when in doubt, keep the existing qualifier or omit" in lower
     assert "at most 1-2 bullets per experience" in lower
-    assert "omit unchanged bullet indexes" in lower
+    assert "[retain]" in lower
     assert "translation candidates, not mandatory insertions" in lower
     assert "career story" in lower
     assert "story retention" in lower
@@ -315,7 +328,7 @@ def test_full_prompt_uses_coverage_hooks_not_jd_insertion_commands() -> None:
 
 
 def test_full_prompt_splits_experience_sparse_diffs_from_project_shape() -> None:
-    """Experience diffs should stay sparse while edited projects preserve bullet shape."""
+    """Section output may omit retained sections while edited projects preserve bullet shape."""
     user = render_tailoring_user_prompt(
         mode_id="full",
         jd_intel_blob={},
@@ -324,9 +337,9 @@ def test_full_prompt_splits_experience_sparse_diffs_from_project_shape() -> None
     )
     lower = user.lower()
     assert "for roles with 2 or fewer bullets, touch at most one bullet" in lower
-    assert "experience: omit unchanged bullet indexes" in lower
+    assert "omit a whole experience or project section" in lower
     assert "projects: preserve source bullet count and shape" in lower
-    assert "including lightly unchanged bullets when needed to prevent compression" in lower
+    assert "do not compress multiple project bullets into one" in lower
 
 
 def test_jd_extractor_prompts_use_neutral_hooks_not_mirror_language() -> None:
@@ -342,11 +355,14 @@ def test_jd_extractor_prompts_use_neutral_hooks_not_mirror_language() -> None:
 
 def test_resume_diff_rules_handles_pivot_roles_from_candidate_identity() -> None:
     """Pivot-role summaries should preserve the candidate's stronger original identity."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-    lower = RESUME_DIFF_RULES.lower()
-    assert "pivot role" in lower
-    assert "candidate's engineering perspective" in lower
-    assert "mention at most one jd-specific domain/tool" in lower
+    lower = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
+    assert "preserving the source identity" in lower
+    assert "use the jd as a lens, not a new identity" in lower
 
 
 def test_full_system_prompt_aligns_titles_to_target_domain() -> None:
@@ -369,17 +385,16 @@ def test_full_system_prompt_uses_broader_competencies_and_plausible_claims() -> 
 
 def test_resume_diff_rules_remove_keyword_weave_and_vendor_substitution_paths() -> None:
     """Prompt rules should block global keyword stuffing and obvious tool swaps."""
-    from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-
-    lower = RESUME_DIFF_RULES.lower()
-    assert "weave keywords throughout" not in lower
-    assert "a keyword appearing once in the right context" in lower
-    assert "do not substitute one vendor/ui/bi surface for another" in lower
-    assert "if the source says streamlit, keep streamlit" in lower
-    assert "never rename or extend the base title" in lower
-    assert "data intern\" -> \"data analyst intern" in lower
-    assert "never add jd-flavored parentheticals" in lower
-    assert "every bullet must be grammatically complete" in lower
+    lower = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
+    assert "keyword stuffing" in lower
+    assert "do not copy jd titles" in lower
+    assert "keep names stable" in lower
+    assert "do not force every bullet to connect" in lower
 
 
 def test_resume_diff_rules_has_locked_fields() -> None:

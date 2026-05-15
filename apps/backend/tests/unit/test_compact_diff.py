@@ -12,6 +12,7 @@ from app.services.tailoring.preservation import (
     normalize_metric_units,
 )
 from app.services.tailoring.models import TailoringResumePayload
+from app.services.tailoring.section_format import section_jd_wrapper
 
 
 @pytest.fixture
@@ -569,6 +570,35 @@ class TestApplyCompactDiff:
         assert result["skills"]["groups"][0]["label"] == "Tools"
         assert result["skills"]["groups"][0]["values"] == ["Python", "SQL"]
         assert any("blocked low-signal" in warning.lower() for warning in warnings)
+
+    def test_finalize_reads_target_location_from_section_jd_wrapper(self, base_resume):
+        payload = TailoringResumePayload.from_resume_data(base_resume)
+        assert payload is not None
+        wrapper = section_jd_wrapper(
+            """
+=== JD METADATA ===
+ROLE: Backend Engineer
+COMPANY: Acme
+LOCATION: San Jose, CA
+
+=== JD INTEL ===
+HOOKS: build APIs
+"""
+        )
+
+        result, _warnings, location_source, location_value = finalize_tailored_resume(
+            payload=payload,
+            original_resume_data=base_resume,
+            original_resume_markdown="",
+            cleanup_source_data=None,
+            job_content="",
+            job_keywords=wrapper,
+            prompt_id="full",
+        )
+
+        assert result["personalInfo"]["location"] == "San Jose, CA"
+        assert location_source == "jd"
+        assert location_value == "San Jose, CA"
 
 
 class TestAllSkillValues:

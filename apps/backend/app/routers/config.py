@@ -74,7 +74,6 @@ from app.prompts.enrichment import (
 from app.prompts.extract_jd_intel import EXTRACT_JD_INTELLIGENCE_PROMPT, EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
 from app.prompts.parse_resume import PARSE_RESUME_PROMPT, PARSE_SYSTEM_PROMPT
 from app.prompts.tailoring_blocks import (
-    TAILORING_CONTRACT_BLOCK,
     TAILORING_CRAFT_BLOCK,
     TAILORING_MODE_STRATEGY,
     TAILORING_USER_SHELL_FULL,

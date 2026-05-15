@@ -11,6 +11,11 @@ from app.llm import complete
 from app.prompts import PROMPT_VERSIONS
 from app.prompts.cover_letter import build_messages as cover_letter_build_messages
 from app.schemas import normalize_resume_data
+from app.services.tailoring.section_format import (
+    extract_jd_intel_section,
+    is_section_jd_wrapper,
+    jd_metadata_from_blob,
+)
 
 _ROLE_AT_COMPANY_RE = re.compile(
     r"\bAs an?\s+(?P<role>.+?)\s+at\s+(?P<company>[^,\n\.]+)",
@@ -418,6 +423,17 @@ def extract_job_target_metadata(
 ) -> dict[str, str | None]:
     """Infer structured target-job metadata without a schema migration."""
 
+    section_metadata = jd_metadata_from_blob(job_keywords)
+    if any(section_metadata.values()):
+        role = _sanitize_metadata_value(section_metadata.get("role"), field="role")
+        company = _sanitize_metadata_value(section_metadata.get("company"), field="company")
+        location = _sanitize_metadata_value(section_metadata.get("location"), field="location")
+        return {
+            "role": _normalize_role_title(role, company=company, location=location),
+            "company": company,
+            "location": location,
+        }
+
     role_title = _sanitize_metadata_value(
         _get_keyword_metadata_value(job_keywords, "core_title", "role", "title"),
         field="role",
@@ -535,13 +551,15 @@ def _tailored_resume_evidence_json(resume_data: dict[str, Any]) -> str:
 
 
 def _jd_extract_slice_json(job_keywords: dict[str, Any] | None) -> str:
-    """Return a narrative-only slice of the JD extract for cover letter prompts.
+    """Return a narrative-only JD extract slice for cover letter prompts.
 
     Includes role, company, responsibility_themes, and calibration — the fields
     useful for writing company-specific narrative. Excludes ATS keyword lists
     (resume_technical_keywords, keyword_must_match, etc.) which are resume-tailoring fields.
     Falls back to empty dict when job_keywords is unavailable.
     """
+    if is_section_jd_wrapper(job_keywords):
+        return str(job_keywords.get("intel") or extract_jd_intel_section(str(job_keywords.get("raw") or "")))
     if not isinstance(job_keywords, dict) or not job_keywords:
         return "{}"
     sliced = {k: v for k, v in job_keywords.items() if k in _JD_EXTRACT_NARRATIVE_KEYS}
@@ -651,10 +669,29 @@ def _parse_combined_message_heading_fallback(content: str) -> tuple[str, str]:
     )
 
 
+def _parse_combined_message_section_fallback(content: str) -> tuple[str, str]:
+    cover_match = re.search(
+        r"(?is)===\s*COVER\s+LETTER\s*===\s*(.*?)\s*(?====\s*OUTREACH\s+MESSAGE\s*===|\Z)",
+        content,
+    )
+    outreach_match = re.search(
+        r"(?is)===\s*OUTREACH\s+MESSAGE\s*===\s*(.*)$",
+        content,
+    )
+    return (
+        cover_match.group(1).strip() if cover_match else "",
+        outreach_match.group(1).strip() if outreach_match else "",
+    )
+
+
 def parse_combined_message_response(content: str) -> tuple[str, str]:
     """Parse the merged auxiliary response without relying on strict JSON."""
 
     normalized = _strip_fenced_wrapper(content)
+    cover_letter, outreach_message = _parse_combined_message_section_fallback(normalized)
+    if cover_letter and outreach_message:
+        return cover_letter, outreach_message
+
     cover_letter = _extract_tagged_block(
         normalized,
         start_tag=_COMBINED_COVER_START,

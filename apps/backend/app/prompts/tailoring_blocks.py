@@ -30,7 +30,7 @@ TAILORING_MODE_STRATEGY = {
 TAILORING_USER_SHELL_FULL = read_shipped_txt("tailor_resume_full/user.txt")
 TAILORING_USER_SHELL_LITE = read_shipped_txt("tailor_resume_lite/user.txt")
 
-# System prompt is craft + mode; resume diff JSON rules ship in the user message as $resume_diff_rules.
+# System prompt is craft + mode; primary tailoring output shape ships as $output_template.
 TAILORING_SYSTEM_PROMPT = "\n\n".join([TAILORING_CRAFT_BLOCK, TAILORING_MODE_STRATEGY["full"]])
 
 TAILORING_MODE_CONSTRAINTS = {k: v for k, v in TAILORING_MODE_STRATEGY.items()}

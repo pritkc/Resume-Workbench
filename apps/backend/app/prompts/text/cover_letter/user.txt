@@ -2,18 +2,16 @@ Generate both outputs in one pass:
 1) a cover letter
 2) a short outreach message
 
-Return plain text only using this exact wrapper:
-<<COVER_LETTER>>
+Return plain text only using these exact section headers:
+=== COVER LETTER ===
 [cover letter body]
-<<END_COVER_LETTER>>
-<<OUTREACH_MESSAGE>>
+=== OUTREACH MESSAGE ===
 [outreach message body]
-<<END_OUTREACH_MESSAGE>>
 
 JOB TARGET (JSON):
 $job_target
 
-JD INTELLIGENCE (JSON — role, company, responsibility themes, level expectations):
+JD INTELLIGENCE:
 $jd_extract_slice
 
 RESUME (JSON — full career evidence):

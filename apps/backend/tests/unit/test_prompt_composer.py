@@ -18,7 +18,9 @@ def test_extract_jd_intel_user_substitutes_job_description() -> None:
     out = Template(JD_USER).substitute(job_description=jd)
     assert jd in out
     assert "$job_description" not in out
-    assert "{" in out and '"role"' in out
+    assert "=== JD METADATA ===" in out
+    assert "ROLE:" in out
+    assert "=== JD INTEL ===" in out
 
 
 def test_render_user_template_rejects_unknown_placeholder() -> None:

@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.schemas import ApplicationQuestionAnswer, TailoringStageBreakdown
 from app.services.additional_groups import normalize_additional_groups
+from app.services.tailoring.section_format import section_jd_wrapper
 
 
 @pytest.fixture
@@ -66,6 +67,7 @@ def _fake_tailoring_result(
         cleanup_changes=[],
         stage_breakdown=TailoringStageBreakdown(),
         bold_keywords=bold_keywords or [],
+        skills_observability=None,
     )
 
 
@@ -297,12 +299,24 @@ async def test_preview_uses_primary_full_generation(
 async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict, client):
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Round-tripped tailored summary"
+    improved["personalInfo"]["location"] = "San Jose, CA"
     improved.pop("sectionMeta", None)
     improved.pop("customSections", None)
 
     job_record = {
         "job_id": "job-123",
         "content": "Senior Backend Engineer",
+        "job_keywords": section_jd_wrapper(
+            """
+=== JD METADATA ===
+ROLE: Senior Backend Engineer
+COMPANY: TechCorp
+LOCATION: San Jose, CA
+
+=== JD INTEL ===
+HOOKS: build APIs
+"""
+        ),
         "preview_hashes": {},
     }
     application_pack = {
@@ -318,7 +332,7 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         patch("app.routers.resumes.db") as mock_db,
         patch(
             "app.routers.resumes.extract_job_keywords",
-            new=AsyncMock(return_value={"keywords": ["FastAPI"]}),
+            new=AsyncMock(return_value=job_record["job_keywords"]),
         ),
         patch(
             "app.routers.resumes.generate_tailored_resume",

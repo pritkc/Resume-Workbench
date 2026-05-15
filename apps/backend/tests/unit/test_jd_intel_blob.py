@@ -72,7 +72,9 @@ def test_render_user_template_parses_extract_kwarg_as_blob() -> None:
 def test_extract_jd_intel_user_template_still_has_schema_marker() -> None:
     from app.prompts.extract_jd_intel import USER_TEMPLATE
 
-    assert '"role"' in USER_TEMPLATE
+    assert "=== JD METADATA ===" in USER_TEMPLATE
+    assert "ROLE:" in USER_TEMPLATE
+    assert "=== JD INTEL ===" in USER_TEMPLATE
     assert "$job_description" in USER_TEMPLATE
 
 

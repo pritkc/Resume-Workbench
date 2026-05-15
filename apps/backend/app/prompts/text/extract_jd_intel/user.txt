@@ -1,67 +1,29 @@
-Return this exact object shape. Defaults show missing values; populate only from the JD.
+Return the job description analysis in this exact format. No JSON, no markdown, no extra keys.
 
-{
-  "role": {
-    "title": "",
-    "role_domain": "other",
-    "scope": ""
-  },
-  "company": {
-    "name": "",
-    "company_context": "",
-    "team_context": "",
-    "domain_context": "",
-    "product_context": "",
-    "scale_signals": []
-  },
-  "location": "",
-  "requirements": {
-    "years_min": null,
-    "years_max": null,
-    "education": null,
-    "must_have": [],
-    "preferred": []
-  },
-  "technical_requirements": {
-    "required_needs": [],
-    "nice_to_have_needs": [],
-    "other_needs": [],
-    "programming_languages": [],
-    "frameworks": [],
-    "infrastructure": [],
-    "paradigms": []
-  },
-  "responsibility_themes": [],
-  "resume_technical_keywords": [],
-  "keyword_must_match": [],
-  "transferable_themes": [],
-  "low_signal_terms": [],
-  "resume_bold_keyword_sources": [],
-  "resume_domain_keywords": [],
-  "calibration": {
-    "level_expectations": ""
-  }
-}
+=== JD METADATA ===
+ROLE: [normalized title only - remove employer, location, employment type]
+COMPANY: [company name exactly as stated, or blank if not stated]
+LOCATION: [City, ST for US cities only; blank for remote-only or unstated]
+
+=== JD INTEL ===
+HOOKS: [exactly 6 short neutral competency hooks, comma-separated; coverage checklist, not prose to reuse]
+MUST-MATCH: [exact-match terms worth including when credible - tools, systems, languages, platforms]
+KEYWORDS: [high-signal ATS technical terms; no responsibility phrases or basic tools]
+THEMES: [responsibility ideas to translate naturally without mirroring JD wording; not mandatory mirror phrases]
+AVOID: [generic responsibility phrases, weak umbrella terms, and tools too basic to signal]
+BOLD-CANDS: [6-10 short source terms for bold_keywords; tools, languages, platforms, data methods only]
+DOMAIN: [industry/product/domain context; use JD evidence only]
+LEVEL: [one sentence on ownership footprint and decision scope]
 
 Rules:
-- Exact JSON only. No extra keys. Use JD evidence only; do not infer unstated company facts, technology, level, or domain.
-- Missing values: null for unknown scalars, [] for arrays, and "" for location. Dedupe lists. Preserve exact JD spelling/abbreviations for technical terms. Keep guidance general to tech roles; avoid narrow scenario assumptions.
-- For long JDs, scan all sections but prioritize role title, responsibilities, required/preferred qualifications, stack, product/domain, scope, level, and hard constraints. Ignore benefits, EEO/legal boilerplate, recruiter process, generic culture copy, and repeated filler unless it changes resume targeting.
-- role.title: normalized title only; remove employer, location, employment type, and fluff.
-- role.role_domain: one of backend | frontend | full-stack | ml-ai | data-engineering | data-science | devops | platform | mobile | security | other.
-- role.scope: concise ownership focus stated or strongly signaled by the JD.
-- company.*: stated company/team/domain/product context only. scale_signals: max 5 concrete, quantitative or scope-defined signals (e.g. "500M+ daily events", "multi-region deployment"); emit [] when the JD provides no such data — qualitative environment labels ("fast-paced", "regulated", "global") belong in company_context, not scale_signals.
-- location: `City, ST` only when a US city is stated; remote/hybrid without a city stays "".
-- requirements: years as integers; ranges fill min/max, single minimum fills years_min only. Put education/certifications in education, nontechnical hard requirements in must_have, and nontechnical preferences in preferred.
-- technical_requirements: required_needs = hard technical must-haves; nice_to_have_needs = preferred technical needs; other_needs = remaining technical/workflow demands. Split languages, frameworks, infrastructure, and paradigms into their own lists; include databases, cloud services, testing, security, observability, and data tools in the closest matching technical bucket.
-- responsibility_themes: exactly 6 short verb + object competency hooks, deduped from the JD and covering distinct major duties. Do not copy full responsibility lines; downstream prompts use these only as a coverage checklist.
-- resume_technical_keywords: high-signal ATS technical terms only; no responsibility phrases or basic office/collaboration tools.
-- keyword_must_match: exact systems, products, languages, platforms, frameworks, data methods, or technical domains worth matching when credible.
-- transferable_themes: responsibility ideas to translate naturally without mirroring JD wording.
-- low_signal_terms: generic responsibility phrases, broad soft skills, weak umbrella terms, generic business/domain labels, and basic tools that should not be added to summary, skills, tech stacks, or bold keywords.
-- resume_bold_keyword_sources: 6-10 short source terms for final bold_keywords; use 1-3 word non-basic tools, languages, platforms, products, data methods, or technical domains. Exclude responsibility phrases, soft skills, full sentences, generic business terms, and table-stakes tools. It it supposed to be an elite SWE resume, so no basic bolierplate tools.
-- resume_domain_keywords: industry, product, regulatory, customer, or business-context terms. These are tailoring context, not mandatory mirror phrases.
-- calibration.level_expectations: one sentence on ownership footprint and decision-making scope. Do not guess title ladder beyond the JD.
+- Use JD evidence only. Do not infer unstated company facts, technology, level, or domain.
+- All values are comma-separated on one line except LEVEL, which is one prose sentence.
+- HOOKS: distinct major duties, deduped, 6 items, not full responsibility sentences.
+- MUST-MATCH: exact systems/products/languages worth matching when the resume supports them.
+- AVOID: include generic soft skills, broad umbrella terms, and tools too basic to signal seniority.
+- BOLD-CANDS: 1-3 word non-basic technical terms only; exclude responsibility phrases and soft skills.
+- LEVEL: do not guess title ladder beyond what the JD states.
+- If a value is empty, write the label with a blank value on its own line.
 
 Job description:
 $job_description

@@ -14,6 +14,7 @@ from app.services.application_questions import (
     normalize_generated_answers,
 )
 from app.services.message_profiles import CandidatePromptProfile
+from app.services.tailoring.section_format import section_jd_wrapper
 
 
 def test_dedupe_question_inputs_preserves_first_question_id() -> None:
@@ -172,3 +173,41 @@ async def test_generate_application_question_answers_calls_single_json_completio
     kwargs = mock_complete_json.await_args.kwargs
     assert kwargs["operation"] == "application_questions_generate"
     assert "question_count" in kwargs["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_generate_application_question_answers_uses_section_jd_keywords(
+    sample_resume: dict,
+    sample_job_description: str,
+) -> None:
+    mock_complete_json = AsyncMock(return_value={"answers": []})
+    wrapper = section_jd_wrapper(
+        """
+=== JD METADATA ===
+ROLE: Platform Engineer
+COMPANY: Acme
+LOCATION:
+
+=== JD INTEL ===
+HOOKS: build APIs, scale systems
+MUST-MATCH: Python, Kubernetes
+"""
+    )
+
+    with patch(
+        "app.services.application_questions.complete_json",
+        new=mock_complete_json,
+    ):
+        await generate_application_question_answers(
+            resume_data=sample_resume,
+            job_description=sample_job_description,
+            questions=[
+                ApplicationQuestionInput(question_id="q_0", question="Why this role?"),
+            ],
+            job_keywords=wrapper,
+        )
+
+    prompt = mock_complete_json.await_args.kwargs["prompt"]
+    assert "Platform Engineer" in prompt
+    assert "Python" in prompt
+    assert "Kubernetes" in prompt

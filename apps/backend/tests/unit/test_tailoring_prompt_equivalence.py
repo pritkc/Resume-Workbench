@@ -2,7 +2,6 @@
 
 from app.prompts import get_prompt
 from app.prompts._prompt_loader import render_user_template
-from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
 from app.prompts.tailoring_blocks import TAILORING_USER_SHELL_FULL, TAILORING_USER_SHELL_LITE
 from app.services.tailoring.prompting import (
     assemble_tailoring_system_prompt,
@@ -38,7 +37,8 @@ def test_full_user_message_matches_module() -> None:
         custom_prompt_instructions="",
         original_resume="{}",
         response_contract="{}",
-        resume_diff_rules=RESUME_DIFF_RULES.strip(),
+        jd_intel="{}",
+        output_template="{}",
     )
     mod = get_prompt("tailor_resume_full")
     _, new = mod.build_messages(
@@ -56,7 +56,8 @@ def test_lite_user_message_matches_module() -> None:
         custom_prompt_instructions="",
         original_resume="{}",
         response_contract="{}",
-        resume_diff_rules=RESUME_DIFF_RULES.strip(),
+        jd_intel="{}",
+        output_template="{}",
     )
     mod = get_prompt("tailor_resume_lite")
     _, new = mod.build_messages(

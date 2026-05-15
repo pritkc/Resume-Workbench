@@ -96,6 +96,7 @@ from app.services.cover_letter import (
     generate_cover_letter_and_outreach,
     sanitize_job_location,
 )
+from app.services.tailoring.section_format import jd_metadata_from_blob
 from app.services.resume_codes import (
     build_resume_pdf_filename,
     derive_resume_code,
@@ -2056,6 +2057,8 @@ async def improve_resume_confirm_endpoint(
             )
             if isinstance(job_keywords_for_validation, dict):
                 location = job_keywords_for_validation.get("location")
+                if not isinstance(location, str):
+                    location = jd_metadata_from_blob(job_keywords_for_validation).get("location")
                 if isinstance(location, str) and location.strip():
                     allowed_mismatches.add("location")
             _validate_confirm_payload(

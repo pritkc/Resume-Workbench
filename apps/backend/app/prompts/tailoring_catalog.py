@@ -97,8 +97,8 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
     runtime_children = [
         PromptCatalogSection(
             id="tailoring_rt_job_intel",
-            label="$extract_jd_intel_output (+ .path)",
-            content="Cached JD JSON blob; optional dot paths (e.g. .requirements.years_min) inject fragments.",
+            label="{jd_intel}",
+            content="Section-header JD INTEL text, or compact legacy JSON text for older cached rows.",
             policy="runtime_injected",
         ),
         PromptCatalogSection(
@@ -109,14 +109,14 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         ),
         PromptCatalogSection(
             id="tailoring_rt_contract",
-            label="{response_contract}",
-            content="JSON contract describing allowed response shape for this resume (parallel arrays align by entry index).",
+            label="{output_template}",
+            content="Section-header output template generated from the current resume contract.",
             policy="runtime_injected",
         ),
         PromptCatalogSection(
             id="tailoring_rt_resume_diff_rules",
             label="{resume_diff_rules}",
-            content="Shared compact JSON output schema (resume_diff rules file; same text as prompt catalog shared rules).",
+            content="Legacy compact JSON schema still used by critique/rewrite fallback prompts.",
             policy="runtime_injected",
         ),
     ]
@@ -125,7 +125,7 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         PromptCatalogSection(
             id="tailoring_craft_block",
             label="Craft block (role, voice, ATS, tailoring approach)",
-            note="PRIMARY RUN RULES, ROLE & GOAL, PROCESS — full tailor only. Universal editorial + JSON diff bible: output_file_schema_rules/resume_diff_output.txt ($resume_diff_rules).",
+            note="PRIMARY RUN RULES, ROLE & GOAL, PROCESS — full tailor only. Primary tailoring now fills a section-header output template.",
             policy="user_editable_future",
             children=craft_children,
         ),
@@ -138,8 +138,8 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         ),
         PromptCatalogSection(
             id="tailoring_contract_block",
-            label="Resume diff output (strict JSON schema)",
-            note="Injected at runtime as $resume_diff_rules (user message). Shipped: output_file_schema_rules/resume_diff_output.txt — JSON shape + universal editorial; PRIMARY RUN RULES in system override when stated.",
+            label="Resume output template",
+            note="Injected at runtime as $output_template. The model returns section-header text, which the backend parses into the compact diff.",
             policy="user_editable_future",
             children=contract_children,
         ),

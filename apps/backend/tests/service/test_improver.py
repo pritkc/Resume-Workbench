@@ -149,15 +149,14 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "RESPONSE CONTRACT" in prompt
-        assert '"mode":"full"' in prompt
-        assert '"output_keys"' in prompt
-        assert '"bullet_counts"' in prompt
-        assert '"entries"' in prompt
+        assert "OUTPUT TEMPLATE" in prompt
+        assert "=== SUMMARY ===" in prompt
+        assert "=== EXPERIENCE 0 ===" in prompt
+        assert "B0:" in prompt
         assert "tech_stacks" in prompt
-        assert "EXTRACTED JD INTELLIGENCE:" in prompt
-        assert "bold_keywords" in prompt
-        assert "OUTPUT FORMAT:" in prompt
+        assert "JD INTELLIGENCE:" in prompt
+        assert "BOLD KEYWORDS" in prompt
+        assert "OUTPUT RULES:" in prompt
         assert "MIT" in prompt
         # FastAPI appears in the MASTER RESUME skills section
         assert "FastAPI" in prompt
@@ -185,8 +184,7 @@ class TestImproveResume:
         )
 
         assert mock_llm.call_args.kwargs["retries"] == 1
-        # Retry hints are reserved for future structured recovery; primary run passes None today.
-        assert mock_llm.call_args.kwargs.get("retry_hint") is None
+        assert "section-header text" in mock_llm.call_args.kwargs.get("retry_hint", "")
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -241,7 +239,7 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "EXTRACTED JD INTELLIGENCE:" in prompt
+        assert "JD INTELLIGENCE:" in prompt
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)

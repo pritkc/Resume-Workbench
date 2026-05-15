@@ -728,6 +728,63 @@ class TailoringResponseContract(BaseModel):
 
         return out
 
+    def to_section_template(self) -> str:
+        """Return the section-header template filled by the LLM."""
+
+        lines: list[str] = [
+            "=== SUMMARY ===",
+            "[FINAL SUMMARY - 1 sentence, 105-135 chars]",
+            "WHY: [max 12 words]",
+            "",
+        ]
+
+        for i, label in enumerate(self.experience_entries):
+            position = self.experience_positions[i] if i < len(self.experience_positions) else ""
+            stack = self.experience_tech_stacks[i] if i < len(self.experience_tech_stacks) else ""
+            count = self.experience_bullet_counts[i] if i < len(self.experience_bullet_counts) else 0
+            budget = self.direct_jd_bullet_budget[i] if i < len(self.direct_jd_bullet_budget) else 1
+            story_min = self.preserve_story_min[i] if i < len(self.preserve_story_min) else 1
+            header_parts = " | ".join(part for part in (label, position, stack) if part)
+            lines.append(f"=== EXPERIENCE {i} === ({header_parts})")
+            lines.append("POSITION: [[RETAIN] or new title qualifier only]")
+            lines.append("STACK: [[RETAIN] or new comma-separated stack]")
+            for b_idx in range(count):
+                lines.append(f"B{b_idx}: [[RETAIN] or rewrite]")
+                lines.append(f"B{b_idx}-WHY: [max 12 words]")
+            lines.append(
+                f"Budget: max {budget} of {count} bullets may be JD-direct; keep at least {story_min} original stories."
+            )
+            lines.append("")
+
+        for i, label in enumerate(self.project_entries):
+            stack = self.project_tech_stacks[i] if i < len(self.project_tech_stacks) else ""
+            count = self.project_bullet_counts[i] if i < len(self.project_bullet_counts) else 0
+            header_parts = " | ".join(part for part in (label, stack) if part)
+            lines.append(f"=== PROJECT {i} === ({header_parts})")
+            lines.append("NAME: [[RETAIN] or minor clarification only]")
+            lines.append("STACK: [[RETAIN] or new comma-separated stack]")
+            for b_idx in range(count):
+                lines.append(f"B{b_idx}: [[RETAIN] or rewrite]")
+                lines.append(f"B{b_idx}-WHY: [max 12 words]")
+            lines.append("")
+
+        if self.skill_group_value_counts:
+            lines.append("=== SKILLS ===")
+            for i, count in enumerate(self.skill_group_value_counts):
+                lines.append(
+                    f"G{i}: [[RETAIN] or new label] | [{count} comma-separated values; use [RETAIN] per unchanged chip]"
+                )
+                lines.append(f"G{i}-WHY: [max 12 words covering all {count} chips]")
+            lines.append("")
+
+        lines.extend(
+            [
+                "=== BOLD KEYWORDS ===",
+                "[6-10 comma-separated ATS terms - tools, languages, platforms, methods only]",
+            ]
+        )
+        return "\n".join(lines)
+
 
 class TailoringResult(BaseModel):
     """Final output of the primary tailoring service."""

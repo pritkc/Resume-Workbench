@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 from pydantic import ValidationError
 
-from app.config import get_enable_critique, get_step_llm_config, settings
-from app.llm import complete_json, get_llm_trace_id
-from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, PROMPT_VERSIONS
+from app.config import get_enable_critique, settings
+from app.llm import get_llm_trace_id
+from app.prompts import DEFAULT_IMPROVE_PROMPT_ID
 from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
 
 from app.services.tailoring.change_manifest import (
@@ -35,8 +34,6 @@ from app.services.tailoring.preservation import (
 )
 from app.services.tailoring.skills_observability import build_skills_observability_v1
 from app.services.tailoring.validation import DiffValidationResult, validate_compact_diff
-from app.prompts.critique_resume import build_messages as build_critique_messages
-from app.prompts.rewrite_resume import build_messages as build_rewrite_messages
 from app.services.tailoring.llm_calls import run_primary_tailoring
 from app.services.tailoring.prompting import build_prompt_context
 from app.services.tailoring.jd_intel_blob import filter_basic_resume_terms
@@ -45,14 +42,9 @@ logger = logging.getLogger(__name__)
 
 # Attached to persisted LLM trace rows (request_context.compact_diff_validation) for UX/debug.
 _ORIGIN_COMPACT_VALIDATE_PRIMARY = (
-    "orchestration.generate_tailored_resume — after run_primary_tailoring / complete_json "
+    "orchestration.generate_tailored_resume — after run_primary_tailoring / complete text "
     "(operation resume_generate_full); validate_compact_diff at orchestration.py ~175–187"
 )
-_ORIGIN_COMPACT_VALIDATE_REWRITE = (
-    "orchestration.generate_tailored_resume — after rewrite complete_json "
-    "(operation rewrite_resume); validate_compact_diff at orchestration.py ~232–243"
-)
-
 
 def _trace_attach_compact_validation(
     *,
@@ -170,11 +162,13 @@ async def generate_tailored_resume(
         custom_prompt_instructions=custom_prompt_instructions,
     )
     adaptive_max_tokens = compute_adaptive_max_tokens(response_contract, resolved_prompt_id)
-    result = await run_primary_tailoring(
+    primary_result = await run_primary_tailoring(
         prompt_context,
+        response_contract=response_contract,
         job_description=job_description,
         max_tokens=adaptive_max_tokens,
     )
+    result = primary_result.compact_diff
 
     # Validate compact diff before applying (log only, don't hard-fail for P1)
     llm_response_v2_pre = TailoringLLMResponseV2.model_validate(result)
@@ -192,61 +186,9 @@ async def generate_tailored_resume(
 
     critique_analysis: dict[str, object] | None = None
     if resolved_prompt_id == "full" and get_enable_critique():
-        primary_tailor_json = json.dumps(result, separators=(",", ":"), ensure_ascii=True)
-
-        c_sys, c_user = build_critique_messages(
-            tailor_resume_full_output=primary_tailor_json,
-            jd_intel_blob=prompt_context.jd_intel_blob,
-            original_resume=prompt_context.original_resume_json,
-        )
-        critique_raw = await complete_json(
-            prompt=c_user,
-            system_prompt=c_sys,
-            config=get_step_llm_config("critique_resume"),
-            max_tokens=4096,
-            timeout_seconds=90,
-            retries=1,
-            operation="critique_resume",
-            metadata={
-                "prompt_version": PROMPT_VERSIONS.get("critique_resume", "unknown"),
-            },
-        )
-        critique_analysis = critique_raw if isinstance(critique_raw, dict) else None
-
-        critique_s = json.dumps(critique_raw, separators=(",", ":"), ensure_ascii=True)
-        r_sys, r_user = build_rewrite_messages(
-            original_resume=prompt_context.original_resume_json,
-            tailor_resume_full_output=primary_tailor_json,
-            critique_resume_output=critique_s,
-            jd_intel_blob=prompt_context.jd_intel_blob,
-            response_contract=prompt_context.response_contract_json,
-        )
-        result = await complete_json(
-            prompt=r_user,
-            system_prompt=r_sys,
-            config=get_step_llm_config("rewrite_resume"),
-            max_tokens=adaptive_max_tokens,
-            timeout_seconds=170,
-            retries=1,
-            operation="rewrite_resume",
-            metadata={
-                "prompt_version": PROMPT_VERSIONS.get("rewrite_resume", "unknown"),
-                "prompt_id": prompt_context.prompt_id,
-                "adaptive_max_tokens": adaptive_max_tokens,
-            },
-            retry_hint=prompt_context.retry_hint,
-        )
-        llm_response_v2_post = TailoringLLMResponseV2.model_validate(result)
-        vr_post = validate_compact_diff(
-            llm_response_v2_post.model_dump(exclude_none=False),
-            response_contract,
-        )
-        _log_compact_validation("Critique rewrite", vr_post)
-        _trace_attach_compact_validation(
-            operation="rewrite_resume",
-            phase_display="critique_rewrite",
-            validation_result=vr_post,
-            origin_note=_ORIGIN_COMPACT_VALIDATE_REWRITE,
+        logger.info(
+            "Skipping critique/rewrite for section-header primary tailoring v1; "
+            "rewrite prompts still expect compact JSON."
         )
 
     _check_for_truncation(result)
@@ -304,6 +246,9 @@ async def generate_tailored_resume(
         job_keywords=job_keywords,
         prompt_id=prompt_context.prompt_id,
     )
+    warnings.extend(primary_result.parse_warnings)
+    if primary_result.parse_errors:
+        warnings.extend(primary_result.parse_errors)
     computed_llm_changes = build_change_manifest(original_resume_data, raw_llm_resume_data)
     applied_changes = build_change_manifest(original_resume_data, resume_data)
     if has_compact_content and not legacy_full_body_response:

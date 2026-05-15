@@ -244,7 +244,7 @@ Open to a quick intro call this week?
         kwargs = mock_complete.call_args.kwargs
         prompt = kwargs["prompt"]
         assert "JOB TARGET (JSON):" in prompt
-        assert "JD INTELLIGENCE (JSON" in prompt
+        assert "JD INTELLIGENCE:" in prompt
         assert "RESUME (JSON" in prompt
         assert "personalInfo" in prompt or "summary" in prompt
         assert kwargs["operation"] == "cover_letter_outreach_generate"
@@ -292,3 +292,17 @@ Open to a quick intro call this week?
 
         assert cover_letter == "Thanks for your time."
         assert outreach == "Worth a quick chat?"
+
+    def test_combined_parser_prefers_section_header_format(self):
+        cover_letter, outreach = parse_combined_message_response(
+            """
+=== COVER LETTER ===
+Thanks for considering my application.
+
+=== OUTREACH MESSAGE ===
+Open to a quick intro call this week?
+""".strip()
+        )
+
+        assert cover_letter == "Thanks for considering my application."
+        assert outreach == "Open to a quick intro call this week?"
