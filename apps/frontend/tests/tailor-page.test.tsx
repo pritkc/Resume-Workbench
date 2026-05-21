@@ -6,7 +6,10 @@ const push = vi.fn();
 const back = vi.fn();
 const setImprovedData = vi.fn();
 const uploadJobDescriptions = vi.fn();
-const previewImproveResume = vi.fn();
+const startLivePreview = vi.fn();
+const subscribeLivePreviewEvents = vi.fn();
+const fetchLivePreviewResult = vi.fn();
+const cancelLivePreview = vi.fn();
 const confirmImproveResume = vi.fn();
 const fetchPromptConfig = vi.fn();
 const fetchGenerationDefaults = vi.fn();
@@ -37,7 +40,10 @@ vi.mock('@/lib/api/resume', async (importOriginal) => {
   return {
     ...actual,
     uploadJobDescriptions: (...args: unknown[]) => uploadJobDescriptions(...args),
-    previewImproveResume: (...args: unknown[]) => previewImproveResume(...args),
+    startLivePreview: (...args: unknown[]) => startLivePreview(...args),
+    subscribeLivePreviewEvents: (...args: unknown[]) => subscribeLivePreviewEvents(...args),
+    fetchLivePreviewResult: (...args: unknown[]) => fetchLivePreviewResult(...args),
+    cancelLivePreview: (...args: unknown[]) => cancelLivePreview(...args),
     confirmImproveResume: (...args: unknown[]) => confirmImproveResume(...args),
     fetchResumeList: (...args: unknown[]) => fetchResumeList(...args),
     getActiveResume: (...args: unknown[]) => getActiveResume(...args),
@@ -158,7 +164,10 @@ describe('TailorPage', () => {
     back.mockReset();
     setImprovedData.mockReset();
     uploadJobDescriptions.mockReset();
-    previewImproveResume.mockReset();
+    startLivePreview.mockReset();
+    subscribeLivePreviewEvents.mockReset();
+    fetchLivePreviewResult.mockReset();
+    cancelLivePreview.mockReset();
     confirmImproveResume.mockReset();
     fetchPromptConfig.mockReset();
     fetchGenerationDefaults.mockReset();
@@ -202,7 +211,29 @@ describe('TailorPage', () => {
       title: 'Test',
     });
     uploadJobDescriptions.mockResolvedValue('job-123');
-    previewImproveResume.mockResolvedValue(previewResult);
+    startLivePreview.mockResolvedValue({
+      live_run_id: 'live-123',
+      generation_run_id: 'run-123',
+      trace_id: 'trace-123',
+      status: 'running',
+    });
+    fetchLivePreviewResult.mockResolvedValue(previewResult);
+    subscribeLivePreviewEvents.mockImplementation((_liveRunId, handlers) => {
+      queueMicrotask(() => {
+        handlers.onEvent?.({
+          event_id: 'event-1',
+          sequence: 1,
+          live_run_id: 'live-123',
+          generation_run_id: 'run-123',
+          trace_id: 'trace-123',
+          type: 'run.completed',
+          at: new Date().toISOString(),
+          data: { status: 'completed' },
+        });
+      });
+      return { close: vi.fn() };
+    });
+    cancelLivePreview.mockResolvedValue(undefined);
     confirmImproveResume.mockResolvedValue(confirmedResult);
     fetchPromptConfig.mockResolvedValue({
       prompt_options: [{ id: 'full' }],
@@ -240,18 +271,20 @@ describe('TailorPage', () => {
     await waitFor(() =>
       expect(screen.getByDisplayValue('Test (Active)')).toHaveValue('master-123')
     );
-    const generateButton = screen.getByRole('button', { name: 'tailor.generateTailored' });
-    await waitFor(() => expect(generateButton).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'tailor.generateTailored' })).toBeEnabled()
+    );
 
-    fireEvent.click(generateButton);
+    fireEvent.click(screen.getByRole('button', { name: 'tailor.generateTailored' }));
 
-    await waitFor(() => expect(previewImproveResume).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(startLivePreview).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchLivePreviewResult).toHaveBeenCalledWith('live-123'));
     expect(await screen.findByText('tailor.diffModal.title')).toBeInTheDocument();
     expect(screen.getByText('Preview Snapshot')).toBeInTheDocument();
     expect(updateGenerationDefaults).toHaveBeenCalledWith({
       prompt_id: 'full',
     });
-    expect(previewImproveResume).toHaveBeenCalledWith(
+    expect(startLivePreview).toHaveBeenCalledWith(
       'master-123',
       'job-123',
       expect.objectContaining({

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import logging
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from pydantic import ValidationError
 
@@ -39,6 +40,8 @@ from app.services.tailoring.prompting import build_prompt_context
 from app.services.tailoring.jd_intel_blob import filter_basic_resume_terms
 
 logger = logging.getLogger(__name__)
+
+LiveEventSink = Callable[[str, dict[str, Any]], Awaitable[None]]
 
 # Attached to persisted LLM trace rows (request_context.compact_diff_validation) for UX/debug.
 _ORIGIN_COMPACT_VALIDATE_PRIMARY = (
@@ -139,43 +142,59 @@ async def generate_tailored_resume(
     original_resume_data: dict[str, Any] | None = None,
     cleanup_source_data: dict[str, Any] | None = None,
     custom_prompt_instructions: str | None = None,
+    event_sink: LiveEventSink | None = None,
+    live_metadata: dict[str, Any] | None = None,
+    timing_recorder: Any | None = None,
 ) -> TailoringResult:
     """Run the primary tailoring prompt and return the full locally restored resume."""
+
+    def track(host_event: str, sub_event: str):
+        if timing_recorder is None:
+            return nullcontext()
+        return timing_recorder.track(host_event, sub_event)
 
     resolved_prompt_id = (
         prompt_id if prompt_id in TAILORING_MODE_STRATEGY else DEFAULT_IMPROVE_PROMPT_ID
     )
-    prompt_resume_data = TailoringResumePayload.from_resume_data(original_resume_data)
+    with track("tailoring_internal", "resume_payload_projection"):
+        prompt_resume_data = TailoringResumePayload.from_resume_data(original_resume_data)
     jd_blob = job_keywords if isinstance(job_keywords, dict) else {}
 
-    response_contract = build_response_contract(
-        prompt_resume_data,
-        prompt_id=resolved_prompt_id,
-    )
-    prompt_context = build_prompt_context(
-        prompt_id=resolved_prompt_id,
-        jd_intel_blob=jd_blob,
-        response_contract=response_contract,
-        resume_payload=prompt_resume_data,
-        original_resume_markdown=original_resume,
-        original_resume_data=original_resume_data,
-        custom_prompt_instructions=custom_prompt_instructions,
-    )
-    adaptive_max_tokens = compute_adaptive_max_tokens(response_contract, resolved_prompt_id)
-    primary_result = await run_primary_tailoring(
-        prompt_context,
-        response_contract=response_contract,
-        job_description=job_description,
-        max_tokens=adaptive_max_tokens,
-    )
+    with track("tailoring_internal", "response_contract_build"):
+        response_contract = build_response_contract(
+            prompt_resume_data,
+            prompt_id=resolved_prompt_id,
+        )
+    with track("tailoring_internal", "prompt_context_assembly"):
+        prompt_context = build_prompt_context(
+            prompt_id=resolved_prompt_id,
+            jd_intel_blob=jd_blob,
+            response_contract=response_contract,
+            resume_payload=prompt_resume_data,
+            original_resume_markdown=original_resume,
+            original_resume_data=original_resume_data,
+            custom_prompt_instructions=custom_prompt_instructions,
+        )
+    with track("tailoring_internal", "adaptive_token_budget"):
+        adaptive_max_tokens = compute_adaptive_max_tokens(response_contract, resolved_prompt_id)
+    with track("tailoring_internal", "primary_resume_llm_call"):
+        primary_result = await run_primary_tailoring(
+            prompt_context,
+            response_contract=response_contract,
+            job_description=job_description,
+            max_tokens=adaptive_max_tokens,
+            event_sink=event_sink,
+            live_metadata=live_metadata,
+        )
     result = primary_result.compact_diff
 
     # Validate compact diff before applying (log only, don't hard-fail for P1)
-    llm_response_v2_pre = TailoringLLMResponseV2.model_validate(result)
-    validation_result = validate_compact_diff(
-        llm_response_v2_pre.model_dump(exclude_none=False),
-        response_contract,
-    )
+    with track("tailoring_internal", "compact_diff_validation"):
+        llm_response_v2_pre = TailoringLLMResponseV2.model_validate(result)
+        validation_result = validate_compact_diff(
+            llm_response_v2_pre.model_dump(exclude_none=False),
+            response_contract,
+        )
     _log_compact_validation("Primary tailor", validation_result)
     _trace_attach_compact_validation(
         operation="resume_generate_full",
@@ -194,63 +213,68 @@ async def generate_tailored_resume(
     _check_for_truncation(result)
 
     # Try compact v2 format first; fall back to legacy full-body format
-    llm_response_v2 = TailoringLLMResponseV2.model_validate(result)
-    legacy_full_body_response = _looks_like_legacy_full_body_response(result)
-    has_compact_content = bool(
-        llm_response_v2.experience
-        or llm_response_v2.projects
-        or llm_response_v2.skills is not None
-        or llm_response_v2.bold_keywords
-        or (llm_response_v2.summary and not legacy_full_body_response)
-    )
+    with track("tailoring_internal", "compact_diff_normalization"):
+        llm_response_v2 = TailoringLLMResponseV2.model_validate(result)
+        legacy_full_body_response = _looks_like_legacy_full_body_response(result)
+        has_compact_content = bool(
+            llm_response_v2.experience
+            or llm_response_v2.projects
+            or llm_response_v2.skills is not None
+            or llm_response_v2.bold_keywords
+            or (llm_response_v2.summary and not legacy_full_body_response)
+        )
 
     declared_changes: list = []
-    if has_compact_content and not legacy_full_body_response and original_resume_data is not None:
-        raw_llm_resume_data = apply_compact_diff(
-            original_resume_data,
-            llm_response_v2.model_dump(exclude_none=False),
-        )
-    else:
-        if not has_compact_content:
-            logger.warning("LLM returned no compact content — falling back to legacy full-body parse")
-        try:
-            llm_response = TailoringLLMResponse.model_validate(result)
-            tailored_payload = TailoringResumePayload.model_validate(
-                llm_response.model_dump(exclude={"changes"})
+    with track("tailoring_internal", "apply_compact_diff"):
+        if has_compact_content and not legacy_full_body_response and original_resume_data is not None:
+            raw_llm_resume_data = apply_compact_diff(
+                original_resume_data,
+                llm_response_v2.model_dump(exclude_none=False),
             )
-            declared_changes = llm_response.changes
-        except ValidationError:
-            logger.warning(
-                "Legacy full-body parse failed strict schema validation; "
-                "falling back to tolerant payload extraction."
+        else:
+            if not has_compact_content:
+                logger.warning("LLM returned no compact content — falling back to legacy full-body parse")
+            try:
+                llm_response = TailoringLLMResponse.model_validate(result)
+                tailored_payload = TailoringResumePayload.model_validate(
+                    llm_response.model_dump(exclude={"changes"})
+                )
+                declared_changes = llm_response.changes
+            except ValidationError:
+                logger.warning(
+                    "Legacy full-body parse failed strict schema validation; "
+                    "falling back to tolerant payload extraction."
+                )
+                tailored_payload = TailoringResumePayload.from_resume_data(result)
+                if tailored_payload is None:
+                    tailored_payload = TailoringResumePayload()
+            raw_llm_resume_data = rehydrate_tailoring_resume(
+                tailored_payload,
+                original_resume_data=original_resume_data,
             )
-            tailored_payload = TailoringResumePayload.from_resume_data(result)
-            if tailored_payload is None:
-                tailored_payload = TailoringResumePayload()
-        raw_llm_resume_data = rehydrate_tailoring_resume(
-            tailored_payload,
-            original_resume_data=original_resume_data,
-        )
 
     # Build a TailoringResumePayload from the reconstructed dict for finalize
-    tailored_payload = TailoringResumePayload.from_resume_data(raw_llm_resume_data)
-    if tailored_payload is None:
-        tailored_payload = TailoringResumePayload()
+    with track("tailoring_internal", "tailored_payload_rehydrate"):
+        tailored_payload = TailoringResumePayload.from_resume_data(raw_llm_resume_data)
+        if tailored_payload is None:
+            tailored_payload = TailoringResumePayload()
 
-    resume_data, warnings, location_source, location_value = finalize_tailored_resume(
-        payload=tailored_payload,
-        original_resume_data=original_resume_data,
-        original_resume_markdown=original_resume,
-        cleanup_source_data=cleanup_source_data,
-        job_content=job_description,
-        job_keywords=job_keywords,
-        prompt_id=prompt_context.prompt_id,
-    )
+    with track("tailoring_internal", "resume_finalization_cleanup"):
+        resume_data, warnings, location_source, location_value = finalize_tailored_resume(
+            payload=tailored_payload,
+            original_resume_data=original_resume_data,
+            original_resume_markdown=original_resume,
+            cleanup_source_data=cleanup_source_data,
+            job_content=job_description,
+            job_keywords=job_keywords,
+            prompt_id=prompt_context.prompt_id,
+        )
     warnings.extend(primary_result.parse_warnings)
     if primary_result.parse_errors:
         warnings.extend(primary_result.parse_errors)
-    computed_llm_changes = build_change_manifest(original_resume_data, raw_llm_resume_data)
-    applied_changes = build_change_manifest(original_resume_data, resume_data)
+    with track("tailoring_internal", "change_manifest_build"):
+        computed_llm_changes = build_change_manifest(original_resume_data, raw_llm_resume_data)
+        applied_changes = build_change_manifest(original_resume_data, resume_data)
     if has_compact_content and not legacy_full_body_response:
         applied_changes = enrich_change_manifest_with_tailored_cells(
             applied_changes,

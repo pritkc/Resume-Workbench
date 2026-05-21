@@ -328,3 +328,54 @@ def test_compact_diff_validation_merges_into_latest_matching_llm_trace_row(tmp_p
             if ctx.get("note") == "older" and "compact_diff_validation" not in ctx
         ]
         assert len(without_envelope) == 1
+
+
+def test_llm_calls_filter_and_merge_by_resume_code(tmp_path: Path) -> None:
+    with create_test_database(tmp_path) as database:
+        first_id = f"a-{uuid4().hex}"
+        second_id = f"b-{uuid4().hex}"
+        database.create_llm_call(
+            llm_call_id=first_id,
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-preview",
+            request_scope="resumes.improve_preview",
+            operation="resume_generate_full",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="text",
+            success=True,
+            json_mode=False,
+            prompt_chars=10,
+            request_context={"source_resume_code": "SRC123"},
+        )
+        database.create_llm_call(
+            llm_call_id=second_id,
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-aux",
+            request_scope="resumes.generate_auxiliary_package",
+            operation="cover_letter_outreach_generate",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="text",
+            success=True,
+            json_mode=False,
+            prompt_chars=11,
+            request_context={"resume_code": "TAIL99"},
+        )
+
+        assert database.merge_llm_call_context_for_trace(
+            "trace-preview",
+            {"resume_code": "TAIL99", "tailored_resume_code": "TAIL99"},
+        ) == 1
+
+        rows = database.list_llm_calls(resume_code="TAIL99", limit=10)
+        assert {row["llm_call_id"] for row in rows} == {first_id, second_id}
+
+        summary = database.summarize_llm_calls(resume_code="TAIL99")
+        assert summary["total_calls"] == 2
+        assert {op["operation"] for op in summary["operations"]} == {
+            "resume_generate_full",
+            "cover_letter_outreach_generate",
+        }

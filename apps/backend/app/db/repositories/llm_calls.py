@@ -10,6 +10,46 @@ from sqlalchemy.orm import Session
 
 from app.db.models import LLMCall
 
+_RESUME_ID_CONTEXT_KEYS = (
+    "resume_id",
+    "source_resume_id",
+    "original_resume_id",
+    "tailored_resume_id",
+)
+_RESUME_CODE_CONTEXT_KEYS = (
+    "resume_code",
+    "source_resume_code",
+    "original_resume_code",
+    "tailored_resume_code",
+)
+
+
+def _normalized_context_value(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _context_matches(
+    record: LLMCall,
+    *,
+    resume_id: str | None = None,
+    resume_code: str | None = None,
+) -> bool:
+    context = record.request_context if isinstance(record.request_context, dict) else {}
+    if resume_id:
+        wanted_id = resume_id.strip()
+        if not any(_normalized_context_value(context.get(key)) == wanted_id for key in _RESUME_ID_CONTEXT_KEYS):
+            return False
+    if resume_code:
+        wanted_code = resume_code.strip().upper()
+        if not any(
+            (_normalized_context_value(context.get(key)) or "").upper() == wanted_code
+            for key in _RESUME_CODE_CONTEXT_KEYS
+        ):
+            return False
+    return True
+
 
 def create_llm_call(session: Session, **values: Any) -> LLMCall:
     record = LLMCall(**values)
@@ -27,6 +67,8 @@ def list_llm_calls(
     request_scope: str | None = None,
     operation: str | None = None,
     success: bool | None = None,
+    resume_id: str | None = None,
+    resume_code: str | None = None,
     limit: int = 100,
 ) -> list[LLMCall]:
     statement = select(LLMCall)
@@ -42,8 +84,17 @@ def list_llm_calls(
     if success is not None:
         statement = statement.where(LLMCall.success == success)
 
-    statement = statement.order_by(desc(LLMCall.created_at)).limit(limit)
-    return list(session.scalars(statement))
+    context_filtered = bool(resume_id or resume_code)
+    fetch_limit = max(limit * 20, 1000) if context_filtered else limit
+    statement = statement.order_by(desc(LLMCall.created_at)).limit(fetch_limit)
+    records = list(session.scalars(statement))
+    if context_filtered:
+        records = [
+            record
+            for record in records
+            if _context_matches(record, resume_id=resume_id, resume_code=resume_code)
+        ][:limit]
+    return records
 
 
 def attach_compact_diff_validation_to_latest_call(
@@ -82,6 +133,8 @@ def summarize_llm_calls(
     *,
     trace_id: str | None = None,
     request_scope: str | None = None,
+    resume_id: str | None = None,
+    resume_code: str | None = None,
 ) -> dict[str, Any]:
     statement = select(LLMCall)
 
@@ -91,6 +144,12 @@ def summarize_llm_calls(
         statement = statement.where(LLMCall.request_scope == request_scope)
 
     records = list(session.scalars(statement))
+    if resume_id or resume_code:
+        records = [
+            record
+            for record in records
+            if _context_matches(record, resume_id=resume_id, resume_code=resume_code)
+        ]
 
     operation_breakdown: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
@@ -202,3 +261,29 @@ def summarize_llm_calls(
         key=lambda item: (item["operation"], item["calls"]),
     )
     return summary
+
+
+def merge_context_for_trace(
+    session: Session,
+    *,
+    trace_id: str,
+    context_updates: dict[str, Any],
+) -> int:
+    """Merge identifying metadata into every LLM call for a trace."""
+
+    if not trace_id or not context_updates:
+        return 0
+    records = list(session.scalars(select(LLMCall).where(LLMCall.trace_id == trace_id)))
+    for record in records:
+        context = dict(record.request_context or {})
+        context.update(
+            {
+                key: value
+                for key, value in context_updates.items()
+                if value is not None and value != ""
+            }
+        )
+        record.request_context = context or None
+    if records:
+        session.commit()
+    return len(records)

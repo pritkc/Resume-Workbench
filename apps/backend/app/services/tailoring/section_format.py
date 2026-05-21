@@ -46,6 +46,47 @@ def _parse_header(line: str) -> tuple[str, int | None] | None:
     return section, index
 
 
+def extract_streamed_resume_sections(raw: str) -> list[dict[str, Any]]:
+    """Return displayable resume sections visible in partial section-header text."""
+
+    sections: list[dict[str, Any]] = []
+    current: tuple[str, int | None] | None = None
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        if current is None:
+            return
+        section, index = current
+        if section not in {"SUMMARY", "EXPERIENCE", "PROJECT", "SKILLS", "BOLD_KEYWORDS"}:
+            return
+        content = "\n".join(current_lines).strip()
+        if not content:
+            return
+        section_id = section.lower()
+        if index is not None:
+            section_id = f"{section_id}_{index}"
+        sections.append(
+            {
+                "section_id": section_id,
+                "section": section,
+                "index": index,
+                "content": content,
+            }
+        )
+
+    for line in raw.splitlines():
+        header = _parse_header(line)
+        if header:
+            flush()
+            current = header
+            current_lines = []
+            continue
+        if current is not None:
+            current_lines.append(line)
+    flush()
+    return sections
+
+
 def _normalize_label(raw: str) -> str:
     upper = re.sub(r"\s+", " ", raw.strip().upper().replace("_", " "))
     m = re.match(r"^(?:BULLET|B)\s*(\d+)$", upper)

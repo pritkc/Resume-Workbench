@@ -10,6 +10,7 @@ import { RawYamlEditor } from './raw-yaml-editor';
 import { CvMetadataPanel } from './cv-metadata-panel';
 import { CoverLetterPreview } from './cover-letter-preview';
 import { UtilitiesWorkspace } from './utilities-workspace';
+import { GenerationObservabilityPanel } from './generation-observability-panel';
 import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,7 +98,13 @@ import {
   parseCvMetadataYaml,
 } from '@/lib/cv-metadata';
 
-type TabId = 'resume' | 'utilities' | 'jd-match' | 'jd-tailor-diff' | 'additional-questions';
+type TabId =
+  | 'resume'
+  | 'utilities'
+  | 'jd-match'
+  | 'jd-tailor-diff'
+  | 'additional-questions'
+  | 'generation-trace';
 type EditorSection = 'cv' | 'design' | 'locale' | 'settings' | 'metadata';
 type EditorMode = 'visual' | 'raw';
 type PaneMode = 'editor' | 'split' | 'preview';
@@ -734,6 +741,8 @@ const ResumeBuilderContent = () => {
   /** Job + pack context for application question answers (tailored resumes). */
   const [jobId, setJobId] = useState<string | null>(null);
   const [applicationPackId, setApplicationPackId] = useState<string | null>(null);
+  const [generationRunId, setGenerationRunId] = useState<string | null>(null);
+  const [llmTraceId, setLlmTraceId] = useState<string | null>(null);
   const [jdTailorDiffPayload, setJdTailorDiffPayload] = useState<JdTailorDiffData | null>(null);
   const [jdTailorDiffLoading, setJdTailorDiffLoading] = useState(false);
   const [jdTailorDiffError, setJdTailorDiffError] = useState<string | null>(null);
@@ -906,6 +915,8 @@ const ResumeBuilderContent = () => {
           // Track if this is a tailored resume (has parent_id)
           setIsTailoredResume(Boolean(data.parent_id));
           setApplicationPackId(data.application_pack_id ?? null);
+          setGenerationRunId(data.generation_run_id ?? null);
+          setLlmTraceId(data.llm_trace_id ?? null);
           // Store resume title for downloads
           setResumeTitle(data.title ?? null);
           setResumeCode(data.resume_code ?? null);
@@ -975,6 +986,8 @@ const ResumeBuilderContent = () => {
         if (improvedData?.data) {
           setApplicationPackId(improvedData.data.application_pack_id ?? null);
           setJobId(improvedData.data.job_id ?? null);
+          setGenerationRunId(improvedData.data.generation_run_id ?? null);
+          setLlmTraceId(improvedData.data.request_id ?? null);
         }
         const nextResumeData = normalizeResumeSkills(improvedPreview);
         setResumeData(nextResumeData);
@@ -1089,7 +1102,7 @@ const ResumeBuilderContent = () => {
     setJdTailorDiffLoading(true);
     setJdTailorDiffError(null);
 
-    void fetchJdTailorDiff(resumeId)
+    void fetchJdTailorDiff(resumeId, { generationRunId })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -1106,7 +1119,9 @@ const ResumeBuilderContent = () => {
           return;
         }
         setJdTailorDiffPayload(null);
-        setJdTailorDiffError(err instanceof Error ? err.message : t('builder.jdTailorDiff.loadError'));
+        setJdTailorDiffError(
+          err instanceof Error ? err.message : t('builder.jdTailorDiff.loadError')
+        );
       })
       .finally(() => {
         if (!cancelled) {
@@ -1117,10 +1132,10 @@ const ResumeBuilderContent = () => {
     return () => {
       cancelled = true;
     };
-  }, [isTailoredResume, resumeId, t]);
+  }, [generationRunId, isTailoredResume, resumeId, t]);
 
   useEffect(() => {
-    if (!isTailoredResume && activeTab === 'jd-tailor-diff') {
+    if (!isTailoredResume && (activeTab === 'jd-tailor-diff' || activeTab === 'generation-trace')) {
       setActiveTab('resume');
     }
   }, [activeTab, isTailoredResume]);
@@ -1613,10 +1628,7 @@ const ResumeBuilderContent = () => {
       setIsDownloading(true);
       const blob = await downloadCoverLetterPdf(
         resumeId,
-        physicalPageSizeForCoverLetter(
-          themeSettings.page_size,
-          themeSettings.design?.page?.size
-        ),
+        physicalPageSizeForCoverLetter(themeSettings.page_size, themeSettings.design?.page?.size),
         uiLanguage
       );
       const filename = sanitizeFilename(resumeTitle, resumeId, 'cover-letter');
@@ -1626,10 +1638,7 @@ const ResumeBuilderContent = () => {
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         const fallbackUrl = getCoverLetterPdfUrl(
           resumeId,
-          physicalPageSizeForCoverLetter(
-            themeSettings.page_size,
-            themeSettings.design?.page?.size
-          ),
+          physicalPageSizeForCoverLetter(themeSettings.page_size, themeSettings.design?.page?.size),
           uiLanguage
         );
         const didOpen = openUrlInNewTab(fallbackUrl);
@@ -1690,20 +1699,27 @@ const ResumeBuilderContent = () => {
   };
 
   const mobilePaneMode: Exclude<PaneMode, 'split'> = paneMode === 'preview' ? 'preview' : 'editor';
-  const showEditorPane = isDesktop ? paneMode !== 'preview' : mobilePaneMode === 'editor';
-  const showPreviewPane = isDesktop ? paneMode !== 'editor' : mobilePaneMode === 'preview';
+  const showEditorPane =
+    activeTab === 'generation-trace' ||
+    (isDesktop ? paneMode !== 'preview' : mobilePaneMode === 'editor');
+  const showPreviewPane =
+    activeTab !== 'generation-trace' &&
+    (isDesktop ? paneMode !== 'editor' : mobilePaneMode === 'preview');
   const showAdditionalQuestionsInEditor =
     activeTab === 'additional-questions' &&
     (isDesktop ? paneMode !== 'preview' : mobilePaneMode === 'editor');
   const showAdditionalQuestionsInPreview =
     activeTab === 'additional-questions' &&
     (isDesktop ? paneMode === 'preview' : mobilePaneMode === 'preview');
+  const showGenerationTraceFullPage = activeTab === 'generation-trace';
   const editorPaneWidth =
-    isDesktop && paneMode === 'split'
-      ? `${paneRatio}%`
-      : isDesktop && paneMode === 'editor'
-        ? '100%'
-        : undefined;
+    isDesktop && showGenerationTraceFullPage
+      ? '100%'
+      : isDesktop && paneMode === 'split'
+        ? `${paneRatio}%`
+        : isDesktop && paneMode === 'editor'
+          ? '100%'
+          : undefined;
   const previewPaneWidth =
     isDesktop && paneMode === 'split'
       ? `${100 - paneRatio}%`
@@ -1763,6 +1779,11 @@ const ResumeBuilderContent = () => {
         id: 'jd-tailor-diff',
         label: t('builder.previewTabs.jdTailorDiff'),
         shortLabel: t('builder.previewTabs.jdTailorDiffShort'),
+      });
+      tabs.push({
+        id: 'generation-trace',
+        label: 'Generation Trace',
+        shortLabel: 'Trace',
       });
     }
     return tabs;
@@ -2079,7 +2100,7 @@ const ResumeBuilderContent = () => {
                 <div
                   className={cn(
                     'flex w-full max-w-none flex-col gap-1.5 pt-0.5 md:pt-1',
-                    activeTab === 'jd-tailor-diff'
+                    activeTab === 'jd-tailor-diff' || activeTab === 'generation-trace'
                       ? 'min-h-0 flex-1 overflow-hidden'
                       : 'min-h-0 flex-1 overflow-y-auto'
                   )}
@@ -2300,7 +2321,8 @@ const ResumeBuilderContent = () => {
                           <p className="shrink-0 px-3 pb-2 font-mono text-[10px] uppercase tracking-wide text-gray-600">
                             {jdTailorDiffPayload.diff_source === 'stored_detailed_changes'
                               ? t('builder.jdTailorDiff.sourceStoredDetailed')
-                              : jdTailorDiffPayload.diff_source === 'recomputed_confirmation_snapshot'
+                              : jdTailorDiffPayload.diff_source ===
+                                  'recomputed_confirmation_snapshot'
                                 ? t('builder.jdTailorDiff.sourceRecomputedConfirmation')
                                 : t('builder.jdTailorDiff.sourceLiveVsMaster')}
                           </p>
@@ -2320,6 +2342,15 @@ const ResumeBuilderContent = () => {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {activeTab === 'generation-trace' && (
+                    <GenerationObservabilityPanel
+                      traceId={llmTraceId}
+                      generationRunId={generationRunId}
+                      resumeId={resumeId}
+                      resumeCode={resumeCode}
+                    />
                   )}
                 </div>
               </div>

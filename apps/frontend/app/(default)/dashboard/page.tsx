@@ -219,7 +219,11 @@ function ResumeRowActions({
             </button>
             {resume.llm_trace_id ? (
               <Link
-                href={`/llm-traces?trace_id=${encodeURIComponent(resume.llm_trace_id)}`}
+                href={
+                  resume.resume_code
+                    ? `/llm-traces?resume_code=${encodeURIComponent(resume.resume_code)}`
+                    : `/llm-traces?trace_id=${encodeURIComponent(resume.llm_trace_id)}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1]"

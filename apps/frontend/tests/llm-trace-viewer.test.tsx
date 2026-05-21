@@ -147,18 +147,20 @@ describe('LLMTraceViewer', () => {
   });
 
   it('loads a trace and renders summary plus timeline cards', async () => {
-    renderWithLanguage(
-      <LLMTraceViewer initialTraceId="trace-123" defaultAutoRefresh={false} />
-    );
+    renderWithLanguage(<LLMTraceViewer initialTraceId="trace-123" defaultAutoRefresh={false} />);
 
     await waitFor(() =>
       expect(fetchLlmCallSummary).toHaveBeenCalledWith({
         traceId: 'trace-123',
+        resumeCode: undefined,
+        resumeId: undefined,
         requestScope: undefined,
       })
     );
     expect(fetchLlmCalls).toHaveBeenCalledWith({
       traceId: 'trace-123',
+      resumeCode: undefined,
+      resumeId: undefined,
       requestScope: undefined,
       success: undefined,
       limit: 100,
@@ -178,9 +180,7 @@ describe('LLMTraceViewer', () => {
 
     fireEvent.click(screen.getAllByText(/Prompt & response previews/)[0]);
 
-    await waitFor(() =>
-      expect(screen.getAllByText('Resume JSON...').length).toBeGreaterThan(0)
-    );
+    await waitFor(() => expect(screen.getAllByText('Resume JSON...').length).toBeGreaterThan(0));
   });
 
   it('applies request scope filters from the form', async () => {
@@ -198,14 +198,40 @@ describe('LLMTraceViewer', () => {
     await waitFor(() =>
       expect(fetchLlmCallSummary).toHaveBeenLastCalledWith({
         traceId: undefined,
+        resumeCode: undefined,
+        resumeId: undefined,
         requestScope: 'resumes.improve_confirm',
       })
     );
     expect(fetchLlmCalls).toHaveBeenLastCalledWith({
       traceId: undefined,
+      resumeCode: undefined,
+      resumeId: undefined,
       requestScope: 'resumes.improve_confirm',
       success: true,
       limit: 25,
     });
+  });
+
+  it('applies resume code filters from the form', async () => {
+    renderWithLanguage(<LLMTraceViewer initialResumeCode="ABC123" defaultAutoRefresh={false} />);
+
+    await waitFor(() =>
+      expect(fetchLlmCallSummary).toHaveBeenCalledWith({
+        traceId: undefined,
+        resumeCode: 'ABC123',
+        resumeId: undefined,
+        requestScope: undefined,
+      })
+    );
+    expect(fetchLlmCalls).toHaveBeenCalledWith({
+      traceId: undefined,
+      resumeCode: 'ABC123',
+      resumeId: undefined,
+      requestScope: undefined,
+      success: undefined,
+      limit: 100,
+    });
+    expect(screen.getByText('All calls linked to this resume')).toBeInTheDocument();
   });
 });

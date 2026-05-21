@@ -6,6 +6,7 @@ from app.services.tailoring.llm_calls import run_primary_tailoring
 from app.services.tailoring.models import TailoringResponseContract
 from app.services.tailoring.prompting import TailoringPromptContext
 from app.services.tailoring.section_format import (
+    extract_streamed_resume_sections,
     extract_jd_intel_section,
     jd_keywords_from_section_blob,
     parse_jd_metadata,
@@ -189,6 +190,27 @@ LEVEL: Senior IC ownership.
     }
     assert extract_jd_intel_section(raw).startswith("HOOKS:")
     assert jd_keywords_from_section_blob(wrapper) == ["build APIs", "scale pipelines", "Python", "Kafka"]
+
+
+def test_extract_streamed_resume_sections_returns_partial_display_sections() -> None:
+    raw = """=== SUMMARY ===
+Tailored summary.
+=== EXPERIENCE 0 ===
+POSITION: Senior Engineer
+B0: Built APIs
+=== SKILLS ===
+G0: Python, FastAPI
+"""
+
+    sections = extract_streamed_resume_sections(raw)
+
+    assert [section["section_id"] for section in sections] == [
+        "summary",
+        "experience_0",
+        "skills",
+    ]
+    assert sections[1]["index"] == 0
+    assert "Built APIs" in sections[1]["content"]
 
 
 @pytest.mark.asyncio

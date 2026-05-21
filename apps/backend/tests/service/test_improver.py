@@ -85,6 +85,34 @@ class TestExtractJobKeywords:
         assert result["role"]["title"] == "Agile Business Analyst"
         assert result["company"]["name"] == "West Shore Home"
 
+    @patch("app.services.tailoring.analysis.complete_stream", new_callable=AsyncMock)
+    async def test_streams_jd_intel_when_live_sink_is_available(self, mock_llm):
+        mock_llm.return_value = (
+            "=== JD METADATA ===\n"
+            "Role: Backend Engineer\n"
+            "Company: ExampleCo\n"
+            "Location: Remote\n\n"
+            "=== JD INTEL ===\n"
+            "- Needs FastAPI and metrics experience."
+        )
+        events: list[tuple[str, dict]] = []
+
+        async def event_sink(event_type: str, data: dict) -> None:
+            events.append((event_type, data))
+
+        result = await extract_job_keywords(
+            "Backend Engineer at ExampleCo. Needs FastAPI and metrics.",
+            event_sink=event_sink,
+            live_metadata={"live_run_id": "live-1"},
+        )
+
+        assert result["format"] == "section_header_v1"
+        assert result["metadata"]["role"] == "Backend Engineer"
+        assert "FastAPI" in result["intel"]
+        assert mock_llm.call_args.kwargs["event_sink"] is event_sink
+        assert mock_llm.call_args.kwargs["include_delta_text"] is True
+        assert mock_llm.call_args.kwargs["stream_kind"] == "jd_intel"
+
 
 class TestImproveResume:
     """Tests for the single primary full-resume tailoring prompt."""

@@ -4,13 +4,14 @@ import asyncio
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
+import hashlib
 import json
 import logging
 import math
 import re
 import threading
 import time
-from typing import Any
+from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 import litellm
@@ -19,6 +20,9 @@ from litellm.router import RetryPolicy
 from pydantic import BaseModel
 
 from app.config import settings
+
+LiveEventSink = Callable[[str, dict[str, Any]], Awaitable[None]]
+StreamDeltaSink = Callable[[str, str], Awaitable[None]]
 
 LITELLM_LOGGER_NAMES = ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy")
 
@@ -219,6 +223,29 @@ def _extract_choice_text(choice: Any) -> str | None:
                 return extracted
 
     return None
+
+
+def _extract_stream_delta_text(chunk: Any) -> str:
+    choices = _safe_get(chunk, "choices")
+    if not choices:
+        return ""
+    choice = choices[0]
+    delta = _safe_get(choice, "delta")
+    if delta is None:
+        return ""
+    content = _safe_get(delta, "content")
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    return _join_text_parts(_extract_text_parts(content))
+
+
+def _extract_stream_finish_reason(chunk: Any) -> str | None:
+    choices = _safe_get(chunk, "choices")
+    if not choices:
+        return None
+    return _extract_finish_reason(choices[0])
 
 
 @contextmanager
@@ -1354,6 +1381,352 @@ async def complete(
             ) from e
 
     raise ValueError(f"LLM completion failed after {retries + 1} attempts")
+
+
+async def complete_stream(
+    prompt: str,
+    system_prompt: str | None = None,
+    config: LLMConfig | None = None,
+    max_tokens: int = 4096,
+    temperature: float = 0.7,
+    retries: int = 1,
+    operation: str = "text_completion",
+    metadata: dict[str, Any] | None = None,
+    retry_hint: str | None = None,
+    retry_max_tokens: int | None = None,
+    timeout_seconds: int | None = None,
+    event_sink: LiveEventSink | None = None,
+    on_delta: StreamDeltaSink | None = None,
+    include_delta_text: bool = False,
+    stream_kind: str | None = None,
+    delta_flush_chars: int = 120,
+    delta_flush_ms: int = 60,
+) -> str:
+    """Make a streamed completion request and return the final collected text."""
+
+    async def emit(event_type: str, data: dict[str, Any]) -> None:
+        if event_sink is not None:
+            await event_sink(event_type, data)
+
+    async def flush_text_delta(
+        *,
+        buffer: list[str],
+        last_flush_at: list[float],
+        force: bool = False,
+        total_chars: int,
+        attempt: int,
+    ) -> None:
+        if not include_delta_text or not buffer:
+            return
+        text_delta = "".join(buffer)
+        elapsed_ms = max(0, int((time.perf_counter() - last_flush_at[0]) * 1000))
+        if not force and len(text_delta) < max(1, delta_flush_chars) and elapsed_ms < delta_flush_ms:
+            return
+        buffer.clear()
+        last_flush_at[0] = time.perf_counter()
+        await emit(
+            "llm.delta",
+            {
+                "operation": operation,
+                "attempt": attempt + 1,
+                "delta_chars": len(text_delta),
+                "total_chars": total_chars,
+                "text_delta": text_delta,
+                "stream_kind": stream_kind,
+            },
+        )
+
+    router, config = get_router(config)
+    model_name = get_model_name(config)
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    base_user_prompt = prompt
+    messages.append({"role": "user", "content": base_user_prompt})
+    prompt_text = _serialize_messages(messages)
+    prompt_hash = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+    system_prompt_hash = (
+        hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()
+        if isinstance(system_prompt, str)
+        else None
+    )
+    call_group_id = str(uuid4())
+    generic_retry_hint = (
+        retry_hint
+        or "Return one complete plain-text response within the requested length. "
+        "End naturally and do not stop mid-sentence."
+    )
+    current_max_tokens = max_tokens
+
+    for attempt in range(retries + 1):
+        applied_temperature: float | None = None
+        reasoning_effort: str | None = None
+        started_at = time.perf_counter()
+        first_token_ms: int | None = None
+        content_parts: list[str] = []
+        delta_event_parts: list[str] = []
+        last_delta_flush_at = [time.perf_counter()]
+        content: str | None = None
+        finish_reason: str | None = None
+        last_chunk: Any = None
+
+        try:
+            kwargs: dict[str, Any] = {
+                "model": "primary",
+                "messages": messages,
+                "max_tokens": current_max_tokens,
+                "timeout": timeout_seconds if timeout_seconds is not None else _calculate_timeout(
+                    "completion",
+                    current_max_tokens,
+                    config.provider,
+                ),
+                "stream": True,
+            }
+            if _supports_temperature(config.provider, model_name):
+                applied_temperature = _get_retry_temperature(attempt, base_temp=temperature)
+                kwargs["temperature"] = applied_temperature
+            reasoning_effort = _get_reasoning_effort(config.provider, model_name)
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
+
+            event_metadata = {
+                **(metadata or {}),
+                "provider": config.provider,
+                "model": config.model,
+                "model_name": model_name,
+                "operation": operation,
+                "attempt": attempt + 1,
+                "max_tokens": current_max_tokens,
+                "reasoning_effort": reasoning_effort,
+                "prompt_chars": len(prompt_text),
+                "prompt_tokens_est": _estimate_tokens_from_text(prompt_text),
+                "prompt_hash": prompt_hash,
+                "system_prompt_hash": system_prompt_hash,
+            }
+            await emit("llm.started", event_metadata)
+
+            stream = await router.acompletion(**kwargs)
+            async for chunk in stream:
+                last_chunk = chunk
+                chunk_finish = _extract_stream_finish_reason(chunk)
+                if chunk_finish:
+                    finish_reason = chunk_finish
+                delta = _extract_stream_delta_text(chunk)
+                if not delta:
+                    continue
+                if first_token_ms is None:
+                    first_token_ms = max(0, int((time.perf_counter() - started_at) * 1000))
+                content_parts.append(delta)
+                content = "".join(content_parts)
+                if include_delta_text:
+                    delta_event_parts.append(delta)
+                    await flush_text_delta(
+                        buffer=delta_event_parts,
+                        last_flush_at=last_delta_flush_at,
+                        total_chars=len(content),
+                        attempt=attempt,
+                    )
+                else:
+                    await emit(
+                        "llm.delta",
+                        {
+                            "operation": operation,
+                            "attempt": attempt + 1,
+                            "delta_chars": len(delta),
+                            "total_chars": len(content),
+                        },
+                    )
+                if on_delta is not None:
+                    await on_delta(delta, content)
+
+            content = "".join(content_parts)
+            await flush_text_delta(
+                buffer=delta_event_parts,
+                last_flush_at=last_delta_flush_at,
+                force=True,
+                total_chars=len(content),
+                attempt=attempt,
+            )
+            if not content:
+                raise ValueError("Empty response from LLM")
+            if "<think>" in content:
+                content = _strip_thinking_tags(content)
+                if not content:
+                    raise ValueError("Response contained only thinking content, no output")
+            if _text_response_hit_length_limit(
+                finish_reason=finish_reason,
+                response=last_chunk,
+                max_tokens=current_max_tokens,
+            ):
+                raise ValueError("LLM response was truncated at max_tokens")
+
+            stream_context = {
+                **(metadata or {}),
+                "streaming_enabled": True,
+                "streaming_fallback_used": False,
+                "time_to_first_token_ms": first_token_ms,
+                "prompt_hash": prompt_hash,
+                "system_prompt_hash": system_prompt_hash,
+            }
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="text_stream",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=current_max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=False,
+                started_at=started_at,
+                success=True,
+                content=content,
+                response=last_chunk,
+                finish_reason=finish_reason,
+                extra_context=stream_context,
+            )
+            await emit(
+                "llm.completed",
+                {
+                    "operation": operation,
+                    "attempt": attempt + 1,
+                    "success": True,
+                    "latency_ms": max(0, int((time.perf_counter() - started_at) * 1000)),
+                    "time_to_first_token_ms": first_token_ms,
+                    "response_chars": len(content),
+                    "finish_reason": finish_reason,
+                    "streaming_fallback_used": False,
+                },
+            )
+            return content
+        except Exception as e:
+            message = str(e).casefold()
+            if attempt == 0 and any(
+                marker in message
+                for marker in ("stream", "streaming", "unsupported", "not support")
+            ):
+                await emit(
+                    "llm.completed",
+                    {
+                        "operation": operation,
+                        "attempt": attempt + 1,
+                        "success": False,
+                        "streaming_fallback_used": True,
+                        "error_type": type(e).__name__,
+                    },
+                )
+                fallback_started = time.perf_counter()
+                fallback_content = await complete(
+                    prompt=base_user_prompt,
+                    system_prompt=system_prompt,
+                    config=config,
+                    max_tokens=current_max_tokens,
+                    temperature=temperature,
+                    retries=retries,
+                    operation=operation,
+                    metadata={
+                        **(metadata or {}),
+                        "streaming_enabled": True,
+                        "streaming_fallback_used": True,
+                        "prompt_hash": prompt_hash,
+                        "system_prompt_hash": system_prompt_hash,
+                    },
+                    retry_hint=retry_hint,
+                    retry_max_tokens=retry_max_tokens,
+                    timeout_seconds=timeout_seconds,
+                )
+                if include_delta_text and fallback_content:
+                    await emit(
+                        "llm.delta",
+                        {
+                            "operation": operation,
+                            "attempt": attempt + 1,
+                            "delta_chars": len(fallback_content),
+                            "total_chars": len(fallback_content),
+                            "text_delta": fallback_content,
+                            "stream_kind": stream_kind,
+                            "streaming_fallback_used": True,
+                        },
+                    )
+                await emit(
+                    "llm.completed",
+                    {
+                        "operation": operation,
+                        "attempt": attempt + 1,
+                        "success": True,
+                        "latency_ms": max(0, int((time.perf_counter() - fallback_started) * 1000)),
+                        "response_chars": len(fallback_content),
+                        "streaming_fallback_used": True,
+                    },
+                )
+                return fallback_content
+
+            _record_llm_attempt(
+                call_group_id=call_group_id,
+                attempt=attempt + 1,
+                operation=operation,
+                request_kind="text_stream",
+                messages=messages,
+                config=config,
+                model_name=model_name,
+                max_tokens=current_max_tokens,
+                temperature=applied_temperature,
+                reasoning_effort=reasoning_effort,
+                json_mode=False,
+                started_at=started_at,
+                success=False,
+                content=content,
+                response=last_chunk,
+                finish_reason=finish_reason,
+                error=e,
+                extra_context={
+                    **(metadata or {}),
+                    "streaming_enabled": True,
+                    "streaming_fallback_used": False,
+                    "time_to_first_token_ms": first_token_ms,
+                    "prompt_hash": prompt_hash,
+                    "system_prompt_hash": system_prompt_hash,
+                },
+            )
+            await emit(
+                "llm.completed",
+                {
+                    "operation": operation,
+                    "attempt": attempt + 1,
+                    "success": False,
+                    "latency_ms": max(0, int((time.perf_counter() - started_at) * 1000)),
+                    "time_to_first_token_ms": first_token_ms,
+                    "error_type": type(e).__name__,
+                    "streaming_fallback_used": False,
+                },
+            )
+            if attempt < retries and _should_retry_text_completion(
+                error=e,
+                finish_reason=finish_reason,
+                response=last_chunk,
+                max_tokens=current_max_tokens,
+            ):
+                current_max_tokens = _get_text_retry_max_tokens(
+                    current_max_tokens,
+                    retry_max_tokens,
+                )
+                messages[-1]["content"] = (
+                    base_user_prompt
+                    + "\n\nIMPORTANT: "
+                    + generic_retry_hint
+                )
+                continue
+            if "truncated at max_tokens" in str(e).lower():
+                raise ValueError(
+                    f"LLM completion for {operation} was truncated after {attempt + 1} "
+                    "attempt(s). Reduce prompt size or tighten the output contract."
+                ) from e
+            raise
+
+    raise ValueError(f"LLM streamed completion failed after {retries + 1} attempts")
 
 
 def _supports_json_mode(model_name: str) -> bool:

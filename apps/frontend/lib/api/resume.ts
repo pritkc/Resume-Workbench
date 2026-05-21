@@ -188,6 +188,8 @@ interface ResumeResponse {
     parent_id?: string | null; // For determining if resume is tailored
     title?: string | null;
     application_pack_id?: string | null;
+    generation_run_id?: string | null;
+    llm_trace_id?: string | null;
     theme_settings?: RenderThemeSettings | null;
   };
 }
@@ -220,6 +222,50 @@ interface GenerateAuxiliaryPackageResponse {
   cover_letter: string;
   outreach_message: string;
   message: string;
+}
+
+export type LiveGenerationEventType =
+  | 'run.started'
+  | 'stage.started'
+  | 'stage.completed'
+  | 'llm.started'
+  | 'llm.delta'
+  | 'llm.completed'
+  | 'section.updated'
+  | 'timing.entry'
+  | 'artifact.started'
+  | 'artifact.completed'
+  | 'run.completed'
+  | 'run.failed'
+  | 'run.cancelled'
+  | 'heartbeat';
+
+export interface LiveGenerationEvent {
+  event_id: string;
+  sequence: number;
+  live_run_id: string;
+  generation_run_id: string;
+  trace_id: string;
+  type: LiveGenerationEventType;
+  at: string;
+  data: Record<string, unknown>;
+}
+
+export interface LivePreviewStartData {
+  live_run_id: string;
+  generation_run_id: string;
+  trace_id: string;
+  status: 'running';
+}
+
+export interface LivePreviewStartResponse {
+  request_id: string;
+  data: LivePreviewStartData;
+}
+
+export interface LivePreviewEventHandlers {
+  onEvent?: (event: LiveGenerationEvent) => void;
+  onError?: (error: Event) => void;
 }
 
 export interface ApplicationQuestionAnswer {
@@ -577,6 +623,105 @@ export async function previewImproveResume(
   );
 }
 
+export async function startLivePreview(
+  resumeId: string,
+  jobId: string,
+  options: {
+    promptId?: string;
+    customPromptInstructions?: string | null;
+    includeCoverLetter?: boolean;
+    includeOutreachMessage?: boolean;
+    themeSettings?: RenderThemeSettings | null;
+    signal?: AbortSignal;
+  } = {}
+): Promise<LivePreviewStartData> {
+  const response = await apiPost(
+    '/application-packs/preview/live',
+    {
+      resume_id: resumeId,
+      job_id: jobId,
+      prompt_id: options.promptId ?? null,
+      custom_prompt_instructions: options.customPromptInstructions?.trim() || null,
+      include_cover_letter: options.includeCoverLetter ?? null,
+      include_outreach_message: options.includeOutreachMessage ?? null,
+      theme_settings: options.themeSettings
+        ? serializeRenderThemeSettings(options.themeSettings)
+        : undefined,
+    },
+    30_000,
+    options.signal
+  );
+  const text = await response.text();
+  if (!response.ok) {
+    const { message, detail } = formatImproveErrorResponse(response.status, text);
+    throw new ImproveApiError(message, response.status, detail);
+  }
+  return (JSON.parse(text) as LivePreviewStartResponse).data;
+}
+
+export function subscribeLivePreviewEvents(
+  liveRunId: string,
+  handlers: LivePreviewEventHandlers = {}
+): EventSource {
+  const url = `${API_BASE}/application-packs/preview/live/${encodeURIComponent(liveRunId)}/events`;
+  const source = new EventSource(url);
+  const eventTypes: LiveGenerationEventType[] = [
+    'run.started',
+    'stage.started',
+    'stage.completed',
+    'llm.started',
+    'llm.delta',
+    'llm.completed',
+    'section.updated',
+    'timing.entry',
+    'artifact.started',
+    'artifact.completed',
+    'run.completed',
+    'run.failed',
+    'run.cancelled',
+    'heartbeat',
+  ];
+
+  const parse = (message: MessageEvent<string>) => {
+    try {
+      handlers.onEvent?.(JSON.parse(message.data) as LiveGenerationEvent);
+    } catch (error) {
+      console.error('Failed to parse live preview event:', error, message.data);
+    }
+  };
+
+  for (const eventType of eventTypes) {
+    source.addEventListener(eventType, parse as EventListener);
+  }
+  source.onerror = (event) => handlers.onError?.(event);
+  return source;
+}
+
+export async function fetchLivePreviewResult(liveRunId: string): Promise<ImprovedResult> {
+  const response = await apiFetch(
+    `/application-packs/preview/live/${encodeURIComponent(liveRunId)}/result`,
+    undefined,
+    30_000
+  );
+  const text = await response.text();
+  if (!response.ok) {
+    const { message, detail } = formatImproveErrorResponse(response.status, text);
+    throw new ImproveApiError(message, response.status, detail);
+  }
+  return JSON.parse(text) as ImprovedResult;
+}
+
+export async function cancelLivePreview(liveRunId: string): Promise<void> {
+  const response = await apiPost(
+    `/application-packs/preview/live/${encodeURIComponent(liveRunId)}/cancel`,
+    {},
+    30_000
+  );
+  if (!response.ok) {
+    throw new Error(`Cancel failed with status ${response.status}`);
+  }
+}
+
 /** Confirms and saves a tailored resume */
 export async function confirmImproveResume(
   payload: ImproveResumeConfirmRequest
@@ -877,8 +1022,16 @@ export interface JdTailorDiffResponse {
 }
 
 /** Line-level JD tailoring diff persisted at confirmation (reference view in builder). */
-export async function fetchJdTailorDiff(resumeId: string): Promise<JdTailorDiffResponse> {
-  const res = await apiFetch(`/resumes/${encodeURIComponent(resumeId)}/jd-tailor-diff`);
+export async function fetchJdTailorDiff(
+  resumeId: string,
+  options?: { generationRunId?: string | null }
+): Promise<JdTailorDiffResponse> {
+  const params = new URLSearchParams();
+  if (options?.generationRunId) {
+    params.set('generation_run_id', options.generationRunId);
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/resumes/${encodeURIComponent(resumeId)}/jd-tailor-diff${suffix}`);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Failed to fetch tailoring diff (status ${res.status}): ${text}`);

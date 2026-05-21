@@ -68,6 +68,40 @@ class TestGetResume:
         assert data["theme_settings"]["theme_id"] == "classic"
 
     @patch("app.routers.resumes.db")
+    async def test_fetch_tailored_resume_surfaces_preview_observability_ids(
+        self, mock_db, client, mock_resume_record
+    ):
+        mock_db.get_resume.return_value = {
+            **mock_resume_record,
+            "parent_id": "master-123",
+        }
+        mock_db.get_latest_generation_run.return_value = {
+            "generation_run_id": "confirm-run-123",
+            "request_payload": {
+                "preview_generation_run_id": "preview-run-123",
+                "llm_trace_id": "trace-confirm-123",
+            },
+        }
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "preview-run-123",
+            "request_payload": {"llm_trace_id": "trace-preview-123"},
+        }
+
+        async with client:
+            resp = await client.get("/api/v1/resumes", params={"resume_id": "res-123"})
+
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["generation_run_id"] == "preview-run-123"
+        assert data["llm_trace_id"] == "trace-preview-123"
+        mock_db.get_latest_generation_run.assert_called_once_with(
+            run_kind="application_pack_confirm",
+            status="completed",
+            tailored_resume_id="res-123",
+        )
+        mock_db.get_generation_run.assert_called_once_with("preview-run-123")
+
+    @patch("app.routers.resumes.db")
     async def test_fetch_existing_resume_surfaces_rendercv_alias_fields(
         self, mock_db, client, mock_resume_record
     ):
@@ -883,6 +917,50 @@ class TestListResumes:
         assert item["target_company"] == "Acme Corp"
         assert item["target_role"] == "Backend Engineer"
         assert item["target_location"] == "Mountain View, CA"
+
+
+class TestJdTailorDiff:
+    """GET /api/v1/resumes/{resume_id}/jd-tailor-diff"""
+
+    @patch("app.routers.resumes.db")
+    async def test_rejects_stale_generation_run_filter(
+        self, mock_db, client, mock_resume_record
+    ):
+        tailored_resume = {
+            **mock_resume_record,
+            "resume_id": "tailored-123",
+            "parent_id": "master-123",
+        }
+        master_resume = {
+            **mock_resume_record,
+            "resume_id": "master-123",
+            "parent_id": None,
+        }
+
+        def get_resume(resume_id):
+            if resume_id == "tailored-123":
+                return tailored_resume
+            if resume_id == "master-123":
+                return master_resume
+            return None
+
+        mock_db.get_resume.side_effect = get_resume
+        mock_db.get_latest_generation_run.return_value = {
+            "generation_run_id": "confirm-current",
+            "request_payload": {"preview_generation_run_id": "preview-current"},
+            "result_payload": {},
+        }
+
+        async with client:
+            response = await client.get(
+                "/api/v1/resumes/tailored-123/jd-tailor-diff",
+                params={"generation_run_id": "preview-old"},
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["data"] is None
+        assert payload["unavailable_reason"] == "generation_run_mismatch"
 
 
 class TestDuplicateResume:

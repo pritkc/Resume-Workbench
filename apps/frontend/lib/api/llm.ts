@@ -88,12 +88,16 @@ export interface FetchLLMCallsParams {
   requestScope?: string;
   operation?: string;
   success?: boolean;
+  resumeId?: string;
+  resumeCode?: string;
   limit?: number;
 }
 
 export interface FetchLLMCallSummaryParams {
   traceId?: string;
   requestScope?: string;
+  resumeId?: string;
+  resumeCode?: string;
 }
 
 function appendQueryParam(
@@ -122,6 +126,8 @@ export async function fetchLlmCalls(params: FetchLLMCallsParams = {}): Promise<L
   appendQueryParam(query, 'request_scope', params.requestScope);
   appendQueryParam(query, 'operation', params.operation);
   appendQueryParam(query, 'success', params.success);
+  appendQueryParam(query, 'resume_id', params.resumeId);
+  appendQueryParam(query, 'resume_code', params.resumeCode);
   appendQueryParam(query, 'limit', params.limit ?? 100);
 
   const response = await apiFetch(`/llm/calls?${query.toString()}`);
@@ -138,6 +144,8 @@ export async function fetchLlmCallSummary(
   const query = new URLSearchParams();
   appendQueryParam(query, 'trace_id', params.traceId);
   appendQueryParam(query, 'request_scope', params.requestScope);
+  appendQueryParam(query, 'resume_id', params.resumeId);
+  appendQueryParam(query, 'resume_code', params.resumeCode);
 
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const response = await apiFetch(`/llm/calls/summary${suffix}`);

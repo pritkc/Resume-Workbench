@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTranslations } from '@/lib/i18n';
@@ -17,6 +24,15 @@ import type {
 } from '@/components/common/resume_previewer_context';
 import type { ArtifactSummary } from '@/lib/types/render-theme';
 import { ArtifactGallery } from '@/components/rendercv/artifact-gallery';
+import { cn } from '@/lib/utils';
+
+/** One sans stack + scale for the whole diff pane. */
+const DIFF_FONT = 'font-sans antialiased';
+const DIFF_BODY = `${DIFF_FONT} text-[15px] font-medium leading-[1.55] text-neutral-900`;
+const DIFF_BODY_SM = `${DIFF_FONT} text-[13px] font-medium leading-snug text-neutral-800`;
+const DIFF_MICRO = `${DIFF_FONT} text-[11px] font-semibold uppercase tracking-wide text-neutral-500`;
+const DIFF_CATEGORY = `${DIFF_FONT} mt-10 border-b border-neutral-200 pb-2 text-xs font-bold uppercase tracking-[0.12em] text-neutral-500 first:mt-0`;
+const DIFF_SUBHEAD = `${DIFF_FONT} text-[11px] font-semibold uppercase tracking-wide text-neutral-500`;
 
 interface DiffPreviewModalProps {
   isOpen: boolean;
@@ -156,7 +172,8 @@ function inferFieldTypeForManifestPath(rawPath: string): ResumeFieldDiff['field_
   if (/^personalinfo\./i.test(pl)) return 'personal_info';
 
   if (/personalprojects\[\d+\]\.name$/i.test(pl)) return 'project_title';
-  if (/personalprojects\[\d+\]\.(?:techstack|tech_stacks|summary|role)$/i.test(pl)) return 'project';
+  if (/personalprojects\[\d+\]\.(?:techstack|tech_stacks|summary|role)$/i.test(pl))
+    return 'project';
   if (/personalprojects\[\d+\]\.description\[\d+\]$/i.test(pl)) return 'description';
 
   if (/workexperience\[\d+\]\.(?:company|(?:start|end)(?:_|)?date(?:s)?)$/i.test(pl)) {
@@ -168,7 +185,11 @@ function inferFieldTypeForManifestPath(rawPath: string): ResumeFieldDiff['field_
 
   if (/education\[\d+\]\.description\[\d+\]$/i.test(pl)) return 'description';
   if (/^education\[\d+\]$/i.test(pl)) return 'education';
-  if (/education\[\d+\]\.(?:degree|area|institution|date|years|start_date|end_date|startdate|enddate)$/i.test(pl)) {
+  if (
+    /education\[\d+\]\.(?:degree|area|institution|date|years|start_date|end_date|startdate|enddate)$/i.test(
+      pl
+    )
+  ) {
     return 'education';
   }
 
@@ -203,11 +224,8 @@ function augmentChangesFromManifestOnlyPaths(
 
     if (!orig && !next && !reasonStr) continue;
 
-    const change_type: ResumeFieldDiff['change_type'] = orig && !next
-      ? 'removed'
-      : !orig && next
-        ? 'added'
-        : 'modified';
+    const change_type: ResumeFieldDiff['change_type'] =
+      orig && !next ? 'removed' : !orig && next ? 'added' : 'modified';
 
     extras.push({
       field_path: p,
@@ -225,7 +243,10 @@ function augmentChangesFromManifestOnlyPaths(
   return [...detailedChanges, ...extras];
 }
 
-function experienceRowHeading(resumePreview: ResumePreview | null | undefined, index: number): string {
+function experienceRowHeading(
+  resumePreview: ResumePreview | null | undefined,
+  index: number
+): string {
   const exp = resumePreview?.workExperience?.[index];
   if (!exp) return `Experience ${index + 1}`;
   const title = exp.title?.trim();
@@ -240,12 +261,9 @@ function projectRowHeading(resumePreview: ResumePreview | null | undefined, inde
   return name || `Project ${index + 1}`;
 }
 
-function educationRowHeading(resumePreview: ResumePreview | null | undefined, index: number): string {
-  const ed = resumePreview?.education?.[index];
-  const institution = ed?.institution?.trim();
-  const degree = ed?.degree?.trim();
-  if (institution && degree) return `${institution} — ${degree}`;
-  return institution || degree || `Education ${index + 1}`;
+function isTechStackPath(path: string): boolean {
+  const p = path.toLowerCase();
+  return p.includes('.techstack') || p.includes('.tech_stack');
 }
 
 function ExperienceSectionTitle({
@@ -256,34 +274,8 @@ function ExperienceSectionTitle({
   index: number;
 }): ReactNode {
   const exp = resumePreview?.workExperience?.[index];
-  if (!exp) {
-    return (
-      <span className="text-sm font-semibold text-slate-900">Experience {index + 1}</span>
-    );
-  }
-  const company = exp.company?.trim();
-  const title = exp.title?.trim();
-  if (!company && !title) {
-    return (
-      <span className="text-sm font-semibold text-slate-900">Experience {index + 1}</span>
-    );
-  }
-  return (
-    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-px">
-      {company ? (
-        <span className="text-base font-semibold tracking-tight text-slate-900">{company}</span>
-      ) : null}
-      {title ? (
-        <span
-          className={`text-[13px] font-normal text-slate-500 ${
-            !company ? 'text-base font-semibold text-slate-900' : ''
-          }`}
-        >
-          {title}
-        </span>
-      ) : null}
-    </span>
-  );
+  const company = exp?.company?.trim();
+  return <span>{company || `Experience ${index + 1}`}</span>;
 }
 
 function ProjectSectionTitle({
@@ -295,11 +287,18 @@ function ProjectSectionTitle({
 }): ReactNode {
   const proj = resumePreview?.personalProjects?.[index];
   const name = proj?.name?.trim();
-  return (
-    <span className="text-base font-semibold tracking-tight text-slate-900">
-      {name || `Project ${index + 1}`}
-    </span>
-  );
+  return <span>{name || `Project ${index + 1}`}</span>;
+}
+
+function educationRowHeading(
+  resumePreview: ResumePreview | null | undefined,
+  index: number
+): string {
+  const ed = resumePreview?.education?.[index];
+  const institution = ed?.institution?.trim();
+  const degree = ed?.degree?.trim();
+  if (institution && degree) return `${institution} — ${degree}`;
+  return institution || degree || `Education ${index + 1}`;
 }
 
 function EducationSectionTitle({
@@ -311,29 +310,40 @@ function EducationSectionTitle({
 }): ReactNode {
   const ed = resumePreview?.education?.[index];
   const institution = ed?.institution?.trim();
-  const degree = ed?.degree?.trim();
-  if (!institution && !degree) {
-    return (
-      <span className="text-sm font-semibold text-slate-900">Education {index + 1}</span>
-    );
-  }
-  return (
-    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-px">
-      {institution ? (
-        <span className="text-[15px] font-semibold text-slate-900">{institution}</span>
-      ) : null}
-      {degree ? (
-        <span
-          className={`text-[13px] text-slate-500 ${
-            institution ? 'font-normal' : 'text-base font-semibold text-slate-900'
-          }`}
-        >
-          {degree}
-        </span>
-      ) : null}
-    </span>
-  );
+  return <span>{institution || `Education ${index + 1}`}</span>;
 }
+
+type SectionCategory =
+  | 'summary'
+  | 'contact'
+  | 'keywords'
+  | 'experience'
+  | 'projects'
+  | 'education'
+  | 'skills'
+  | 'other';
+
+function sectionCategoryFromKey(sectionKey: string): SectionCategory {
+  if (sectionKey === 'summary') return 'summary';
+  if (sectionKey.startsWith('experience-')) return 'experience';
+  if (sectionKey.startsWith('project-')) return 'projects';
+  if (sectionKey === 'skills') return 'skills';
+  if (sectionKey.startsWith('education-')) return 'education';
+  if (sectionKey === 'personal') return 'contact';
+  if (sectionKey === 'keywords') return 'keywords';
+  return 'other';
+}
+
+const CATEGORY_TITLE: Record<SectionCategory, string> = {
+  summary: 'Summary',
+  experience: 'Experience',
+  projects: 'Projects',
+  skills: 'Skills',
+  education: 'Education',
+  contact: 'Contact',
+  keywords: 'Keywords',
+  other: 'Other',
+};
 
 function canonicalizePath(path: string): string {
   return path
@@ -453,30 +463,30 @@ function buildContextLabel(
       const labelBase = resumePreview ? experienceRowHeading(resumePreview, idx) : null;
       const n = idx + 1;
       if (change.field_path.toLowerCase().includes('.techstack')) {
-        return labelBase ? `${labelBase} — tech stack` : `Experience ${n} tech stack`;
+        return 'Tech stack';
       }
       if (change.field_type === 'experience_title') {
-        return labelBase ? `${labelBase} — role title` : `Experience ${n} role`;
+        return 'Role title';
       }
       if (change.field_type === 'description') {
         return `Bullet ${(parsed.bulletIndex ?? 0) + 1}`;
       }
-      return labelBase ?? `Experience ${n} entry`;
+      return labelBase ? 'Entry details' : `Experience ${n}`;
     }
     case 'project': {
       const idx = parsed.entryIndex ?? 0;
       const labelBase = resumePreview ? projectRowHeading(resumePreview, idx) : null;
       const n = idx + 1;
       if (change.field_path.toLowerCase().includes('.techstack')) {
-        return labelBase ? `${labelBase} — tech stack` : `Project ${n} tech stack`;
+        return 'Tech stack';
       }
       if (change.field_type === 'project_title') {
-        return labelBase ? `${labelBase} — name` : `Project ${n} name`;
+        return 'Project name';
       }
       if (change.field_type === 'description') {
         return `Bullet ${(parsed.bulletIndex ?? 0) + 1}`;
       }
-      return labelBase ?? `Project ${n} entry`;
+      return labelBase ? 'Project details' : `Project ${n}`;
     }
     case 'education': {
       if (change.field_type === 'description') {
@@ -705,21 +715,8 @@ function buildOrderedSections(
   if (summaryItems.length > 0) {
     sections.push({
       key: 'summary',
-      title: (
-        <span className="text-sm font-semibold text-slate-900">Professional summary</span>
-      ),
+      title: <span>Professional summary</span>,
       items: summaryItems,
-    });
-  }
-
-  const keywordItems = displayChanges.filter((item) => item.parsed.section === 'keywords');
-  if (keywordItems.length > 0) {
-    sections.push({
-      key: 'keywords',
-      title: <span className="text-sm font-semibold text-slate-900">Bold keywords</span>,
-      items: keywordItems.sort((a, b) =>
-        a.change.field_path.localeCompare(b.change.field_path)
-      ),
     });
   }
 
@@ -727,10 +724,17 @@ function buildOrderedSections(
   if (personalItems.length > 0) {
     sections.push({
       key: 'personal',
-      title: <span className="text-sm font-semibold text-slate-900">Contact</span>,
-      items: personalItems.sort((a, b) =>
-        a.change.field_path.localeCompare(b.change.field_path)
-      ),
+      title: <span>Contact</span>,
+      items: personalItems.sort((a, b) => a.change.field_path.localeCompare(b.change.field_path)),
+    });
+  }
+
+  const keywordItems = displayChanges.filter((item) => item.parsed.section === 'keywords');
+  if (keywordItems.length > 0) {
+    sections.push({
+      key: 'keywords',
+      title: <span>Bold keywords</span>,
+      items: keywordItems.sort((a, b) => a.change.field_path.localeCompare(b.change.field_path)),
     });
   }
 
@@ -758,9 +762,7 @@ function buildOrderedSections(
   const projectIndices = Array.from(
     new Set(
       displayChanges
-        .filter(
-          (item) => item.parsed.section === 'project' && item.parsed.entryIndex !== undefined
-        )
+        .filter((item) => item.parsed.section === 'project' && item.parsed.entryIndex !== undefined)
         .map((item) => item.parsed.entryIndex as number)
     )
   ).sort((a, b) => a - b);
@@ -803,7 +805,7 @@ function buildOrderedSections(
   if (skillsItems.length > 0) {
     sections.push({
       key: 'skills',
-      title: <span className="text-sm font-semibold text-slate-900">Skills</span>,
+      title: <span>Skills</span>,
       items: skillsItems,
     });
   }
@@ -814,7 +816,7 @@ function buildOrderedSections(
   if (otherItems.length > 0) {
     sections.push({
       key: 'other',
-      title: <span className="text-sm font-semibold text-slate-900">Other</span>,
+      title: <span>Other</span>,
       items: otherItems,
     });
   }
@@ -967,12 +969,7 @@ export function TailorDiffReadonlyBody({
             resumePreview
           )
         : [],
-    [
-      changeBreakdown?.cleanup_only_changes,
-      changeManifest,
-      mergedDetailedChanges,
-      resumePreview,
-    ]
+    [changeBreakdown?.cleanup_only_changes, changeManifest, mergedDetailedChanges, resumePreview]
   );
 
   const orderedSections = useMemo(
@@ -1004,7 +1001,7 @@ export function TailorDiffReadonlyBody({
       return <>{emptyFallback}</>;
     }
     return (
-      <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-[13px] text-slate-600">
+      <div className="rounded-sm border border-dashed border-neutral-300 bg-white px-4 py-8 text-center text-[15px] font-medium leading-relaxed text-neutral-600">
         No line-level tailoring changes recorded for this view.
       </div>
     );
@@ -1033,30 +1030,31 @@ export function TailorDiffReadonlyBody({
 
   return (
     <>
-      <div className="mb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 text-[13px] text-slate-600">
-          <p className="m-0 min-w-[12rem]">
-            <span className="tabular-nums text-lg font-semibold text-slate-900">{stats.total}</span>{' '}
-            <span className="text-slate-500">
+      <div className="mb-4 border-b border-neutral-200 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className={cn('m-0 min-w-0 leading-snug text-neutral-800', DIFF_BODY)}>
+            <span className="tabular-nums text-lg font-semibold text-neutral-950">{stats.total}</span>{' '}
+            <span className="font-semibold text-neutral-700">
               row{stats.total === 1 ? '' : 's'} changed
             </span>
             {stats.verify > 0 ? (
-              <span className="ml-3 inline-flex items-center gap-1 text-amber-700">
-                <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> {stats.verify} to verify
+              <span className="ml-2 inline-flex items-center gap-1 rounded-sm border border-amber-700/30 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden /> {stats.verify} to
+                verify
               </span>
             ) : null}
           </p>
           <Button
-            variant="ghost"
+            variant="outline"
             size="xs"
-            className="text-slate-600"
+            className="border-[#1f2328] bg-white text-black shadow-none hover:bg-[#f6f8fa]"
             onClick={() => setShowMetaDetails((value) => !value)}
           >
             {showMetaDetails ? 'Hide breakdown' : 'Breakdown'}
           </Button>
         </div>
         {showMetaDetails ? (
-          <div className="flex flex-wrap gap-1.5 pt-2">
+          <div className="mt-2 flex flex-wrap gap-1.5">
             <InlineStat label="Summary" value={stats.summaryChanged} variant="info" />
             <InlineStat label="Keywords" value={stats.keywordRows} variant="info" />
             <InlineStat label="Contact" value={stats.personalChanged} variant="info" />
@@ -1067,44 +1065,72 @@ export function TailorDiffReadonlyBody({
             <InlineStat label="Skills −" value={stats.skillsRemoved} variant="danger" />
             <InlineStat label="Model-attributed rows" value={stats.ai} variant="success" />
             <InlineStat label="Cleanup / other rows" value={stats.system} variant="warning" />
-            <InlineStat label="Unchanged (with note)" value={stats.unchangedSemantics} variant="info" />
+            <InlineStat
+              label="Unchanged (with note)"
+              value={stats.unchangedSemantics}
+              variant="info"
+            />
             <InlineStat label="Skills verify" value={stats.verify} variant="warning" />
           </div>
         ) : null}
       </div>
 
       {errorMessage && (
-        <div className="mt-3 whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="mt-3 whitespace-pre-wrap rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-[13px] leading-snug text-red-950">
           {errorMessage}
         </div>
       )}
 
-      <div className="mt-3 space-y-2 pb-2">
-        {artifacts && artifacts.length > 0 && (
-          <ArtifactGallery artifacts={artifacts} title={artifactGalleryTitle} />
-        )}
+      <div className={cn('w-full bg-white pl-2.5 text-neutral-900 sm:pl-3', DIFF_BODY)}>
+        <div className="mt-4 flex flex-col gap-8 pb-4">
+          {artifacts && artifacts.length > 0 && (
+            <ArtifactGallery artifacts={artifacts} title={artifactGalleryTitle} />
+          )}
 
-        {orderedSections.map((section) => (
-          <ChangeSection
-            key={section.key}
-            title={section.title}
-            count={section.items.length}
-            isExpanded={expandedSections.has(section.key)}
-            onToggle={() => toggleSection(section.key)}
-          >
-            {section.key === 'skills' ? (
-              <SkillsGroupedView
-                items={section.items}
-                aggregateRationale={skillsAggregateRationale}
-                observation={skillsObsNormalized}
-              />
-            ) : (
-              section.items.map((item, index) => (
-                <ChangeItem key={`${section.key}-${index}`} item={item} />
-              ))
-            )}
-          </ChangeSection>
-        ))}
+          {(() => {
+            let lastCategory: SectionCategory | null = null;
+            return orderedSections.map((section) => {
+              const category = sectionCategoryFromKey(section.key);
+              const showCategory = category !== lastCategory;
+              lastCategory = category;
+
+              const inner =
+                section.key === 'skills' ? (
+                  <SkillsGroupedView
+                    items={section.items}
+                    aggregateRationale={skillsAggregateRationale}
+                    observation={skillsObsNormalized}
+                  />
+                ) : section.key.startsWith('experience-') ? (
+                  <ExperienceEntryDiff items={section.items} />
+                ) : section.key.startsWith('project-') ? (
+                  <ProjectEntryDiff items={section.items} />
+                ) : section.key.startsWith('education-') ? (
+                  <EducationEntryDiff items={section.items} />
+                ) : (
+                  section.items.map((item, index) => (
+                    <ChangeItem key={`${section.key}-${index}`} item={item} />
+                  ))
+                );
+
+              return (
+                <div key={section.key}>
+                  {showCategory ? (
+                    <h2 className={DIFF_CATEGORY}>{CATEGORY_TITLE[category]}</h2>
+                  ) : null}
+                  <ChangeSection
+                    title={section.title}
+                    count={section.items.length}
+                    isExpanded={expandedSections.has(section.key)}
+                    onToggle={() => toggleSection(section.key)}
+                  >
+                    {inner}
+                  </ChangeSection>
+                </div>
+              );
+            });
+          })()}
+        </div>
       </div>
     </>
   );
@@ -1157,14 +1183,14 @@ export function DiffPreviewModal({
           }
         }}
       >
-        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden border border-slate-200 bg-white p-0 shadow-lg">
-          <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4">
-            <DialogTitle className="text-lg font-semibold tracking-tight text-slate-900">
+        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden border border-[#1f2328] bg-white p-0 shadow-lg">
+          <DialogHeader className="shrink-0 border-b border-[#d0d7de] px-5 py-4">
+            <DialogTitle className="text-lg font-semibold tracking-tight text-black">
               {t('tailor.missingDiffDialog.title')}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="px-5 py-4 text-[13px] leading-relaxed text-slate-700">
+          <div className="px-5 py-4 text-[13px] leading-relaxed text-black">
             {t('tailor.missingDiffDialog.description')}
           </div>
           <div className="flex items-start gap-2 px-5 pb-1 text-[12px] text-amber-800">
@@ -1172,7 +1198,7 @@ export function DiffPreviewModal({
             <span>{t('tailor.missingDiffDialog.confirmLabel')}</span>
           </div>
 
-          <div className="mt-auto flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+          <div className="mt-auto flex justify-end gap-2 border-t border-[#d0d7de] px-5 py-3">
             <Button variant="outline" onClick={onClose} disabled={isConfirming} className="gap-2">
               {t('common.cancel')}
             </Button>
@@ -1201,15 +1227,14 @@ export function DiffPreviewModal({
         }
       }}
     >
-      <DialogContent className="flex max-h-[95vh] w-[92vw] max-w-6xl flex-col gap-0 overflow-hidden border border-slate-200 bg-slate-50 p-0 shadow-xl">
-        <DialogHeader className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
-          <DialogTitle className="text-base font-semibold tracking-tight text-slate-900">
+      <DialogContent className="flex max-h-[95vh] w-[94vw] max-w-7xl flex-col gap-0 overflow-hidden border border-[#1f2328] bg-white p-0 shadow-2xl">
+        <DialogHeader className="shrink-0 border-b border-[#1f2328] bg-white px-4 py-3 sm:px-5">
+          <DialogTitle className="text-lg font-bold tracking-tight text-black">
             {t('tailor.diffModal.title')}
           </DialogTitle>
-          <p className="mt-0.5 text-[12px] text-slate-500">Reads top-to-bottom like your résumé.</p>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-3 sm:px-4">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 pb-4 pt-3 sm:px-5">
           <TailorDiffReadonlyBody
             detailedChanges={detailedChanges}
             changeManifest={changeManifest}
@@ -1221,8 +1246,13 @@ export function DiffPreviewModal({
           />
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
-          <Button variant="outline" onClick={onReject} disabled={isConfirming} className="gap-2">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#1f2328] bg-white px-4 py-3 sm:px-5">
+          <Button
+            variant="outline"
+            onClick={onReject}
+            disabled={isConfirming}
+            className="gap-2 border-[#1f2328] bg-white text-black hover:bg-[#f6f8fa]"
+          >
             <X className="w-4 h-4" />
             {t('tailor.diffModal.rejectButton')}
           </Button>
@@ -1233,7 +1263,7 @@ export function DiffPreviewModal({
             <Button
               onClick={onConfirm}
               disabled={isConfirming}
-              className="gap-2 bg-emerald-700 hover:bg-emerald-800"
+              className="gap-2 border border-[#1f2328] bg-[#1f883d] font-semibold text-white hover:bg-[#1a7f37]"
             >
               {isConfirming ? (
                 <>
@@ -1262,17 +1292,17 @@ interface StatCardProps {
 
 function InlineStat({ label, value, variant }: StatCardProps) {
   const colors = {
-    success: 'border-emerald-200 bg-emerald-50/70 text-emerald-900',
-    warning: 'border-amber-200 bg-amber-50/70 text-amber-900',
-    danger: 'border-red-200 bg-red-50/70 text-red-900',
-    info: 'border-slate-200 bg-slate-50 text-slate-800',
+    success: 'border-[#1a7f37] bg-[#dafbe1] text-black',
+    warning: 'border-[#9a6700] bg-[#fff8c5] text-black',
+    danger: 'border-[#cf222e] bg-[#ffebe9] text-black',
+    info: 'border-[#0969da] bg-[#ddf4ff] text-black',
   };
 
   return (
     <div
-      className={`flex items-center gap-2 rounded px-2 py-1 text-[11px] leading-none ${colors[variant]}`}
+      className={`flex items-center gap-2 border px-2 py-1 text-xs font-medium leading-none ${colors[variant]}`}
     >
-      <span className="tabular-nums font-semibold">{value}</span>
+      <span className="tabular-nums font-bold">{value}</span>
       <span className="opacity-85">{label}</span>
     </div>
   );
@@ -1288,27 +1318,297 @@ interface ChangeSectionProps {
 
 function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeSectionProps) {
   return (
-    <section className="rounded-lg border border-slate-200/90 bg-white">
+    <section className="m-0">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50"
+        className={cn(
+          'flex w-full items-start justify-between gap-3 border-0 border-b border-neutral-200 bg-transparent p-0 pb-3 text-left',
+          'transition-colors hover:border-neutral-300'
+        )}
       >
-        <span className="flex min-w-0 flex-1 items-start gap-2">
+        <span className="flex min-w-0 flex-1 items-start gap-2.5">
           {isExpanded ? (
-            <ChevronDown className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+            <ChevronDown
+              className={cn('mt-1 size-4 shrink-0 text-neutral-400', DIFF_FONT)}
+              strokeWidth={2}
+              aria-hidden
+            />
           ) : (
-            <ChevronRight className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+            <ChevronRight
+              className={cn('mt-1 size-4 shrink-0 text-neutral-400', DIFF_FONT)}
+              strokeWidth={2}
+              aria-hidden
+            />
           )}
-          <span className="min-w-0 flex-1 text-[15px] leading-snug">{title}</span>
+          <span
+            className={cn('min-w-0 flex-1 text-base font-semibold leading-snug text-neutral-950', DIFF_FONT)}
+          >
+            {title}
+          </span>
         </span>
-        <span className="shrink-0 tabular-nums text-xs font-medium text-slate-400">{count}</span>
+        <span
+          className={cn(
+            'shrink-0 pt-1 text-xs font-semibold tabular-nums text-neutral-400',
+            DIFF_FONT
+          )}
+          title="Changes in this section"
+        >
+          {count}
+        </span>
       </button>
 
-      {isExpanded ? (
-        <div className="divide-y divide-slate-100 border-t border-slate-100">{children}</div>
-      ) : null}
+      {isExpanded ? <div className={cn('mt-4 flex flex-col gap-5', DIFF_FONT)}>{children}</div> : null}
     </section>
+  );
+}
+
+function RationaleNote({ text }: { text?: string | null }) {
+  if (!text?.trim()) return null;
+  return (
+    <p
+      className={cn(
+        'relative mb-0 mt-2 border-l-[3px] border-sky-500/55 pl-3.5 text-[13px] font-medium leading-relaxed text-sky-900',
+        DIFF_FONT
+      )}
+    >
+      <span className="absolute left-0 top-[0.4em] h-1 w-1 -translate-x-[5px] rounded-full bg-sky-500/90" aria-hidden />
+      {text.trim()}
+    </p>
+  );
+}
+
+function DiffTextPair({
+  before,
+  after,
+  rationale,
+}: {
+  before?: string;
+  after?: string;
+  rationale?: string;
+}) {
+  return (
+    <div className={cn('flex flex-col gap-2', DIFF_FONT)}>
+      {before ? (
+        <p
+          className={cn(
+            'm-0 text-red-900 line-through decoration-red-400/85 decoration-1',
+            DIFF_BODY
+          )}
+        >
+          {before}
+        </p>
+      ) : null}
+      {after ? <p className={cn('m-0 text-neutral-950', DIFF_BODY)}>{after}</p> : null}
+      <RationaleNote text={rationale} />
+    </div>
+  );
+}
+
+function DiffChangeBody({ item }: { item: DisplayChange }) {
+  const { change } = item;
+  const unchangedFlag = item.semanticUnchanged;
+  const displayLine = (change.original_value ?? change.new_value)?.trim() || '';
+
+  return (
+    <>
+      {change.change_type === 'added' && change.new_value && (
+        <DiffTextPair after={change.new_value} rationale={item.aiRationale} />
+      )}
+      {change.change_type === 'removed' && change.original_value && (
+        <DiffTextPair before={change.original_value} rationale={item.aiRationale} />
+      )}
+      {change.change_type === 'modified' &&
+        (unchangedFlag ? (
+          displayLine ? (
+            <>
+              <p className={cn('m-0', DIFF_BODY)}>{displayLine}</p>
+              <RationaleNote text={item.aiRationale} />
+            </>
+          ) : (
+            <>
+              <p className={cn('m-0 text-neutral-500', DIFF_BODY_SM)}>
+                No textual change on this row — retained as-is.
+              </p>
+              <RationaleNote text={item.aiRationale} />
+            </>
+          )
+        ) : (
+          <DiffTextPair
+            before={change.original_value ?? '(empty)'}
+            after={change.new_value ?? '(empty)'}
+            rationale={item.aiRationale}
+          />
+        ))}
+      {item.cleanupNote && !unchangedFlag ? (
+        <div className="mt-2 border-l-2 border-amber-300/90 pl-3 text-[13px] leading-snug text-neutral-800">
+          <p className="m-0">
+            <span className="text-neutral-500">−</span> {item.cleanupNote.oldFragment}
+            <span className="mx-1.5 text-neutral-400">→</span>
+            <span className="text-neutral-500">+</span> {item.cleanupNote.newFragment}
+          </p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function TitleDiffRow({ item, label = 'Role' }: { item: DisplayChange; label?: string }) {
+  const attributionHint =
+    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
+  return (
+    <div className="m-0 border-0 p-0">
+      {attributionHint ? (
+        <div className="mb-2 flex justify-end">
+          <span className={DIFF_MICRO}>{attributionHint}</span>
+        </div>
+      ) : !item.semanticUnchanged ? (
+        <span className="sr-only">Attributed to model tailoring</span>
+      ) : null}
+      <p className={cn('mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500', DIFF_FONT)}>
+        {label}
+      </p>
+      <DiffChangeBody item={item} />
+    </div>
+  );
+}
+
+function TechBulletDiffRow({ item }: { item: DisplayChange }) {
+  const attributionHint =
+    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
+  return (
+    <div className={cn('grid grid-cols-[1.35rem_minmax(0,1fr)] items-start gap-x-3.5', DIFF_FONT)}>
+      <span
+        className={cn(
+          'flex justify-end pt-[0.4rem] text-[16px] font-semibold leading-none text-neutral-400'
+        )}
+        aria-hidden
+      >
+        •
+      </span>
+      <div className="min-w-0">
+        <p className={cn('mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500')}>
+          Tech stack
+        </p>
+        {attributionHint ? (
+          <div className="mb-1.5 flex justify-end">
+            <span className={DIFF_MICRO}>{attributionHint}</span>
+          </div>
+        ) : !item.semanticUnchanged ? (
+          <span className="sr-only">Attributed to model tailoring</span>
+        ) : null}
+        <DiffChangeBody item={item} />
+      </div>
+    </div>
+  );
+}
+
+function BulletDiffRow({ item }: { item: DisplayChange }) {
+  const bulletPos =
+    item.parsed.bulletIndex !== undefined ? item.parsed.bulletIndex + 1 : null;
+  const attributionHint =
+    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
+
+  return (
+    <div className={cn('grid grid-cols-[1.35rem_minmax(0,1fr)] items-start gap-x-3.5', DIFF_FONT)}>
+      <span className="flex justify-end pt-[0.35rem] leading-none text-neutral-400">
+        <span
+          className={cn('text-[16px] font-semibold', DIFF_FONT)}
+          aria-label={bulletPos ? `Bullet ${bulletPos}` : 'Bullet'}
+        >
+          •
+        </span>
+      </span>
+      <div className="min-w-0">
+        {attributionHint ? (
+          <div className="mb-1.5 flex justify-end">
+            <span className={DIFF_MICRO}>{attributionHint}</span>
+          </div>
+        ) : !item.semanticUnchanged ? (
+          <span className="sr-only">Attributed to model tailoring</span>
+        ) : null}
+        <DiffChangeBody item={item} />
+      </div>
+    </div>
+  );
+}
+
+function ExperienceEntryDiff({ items }: { items: DisplayChange[] }) {
+  const title = items.filter((i) => i.change.field_type === 'experience_title');
+  const tech = items.filter(
+    (i) => i.change.field_type === 'experience' && isTechStackPath(i.change.field_path)
+  );
+  const other = items.filter(
+    (i) =>
+      i.change.field_type === 'experience' && !isTechStackPath(i.change.field_path)
+  );
+  const bullets = items.filter((i) => i.change.field_type === 'description');
+  const sortedOther = [...other].sort((a, b) =>
+    a.change.field_path.localeCompare(b.change.field_path)
+  );
+  return (
+    <div className="flex flex-col gap-5">
+      {title.map((item) => (
+        <TitleDiffRow key={item.change.field_path} item={item} />
+      ))}
+      {tech.map((item) => (
+        <TechBulletDiffRow key={item.change.field_path} item={item} />
+      ))}
+      {bullets.map((item) => (
+        <BulletDiffRow key={item.change.field_path} item={item} />
+      ))}
+      {sortedOther.map((item) => (
+        <ChangeItem key={item.change.field_path} item={item} />
+      ))}
+    </div>
+  );
+}
+
+function ProjectEntryDiff({ items }: { items: DisplayChange[] }) {
+  const title = items.filter((i) => i.change.field_type === 'project_title');
+  const tech = items.filter(
+    (i) => i.change.field_type === 'project' && isTechStackPath(i.change.field_path)
+  );
+  const other = items.filter(
+    (i) => i.change.field_type === 'project' && !isTechStackPath(i.change.field_path)
+  );
+  const bullets = items.filter((i) => i.change.field_type === 'description');
+  const sortedOther = [...other].sort((a, b) =>
+    a.change.field_path.localeCompare(b.change.field_path)
+  );
+  return (
+    <div className="flex flex-col gap-5">
+      {title.map((item) => (
+        <TitleDiffRow key={item.change.field_path} item={item} label="Project name" />
+      ))}
+      {tech.map((item) => (
+        <TechBulletDiffRow key={item.change.field_path} item={item} />
+      ))}
+      {bullets.map((item) => (
+        <BulletDiffRow key={item.change.field_path} item={item} />
+      ))}
+      {sortedOther.map((item) => (
+        <ChangeItem key={item.change.field_path} item={item} />
+      ))}
+    </div>
+  );
+}
+
+function EducationEntryDiff({ items }: { items: DisplayChange[] }) {
+  const bullets = items.filter((i) => i.change.field_type === 'description');
+  const meta = items.filter((i) => i.change.field_type !== 'description');
+  const sortedMeta = [...meta].sort((a, b) =>
+    a.change.field_path.localeCompare(b.change.field_path)
+  );
+  return (
+    <div className="flex flex-col gap-5">
+      {sortedMeta.map((item) => (
+        <ChangeItem key={item.change.field_path} item={item} />
+      ))}
+      {bullets.map((item) => (
+        <BulletDiffRow key={item.change.field_path} item={item} />
+      ))}
+    </div>
   );
 }
 
@@ -1318,166 +1618,56 @@ function ChangeItem({ item }: { item: DisplayChange }) {
     item.parsed.bulletIndex !== undefined && change.field_type === 'description'
       ? item.parsed.bulletIndex + 1
       : null;
+  const isBullet = bulletPos !== null;
 
   const unchangedFlag = item.semanticUnchanged;
 
-  const rowTone = unchangedFlag
-    ? 'border-l-slate-300 bg-slate-50/50'
-    : change.change_type === 'added'
-      ? 'border-l-emerald-500 bg-emerald-50/25'
-      : change.change_type === 'removed'
-        ? 'border-l-red-500 bg-red-50/25'
-        : 'border-l-slate-400 bg-white';
-
-  const rationaleBlock =
-    item.aiRationale && item.aiRationale.length > 0 ? (
-      <details open className="rounded-md border border-slate-100 bg-white px-2 py-1.5 text-[12px] text-slate-600">
-        <summary className="cursor-pointer select-none text-[11px] font-medium text-slate-600">
-          Model note
-        </summary>
-        <p className="mt-1.5 whitespace-pre-wrap break-words text-[13px] text-slate-800">
-          {item.aiRationale}
-        </p>
-      </details>
-    ) : null;
-
   const attributionHint =
-    unchangedFlag ? 'unchanged' : item.source === 'system'
-      ? 'post-tailor delta'
-      : item.needsVerification ? 'verify' : null;
+    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
 
-  const displayLine =
-    (change.original_value ?? change.new_value)?.trim() || '';
-
-  const bodyContent = (
-    <>
-      {rationaleBlock ? <div>{rationaleBlock}</div> : null}
-
-      {change.change_type === 'added' && change.new_value && (
-        <DiffValueBox label="New" value={change.new_value} tone="added" />
-      )}
-
-      {change.change_type === 'removed' && change.original_value && (
-        <DiffValueBox label="Removed" value={change.original_value} tone="removed" />
-      )}
-
-      {change.change_type === 'modified' &&
-        (unchangedFlag ? (
-          displayLine ? (
-            <DiffValueBox label="Resume text (unchanged)" value={displayLine} tone="system" />
-          ) : (
-            <p className="text-[13px] leading-snug text-slate-600">
-              No textual change on this row — retained as-is.
-            </p>
-          )
-        ) : (
-          (() => {
-            const { before, after } = displayValuesForModifiedField(
-              change.original_value,
-              change.new_value
-            );
-            return (
-              <div className="grid grid-cols-1 gap-1.5 sm:gap-2 md:grid-cols-2">
-                <DiffValueBox label="Before" value={before} tone="removed" />
-                <DiffValueBox label="After" value={after} tone="added" />
-              </div>
-            );
-          })()
-        ))}
-
-      {item.cleanupNote && !unchangedFlag ? (
-        <div className="rounded-md border border-amber-100 bg-amber-50/60 px-2 py-1.5 text-[12px] text-amber-950">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-amber-800/85">
-            Post-tailor tweak
-          </p>
-          <p className="mt-1 leading-snug">
-            − {item.cleanupNote.oldFragment}
-            <span className="mx-2 text-slate-400">→</span>+ {item.cleanupNote.newFragment}
-          </p>
-        </div>
-      ) : null}
-    </>
-  );
+  if (isBullet) {
+    return <BulletDiffRow item={item} />;
+  }
 
   return (
-    <div className={`border-l-[3px] px-2.5 py-1.5 sm:px-3 sm:py-2 ${rowTone}`}>
-      <div className="flex items-start gap-2">
-        {bulletPos !== null ? (
+    <div className="m-0 p-0">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <span
-            className="w-11 shrink-0 pt-0.5 text-center text-xl font-semibold tabular-nums tracking-tight text-slate-900 sm:text-[1.35rem]"
-            aria-label={`Bullet ${bulletPos}`}
+            className={cn(
+              'text-[12px] font-semibold uppercase tracking-wide text-neutral-600',
+              DIFF_FONT
+            )}
           >
-            #{bulletPos}
+            {item.contextLabel}
           </span>
-        ) : null}
-        <div className="min-w-0 flex-1 space-y-1.5">
-          {bulletPos === null ? (
-            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="text-[13px] font-medium text-slate-900">{item.contextLabel}</span>
-                {unchangedFlag ? (
-                  <span className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-violet-900">
-                    same text
-                  </span>
-                ) : null}
-              </span>
-              {attributionHint ? (
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-slate-400">
-                  {attributionHint}
-                </span>
-              ) : unchangedFlag ? null : (
-                <span className="sr-only">
-                  Attributed to {item.source === 'ai' ? 'model' : 'cleanup'}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1">
-              {unchangedFlag ? (
-                <span className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-violet-900">
-                  same text
-                </span>
-              ) : attributionHint ? (
-                <span className="text-[10px] uppercase tracking-wide text-slate-400">{attributionHint}</span>
-              ) : (
-                <span className="sr-only">Attributed to model tailoring</span>
-              )}
-            </div>
+          {attributionHint ? (
+            <span className={cn('shrink-0', DIFF_MICRO)}>{attributionHint}</span>
+          ) : unchangedFlag ? null : (
+            <span className="sr-only">
+              Attributed to {item.source === 'ai' ? 'model' : 'cleanup'}
+            </span>
           )}
-
-          {bodyContent}
+        </div>
+        <div className="mt-2">
+          <DiffChangeBody item={item} />
         </div>
       </div>
     </div>
   );
 }
 
-function skillObservationGlyph(changeTag: string): string {
-  switch (changeTag) {
-    case 'added':
-      return '+';
-    case 'removed':
-      return '−';
-    case 'moved':
-      return '≈';
-    case 'unchanged':
-      return '●';
-    default:
-      return '•';
-  }
-}
-
-function skillObservationTone(changeTag: string): string {
-  switch (changeTag) {
-    case 'added':
-      return 'border-emerald-200 bg-emerald-50/70 text-emerald-950';
-    case 'removed':
-      return 'border-red-200 bg-red-50/70 text-red-950';
-    case 'moved':
-      return 'border-amber-200 bg-amber-50/70 text-amber-950';
-    default:
-      return 'border-slate-200 bg-slate-50/80 text-slate-800';
-  }
+function skillsFallbackLineParts(entry: {
+  added: string[];
+  removed: string[];
+  modified: string[];
+}): string {
+  const fromModified = entry.modified.map((m) => {
+    const arrow = m.indexOf(' -> ');
+    if (arrow === -1) return m.trim();
+    return m.slice(arrow + 4).trim();
+  });
+  return [...entry.added, ...fromModified].filter(Boolean).join(', ');
 }
 
 function SkillsGroupedView({
@@ -1530,126 +1720,94 @@ function SkillsGroupedView({
 
   if (observation?.groups?.length) {
     return (
-      <div className="space-y-3">
-        {observation.groups.map((grp) => (
-          <div
-            key={grp.group_id}
-            className="rounded-md border border-slate-200/80 bg-white px-3 py-2 shadow-sm shadow-slate-900/5"
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-[13px] font-semibold text-slate-900">{grp.group_label || grp.group_id}</p>
-              <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">
-                {grp.group_id}
-              </span>
-            </div>
-            {grp.group_why ? (
-              <p className="mt-1 text-[12px] leading-snug text-slate-700">{grp.group_why}</p>
-            ) : null}
-            <div className="mt-2 space-y-1.5">
-              {grp.values.map((cell, ix) => (
-                <div
-                  key={`${grp.group_id}-v-${ix}`}
-                  className={`flex flex-wrap items-start gap-2 rounded border px-2 py-1.5 text-[12px] leading-snug ${skillObservationTone(
-                    typeof cell.change_tag === 'string' ? cell.change_tag : ''
-                  )}`}
-                >
-                  <span className="min-w-[1.25rem] font-semibold tabular-nums">
-                    {skillObservationGlyph(typeof cell.change_tag === 'string' ? cell.change_tag : '')}
+      <div className="flex flex-col gap-4">
+        {observation.groups.map((grp) => {
+          const label = grp.group_label || grp.group_id;
+          const valuesText = grp.values.map((c) => c.text).filter(Boolean).join(', ');
+          return (
+            <div key={grp.group_id} className="m-0 p-0">
+              <div
+                className={cn(
+                  'grid grid-cols-[1.35rem_minmax(0,1fr)] items-start gap-x-3.5 text-neutral-900',
+                  DIFF_BODY
+                )}
+              >
+                <span className="flex justify-end pt-[0.35rem] leading-none text-neutral-400">
+                  <span className={cn('text-[16px] font-semibold', DIFF_FONT)} aria-hidden>
+                    •
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="font-medium">{cell.text}</span>
-                    {cell.why ? (
-                      <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] opacity-90">
-                        {cell.why}
-                      </p>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 text-[10px] uppercase tracking-wide opacity-70">
-                    {cell.change_tag}
-                  </span>
+                </span>
+                <div className="min-w-0">
+                  <p className="m-0">
+                    <span className="font-semibold text-neutral-950">{label}:</span>{' '}
+                    {valuesText}
+                  </p>
+                  {grp.group_why ? <RationaleNote text={grp.group_why} /> : null}
                 </div>
-              ))}
-            </div>
-            {(grp.removed?.length ?? 0) > 0 ? (
-              <div className="mt-2 border-t border-slate-100 pt-2">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Removed</p>
-                <div className="mt-1 space-y-1">
+              </div>
+              {(grp.removed?.length ?? 0) > 0 ? (
+                <div className="mt-3 flex flex-col gap-2">
                   {(grp.removed ?? []).map((r, ix) => (
                     <div
                       key={`${grp.group_id}-r-${ix}`}
-                      className="flex items-center gap-2 rounded border border-red-100 bg-red-50/60 px-2 py-1 text-[12px] text-red-900"
+                      className="grid grid-cols-[1.35rem_minmax(0,1fr)] items-start gap-x-3.5 text-[15px] font-medium leading-snug text-neutral-900"
                     >
-                      <span className="font-semibold">−</span>
-                      <span>{r.text}</span>
+                      <span className="flex justify-end pt-[0.1rem] font-semibold text-red-800">
+                        −
+                      </span>
+                      <span className="text-red-900 line-through decoration-red-400 decoration-1">
+                        {r.text}
+                      </span>
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : null}
-          </div>
-        ))}
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      {aggregateRationale ? (
-        <details open className="rounded-md border border-slate-200 bg-slate-50/80 px-3 py-2">
-          <summary className="cursor-pointer text-[12px] font-medium text-slate-700">
-            Skills — model note
-          </summary>
-          <p className="mt-2 whitespace-pre-wrap break-words text-[13px] text-slate-700">
-            {aggregateRationale}
-          </p>
-        </details>
-      ) : null}
-      {grouped.map((entry) => (
-        <div key={entry.group} className="rounded-md border border-slate-200/80 bg-white px-3 py-2">
-          <p className="text-[13px] font-semibold text-slate-900">{entry.group}</p>
-          <div className="mt-1.5 space-y-1 text-[12px] leading-snug">
-            {entry.added.length > 0 && (
-              <p className="text-emerald-800">
-                <span className="font-medium">+</span> {entry.added.join(', ')}
-              </p>
-            )}
-            {entry.removed.length > 0 && (
-              <p className="text-red-800">
-                <span className="font-medium">−</span> {entry.removed.join(', ')}
-              </p>
-            )}
-            {entry.modified.length > 0 && (
-              <p className="text-sky-950">
-                <span className="font-medium">±</span> {entry.modified.join(' · ')}
-              </p>
-            )}
+    <div className="flex flex-col gap-4">
+      {aggregateRationale ? <RationaleNote text={aggregateRationale} /> : null}
+      {grouped.map((entry) => {
+        const line = skillsFallbackLineParts(entry);
+        return (
+          <div key={entry.group} className="m-0 p-0">
+            <div
+              className={cn(
+                'grid grid-cols-[1.35rem_minmax(0,1fr)] items-start gap-x-3.5 text-neutral-900',
+                DIFF_BODY
+              )}
+            >
+              <span className="flex justify-end pt-[0.35rem] leading-none text-neutral-400">
+                <span className={cn('text-[16px] font-semibold', DIFF_FONT)} aria-hidden>
+                  •
+                </span>
+              </span>
+              <div className="min-w-0">
+                <p className="m-0">
+                  <span className="font-semibold text-neutral-950">{entry.group}:</span>{' '}
+                  {line}
+                </p>
+              </div>
+            </div>
+            {entry.removed.length > 0 ? (
+              <div className="mt-2 flex flex-col gap-1.5 pl-[calc(1.35rem+0.875rem)]">
+                <p className={cn('m-0 text-red-800', DIFF_BODY_SM)}>
+                  <span className="font-semibold">Removed:</span>{' '}
+                  <span className="text-red-900 line-through decoration-red-400 decoration-1">
+                    {entry.removed.join(', ')}
+                  </span>
+                </p>
+              </div>
+            ) : null}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-function DiffValueBox({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value?: string;
-  tone: 'added' | 'removed' | 'system';
-}) {
-  const toneClass =
-    tone === 'added'
-      ? 'border-emerald-200/90 bg-white text-emerald-950'
-      : tone === 'removed'
-        ? 'border-red-200/90 bg-white text-red-950'
-        : 'border-amber-200/90 bg-white text-amber-950';
-
-  return (
-    <div className={`rounded-md border px-2.5 py-2 text-[13px] leading-snug ${toneClass}`}>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="whitespace-pre-wrap break-words text-slate-900">{value || '(empty)'}</p>
-    </div>
-  );
-}

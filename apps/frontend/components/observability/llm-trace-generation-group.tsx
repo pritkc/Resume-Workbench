@@ -8,6 +8,8 @@ import {
   aggregateGroupTokens,
   formatCost,
   formatCount,
+  getCallResumeCode,
+  getCallResumeId,
   groupTimeRangeLabel,
   shortenId,
   type TraceCallGroup,
@@ -33,6 +35,8 @@ export function LlmTraceGenerationGroup({
   const failed = calls.filter((c) => !c.success).length;
   const tokens = aggregateGroupTokens(calls);
   const cost = aggregateGroupCostUsd(calls);
+  const resumeCode = calls.map(getCallResumeCode).find(Boolean);
+  const resumeId = calls.map(getCallResumeId).find(Boolean);
 
   return (
     <details
@@ -53,6 +57,11 @@ export function LlmTraceGenerationGroup({
             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
               {formatCount(calls.length)} LLM call{calls.length === 1 ? '' : 's'}
             </span>
+            {resumeCode ? (
+              <span className="rounded bg-blue-50 px-1.5 py-0.5 font-mono text-[10px] text-blue-800">
+                resume {resumeCode}
+              </span>
+            ) : null}
             {failed > 0 ? (
               <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800">
                 {formatCount(failed)} failed
@@ -72,14 +81,30 @@ export function LlmTraceGenerationGroup({
             <span>{groupTimeRangeLabel(calls)}</span>
           </div>
           {!isSingleTraceQuery ? (
-            <Link
-              href={`/llm-traces?trace_id=${encodeURIComponent(traceKey)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block pt-1 text-[11px] font-medium text-blue-700 underline-offset-2 hover:underline"
-            >
-              Open only this generation
-            </Link>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Link
+                href={`/llm-traces?trace_id=${encodeURIComponent(traceKey)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-[11px] font-medium text-blue-700 underline-offset-2 hover:underline"
+              >
+                Open only this generation
+              </Link>
+              {resumeCode || resumeId ? (
+                <Link
+                  href={
+                    resumeCode
+                      ? `/llm-traces?resume_code=${encodeURIComponent(resumeCode)}`
+                      : `/llm-traces?resume_id=${encodeURIComponent(resumeId || '')}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-[11px] font-medium text-blue-700 underline-offset-2 hover:underline"
+                >
+                  Open all for this resume
+                </Link>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </summary>

@@ -5,6 +5,8 @@ import { ArrowLeft } from 'lucide-react';
 type PageProps = {
   searchParams?: Promise<{
     trace_id?: string;
+    resume_code?: string;
+    resume_id?: string;
     request_scope?: string;
   }>;
 };
@@ -12,6 +14,8 @@ type PageProps = {
 export default async function LLMTracesPage({ searchParams }: PageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const traceId = resolvedSearchParams?.trace_id ?? null;
+  const resumeCode = resolvedSearchParams?.resume_code ?? null;
+  const resumeId = resolvedSearchParams?.resume_id ?? null;
   const requestScope = resolvedSearchParams?.request_scope ?? null;
 
   return (
@@ -30,7 +34,7 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
               </Link>
               <h1 className="truncate text-base font-medium text-slate-900">LLM traces</h1>
             </div>
-            {(traceId || requestScope) && (
+            {(traceId || resumeCode || resumeId || requestScope) && (
               <div className="flex flex-wrap gap-1.5 pl-10 sm:pl-0">
                 {traceId ? (
                   <span
@@ -38,6 +42,22 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
                     title={traceId}
                   >
                     trace: {traceId}
+                  </span>
+                ) : null}
+                {resumeCode ? (
+                  <span
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700"
+                    title={resumeCode}
+                  >
+                    resume code: {resumeCode}
+                  </span>
+                ) : null}
+                {resumeId ? (
+                  <span
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700"
+                    title={resumeId}
+                  >
+                    resume id: {resumeId}
                   </span>
                 ) : null}
                 {requestScope ? (
@@ -67,6 +87,8 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
 
         <LLMTraceViewer
           initialTraceId={traceId}
+          initialResumeCode={resumeCode}
+          initialResumeId={resumeId}
           initialRequestScope={requestScope}
           defaultAutoRefresh={true}
         />

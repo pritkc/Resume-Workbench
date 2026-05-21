@@ -6,6 +6,7 @@ import type {
   ResumeDiffSummary,
   ResumeFieldDiff,
   ResumeChange,
+  ResumePreview,
 } from '@/components/common/resume_previewer_context';
 
 vi.mock('@/lib/i18n', () => ({
@@ -64,6 +65,35 @@ const changeManifest: ResumeChange[] = [
   },
 ];
 
+const resumePreview: ResumePreview = {
+  personalInfo: {
+    name: 'Prit Chakalasiya',
+    email: 'prit@example.com',
+    phone: '555-0100',
+    location: 'Nashville, TN',
+  },
+  summary: 'Resume summary',
+  workExperience: [
+    {
+      id: 1,
+      company: 'Humana',
+      title: 'Software Engineer',
+      location: 'Remote',
+      years: '2025-present',
+      description: ['Built APIs', 'Built dashboard'],
+    },
+  ],
+  education: [],
+  personalProjects: [
+    {
+      id: 1,
+      name: 'ClaimSight',
+      description: ['Built dashboard', 'Migrated search'],
+    },
+  ],
+  skills: { groups: [] },
+};
+
 describe('DiffPreviewModal', () => {
   it('renders fallback dialog when diff data is missing', () => {
     const onClose = vi.fn();
@@ -103,7 +133,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('new')).toBeInTheDocument();
+    expect(screen.getByText('new summary')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Professional summary/i }));
     expect(screen.queryByText('new summary')).not.toBeInTheDocument();
   });
@@ -128,7 +158,7 @@ describe('DiffPreviewModal', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Breakdown' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Breakdown' }));
-    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
     expect(screen.getByText('Skills verify')).toBeInTheDocument();
     expect(screen.getByText('Model-attributed rows')).toBeInTheDocument();
   });
@@ -153,6 +183,7 @@ describe('DiffPreviewModal', () => {
         onConfirm={vi.fn()}
         diffSummary={diffSummary}
         detailedChanges={titleOnlyChanges}
+        resumePreview={resumePreview}
         changeManifest={[
           {
             path: 'workExperience[0].description[0]',
@@ -165,9 +196,88 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    const context = screen.getByText('Experience 1 role').closest('div');
+    const context = screen.getByText('Role').closest('div');
     expect(context).not.toBeNull();
-    expect(within(context as HTMLElement).getByText('Attributed to model')).toBeInTheDocument();
+    expect(within(context as HTMLElement).getByText(/Attributed to model/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Humana')).toHaveLength(1);
+    expect(screen.queryByText(/Humana .* role/i)).not.toBeInTheDocument();
+  });
+
+  it('renders changed bullets as old stricken text, new text, and why', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        resumePreview={resumePreview}
+        detailedChanges={[
+          {
+            field_path: 'workExperience[0].description[1]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Built dashboard',
+            new_value: 'Built analytics dashboard',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'workExperience[0].description[1]',
+            action: 'replace',
+            original: 'Built dashboard',
+            value: 'Built analytics dashboard',
+            reason: 'Directly maps to analytics ownership.',
+          },
+        ]}
+      />
+    );
+
+    const oldBullet = screen.getByText('Built dashboard');
+    expect(oldBullet).toHaveClass('line-through');
+    expect(screen.getByText('Built analytics dashboard')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Directly maps to analytics ownership/i)
+    ).toBeInTheDocument();
+  });
+
+  it('renders unchanged rows with a bullet and retained rationale', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        resumePreview={resumePreview}
+        detailedChanges={[
+          {
+            field_path: 'workExperience[0].description[0]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Built APIs',
+            new_value: 'Built APIs',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'workExperience[0].description[0]',
+            action: 'replace',
+            original: 'Built APIs',
+            value: 'Built APIs',
+            reason: 'Original story is already targeted.',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByLabelText('Bullet 1')).toBeInTheDocument();
+    expect(screen.getByText('Built APIs')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Original story is already targeted/i)
+    ).toBeInTheDocument();
   });
 
   it('shows project diffs when project path uses alias form', () => {
@@ -194,7 +304,7 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.getByRole('button', { name: /Project 1/i })).toBeInTheDocument();
-    expect(screen.getByText('#2')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bullet 2')).toBeInTheDocument();
   });
 
   it('fires confirm and reject handlers', () => {
@@ -330,7 +440,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.queryAllByText('Post-tailor tweak')).toHaveLength(1);
+    expect(screen.queryByText('Post-tailor tweak')).not.toBeInTheDocument();
     expect(
       screen.getByText(new RegExp(ragSnippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     ).toBeInTheDocument();

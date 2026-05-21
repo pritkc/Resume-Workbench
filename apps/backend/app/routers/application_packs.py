@@ -1,15 +1,21 @@
 """Application pack endpoints."""
 
+import asyncio
 from datetime import datetime, timezone
+import json
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
 from app.database import db
 from app.llm import llm_trace_scope
 
 from app.routers.resumes import (
+    _improve_preview_flow,
+    _resolve_prompt_id,
+    _resolve_request_theme_settings,
     improve_resume_confirm_endpoint,
     improve_resume_preview_endpoint,
 )
@@ -24,7 +30,10 @@ from app.schemas import (
     ImproveResumeConfirmRequest,
     ImproveResumeRequest,
     ImproveResumeResponse,
+    LivePreviewStartData,
+    LivePreviewStartResponse,
 )
+from app.services.live_generation import LIVE_TERMINAL_EVENT_TYPES, live_generation_registry
 from app.services.application_questions import (
     dedupe_question_inputs,
     generate_application_question_answers,
@@ -32,12 +41,134 @@ from app.services.application_questions import (
     read_answers_from_generation_payload,
     validate_question_batch_constraints,
 )
+from app.services.resume_codes import derive_resume_code
 
 router = APIRouter(prefix="/application-packs", tags=["Application Packs"])
 
 QUESTION_GENERATE_RUN_KIND = "application_pack_questions"
 QUESTION_MANUAL_RUN_KIND = "application_pack_questions_manual"
 QUESTION_RUN_KINDS = (QUESTION_MANUAL_RUN_KIND, QUESTION_GENERATE_RUN_KIND)
+
+
+async def _run_live_preview_background(
+    *,
+    live_run_id: str,
+    generation_run_id: str,
+    trace_id: str,
+    request: ImproveResumeRequest,
+    resume: dict[str, Any],
+    job: dict[str, Any],
+    prompt_id: str,
+) -> None:
+    live_run = await live_generation_registry.get_run(live_run_id)
+    if live_run is None:
+        return
+
+    stage_state = {"stage": "load_job_keywords"}
+    try:
+        await live_generation_registry.emit(
+            live_run_id,
+            "run.started",
+            {
+                "status": "running",
+                "resume_id": request.resume_id,
+                "job_id": request.job_id,
+                "prompt_id": prompt_id,
+            },
+        )
+        await live_generation_registry.emit(
+            live_run_id,
+            "stage.started",
+            {
+                "host_event": "live_preview",
+                "sub_event": "request_accepted",
+                "stage_label": "Starting live preview",
+                "stage_detail": "The preview request was accepted and the backend pipeline is starting.",
+            },
+        )
+        with llm_trace_scope(
+            trace_id,
+            "resumes.improve_preview",
+            {
+                "resume_id": request.resume_id,
+                "resume_code": derive_resume_code(request.resume_id),
+                "source_resume_id": request.resume_id,
+                "source_resume_code": derive_resume_code(request.resume_id),
+                "job_id": request.job_id,
+                "live_run_id": live_run_id,
+                "generation_run_id": generation_run_id,
+            },
+        ):
+            result = await asyncio.wait_for(
+                _improve_preview_flow(
+                    request=request,
+                    resume=resume,
+                    job=job,
+                    prompt_id=prompt_id,
+                    request_id=trace_id,
+                    theme_settings=_resolve_request_theme_settings(
+                        request_theme_settings=request.theme_settings,
+                        resume=resume,
+                    ),
+                    stage_state=stage_state,
+                    preview_generation_run_id=generation_run_id,
+                    live_run=live_run,
+                ),
+                timeout=240.0,
+            )
+        await live_generation_registry.set_result(live_run_id, result)
+        await live_generation_registry.emit(
+            live_run_id,
+            "run.completed",
+            {
+                "status": "completed",
+                "application_pack_id": result.data.application_pack_id,
+                "generation_run_id": result.data.generation_run_id,
+                "artifact_count": len(result.data.artifacts),
+            },
+        )
+    except asyncio.CancelledError:
+        db.update_generation_run(
+            generation_run_id,
+            {
+                "status": "cancelled",
+                "completed_at": datetime.now(timezone.utc),
+                "warnings": ["Live preview cancelled by user."],
+            },
+        )
+        await live_generation_registry.emit(
+            live_run_id,
+            "run.cancelled",
+            {"status": "cancelled", "stage": stage_state.get("stage")},
+        )
+        raise
+    except Exception as exc:
+        db.update_generation_run(
+            generation_run_id,
+            {
+                "status": "failed",
+                "completed_at": datetime.now(timezone.utc),
+                "warnings": [str(exc)],
+                "result_payload": {
+                    "live_run_id": live_run_id,
+                    "llm_trace_id": trace_id,
+                    "failed_stage": stage_state.get("stage"),
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+            },
+        )
+        await live_generation_registry.set_error(live_run_id, str(exc))
+        await live_generation_registry.emit(
+            live_run_id,
+            "run.failed",
+            {
+                "status": "failed",
+                "stage": stage_state.get("stage"),
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            },
+        )
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -207,6 +338,151 @@ async def preview_application_pack(
     return await improve_resume_preview_endpoint(request)
 
 
+@router.post("/preview/live", response_model=LivePreviewStartResponse)
+async def start_live_preview_application_pack(
+    request: ImproveResumeRequest,
+) -> LivePreviewStartResponse:
+    resume = db.get_resume(request.resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    job = db.get_job(request.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job description not found")
+
+    prompt_id = _resolve_prompt_id(request.prompt_id)
+    trace_id = str(uuid4())
+    generation_run = db.create_generation_run(
+        run_kind="application_pack_preview",
+        status="running",
+        source_resume_id=request.resume_id,
+        job_id=request.job_id,
+        prompt_id=prompt_id,
+        request_payload={
+            "prompt_id": prompt_id,
+            "llm_trace_id": trace_id,
+            "live_preview": True,
+        },
+        result_payload={
+            "live_preview": True,
+            "llm_trace_id": trace_id,
+        },
+    )
+    live_run = await live_generation_registry.create_run(
+        generation_run_id=generation_run["generation_run_id"],
+        trace_id=trace_id,
+    )
+    db.update_generation_run(
+        generation_run["generation_run_id"],
+        {
+            "request_payload": {
+                "prompt_id": prompt_id,
+                "llm_trace_id": trace_id,
+                "live_preview": True,
+                "live_run_id": live_run.live_run_id,
+            }
+        },
+    )
+    task = asyncio.create_task(
+        _run_live_preview_background(
+            live_run_id=live_run.live_run_id,
+            generation_run_id=generation_run["generation_run_id"],
+            trace_id=trace_id,
+            request=request,
+            resume=resume,
+            job=job,
+            prompt_id=prompt_id,
+        )
+    )
+    await live_generation_registry.set_task(live_run.live_run_id, task)
+    return LivePreviewStartResponse(
+        request_id=trace_id,
+        data=LivePreviewStartData(
+            live_run_id=live_run.live_run_id,
+            generation_run_id=generation_run["generation_run_id"],
+            trace_id=trace_id,
+        ),
+    )
+
+
+@router.get("/preview/live/{live_run_id}/events")
+async def stream_live_preview_events(
+    live_run_id: str,
+    request: Request,
+    last_event_id: int = Query(0, alias="last_event_id", ge=0),
+) -> StreamingResponse:
+    live_run = await live_generation_registry.get_run(live_run_id)
+    if live_run is None:
+        raise HTTPException(status_code=404, detail="Live preview run not found")
+
+    header_last_event_id = request.headers.get("last-event-id")
+    try:
+        initial_sequence = int(header_last_event_id) if header_last_event_id else last_event_id
+    except ValueError:
+        initial_sequence = last_event_id
+
+    async def event_stream():
+        last_sequence = max(0, initial_sequence)
+        for event in await live_generation_registry.events_after(live_run_id, last_sequence):
+            last_sequence = event.sequence
+            yield event.to_sse()
+            if event.type in LIVE_TERMINAL_EVENT_TYPES:
+                return
+
+        while True:
+            if await request.is_disconnected():
+                return
+            try:
+                event = await asyncio.wait_for(live_run.queue.get(), timeout=12.0)
+            except asyncio.TimeoutError:
+                heartbeat = {
+                    "event_id": str(uuid4()),
+                    "sequence": last_sequence,
+                    "live_run_id": live_run.live_run_id,
+                    "generation_run_id": live_run.generation_run_id,
+                    "trace_id": live_run.trace_id,
+                    "type": "heartbeat",
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "data": {"status": live_run.status},
+                }
+                yield f"event: heartbeat\ndata: {json.dumps(heartbeat, separators=(',', ':'))}\n\n"
+                continue
+            if event.sequence <= last_sequence:
+                continue
+            last_sequence = event.sequence
+            yield event.to_sse()
+            if event.type in LIVE_TERMINAL_EVENT_TYPES:
+                return
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/preview/live/{live_run_id}/result", response_model=ImproveResumeResponse)
+async def get_live_preview_result(live_run_id: str) -> ImproveResumeResponse:
+    live_run = await live_generation_registry.get_run(live_run_id)
+    if live_run is None:
+        raise HTTPException(status_code=404, detail="Live preview run not found")
+    if live_run.result is None:
+        raise HTTPException(status_code=202, detail={"status": live_run.status})
+    return live_run.result
+
+
+@router.post("/preview/live/{live_run_id}/cancel")
+async def cancel_live_preview(live_run_id: str) -> dict[str, Any]:
+    cancelled = await live_generation_registry.cancel(live_run_id)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="Live preview run not found")
+    return {"status": "cancelled", "live_run_id": live_run_id}
+
+
 @router.post("/confirm", response_model=ImproveResumeResponse)
 async def confirm_application_pack(
     request: ImproveResumeConfirmRequest,
@@ -305,11 +581,19 @@ async def answer_application_questions(
             generation_run_id=request.generation_run_id,
         )
         trace_metadata = {
+            "resume_id": resume["resume_id"],
+            "resume_code": derive_resume_code(resume["resume_id"]),
             "generation_run_id": generation_run["generation_run_id"],
             "application_pack_id": application_pack_id,
             "job_id": request.job_id,
             "question_count": len(questions_for_generation),
         }
+        if source_resume_id:
+            trace_metadata["source_resume_id"] = source_resume_id
+            trace_metadata["source_resume_code"] = derive_resume_code(source_resume_id)
+        if tailored_resume_id:
+            trace_metadata["tailored_resume_id"] = tailored_resume_id
+            trace_metadata["tailored_resume_code"] = derive_resume_code(tailored_resume_id)
         with llm_trace_scope(
             trace_id=generation_run["generation_run_id"],
             request_scope="application_packs.questions.answer",

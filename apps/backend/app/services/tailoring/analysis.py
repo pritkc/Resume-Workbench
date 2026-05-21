@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from app.config import get_step_llm_config
 from app.llm import complete as complete_json
+from app.llm import complete_stream
 from app.prompts import PROMPT_VERSIONS, LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT
 from app.prompts.extract_jd_intel import build_messages as build_jd_intel_messages
 from app.services.prompt_utils import sanitize_user_input
@@ -26,6 +27,7 @@ from app.services.tailoring.section_format import (
 logger = logging.getLogger(__name__)
 
 MAX_PROMPT_LIST_ITEMS = 12
+LiveEventSink = Callable[[str, dict[str, Any]], Awaitable[None]]
 
 
 def normalize_prompt_list(value: Any, *, limit: int = MAX_PROMPT_LIST_ITEMS) -> list[str]:
@@ -100,13 +102,29 @@ def find_supported_keywords(job_keywords: dict[str, Any], resume_source: Any) ->
     ]
 
 
-async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
+async def extract_jd_intelligence(
+    job_description: str,
+    *,
+    event_sink: LiveEventSink | None = None,
+    live_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Extract JD intelligence as section-header text wrapped in a JSON-compatible dict."""
 
     sanitized_jd = sanitize_user_input(job_description)
     system_prompt, prompt = build_jd_intel_messages(sanitized_jd)
 
-    result = await complete_json(
+    completion = complete_stream if event_sink is not None else complete_json
+    completion_kwargs: dict[str, Any] = {}
+    if event_sink is not None:
+        completion_kwargs.update(
+            {
+                "event_sink": event_sink,
+                "include_delta_text": True,
+                "stream_kind": "jd_intel",
+            }
+        )
+
+    result = await completion(
         prompt=prompt,
         system_prompt=system_prompt,
         config=get_step_llm_config("extract_jd_intel"),
@@ -114,12 +132,14 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
         timeout_seconds=90,
         operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
         metadata={
+            **(live_metadata or {}),
             "job_description_chars": len(job_description),
             "prompt_version": PROMPT_VERSIONS.get(
                 "jd_intelligence_user",
                 PROMPT_VERSIONS.get("extract_keywords", "unknown"),
             ),
         },
+        **completion_kwargs,
     )
     if isinstance(result, dict):
         enrich_jd_intel_blob(result, job_description)
@@ -130,6 +150,15 @@ async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
     return section_jd_wrapper(result)
 
 
-async def extract_job_keywords(job_description: str) -> dict[str, Any]:
+async def extract_job_keywords(
+    job_description: str,
+    *,
+    event_sink: LiveEventSink | None = None,
+    live_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Alias for :func:`extract_jd_intelligence` (cached ``job_keywords`` JSON blob)."""
-    return await extract_jd_intelligence(job_description)
+    return await extract_jd_intelligence(
+        job_description,
+        event_sink=event_sink,
+        live_metadata=live_metadata,
+    )

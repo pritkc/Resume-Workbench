@@ -10,7 +10,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.schemas import ApplicationQuestionAnswer, TailoringStageBreakdown
+from app.schemas import ApplicationQuestionAnswer, ImproveResumeData, ImproveResumeResponse, TailoringStageBreakdown
 from app.services.additional_groups import normalize_additional_groups
 from app.services.tailoring.section_format import section_jd_wrapper
 
@@ -171,6 +171,92 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     }
     generate_auxiliary.assert_not_awaited()
     assert "pipeline_timing" in update_run_payload["result_payload"]
+
+
+@pytest.mark.asyncio
+async def test_live_preview_streams_events_and_returns_result(sample_resume: dict, client):
+    final_response = ImproveResumeResponse(
+        request_id="trace-live-123",
+        data=ImproveResumeData(
+            request_id="trace-live-123",
+            resume_id=None,
+            application_pack_id="pack-live-123",
+            generation_run_id="run-live-123",
+            job_id="job-123",
+            resume_preview=sample_resume,
+            improvements=[],
+        ),
+    )
+
+    async def fake_preview_flow(**kwargs):
+        live_run = kwargs["live_run"]
+        from app.services.live_generation import live_generation_registry
+
+        await live_generation_registry.emit(
+            live_run.live_run_id,
+            "stage.started",
+            {"stage_label": "tailoring / generate_full_resume"},
+        )
+        await live_generation_registry.emit(
+            live_run.live_run_id,
+            "llm.started",
+            {
+                "operation": "resume_generate_full",
+                "model_name": "fake-model",
+                "prompt_id": "full",
+            },
+        )
+        await live_generation_registry.emit(
+            live_run.live_run_id,
+            "section.updated",
+            {
+                "section_id": "summary",
+                "section": "SUMMARY",
+                "content": "Tailored summary",
+            },
+        )
+        return final_response
+
+    with (
+        patch("app.routers.application_packs.db") as mock_db,
+        patch(
+            "app.routers.application_packs._improve_preview_flow",
+            new=AsyncMock(side_effect=fake_preview_flow),
+        ),
+    ):
+        mock_db.get_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.get_job.return_value = {"job_id": "job-123", "content": "Senior Backend Engineer"}
+        mock_db.create_generation_run.return_value = {
+            "generation_run_id": "run-live-123",
+            "result_payload": {},
+        }
+        mock_db.update_generation_run.return_value = {
+            "generation_run_id": "run-live-123",
+            "result_payload": {},
+        }
+
+        start_response = await client.post(
+            "/api/v1/application-packs/preview/live",
+            json={"resume_id": "res-123", "job_id": "job-123", "prompt_id": "full"},
+        )
+        assert start_response.status_code == 200
+        live_run_id = start_response.json()["data"]["live_run_id"]
+
+        events_response = await client.get(
+            f"/api/v1/application-packs/preview/live/{live_run_id}/events"
+        )
+        assert events_response.status_code == 200
+        event_text = events_response.text
+        assert "run.started" in event_text
+        assert "llm.started" in event_text
+        assert "section.updated" in event_text
+        assert "run.completed" in event_text
+
+        result_response = await client.get(
+            f"/api/v1/application-packs/preview/live/{live_run_id}/result"
+        )
+        assert result_response.status_code == 200
+        assert result_response.json()["data"]["application_pack_id"] == "pack-live-123"
 
 
 @pytest.mark.asyncio

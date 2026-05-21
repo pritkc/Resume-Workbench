@@ -897,6 +897,8 @@ class ResumeFetchData(BaseModel):
     parent_id: str | None = None  # For determining if resume is tailored
     title: str | None = None
     application_pack_id: str | None = None
+    generation_run_id: str | None = None
+    llm_trace_id: str | None = None
     theme_settings: RenderThemeSettings | None = None
 
 
@@ -1440,6 +1442,22 @@ class ImproveResumeResponse(BaseModel):
 
     request_id: str
     data: ImproveResumeData
+
+
+class LivePreviewStartData(BaseModel):
+    """Identifiers returned when a live preview run is accepted."""
+
+    live_run_id: str
+    generation_run_id: str
+    trace_id: str
+    status: Literal["running"] = "running"
+
+
+class LivePreviewStartResponse(BaseModel):
+    """Response for starting a live application-pack preview."""
+
+    request_id: str
+    data: LivePreviewStartData
 
 
 class JdTailorDiffData(BaseModel):

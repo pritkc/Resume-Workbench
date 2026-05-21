@@ -108,6 +108,19 @@ export type TraceCallGroup = {
   newestCreatedAt: number;
 };
 
+export function getCallResumeCode(call: LLMCallRecord): string | null {
+  const context = call.request_context ?? {};
+  const value =
+    context.resume_code ?? context.tailored_resume_code ?? context.source_resume_code ?? null;
+  return typeof value === 'string' && value.trim() ? value.trim().toUpperCase() : null;
+}
+
+export function getCallResumeId(call: LLMCallRecord): string | null {
+  const context = call.request_context ?? {};
+  const value = context.resume_id ?? context.tailored_resume_id ?? context.source_resume_id ?? null;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 /**
  * Partition flat API results into one group per resume-generation (or other) request.
  * Groups are ordered newest-first; calls inside each group are oldest-first (pipeline order).

@@ -97,6 +97,29 @@ def _extract_run_timing_summary(run: dict[str, object]) -> tuple[
     return total_duration_ms, total_events, process_timings, llm_summary if isinstance(llm_summary, dict) else None
 
 
+def _select_generation_runs(
+    *,
+    generation_run_id: str | None,
+    run_kind: str | None,
+    status: str | None,
+    limit: int,
+) -> list[dict[str, object]]:
+    trimmed_generation_run_id = (
+        generation_run_id.strip()
+        if isinstance(generation_run_id, str) and generation_run_id.strip()
+        else None
+    )
+    if trimmed_generation_run_id:
+        run = db.get_generation_run(trimmed_generation_run_id)
+        return [run] if isinstance(run, dict) else []
+
+    return db.list_generation_runs(
+        run_kind=run_kind,
+        status=status,
+        limit=limit,
+    )
+
+
 @router.get("/calls", response_model=LLMCallListResponse)
 async def list_llm_calls(
     trace_id: str | None = Query(None),
@@ -104,6 +127,8 @@ async def list_llm_calls(
     request_scope: str | None = Query(None),
     operation: str | None = Query(None),
     success: bool | None = Query(None),
+    resume_id: str | None = Query(None),
+    resume_code: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
 ) -> LLMCallListResponse:
     return LLMCallListResponse(
@@ -114,6 +139,8 @@ async def list_llm_calls(
             request_scope=request_scope,
             operation=operation,
             success=success,
+            resume_id=resume_id,
+            resume_code=resume_code,
             limit=limit,
         ),
     )
@@ -123,8 +150,15 @@ async def list_llm_calls(
 async def summarize_llm_calls(
     trace_id: str | None = Query(None),
     request_scope: str | None = Query(None),
+    resume_id: str | None = Query(None),
+    resume_code: str | None = Query(None),
 ) -> LLMCallSummaryResponse:
-    summary = db.summarize_llm_calls(trace_id=trace_id, request_scope=request_scope)
+    summary = db.summarize_llm_calls(
+        trace_id=trace_id,
+        request_scope=request_scope,
+        resume_id=resume_id,
+        resume_code=resume_code,
+    )
     return LLMCallSummaryResponse(
         request_id=str(uuid4()),
         data=LLMCallSummary.model_validate(summary),
@@ -133,6 +167,7 @@ async def summarize_llm_calls(
 
 @router.get("/runs/timing", response_model=GenerationRunTimingListResponse)
 async def list_generation_run_timing(
+    generation_run_id: str | None = Query(None),
     run_kind: str | None = Query(None),
     status: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
@@ -140,7 +175,8 @@ async def list_generation_run_timing(
     trimmed_run_kind = run_kind.strip() if isinstance(run_kind, str) and run_kind.strip() else None
     trimmed_status = status.strip() if isinstance(status, str) and status.strip() else None
 
-    runs = db.list_generation_runs(
+    runs = _select_generation_runs(
+        generation_run_id=generation_run_id,
         run_kind=trimmed_run_kind,
         status=trimmed_status,
         limit=limit,
@@ -191,6 +227,7 @@ async def list_generation_run_timing(
 
 @router.get("/runs/timing-detailed", response_model=GenerationRunTimingDetailListResponse)
 async def list_generation_run_timing_detailed(
+    generation_run_id: str | None = Query(None),
     run_kind: str | None = Query(None),
     status: str | None = Query(None),
     limit: int = Query(80, ge=1, le=1000),
@@ -198,7 +235,8 @@ async def list_generation_run_timing_detailed(
     trimmed_run_kind = run_kind.strip() if isinstance(run_kind, str) and run_kind.strip() else None
     trimmed_status = status.strip() if isinstance(status, str) and status.strip() else None
 
-    runs = db.list_generation_runs(
+    runs = _select_generation_runs(
+        generation_run_id=generation_run_id,
         run_kind=trimmed_run_kind,
         status=trimmed_status,
         limit=limit,

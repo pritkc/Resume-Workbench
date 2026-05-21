@@ -28,6 +28,8 @@ import { Activity, Braces, Database, Loader2, RefreshCw, Search } from 'lucide-r
 
 interface TraceQuery {
   traceId: string;
+  resumeCode: string;
+  resumeId: string;
   requestScope: string;
   successFilter: SuccessFilter;
   limit: number;
@@ -35,6 +37,8 @@ interface TraceQuery {
 
 interface LLMTraceViewerProps {
   initialTraceId?: string | null;
+  initialResumeCode?: string | null;
+  initialResumeId?: string | null;
   initialRequestScope?: string | null;
   defaultAutoRefresh?: boolean;
 }
@@ -79,20 +83,26 @@ function StatCard({
 
 export function LLMTraceViewer({
   initialTraceId,
+  initialResumeCode,
+  initialResumeId,
   initialRequestScope,
   defaultAutoRefresh = true,
 }: LLMTraceViewerProps) {
   const initialQuery = useMemo<TraceQuery>(
     () => ({
       traceId: initialTraceId?.trim() ?? '',
+      resumeCode: initialResumeCode?.trim() ?? '',
+      resumeId: initialResumeId?.trim() ?? '',
       requestScope: initialRequestScope?.trim() ?? '',
       successFilter: 'all',
       limit: 100,
     }),
-    [initialRequestScope, initialTraceId]
+    [initialRequestScope, initialResumeCode, initialResumeId, initialTraceId]
   );
 
   const [traceIdInput, setTraceIdInput] = useState(initialQuery.traceId);
+  const [resumeCodeInput, setResumeCodeInput] = useState(initialQuery.resumeCode);
+  const [resumeIdInput, setResumeIdInput] = useState(initialQuery.resumeId);
   const [requestScopeInput, setRequestScopeInput] = useState(initialQuery.requestScope);
   const [successFilterInput, setSuccessFilterInput] = useState<SuccessFilter>(
     initialQuery.successFilter
@@ -129,6 +139,8 @@ export function LLMTraceViewer({
 
     const callParams: FetchLLMCallsParams = {
       traceId: nextQuery.traceId || undefined,
+      resumeCode: nextQuery.resumeCode || undefined,
+      resumeId: nextQuery.resumeId || undefined,
       requestScope: nextQuery.requestScope || undefined,
       success: toSuccessValue(nextQuery.successFilter),
       limit: nextQuery.limit,
@@ -138,6 +150,8 @@ export function LLMTraceViewer({
       const [summaryData, callsData] = await Promise.all([
         fetchLlmCallSummary({
           traceId: nextQuery.traceId || undefined,
+          resumeCode: nextQuery.resumeCode || undefined,
+          resumeId: nextQuery.resumeId || undefined,
           requestScope: nextQuery.requestScope || undefined,
         }),
         fetchLlmCalls(callParams),
@@ -173,6 +187,8 @@ export function LLMTraceViewer({
   const handleApplyFilters = () => {
     setQuery({
       traceId: traceIdInput.trim(),
+      resumeCode: resumeCodeInput.trim(),
+      resumeId: resumeIdInput.trim(),
       requestScope: requestScopeInput.trim(),
       successFilter: successFilterInput,
       limit: limitInput,
@@ -181,11 +197,15 @@ export function LLMTraceViewer({
 
   const handleClearFilters = () => {
     setTraceIdInput('');
+    setResumeCodeInput('');
+    setResumeIdInput('');
     setRequestScopeInput('');
     setSuccessFilterInput('all');
     setLimitInput(100);
     setQuery({
       traceId: '',
+      resumeCode: '',
+      resumeId: '',
       requestScope: '',
       successFilter: 'all',
       limit: 100,
@@ -201,9 +221,11 @@ export function LLMTraceViewer({
 
   const currentModeLabel = query.traceId
     ? 'Chronological trace flow'
-    : query.requestScope
-      ? 'Latest calls in this request scope'
-      : 'Latest calls across the whole system';
+    : query.resumeCode || query.resumeId
+      ? 'All calls linked to this resume'
+      : query.requestScope
+        ? 'Latest calls in this request scope'
+        : 'Latest calls across the whole system';
 
   return (
     <div className="lg:grid lg:grid-cols-[10rem_minmax(0,1fr)] lg:items-start lg:gap-6">
@@ -265,6 +287,39 @@ export function LLMTraceViewer({
                   />
                   <p className="text-[11px] leading-snug text-slate-500">
                     One end-to-end request, including retries.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="resume-code" className="text-xs text-slate-600">
+                    Resume code
+                  </Label>
+                  <Input
+                    id="resume-code"
+                    value={resumeCodeInput}
+                    onChange={(event) => setResumeCodeInput(event.target.value.toUpperCase())}
+                    placeholder="ABC123"
+                    className="font-mono text-sm uppercase"
+                  />
+                  <p className="text-[11px] leading-snug text-slate-500">
+                    Pulls preview, cover letter, outreach, questions, and other calls tagged to the
+                    resume.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="resume-id" className="text-xs text-slate-600">
+                    Resume ID
+                  </Label>
+                  <Input
+                    id="resume-id"
+                    value={resumeIdInput}
+                    onChange={(event) => setResumeIdInput(event.target.value)}
+                    placeholder="tailored resume id"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-[11px] leading-snug text-slate-500">
+                    Useful when a code is not available on older trace rows.
                   </p>
                 </div>
 
@@ -515,6 +570,13 @@ export function LLMTraceViewer({
               {query.traceId ? (
                 <p className="font-mono text-[11px] text-slate-400" title={query.traceId}>
                   {shortenId(query.traceId)}
+                </p>
+              ) : query.resumeCode || query.resumeId ? (
+                <p
+                  className="font-mono text-[11px] text-slate-400"
+                  title={query.resumeCode || query.resumeId}
+                >
+                  resume {query.resumeCode || shortenId(query.resumeId)}
                 </p>
               ) : null}
             </div>

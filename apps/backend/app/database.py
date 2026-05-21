@@ -676,6 +676,8 @@ class Database:
         request_scope: str | None = None,
         operation: str | None = None,
         success: bool | None = None,
+        resume_id: str | None = None,
+        resume_code: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         with self._session() as session:
@@ -686,6 +688,8 @@ class Database:
                 request_scope=request_scope,
                 operation=operation,
                 success=success,
+                resume_id=resume_id,
+                resume_code=resume_code,
                 limit=limit,
             )
             return [_serialize_llm_call(record) for record in records]
@@ -695,12 +699,28 @@ class Database:
         *,
         trace_id: str | None = None,
         request_scope: str | None = None,
+        resume_id: str | None = None,
+        resume_code: str | None = None,
     ) -> dict[str, Any]:
         with self._session() as session:
             return llm_call_repo.summarize_llm_calls(
                 session,
                 trace_id=trace_id,
                 request_scope=request_scope,
+                resume_id=resume_id,
+                resume_code=resume_code,
+            )
+
+    def merge_llm_call_context_for_trace(
+        self,
+        trace_id: str,
+        context_updates: dict[str, Any],
+    ) -> int:
+        with self._session() as session:
+            return llm_call_repo.merge_context_for_trace(
+                session,
+                trace_id=trace_id,
+                context_updates=context_updates,
             )
 
     def attach_compact_diff_validation_to_latest_llm_call(

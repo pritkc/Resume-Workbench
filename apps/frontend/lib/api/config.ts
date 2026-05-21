@@ -221,11 +221,13 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
 }
 
 export async function fetchGenerationRunTimingLogs(options?: {
+  generationRunId?: string;
   runKind?: string;
   status?: string;
   limit?: number;
 }): Promise<GenerationRunTimingRow[]> {
   const params = new URLSearchParams();
+  if (options?.generationRunId) params.set('generation_run_id', options.generationRunId);
   if (options?.runKind) params.set('run_kind', options.runKind);
   if (options?.status) params.set('status', options.status);
   params.set('limit', String(options?.limit ?? 100));
@@ -239,11 +241,13 @@ export async function fetchGenerationRunTimingLogs(options?: {
 }
 
 export async function fetchGenerationRunTimingDetails(options?: {
+  generationRunId?: string;
   runKind?: string;
   status?: string;
   limit?: number;
 }): Promise<GenerationRunTimingDetailRow[]> {
   const params = new URLSearchParams();
+  if (options?.generationRunId) params.set('generation_run_id', options.generationRunId);
   if (options?.runKind) params.set('run_kind', options.runKind);
   if (options?.status) params.set('status', options.status);
   params.set('limit', String(options?.limit ?? 50));
