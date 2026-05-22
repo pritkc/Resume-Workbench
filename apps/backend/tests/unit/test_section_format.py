@@ -178,6 +178,8 @@ LOCATION: San Francisco, CA
 === JD INTEL ===
 HOOKS: build APIs, scale pipelines
 MUST-MATCH: Python, Kafka
+CONTEXT: Acme marketplace, enterprise customers
+TARGETING: platform reliability for marketplace scale
 AVOID: Microsoft Office
 LEVEL: Senior IC ownership.
 """

@@ -507,7 +507,7 @@ def jd_keywords_from_section_blob(value: Any) -> list[str]:
         if ":" not in line:
             continue
         label, _, raw = line.partition(":")
-        if label.strip().upper() in {"AVOID", "LEVEL", "DOMAIN"}:
+        if label.strip().upper() in {"AVOID", "LEVEL", "DOMAIN", "CONTEXT", "TARGETING"}:
             continue
         keywords.extend(_parse_csv_values(raw))
     return _dedupe(keywords)

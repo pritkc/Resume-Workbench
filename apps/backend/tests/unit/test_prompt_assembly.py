@@ -378,13 +378,19 @@ def test_full_prompt_splits_experience_sparse_diffs_from_project_shape() -> None
 
 def test_jd_extractor_prompts_use_neutral_hooks_not_mirror_language() -> None:
     """Extractor output should feed translation, not repeated JD phrasing."""
-    from app.prompts.extract_jd_intel import USER_TEMPLATE
+    from app.prompts.extract_jd_intel import INSTRUCTIONS, USER_TEMPLATE
 
     lower = USER_TEMPLATE.lower()
     assert "neutral competency hooks" in lower
     assert "coverage checklist, not prose to reuse" in lower
     assert "terms to mirror" not in lower
     assert "not mandatory mirror phrases" in lower
+    assert "context:" in lower
+    assert "targeting:" in lower
+    assert "high-confidence company, product, customer, or industry context" in lower
+    assert "use jd evidence only" not in lower
+    assert "do not output null, [], markdown, or extra labels" in lower
+    assert "do not infer unstated facts" not in INSTRUCTIONS.lower()
 
 
 def test_resume_diff_rules_handles_pivot_roles_from_candidate_identity() -> None:
