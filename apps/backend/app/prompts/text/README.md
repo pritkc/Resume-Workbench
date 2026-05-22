@@ -6,7 +6,7 @@
 
 | Path | Purpose |
 |------|---------|
-| `output_file_schema_rules/` | Legacy compact JSON diff contract (`resume_diff_output.txt`), still used by critique/rewrite fallback prompts |
+| `output_file_schema_rules/` | Legacy compact JSON diff contract (`resume_diff_output.txt`), still used by critique/rewrite fallback prompts; section-header content policy (`resume_content_rules.txt`) injected into primary tailoring as `$content_rules` |
 | `{step_id}/` | Per-step **`system.txt`** and **`user.txt`** (`parse_resume/`, `extract_jd_intel/`, `tailor_resume_full/`, `tailor_resume_lite/`, `critique_resume/`, `rewrite_resume/`, `cover_letter/`, `answer_questions/`) |
 | `enrichment/{analyze,enhance,regenerate_item,regenerate_group}/` | Each op has `system.txt` + `user.txt` |
 | `index.yaml` | Machine-readable list of step ids and enrichment ops |
@@ -14,9 +14,10 @@
 
 ### `tailor_resume_full` (three-way split)
 
-- **`tailor_resume_full/user.txt`:** JD first, then resume, then **`$output_template`**; the LLM returns section-header text that is parsed back into the compact diff.
+- **`tailor_resume_full/user.txt`:** JD first, then **`$content_rules`**, resume, and **`$output_template`**; the LLM returns section-header text that is parsed back into the compact diff.
 - **`tailor_resume_full/system.txt`:** **`PRIMARY RUN RULES`** (top, edit often), **ROLE & GOAL**, **PROCESS** only — full-tailor framing.
-- **`output_file_schema_rules/resume_diff_output.txt`:** Universal **output bible**: precedence vs PRIMARY RUN RULES, JSON shape/indexing/locks, plus shared editorial (bullets, calibration, ATS, banned words, etc.) for any phase using this diff format.
+- **`output_file_schema_rules/resume_content_rules.txt`:** Section-header-compatible content bible: locks, signal strategy, ATS, skills, writing policy, claim calibration, and banned patterns. It intentionally excludes JSON-only format/schema instructions.
+- **`output_file_schema_rules/resume_diff_output.txt`:** Legacy compact JSON **output bible** for any phase still using that diff format.
 
 Runtime note: the primary tailoring operation is still named **`resume_generate_full`**, but both **full** and **lite** prompt modes now target section-header text. The backend normalizes sparse or retained sections into the compact addressed diff shape: **`summary`**, **`experience`**, **`projects`**, **`skills`**, and **`bold_keywords`**. Critique/rewrite remains deferred for section-header v1.
 
@@ -24,7 +25,7 @@ Runtime note: the primary tailoring operation is still named **`resume_generate_
 
 - **Per-step prose:** `app/prompt_overrides/{step}.system.txt` (or legacy `{step}.instructions.txt`), `{step}.rules.txt` (diff block override for tailoring steps when used)
 - **Composer:** `app/prompt_overrides/{step}.composer.json`
-- **Shared diff:** `app/prompt_overrides/_rules.resume_diff.txt`
+- **Shared rules:** `app/prompt_overrides/_rules.resume_diff.txt` for legacy JSON diff output; `app/prompt_overrides/_rules.resume_content.txt` for primary section-header content policy.
 
 Composer and file overrides **replace** shipped text at runtime; they do not live in this directory.
 
@@ -36,11 +37,11 @@ Rendering is implemented in **`app/prompts/_prompt_loader.render_user_template`*
    - **Whole blob:** `$extract_jd_intel_output` alone → compact JSON for the entire dict (empty keys stripped via **`jd_intel_to_prompt_json`** in **`app/services/tailoring/jd_intel_blob.py`**).
    - **Dot paths:** e.g. `$extract_jd_intel_output.requirements.years_min`, `$extract_jd_intel_output.role.title` → JSON fragment for that sub-value; missing path → **`null`**.
    - If **`jd_intel_blob`** is omitted but **`extract_jd_intel_output=`** is supplied as a JSON **string**, it is parsed and used for the same placeholders (composer-only convenience).
-2. **`string.Template`** — Remaining **`$name`** placeholders (`$original_resume`, `$jd_intel`, `$output_template`, …). A literal dollar sign in prose must be **`$$`**.
+2. **`string.Template`** — Remaining **`$name`** placeholders (`$original_resume`, `$jd_intel`, `$content_rules`, `$output_template`, …). A literal dollar sign in prose must be **`$$`**.
 
 Step modules **`tailor_resume_full`**, **`tailor_resume_lite`**, **`critique_resume`**, and **`rewrite_resume`** take **`jd_intel_blob: dict`** at **`build_messages`** time. Primary tailoring shipped **`user.txt`** files use **`$jd_intel`** and **`$output_template`**. Critique/rewrite still use legacy JSON placeholders until that path is migrated.
 
-Other common tailoring-related names: **`$tailor_resume_full_output`**, **`$critique_resume_output`**, **`$original_resume`**, **`$response_contract`**, **`$resume_diff_rules`**, **`$jd_intel`**, and **`$output_template`**. Auxiliary writing prompts use **`$tailored_resume`** and **`$resume_profile`**. There is no **`$output_language`** placeholder.
+Other common tailoring-related names: **`$tailor_resume_full_output`**, **`$critique_resume_output`**, **`$original_resume`**, **`$response_contract`**, **`$resume_diff_rules`**, **`$jd_intel`**, **`$content_rules`**, and **`$output_template`**. Auxiliary writing prompts use **`$tailored_resume`** and **`$resume_profile`**. There is no **`$output_language`** placeholder.
 
 **Runtime injection points:** tailoring and critique/rewrite receive the JD blob (as above) plus resume/contract/diff rules as applicable; cover letter and application-question prompts receive **`$tailored_resume`** and **`$resume_profile`**.
 

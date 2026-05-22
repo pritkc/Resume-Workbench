@@ -31,6 +31,9 @@ JD INTELLIGENCE GUIDE:
 - Use AVOID to demote generic or low-signal wording.
 - Use LEVEL as the seniority ceiling.
 
+CONTENT RULES:
+$content_rules
+
 ORIGINAL RESUME:
 $original_resume
 

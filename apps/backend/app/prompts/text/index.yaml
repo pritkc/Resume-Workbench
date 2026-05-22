@@ -10,6 +10,7 @@ steps:
   - answer_questions
 output_file_schema_rules:
   - resume_diff_output
+  - resume_content_rules
 enrichment:
   - analyze
   - enhance

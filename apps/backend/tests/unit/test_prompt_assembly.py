@@ -38,6 +38,8 @@ def test_render_user_prompt_fills_slots() -> None:
     assert "$extract_jd_intel_output" not in text
     assert "OUTPUT TEMPLATE:" in text
     assert "Return plain text only" in text
+    assert "CONTENT RULES:" in text
+    assert "CLAIM CALIBRATION:" in text
 
 
 def test_render_user_prompt_injects_custom_instructions_before_full_run_rules() -> None:
@@ -274,6 +276,38 @@ def test_resume_diff_rules_forbid_markdown_fences() -> None:
     ).lower()
     assert "no markdown fences" in lower
     assert "no json" in lower
+
+
+def test_section_tailoring_restores_original_content_rules_without_json_contract() -> None:
+    """Primary tailoring should carry old writing policy while keeping section-header syntax."""
+    full = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    )
+    lite = render_tailoring_user_prompt(
+        mode_id="lite",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    )
+    for rendered in (full, lite):
+        lower = rendered.lower()
+        assert "content rules:" in lower
+        assert "the source resume is the candidate superset" in lower
+        assert "never keyword-stuff" in lower
+        assert "tech_stacks values contain only named tools" in lower
+        assert "skill values must be specific tools" in lower
+        assert "one idea per bullet" in lower
+        assert "claim calibration:" in lower
+        assert "do not claim org-wide architecture" in lower
+        assert "openers (never use as primary verb)" in lower
+        assert "impossible wins unsupported by source evidence" in lower
+        assert "return valid json only" not in lower
+        assert "tailored cell:" not in lower
+        assert "full envelope:" not in lower
+        assert "shapes:" not in lower
 
 
 def test_full_prompt_preserves_project_bullet_count_and_stacks() -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from app.prompts.tailoring_blocks import (
+    TAILORING_CONTENT_RULES_BLOCK,
     TAILORING_CONTRACT_BLOCK,
     TAILORING_CRAFT_BLOCK,
     TAILORING_MODE_STRATEGY,
@@ -114,6 +115,12 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
             policy="runtime_injected",
         ),
         PromptCatalogSection(
+            id="tailoring_rt_content_rules",
+            label="{content_rules}",
+            content="Section-header-compatible resume content rules: locks, ATS, skills, writing policy, claim calibration, and banned patterns.",
+            policy="runtime_injected",
+        ),
+        PromptCatalogSection(
             id="tailoring_rt_resume_diff_rules",
             label="{resume_diff_rules}",
             content="Legacy compact JSON schema still used by critique/rewrite fallback prompts.",
@@ -142,6 +149,13 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
             note="Injected at runtime as $output_template. The model returns section-header text, which the backend parses into the compact diff.",
             policy="user_editable_future",
             children=contract_children,
+        ),
+        PromptCatalogSection(
+            id="tailoring_content_rules_block",
+            label="Resume content rules",
+            note="Injected at runtime as $content_rules. Restores the original non-JSON writing, ATS, locks, calibration, and banned-pattern guidance for section-header output.",
+            policy="user_editable_future",
+            content=TAILORING_CONTENT_RULES_BLOCK,
         ),
         PromptCatalogSection(
             id="tailoring_user_message",

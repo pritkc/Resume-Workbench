@@ -11,6 +11,9 @@ LITE-RUN EDIT SCOPE:
 JD INTELLIGENCE:
 $jd_intel
 
+CONTENT RULES:
+$content_rules
+
 MASTER RESUME:
 $original_resume
 

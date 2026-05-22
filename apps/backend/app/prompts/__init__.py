@@ -49,7 +49,7 @@ VALID_STEPS = frozenset(
     }
 )
 
-_VALID_SHARED_RULES = frozenset({"resume_diff"})
+_VALID_SHARED_RULES = frozenset({"resume_diff", "resume_content"})
 
 _OVERRIDE_DIR = Path(__file__).parent.parent / "prompt_overrides"
 

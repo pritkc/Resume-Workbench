@@ -179,6 +179,7 @@ def test_tailoring_catalog_runtime_fields_include_core_injections() -> None:
     visit(sections)
 
     assert "{original_resume}" in labels
+    assert "{content_rules}" in labels
     assert "{resume_diff_rules}" in labels
 
 
@@ -195,4 +196,5 @@ def test_prompt_text_readme_documents_runtime_context_fields() -> None:
     readme = read_shipped_txt("README.md")
 
     assert "$tailored_resume" in readme
+    assert "$content_rules" in readme
     assert "$resume_diff_rules" in readme

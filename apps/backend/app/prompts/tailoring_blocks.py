@@ -4,6 +4,7 @@ from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
 from app.prompts._text_prompts import read_shipped_txt
 
 TAILORING_CONTRACT_BLOCK = RESUME_DIFF_RULES
+TAILORING_CONTENT_RULES_BLOCK = read_shipped_txt("output_file_schema_rules/resume_content_rules.txt")
 
 _MERGED_FULL = read_shipped_txt("tailor_resume_full/system.txt")
 _MERGED_LITE = read_shipped_txt("tailor_resume_lite/system.txt")
@@ -30,7 +31,8 @@ TAILORING_MODE_STRATEGY = {
 TAILORING_USER_SHELL_FULL = read_shipped_txt("tailor_resume_full/user.txt")
 TAILORING_USER_SHELL_LITE = read_shipped_txt("tailor_resume_lite/user.txt")
 
-# System prompt is craft + mode; primary tailoring output shape ships as $output_template.
+# System prompt is craft + mode; primary tailoring output shape ships as $output_template
+# and writing/content policy ships as $content_rules.
 TAILORING_SYSTEM_PROMPT = "\n\n".join([TAILORING_CRAFT_BLOCK, TAILORING_MODE_STRATEGY["full"]])
 
 TAILORING_MODE_CONSTRAINTS = {k: v for k, v in TAILORING_MODE_STRATEGY.items()}
