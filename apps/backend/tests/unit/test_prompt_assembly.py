@@ -111,14 +111,107 @@ def test_tailoring_resume_to_llm_prompt_education_and_skills_without_group_ids(
     d = payload.to_llm_prompt_dict()
     assert "education" in d
     assert d["education"][0].get("institution") == "MIT"
+    assert d["education"][0].get("degree") == "B.S. Computer Science"
+    assert d["education"][0].get("end_date") == "2018"
+    assert d["education"][0].get("detail") == "Graduated with honors, Dean's List"
+    assert "id" not in d["education"][0]
+    assert "summary" not in d["education"][0]
+    assert "description" not in d["education"][0]
+    assert "start_date" not in d["education"][0]
     assert "groups" in d["skills"]
     assert all("id" not in g for g in d["skills"]["groups"])
     exp0 = d["workExperience"][0]
     assert exp0.get("company") == "Acme Corp"
+    assert exp0.get("period") == "Jan 2021 - Present"
+    assert "id" not in exp0
+    assert "title" not in exp0
+    assert "location" not in exp0
     assert "date" not in exp0 and "years" not in exp0
+    assert "start_date" not in exp0 and "end_date" not in exp0
     proj0 = d["personalProjects"][0]
     assert "date" not in proj0 and "years" not in proj0
-    assert "project_period" in proj0 or proj0.get("role")
+    assert "id" not in proj0
+    assert "github" not in proj0 and "website" not in proj0
+    assert "role" not in proj0
+    assert "project_period" not in proj0
+
+
+def test_tailoring_resume_prompt_compacts_duplicate_project_role_and_split_skills() -> None:
+    payload = TailoringResumePayload.from_resume_data(
+        {
+            "summary": "Data platform engineer.",
+            "workExperience": [
+                {
+                    "id": 1,
+                    "position": "Software Engineer",
+                    "title": "Software Engineer",
+                    "company": "Humana",
+                    "location": "Remote",
+                    "start_date": "2025-05",
+                    "end_date": "present",
+                    "techStack": "Python, FastAPI",
+                    "description": ["Built claims pipelines."],
+                }
+            ],
+            "personalProjects": [
+                {
+                    "id": 1,
+                    "name": "ClaimSight",
+                    "techStack": "Python, FastAPI, OpenAI API",
+                    "role": "Python, FastAPI, OpenAI API",
+                    "github": "https://github.com/example/claimsight",
+                    "website": "https://claimsight.example",
+                    "description": ["Classified prior authorization documents."],
+                }
+            ],
+            "education": [
+                {
+                    "institution": "San Diego State University",
+                    "area": "Big Data Analytics",
+                    "degree": "Master of Science",
+                    "start_date": "2023-08",
+                    "end_date": "2025-05",
+                    "summary": "GPA: 3.78",
+                    "description": "GPA: 3.78",
+                }
+            ],
+            "skills": {
+                "groups": [
+                    {
+                        "label": "Cloud & DevOps",
+                        "values": ["AWS (Lambda", "S3", "RDS)", "Docker"],
+                    }
+                ]
+            },
+        }
+    )
+    assert payload is not None
+
+    d = payload.to_llm_prompt_dict()
+
+    assert d["workExperience"][0] == {
+        "position": "Software Engineer",
+        "company": "Humana",
+        "period": "2025-05 - present",
+        "tech_stacks": "Python, FastAPI",
+        "description": ["Built claims pipelines."],
+    }
+    assert d["personalProjects"][0] == {
+        "name": "ClaimSight",
+        "tech_stacks": "Python, FastAPI, OpenAI API",
+        "description": ["Classified prior authorization documents."],
+    }
+    assert d["education"][0] == {
+        "institution": "San Diego State University",
+        "degree": "Master of Science",
+        "area": "Big Data Analytics",
+        "end_date": "2025-05",
+        "detail": "GPA: 3.78",
+    }
+    assert d["skills"]["groups"][0]["values"] == [
+        "AWS (Lambda, S3, RDS)",
+        "Docker",
+    ]
 
 
 def test_config_resolve_prompt_id_migrates_legacy_ids() -> None:

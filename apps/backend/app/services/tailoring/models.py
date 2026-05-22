@@ -269,44 +269,84 @@ def _llm_strip_empty(value: Any) -> Any:
 
 
 def _experience_for_llm_prompt(exp: TailoringExperience) -> dict[str, Any]:
-    data = exp.model_dump()
-    date_val = str(data.pop("date", None) or "").strip()
-    years_val = str(data.pop("years", None) or "").strip()
-    sd = str(data.get("start_date") or "").strip()
-    ed = str(data.get("end_date") or "").strip()
-    if not sd and not ed:
-        merged = (date_val or years_val).strip()
-        if merged:
-            data["employment_period"] = merged
+    position = exp.position or exp.title
+    period = _compose_date_range(exp.start_date, exp.end_date) or exp.date or exp.years
+    data: dict[str, Any] = {
+        "position": position,
+        "company": exp.company,
+        "period": period,
+        "tech_stacks": exp.tech_stacks,
+        "description": list(exp.description),
+    }
+    if exp.title and exp.title != position:
+        data["title"] = exp.title
     return _llm_strip_empty(data)
 
 
 def _education_for_llm_prompt(row: Education) -> dict[str, Any]:
-    data = row.model_dump()
-    data.pop("id", None)
-    date_val = str(data.pop("date", None) or "").strip()
-    years_val = str(data.pop("years", None) or "").strip()
-    sd = str(data.get("start_date") or "").strip()
-    ed = str(data.get("end_date") or "").strip()
-    if not sd and not ed:
-        merged = (date_val or years_val).strip()
-        if merged:
-            data["study_period"] = merged
+    end_date = row.end_date
+    if not end_date:
+        date_text = (row.date or row.years or "").strip()
+        if " - " in date_text:
+            end_date = date_text.rsplit(" - ", 1)[-1].strip()
+        elif date_text:
+            end_date = date_text
+    data: dict[str, Any] = {
+        "institution": row.institution,
+        "degree": row.degree,
+        "area": row.area,
+        "end_date": end_date,
+    }
+    detail = row.summary or row.description
+    if detail:
+        data["detail"] = detail
+    elif row.highlights:
+        data["detail"] = "; ".join(row.highlights)
     return _llm_strip_empty(data)
 
 
 def _project_for_llm_prompt(proj: TailoringProject) -> dict[str, Any]:
-    data = proj.model_dump()
-    date_val = str(data.pop("date", None) or "").strip()
-    years_val = str(data.pop("years", None) or "").strip()
-    merged = (date_val or years_val).strip()
-    if merged:
-        data["project_period"] = merged
+    data: dict[str, Any] = {
+        "name": proj.name,
+        "tech_stacks": proj.tech_stacks,
+        "description": list(proj.description),
+    }
+    if proj.role and proj.role != (proj.tech_stacks or ""):
+        data["role"] = proj.role
     return _llm_strip_empty(data)
 
 
+def _compact_skill_values(values: list[str]) -> list[str]:
+    compacted: list[str] = []
+    pending: list[str] = []
+    balance = 0
+    for raw in values:
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        if pending:
+            pending.append(value)
+            balance += value.count("(") - value.count(")")
+            if balance <= 0:
+                compacted.append(", ".join(pending))
+                pending = []
+                balance = 0
+            continue
+        balance = value.count("(") - value.count(")")
+        if balance > 0:
+            pending = [value]
+            continue
+        compacted.append(value)
+    if pending:
+        compacted.append(", ".join(pending))
+    return compacted
+
+
 def _skills_for_llm_prompt(skills: SkillsSection) -> dict[str, Any]:
-    groups = [{"label": g.label, "values": list(g.values)} for g in skills.groups]
+    groups = [
+        {"label": g.label, "values": _compact_skill_values(list(g.values))}
+        for g in skills.groups
+    ]
     return _llm_strip_empty({"groups": groups})
 
 
