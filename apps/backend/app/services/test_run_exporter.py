@@ -433,6 +433,86 @@ For complete prompt/response capture, run with `LLM_TRACE_STORE_CONTENT=true` an
     )
 
 
+def _markdown_cell(value: Any) -> str:
+    text = str(value or "")
+    return text.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _write_test_run_index(output_root: Path) -> None:
+    rows: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    if not output_root.exists():
+        return
+
+    for run_dir in sorted(path for path in output_root.iterdir() if path.is_dir()):
+        manifest_path = run_dir / "manifest.json"
+        if not manifest_path.exists():
+            skipped.append(run_dir.name)
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            skipped.append(run_dir.name)
+            continue
+
+        summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+        operations = summary.get("operations") if isinstance(summary.get("operations"), list) else []
+        warning_count = len(manifest.get("warnings")) if isinstance(manifest.get("warnings"), list) else 0
+        artifact_count = len(manifest.get("artifacts")) if isinstance(manifest.get("artifacts"), list) else 0
+        rows.append(
+            {
+                "exported_at": str(manifest.get("exported_at") or ""),
+                "trace_id": str(manifest.get("trace_id") or run_dir.name),
+                "folder": run_dir.name,
+                "label": str(manifest.get("label") or ""),
+                "operations": ", ".join(str(item) for item in operations),
+                "calls": summary.get("total_calls") or 0,
+                "tokens": summary.get("usage_total_tokens") or 0,
+                "warnings": warning_count,
+                "artifacts": artifact_count,
+            }
+        )
+
+    rows.sort(key=lambda row: (row["exported_at"], row["folder"]), reverse=True)
+
+    lines = [
+        "# Test Run Index",
+        "",
+        "Generated from each run's `manifest.json`. Newest exports are listed first.",
+        "",
+        "| Exported at | Run | Label | Operations | Calls | Tokens | Warnings | Artifacts |",
+        "|---|---|---|---|---:|---:|---:|---:|",
+    ]
+    for row in rows:
+        folder = _markdown_cell(row["folder"])
+        trace_id = _markdown_cell(row["trace_id"])
+        lines.append(
+            "| "
+            f"{_markdown_cell(row['exported_at'])} | "
+            f"[`{trace_id}`]({folder}/) | "
+            f"{_markdown_cell(row['label'])} | "
+            f"{_markdown_cell(row['operations'])} | "
+            f"{row['calls']} | "
+            f"{row['tokens']} | "
+            f"{row['warnings']} | "
+            f"{row['artifacts']} |"
+        )
+
+    if skipped:
+        lines.extend(
+            [
+                "",
+                "## Skipped",
+                "",
+                "These folders do not have a readable `manifest.json`:",
+                "",
+            ]
+        )
+        lines.extend(f"- `{name}`" for name in skipped)
+
+    (output_root / "_index.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def export_test_run_capture(
     *,
     trace_id: str,
@@ -445,12 +525,6 @@ def export_test_run_capture(
 
     output_root = out_dir or DEFAULT_OUT_DIR
     output_dir = output_root / trace_id
-    if output_dir.exists():
-        if overwrite:
-            shutil.rmtree(output_dir)
-        else:
-            raise FileExistsError(f"Test run export already exists: {output_dir}")
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     calls = _fetch_all(
         """
@@ -463,6 +537,13 @@ def export_test_run_capture(
     )
     if not calls:
         raise ValueError(f"No llm_calls rows found for trace_id={trace_id}")
+
+    if output_dir.exists():
+        if overwrite:
+            shutil.rmtree(output_dir)
+        else:
+            raise FileExistsError(f"Test run export already exists: {output_dir}")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     generation_run = _find_generation_run(
         trace_id=trace_id,
@@ -505,4 +586,5 @@ def export_test_run_capture(
         warnings=warnings,
         artifacts=copied_artifacts,
     )
+    _write_test_run_index(output_root)
     return output_dir
