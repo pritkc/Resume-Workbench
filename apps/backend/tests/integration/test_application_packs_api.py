@@ -467,6 +467,7 @@ HOOKS: build APIs
         mock_db.update_application_pack.return_value = application_pack
         mock_db.get_generation_run.return_value = {
             "generation_run_id": "preview-run-123",
+            "request_payload": {"llm_trace_id": "trace-preview-123"},
             "result_payload": {
                 "auxiliary": {
                     "title": "Tailored Title",
@@ -561,6 +562,7 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
         }
         mock_db.get_generation_run.return_value = {
             "generation_run_id": "preview-run-123",
+            "request_payload": {"llm_trace_id": "trace-preview-123"},
             "result_payload": {
                 "auxiliary": {
                     "title": "Tailored Title",
@@ -593,6 +595,11 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
     assert data["generation_run_id"] == "confirm-run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-final-1"
     generate_auxiliary.assert_not_awaited()
+    mock_db.summarize_llm_calls.assert_called_with(trace_id="trace-preview-123")
+    confirm_run_payload = mock_db.create_generation_run.call_args.kwargs["request_payload"]
+    assert confirm_run_payload["llm_trace_id"] == "trace-preview-123"
+    assert confirm_run_payload["confirm_request_id"]
+    assert confirm_run_payload["confirm_request_id"] != "trace-preview-123"
     update_run_payload = mock_db.update_generation_run.call_args.args[1]
     assert update_run_payload["result_payload"]["auxiliary"] == {
         "title": "Tailored Title",

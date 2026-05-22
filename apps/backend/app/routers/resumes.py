@@ -2391,7 +2391,17 @@ async def improve_resume_confirm_endpoint(
             if isinstance(resume.get("outreach_message"), str)
             else None
         )
-        llm_summary = db.summarize_llm_calls(trace_id=request_id)
+        preview_trace_id = None
+        if request.generation_run_id:
+            preview_run = db.get_generation_run(request.generation_run_id)
+            preview_request_payload = (
+                preview_run.get("request_payload") if isinstance(preview_run, dict) else None
+            )
+            if isinstance(preview_request_payload, dict):
+                raw_preview_trace_id = preview_request_payload.get("llm_trace_id")
+                if isinstance(raw_preview_trace_id, str) and raw_preview_trace_id.strip():
+                    preview_trace_id = raw_preview_trace_id.strip()
+        llm_summary = db.summarize_llm_calls(trace_id=preview_trace_id or request_id)
         job = _backfill_job_target_metadata(
             job_id=request.job_id,
             job=job,
@@ -2457,16 +2467,6 @@ async def improve_resume_confirm_endpoint(
                 tailored_resume["resume_id"], {"application_pack_id": application_pack_id}
             )
 
-        preview_trace_id = None
-        if request.generation_run_id:
-            preview_run = db.get_generation_run(request.generation_run_id)
-            preview_request_payload = (
-                preview_run.get("request_payload") if isinstance(preview_run, dict) else None
-            )
-            if isinstance(preview_request_payload, dict):
-                raw_preview_trace_id = preview_request_payload.get("llm_trace_id")
-                if isinstance(raw_preview_trace_id, str) and raw_preview_trace_id.strip():
-                    preview_trace_id = raw_preview_trace_id.strip()
         trace_resume_context = {
             **_resume_trace_metadata(tailored_resume, resume_id=tailored_resume["resume_id"]),
             **_resume_trace_metadata(
@@ -2492,7 +2492,8 @@ async def improve_resume_confirm_endpoint(
             request_payload={
                 "preview_generation_run_id": request.generation_run_id,
                 "application_pack_id": application_pack_id,
-                "llm_trace_id": request_id,
+                "llm_trace_id": preview_trace_id,
+                "confirm_request_id": request_id,
             },
             result_payload={
                 "llm_summary": llm_summary,

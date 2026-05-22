@@ -54,6 +54,12 @@ def _fetch_all(sql: str, params: dict[str, Any] | None = None) -> list[dict[str,
     return [dict(row) for row in rows]
 
 
+def _text_value(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def _normalize_json_field(value: Any) -> Any:
     if isinstance(value, str):
         try:
@@ -77,6 +83,75 @@ def _contains_trace_id(value: Any, trace_id: str) -> bool:
     return value == trace_id
 
 
+def _get_generation_run_by_id(generation_run_id: str | None) -> dict[str, Any] | None:
+    generation_run_id = _text_value(generation_run_id)
+    if not generation_run_id:
+        return None
+    rows = _fetch_all(
+        "select * from generation_runs where generation_run_id = :generation_run_id",
+        {"generation_run_id": generation_run_id},
+    )
+    return rows[0] if rows else None
+
+
+def _llm_trace_id_from_generation_run(run: dict[str, Any] | None) -> str | None:
+    if not run:
+        return None
+    for field in ("request_payload", "result_payload"):
+        payload = _normalize_json_field(run.get(field))
+        if isinstance(payload, dict):
+            trace_id = _text_value(payload.get("llm_trace_id"))
+            if trace_id:
+                return trace_id
+    return None
+
+
+def _fetch_llm_calls_for_trace(trace_id: str) -> list[dict[str, Any]]:
+    return _fetch_all(
+        """
+        select *
+        from llm_calls
+        where trace_id = :trace_id
+        order by created_at asc, operation asc, attempt asc, id asc
+        """,
+        {"trace_id": trace_id},
+    )
+
+
+def _resolve_export_source(
+    input_id: str,
+    *,
+    generation_run_id: str | None = None,
+) -> tuple[str, dict[str, Any] | None, list[dict[str, Any]]]:
+    """Resolve an input id to (trace_id, generation_run, llm_calls).
+
+    ``input_id`` may be either a generation run id or an LLM trace id.  Captures
+    are named by generation run id when the run can be resolved.
+    """
+
+    input_id = _text_value(input_id) or ""
+    explicit_run = _get_generation_run_by_id(generation_run_id)
+    input_run = _get_generation_run_by_id(input_id) if input_id else None
+    generation_run = explicit_run or input_run
+
+    trace_candidates: list[str] = []
+    run_trace_id = _llm_trace_id_from_generation_run(generation_run)
+    if run_trace_id:
+        trace_candidates.append(run_trace_id)
+    if input_id and input_id not in trace_candidates:
+        trace_candidates.append(input_id)
+
+    for trace_id in trace_candidates:
+        calls = _fetch_llm_calls_for_trace(trace_id)
+        if calls:
+            if generation_run is None:
+                generation_run = _find_generation_run(trace_id=trace_id, calls=calls)
+            return trace_id, generation_run, calls
+
+    missing = generation_run_id or input_id
+    raise ValueError(f"No llm_calls rows found for trace_id or generation_run_id={missing}")
+
+
 def _find_generation_run(
     *,
     trace_id: str,
@@ -94,12 +169,9 @@ def _find_generation_run(
                 candidate_ids.add(candidate.strip())
 
     for candidate_id in candidate_ids:
-        rows = _fetch_all(
-            "select * from generation_runs where generation_run_id = :generation_run_id",
-            {"generation_run_id": candidate_id},
-        )
-        if rows:
-            return rows[0]
+        run = _get_generation_run_by_id(candidate_id)
+        if run:
+            return run
 
     recent_runs = _fetch_all(
         """
@@ -392,6 +464,7 @@ def _generation_run_summary(run: dict[str, Any] | None) -> dict[str, Any] | None
 def _write_qa_notes(
     path: Path,
     *,
+    generation_run_id: str | None,
     trace_id: str,
     label: str | None,
     warnings: list[str],
@@ -407,6 +480,7 @@ def _write_qa_notes(
     path.write_text(
         f"""# QA Notes
 
+Run: `{generation_run_id or "unknown"}`
 Trace: `{trace_id}`{label_line}
 ## Checklist
 
@@ -456,6 +530,9 @@ def _write_test_run_index(output_root: Path) -> None:
             continue
 
         summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+        generation_run = (
+            manifest.get("generation_run") if isinstance(manifest.get("generation_run"), dict) else {}
+        )
         operations = summary.get("operations") if isinstance(summary.get("operations"), list) else []
         warning_count = len(manifest.get("warnings")) if isinstance(manifest.get("warnings"), list) else 0
         artifact_count = len(manifest.get("artifacts")) if isinstance(manifest.get("artifacts"), list) else 0
@@ -463,6 +540,7 @@ def _write_test_run_index(output_root: Path) -> None:
             {
                 "exported_at": str(manifest.get("exported_at") or ""),
                 "trace_id": str(manifest.get("trace_id") or run_dir.name),
+                "generation_run_id": str(generation_run.get("generation_run_id") or run_dir.name),
                 "folder": run_dir.name,
                 "label": str(manifest.get("label") or ""),
                 "operations": ", ".join(str(item) for item in operations),
@@ -480,16 +558,18 @@ def _write_test_run_index(output_root: Path) -> None:
         "",
         "Generated from each run's `manifest.json`. Newest exports are listed first.",
         "",
-        "| Exported at | Run | Label | Operations | Calls | Tokens | Warnings | Artifacts |",
-        "|---|---|---|---|---:|---:|---:|---:|",
+        "| Exported at | Generation run | Trace | Label | Operations | Calls | Tokens | Warnings | Artifacts |",
+        "|---|---|---|---|---|---:|---:|---:|---:|",
     ]
     for row in rows:
         folder = _markdown_cell(row["folder"])
+        generation_run_id = _markdown_cell(row["generation_run_id"])
         trace_id = _markdown_cell(row["trace_id"])
         lines.append(
             "| "
             f"{_markdown_cell(row['exported_at'])} | "
-            f"[`{trace_id}`]({folder}/) | "
+            f"[`{generation_run_id}`]({folder}/) | "
+            f"`{trace_id}` | "
             f"{_markdown_cell(row['label'])} | "
             f"{_markdown_cell(row['operations'])} | "
             f"{row['calls']} | "
@@ -524,19 +604,14 @@ def export_test_run_capture(
     """Export a trace capture for QA and return the output directory."""
 
     output_root = out_dir or DEFAULT_OUT_DIR
-    output_dir = output_root / trace_id
-
-    calls = _fetch_all(
-        """
-        select *
-        from llm_calls
-        where trace_id = :trace_id
-        order by created_at asc, operation asc, attempt asc, id asc
-        """,
-        {"trace_id": trace_id},
+    resolved_trace_id, generation_run, calls = _resolve_export_source(
+        trace_id,
+        generation_run_id=generation_run_id,
     )
-    if not calls:
-        raise ValueError(f"No llm_calls rows found for trace_id={trace_id}")
+    resolved_generation_run_id = (
+        _text_value(generation_run.get("generation_run_id")) if generation_run else None
+    )
+    output_dir = output_root / (resolved_generation_run_id or resolved_trace_id)
 
     if output_dir.exists():
         if overwrite:
@@ -545,11 +620,6 @@ def export_test_run_capture(
             raise FileExistsError(f"Test run export already exists: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    generation_run = _find_generation_run(
-        trace_id=trace_id,
-        calls=calls,
-        generation_run_id=generation_run_id,
-    )
     artifact_rows = _artifact_rows(generation_run=generation_run, calls=calls)
 
     call_exports = _write_call_exports(calls, output_dir)
@@ -560,7 +630,8 @@ def export_test_run_capture(
     warnings = _trace_warnings(calls) + artifact_warnings
 
     manifest = {
-        "trace_id": trace_id,
+        "input_id": trace_id,
+        "trace_id": resolved_trace_id,
         "label": label,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "exporter": "app.services.test_run_exporter",
@@ -581,7 +652,8 @@ def export_test_run_capture(
     _write_json(output_dir / "manifest.json", manifest)
     _write_qa_notes(
         output_dir / "qa-notes.md",
-        trace_id=trace_id,
+        generation_run_id=resolved_generation_run_id,
+        trace_id=resolved_trace_id,
         label=label,
         warnings=warnings,
         artifacts=copied_artifacts,
