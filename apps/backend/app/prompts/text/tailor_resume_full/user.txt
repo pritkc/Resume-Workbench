@@ -42,8 +42,13 @@ $output_template
 
 OUTPUT RULES:
 - Return plain text only. No markdown fences, no JSON, no commentary.
-- Use the section headers exactly as shown in OUTPUT TEMPLATE.
+- Use these headers exactly when outputting changed sections: === SUMMARY ===, === EXPERIENCE n ===, === PROJECT n ===, === SKILLS ===, === BOLD KEYWORDS ===.
+- In changed sections, use only these labels: POSITION, STACK, NAME, B#, B#-WHY, G#, G#-WHY, WHY.
 - Write [RETAIN] to keep an unchanged cell. Do not copy original unchanged text.
+- For scalar cells (POSITION, STACK, NAME, B#), [RETAIN] must be the entire value or absent; never mix [RETAIN] with added text.
 - SUMMARY and BOLD KEYWORDS must always be present.
 - You may omit a whole EXPERIENCE or PROJECT section only when every cell in that section is retained.
-- Preserve all bullet indexes and skill positions from the template.
+- Preserve listed indexes only. Do not add, drop, combine, or renumber bullets or skill positions.
+- For comma-separated scalar cells like STACK, write the complete final value without [RETAIN] when changing it.
+- For skills only, format G# as: G#: [RETAIN or new label] | comma-separated values using [RETAIN] for unchanged chips.
+- BOLD KEYWORDS: 6-10 comma-separated ATS terms; tools, languages, platforms, methods only.

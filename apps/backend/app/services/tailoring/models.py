@@ -769,60 +769,49 @@ class TailoringResponseContract(BaseModel):
         return out
 
     def to_section_template(self) -> str:
-        """Return the section-header template filled by the LLM."""
+        """Return compact section-header addresses filled by the LLM."""
 
         lines: list[str] = [
+            "Required:",
             "=== SUMMARY ===",
-            "[FINAL SUMMARY - 1 sentence, 105-135 chars]",
-            "WHY: [max 12 words]",
+            "WHY:",
+            "=== BOLD KEYWORDS ===",
             "",
+            "Editable addresses:",
         ]
 
-        for i, label in enumerate(self.experience_entries):
-            position = self.experience_positions[i] if i < len(self.experience_positions) else ""
-            stack = self.experience_tech_stacks[i] if i < len(self.experience_tech_stacks) else ""
+        def bullet_range(count: int) -> str:
+            if count <= 0:
+                return "none"
+            if count == 1:
+                return "B0"
+            return f"B0-B{count - 1}"
+
+        exp_specs: list[str] = []
+        for i, _label in enumerate(self.experience_entries):
             count = self.experience_bullet_counts[i] if i < len(self.experience_bullet_counts) else 0
             budget = self.direct_jd_bullet_budget[i] if i < len(self.direct_jd_bullet_budget) else 1
             story_min = self.preserve_story_min[i] if i < len(self.preserve_story_min) else 1
-            header_parts = " | ".join(part for part in (label, position, stack) if part)
-            lines.append(f"=== EXPERIENCE {i} === ({header_parts})")
-            lines.append("POSITION: [[RETAIN] or new title qualifier only]")
-            lines.append("STACK: [[RETAIN] or new comma-separated stack]")
-            for b_idx in range(count):
-                lines.append(f"B{b_idx}: [[RETAIN] or rewrite]")
-                lines.append(f"B{b_idx}-WHY: [max 12 words]")
-            lines.append(
-                f"Budget: max {budget} of {count} bullets may be JD-direct; keep at least {story_min} original stories."
+            exp_specs.append(
+                f"{i}={bullet_range(count)} budget {budget}/{count} keep>={story_min}"
             )
-            lines.append("")
+        if exp_specs:
+            lines.append("EXPERIENCE: " + "; ".join(exp_specs))
 
-        for i, label in enumerate(self.project_entries):
-            stack = self.project_tech_stacks[i] if i < len(self.project_tech_stacks) else ""
+        project_specs: list[str] = []
+        for i, _label in enumerate(self.project_entries):
             count = self.project_bullet_counts[i] if i < len(self.project_bullet_counts) else 0
-            header_parts = " | ".join(part for part in (label, stack) if part)
-            lines.append(f"=== PROJECT {i} === ({header_parts})")
-            lines.append("NAME: [[RETAIN] or minor clarification only]")
-            lines.append("STACK: [[RETAIN] or new comma-separated stack]")
-            for b_idx in range(count):
-                lines.append(f"B{b_idx}: [[RETAIN] or rewrite]")
-                lines.append(f"B{b_idx}-WHY: [max 12 words]")
-            lines.append("")
+            project_specs.append(f"{i}={bullet_range(count)}")
+        if project_specs:
+            lines.append("PROJECT: " + "; ".join(project_specs))
 
         if self.skill_group_value_counts:
-            lines.append("=== SKILLS ===")
-            for i, count in enumerate(self.skill_group_value_counts):
-                lines.append(
-                    f"G{i}: [[RETAIN] or new label] | [{count} comma-separated values; use [RETAIN] per unchanged chip]"
-                )
-                lines.append(f"G{i}-WHY: [max 12 words covering all {count} chips]")
-            lines.append("")
-
-        lines.extend(
-            [
-                "=== BOLD KEYWORDS ===",
-                "[6-10 comma-separated ATS terms - tools, languages, platforms, methods only]",
+            skill_specs = [
+                f"G{i}={count} values"
+                for i, count in enumerate(self.skill_group_value_counts)
             ]
-        )
+            lines.append("SKILLS: " + "; ".join(skill_specs))
+
         return "\n".join(lines)
 
 

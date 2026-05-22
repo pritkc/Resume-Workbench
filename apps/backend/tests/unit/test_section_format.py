@@ -97,6 +97,48 @@ Python
     assert diff["skills"][0]["values"] == [{"value": None}, {"value": None}, {"value": None}]
 
 
+def test_sparse_changed_later_section_pads_other_indexes_as_retain() -> None:
+    contract = TailoringResponseContract(
+        prompt_mode="full",
+        experience_entries=["Acme", "StartupCo"],
+        experience_bullet_counts=[2, 2],
+        project_entries=["Matcher"],
+        project_bullet_counts=[1],
+        skill_group_value_counts=[2, 3],
+    )
+    parsed = parse_resume_section_output(
+        """
+=== SUMMARY ===
+[RETAIN]
+WHY: Keep source identity.
+
+=== EXPERIENCE 1 ===
+B1: Added platform reliability framing. WHY: Maps to JD ownership.
+
+=== SKILLS ===
+G1: [RETAIN] | Python, SQL, [RETAIN]
+G1-WHY: Adds supported data terms.
+
+=== BOLD KEYWORDS ===
+Python, SQL
+""",
+        contract,
+    )
+    diff = to_compact_diff(parsed, contract)
+
+    assert diff["experience"]["0"]["bullets"]["0"]["value"] is None
+    assert diff["experience"]["1"]["bullets"]["0"]["value"] is None
+    assert diff["experience"]["1"]["bullets"]["1"]["value"] == "Added platform reliability framing."
+    assert diff["experience"]["1"]["bullets"]["1"]["why"] == "Maps to JD ownership."
+    assert diff["projects"]["0"]["bullets"]["0"]["value"] is None
+    assert diff["skills"][0]["values"] == [{"value": None}, {"value": None}]
+    assert diff["skills"][1]["values"] == [
+        {"value": "Python"},
+        {"value": "SQL"},
+        {"value": None},
+    ]
+
+
 def test_parser_handles_multiline_duplicates_and_skill_count_warnings() -> None:
     parsed = parse_resume_section_output(
         """

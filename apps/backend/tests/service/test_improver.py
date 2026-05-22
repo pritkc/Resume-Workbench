@@ -179,8 +179,8 @@ class TestImproveResume:
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
         assert "OUTPUT TEMPLATE" in prompt
         assert "=== SUMMARY ===" in prompt
-        assert "=== EXPERIENCE 0 ===" in prompt
-        assert "B0:" in prompt
+        assert "Editable addresses:" in prompt
+        assert "EXPERIENCE: 0=B0-B2 budget 2/3 keep>=1; 1=B0-B1 budget 1/2 keep>=1" in prompt
         assert "tech_stacks" in prompt
         assert "JD INTELLIGENCE:" in prompt
         assert "BOLD KEYWORDS" in prompt

@@ -299,8 +299,60 @@ def test_resume_diff_rules_do_not_allow_default_new_bullet_indexes() -> None:
         original_resume_json="{}",
         response_contract_json="{}",
     ).lower()
-    assert "preserve all bullet indexes" in user
+    assert "preserve listed indexes only" in user
     assert "skill positions" in user
+
+
+def test_section_output_template_is_compact_and_omits_resume_facts() -> None:
+    contract = TailoringResponseContract(
+        prompt_mode="full",
+        experience_entries=["Acme Corp", "StartupCo"],
+        experience_positions=["Senior Backend Engineer", "Software Engineer"],
+        experience_tech_stacks=["Python, FastAPI", "Java, Spring"],
+        experience_bullet_counts=[3, 2],
+        direct_jd_bullet_budget=[2, 1],
+        preserve_story_min=[1, 1],
+        project_entries=["OpenAPI Generator"],
+        project_bullet_counts=[1],
+        project_tech_stacks=["Python, Click"],
+        skill_group_value_counts=[4, 6],
+    )
+
+    template = contract.to_section_template()
+
+    assert "Required:" in template
+    assert "=== SUMMARY ===" in template
+    assert "WHY:" in template
+    assert "=== BOLD KEYWORDS ===" in template
+    assert "Editable addresses:" in template
+    assert "EXPERIENCE: 0=B0-B2 budget 2/3 keep>=1; 1=B0-B1 budget 1/2 keep>=1" in template
+    assert "PROJECT: 0=B0" in template
+    assert "SKILLS: G0=4 values; G1=6 values" in template
+    assert "Acme Corp" not in template
+    assert "Senior Backend Engineer" not in template
+    assert "Python, FastAPI" not in template
+    assert "OpenAPI Generator" not in template
+    assert "B0: [[RETAIN] or rewrite]" not in template
+    assert "G0-WHY" not in template
+    assert "max 12 words" not in template
+    assert "Budget: max" not in template
+
+
+def test_section_output_rules_forbid_mixed_retain_in_scalar_cells() -> None:
+    for mode in ("full", "lite"):
+        user = render_tailoring_user_prompt(
+            mode_id=mode,
+            jd_intel_blob={},
+            original_resume_json="{}",
+            response_contract_json="{}",
+        )
+        lower = user.lower()
+
+        assert "for scalar cells (position, stack, name, b#)" in lower
+        assert "[retain] must be the entire value or absent" in lower
+        assert "never mix [retain] with added text" in lower
+        assert "for comma-separated scalar cells like stack" in lower
+        assert "for skills only" in lower
 
 
 def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
@@ -320,9 +372,14 @@ def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
 
 def test_resume_diff_rules_keep_bold_keywords_compact() -> None:
     """Bold keywords should be short technical ATS terms, not long phrases."""
-    template = TailoringResponseContract(prompt_mode="full").to_section_template().lower()
-    assert "6-10 comma-separated ats terms" in template
-    assert "tools, languages, platforms, methods only" in template
+    user = render_tailoring_user_prompt(
+        mode_id="full",
+        jd_intel_blob={},
+        original_resume_json="{}",
+        response_contract_json="{}",
+    ).lower()
+    assert "6-10 comma-separated ats terms" in user
+    assert "tools, languages, platforms, methods only" in user
 
 
 def test_resume_diff_rules_allows_plausible_new_claims() -> None:
@@ -343,7 +400,7 @@ def test_resume_diff_rules_lock_project_count_and_limit_tool_promotion() -> None
     ).lower()
     assert "projects: preserve source bullet count and shape" in lower
     assert "keep names stable" in lower
-    assert "preserve all bullet indexes" in lower
+    assert "preserve listed indexes only" in lower
 
 
 def test_resume_diff_rules_apply_bans_globally_and_keep_skills_specific() -> None:

@@ -88,7 +88,8 @@ def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> 
     _ = response_contract
     return (
         "Return raw section-header text only. Include SUMMARY and BOLD KEYWORDS. "
-        "Use [RETAIN] for unchanged cells and do not return JSON."
+        "Use [RETAIN] only as a whole scalar cell or skill chip placeholder; "
+        "never mix [RETAIN] with added scalar text. Do not return JSON."
     )
 
 
