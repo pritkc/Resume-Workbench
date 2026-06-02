@@ -50,6 +50,28 @@ class TestLlmConfig:
 
     @patch("app.routers.config._save_config")
     @patch("app.routers.config._load_config")
+    async def test_put_direct_gemini_drops_stale_ollama_api_base(
+        self, mock_load, mock_save, client
+    ):
+        mock_load.return_value = {
+            "provider": "gemini",
+            "model": "gemini-2.5-flash",
+            "api_base": "http://localhost:11434",
+            "ai_route": "direct_api",
+        }
+        async with client:
+            resp = await client.put(
+                "/api/v1/config/llm-api-key",
+                json={"provider": "gemini", "ai_route": "direct_api"},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["api_base"] is None
+        saved = mock_save.call_args.args[0]
+        assert "api_base" not in saved
+
+    @patch("app.routers.config._save_config")
+    @patch("app.routers.config._load_config")
     async def test_put_llm_config_cliproxy_route(self, mock_load, mock_save, client):
         mock_load.return_value = {}
         async with client:
@@ -135,6 +157,34 @@ class TestLlmTest:
         called_config = mock_health.call_args.args[0]
         assert called_config.provider == "openai"
         assert called_config.model == "codex-jd-fast"
+
+    @patch("app.routers.config.check_llm_health", new_callable=AsyncMock)
+    @patch("app.routers.config._load_config")
+    async def test_connection_test_direct_gemini_ignores_stale_ollama_api_base(
+        self, mock_load, mock_health, client
+    ):
+        mock_load.return_value = {
+            "provider": "gemini",
+            "model": "gemini-2.5-flash",
+            "api_key": "gemini-key",
+            "api_base": "http://localhost:11434",
+            "ai_route": "direct_api",
+        }
+        mock_health.return_value = {"healthy": True}
+        async with client:
+            resp = await client.post(
+                "/api/v1/config/llm-test",
+                json={
+                    "provider": "gemini",
+                    "model": "gemini-2.5-flash",
+                    "api_base": "http://localhost:11434",
+                    "ai_route": "direct_api",
+                },
+            )
+        assert resp.status_code == 200
+        called_config = mock_health.call_args.args[0]
+        assert called_config.provider == "gemini"
+        assert called_config.api_base is None
 
 
 class TestCLIProxyModels:

@@ -17,6 +17,7 @@ from app.llm import (
     LLMConfig,
     normalize_ai_route,
     normalize_cliproxy_api_base,
+    resolve_direct_api_base,
     resolve_api_key,
 )
 from app.schemas import (
@@ -165,7 +166,7 @@ def _build_llm_config_response(stored: dict) -> LLMConfigResponse:
         provider=provider,
         model=stored.get("model", settings.llm_model),
         api_key=_mask_api_key(resolve_api_key(stored, provider)),
-        api_base=stored.get("api_base", settings.llm_api_base),
+        api_base=resolve_direct_api_base(stored, provider),
         ai_route=ai_route,
         cliproxy=CLIProxyConfigResponse(
             base_url=cliproxy["base_url"],
@@ -177,6 +178,16 @@ def _build_llm_config_response(stored: dict) -> LLMConfigResponse:
         ),
         cliproxy_route_enabled=settings.enable_cliproxy_route,
     )
+
+
+def _direct_api_base_from_request_or_stored(
+    request: LLMConfigRequest | None,
+    stored: dict,
+    provider: str,
+) -> str | None:
+    if request and request.api_base is not None:
+        return resolve_direct_api_base({"api_base": request.api_base}, provider)
+    return resolve_direct_api_base(stored, provider)
 
 
 def _cliproxy_model_provider(model_id: str) -> str:
@@ -418,6 +429,12 @@ async def update_llm_config(
 
         stored["cliproxy"] = cliproxy
 
+    provider = stored.get("provider", settings.llm_provider)
+    if normalize_ai_route(stored.get("ai_route")) == AI_ROUTE_DIRECT and provider != "ollama":
+        resolved_api_base = resolve_direct_api_base(stored, provider)
+        if resolved_api_base is None and str(stored.get("api_base") or "").strip():
+            stored.pop("api_base", None)
+
     # Build normalized config for response
     # Save config regardless of health check outcome (see docstring).
     _save_config(stored)
@@ -499,11 +516,7 @@ async def test_llm_connection(request: LLMConfigRequest | None = None) -> dict:
                 if request and request.api_key
                 else resolve_api_key(stored, test_provider)
             ),
-            api_base=(
-                request.api_base
-                if request and request.api_base is not None
-                else stored.get("api_base", settings.llm_api_base)
-            ),
+            api_base=_direct_api_base_from_request_or_stored(request, stored, test_provider),
             ai_route=AI_ROUTE_DIRECT,
         )
 

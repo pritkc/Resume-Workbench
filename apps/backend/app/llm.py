@@ -758,6 +758,33 @@ def normalize_cliproxy_api_base(api_base: str | None) -> str:
     return _normalize_cliproxy_api_base(api_base)
 
 
+def _looks_like_local_ollama_base(api_base: str | None) -> bool:
+    base = (api_base or "").strip().lower().rstrip("/")
+    return base in {
+        "http://localhost:11434",
+        "https://localhost:11434",
+        "http://127.0.0.1:11434",
+        "https://127.0.0.1:11434",
+        "http://[::1]:11434",
+        "https://[::1]:11434",
+    }
+
+
+def resolve_direct_api_base(stored: dict, provider: str) -> str | None:
+    """Resolve direct API base without leaking stale local Ollama URLs to hosted providers."""
+    raw = stored.get("api_base")
+    if raw is None:
+        raw = settings.llm_api_base if provider == settings.llm_provider else None
+
+    if provider != "ollama" and _looks_like_local_ollama_base(raw):
+        return None
+
+    if isinstance(raw, str):
+        cleaned = raw.strip()
+        return cleaned or None
+    return raw
+
+
 def resolve_api_key(stored: dict, provider: str) -> str:
     """Resolve the effective API key from stored config.
 
@@ -816,7 +843,7 @@ def get_llm_config() -> LLMConfig:
         provider=provider,
         model=stored.get("model", settings.llm_model),
         api_key=api_key,
-        api_base=stored.get("api_base", settings.llm_api_base),
+        api_base=resolve_direct_api_base(stored, provider),
         ai_route=AI_ROUTE_DIRECT,
     )
 
