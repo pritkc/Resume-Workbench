@@ -2,14 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  AlertTriangle,
-  CheckCircle,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTranslations } from '@/lib/i18n';
@@ -32,7 +25,6 @@ const DIFF_BODY = `${DIFF_FONT} text-[15px] font-medium leading-[1.55] text-neut
 const DIFF_BODY_SM = `${DIFF_FONT} text-[13px] font-medium leading-snug text-neutral-800`;
 const DIFF_MICRO = `${DIFF_FONT} text-[11px] font-semibold uppercase tracking-wide text-neutral-500`;
 const DIFF_CATEGORY = `${DIFF_FONT} mt-10 border-b border-neutral-200 pb-2 text-xs font-bold uppercase tracking-[0.12em] text-neutral-500 first:mt-0`;
-const DIFF_SUBHEAD = `${DIFF_FONT} text-[11px] font-semibold uppercase tracking-wide text-neutral-500`;
 
 interface DiffPreviewModalProps {
   isOpen: boolean;
@@ -1036,7 +1028,9 @@ export function TailorDiffReadonlyBody({
       <div className="mb-4 border-b border-neutral-200 pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className={cn('m-0 min-w-0 leading-snug text-neutral-800', DIFF_BODY)}>
-            <span className="tabular-nums text-lg font-semibold text-neutral-950">{stats.total}</span>{' '}
+            <span className="tabular-nums text-lg font-semibold text-neutral-950">
+              {stats.total}
+            </span>{' '}
             <span className="font-semibold text-neutral-700">
               row{stats.total === 1 ? '' : 's'} changed
             </span>
@@ -1104,49 +1098,49 @@ export function TailorDiffReadonlyBody({
             <ArtifactGallery artifacts={artifacts} title={artifactGalleryTitle} />
           )}
 
-          {(() => {
-            let lastCategory: SectionCategory | null = null;
-            return orderedSections.map((section) => {
-              const category = sectionCategoryFromKey(section.key);
-              const showCategory = category !== lastCategory;
-              lastCategory = category;
+          {orderedSections.map((section, sectionIndex) => {
+            const category = sectionCategoryFromKey(section.key);
+            const previousCategory =
+              sectionIndex > 0
+                ? sectionCategoryFromKey(orderedSections[sectionIndex - 1].key)
+                : null;
+            const showCategory = category !== previousCategory;
 
-              const inner =
-                section.key === 'skills' ? (
-                  <SkillsGroupedView
-                    items={section.items}
-                    aggregateRationale={skillsAggregateRationale}
-                    observation={skillsObsNormalized}
-                  />
-                ) : section.key.startsWith('experience-') ? (
-                  <ExperienceEntryDiff items={section.items} />
-                ) : section.key.startsWith('project-') ? (
-                  <ProjectEntryDiff items={section.items} />
-                ) : section.key.startsWith('education-') ? (
-                  <EducationEntryDiff items={section.items} />
-                ) : (
-                  section.items.map((item, index) => (
-                    <ChangeItem key={`${section.key}-${index}`} item={item} />
-                  ))
-                );
-
-              return (
-                <div key={section.key}>
-                  {showCategory ? (
-                    <h2 className={DIFF_CATEGORY}>{CATEGORY_TITLE[category]}</h2>
-                  ) : null}
-                  <ChangeSection
-                    title={section.title}
-                    count={section.items.length}
-                    isExpanded={expandedSections.has(section.key)}
-                    onToggle={() => toggleSection(section.key)}
-                  >
-                    {inner}
-                  </ChangeSection>
-                </div>
+            const inner =
+              section.key === 'skills' ? (
+                <SkillsGroupedView
+                  items={section.items}
+                  aggregateRationale={skillsAggregateRationale}
+                  observation={skillsObsNormalized}
+                />
+              ) : section.key.startsWith('experience-') ? (
+                <ExperienceEntryDiff items={section.items} />
+              ) : section.key.startsWith('project-') ? (
+                <ProjectEntryDiff items={section.items} />
+              ) : section.key.startsWith('education-') ? (
+                <EducationEntryDiff items={section.items} />
+              ) : (
+                section.items.map((item, index) => (
+                  <ChangeItem key={`${section.key}-${index}`} item={item} />
+                ))
               );
-            });
-          })()}
+
+            return (
+              <div key={section.key}>
+                {showCategory ? (
+                  <h2 className={DIFF_CATEGORY}>{CATEGORY_TITLE[category]}</h2>
+                ) : null}
+                <ChangeSection
+                  title={section.title}
+                  count={section.items.length}
+                  isExpanded={expandedSections.has(section.key)}
+                  onToggle={() => toggleSection(section.key)}
+                >
+                  {inner}
+                </ChangeSection>
+              </div>
+            );
+          })}
         </div>
       </div>
     </>
@@ -1361,7 +1355,10 @@ function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeS
             />
           )}
           <span
-            className={cn('min-w-0 flex-1 text-base font-semibold leading-snug text-neutral-950', DIFF_FONT)}
+            className={cn(
+              'min-w-0 flex-1 text-base font-semibold leading-snug text-neutral-950',
+              DIFF_FONT
+            )}
           >
             {title}
           </span>
@@ -1377,7 +1374,9 @@ function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeS
         </span>
       </button>
 
-      {isExpanded ? <div className={cn('mt-4 flex flex-col gap-5', DIFF_FONT)}>{children}</div> : null}
+      {isExpanded ? (
+        <div className={cn('mt-4 flex flex-col gap-5', DIFF_FONT)}>{children}</div>
+      ) : null}
     </section>
   );
 }
@@ -1391,7 +1390,10 @@ function RationaleNote({ text }: { text?: string | null }) {
         DIFF_FONT
       )}
     >
-      <span className="absolute left-0 top-[0.4em] h-1 w-1 -translate-x-[5px] rounded-full bg-sky-500/90" aria-hidden />
+      <span
+        className="absolute left-0 top-[0.4em] h-1 w-1 -translate-x-[5px] rounded-full bg-sky-500/90"
+        aria-hidden
+      />
       {text.trim()}
     </p>
   );
@@ -1484,7 +1486,12 @@ function TitleDiffRow({ item, label = 'Role' }: { item: DisplayChange; label?: s
       ) : !item.semanticUnchanged ? (
         <span className="sr-only">Attributed to model tailoring</span>
       ) : null}
-      <p className={cn('mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500', DIFF_FONT)}>
+      <p
+        className={cn(
+          'mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500',
+          DIFF_FONT
+        )}
+      >
         {label}
       </p>
       <DiffChangeBody item={item} />
@@ -1506,7 +1513,9 @@ function TechBulletDiffRow({ item }: { item: DisplayChange }) {
         •
       </span>
       <div className="min-w-0">
-        <p className={cn('mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500')}>
+        <p
+          className={cn('mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500')}
+        >
           Tech stack
         </p>
         {attributionHint ? (
@@ -1523,8 +1532,7 @@ function TechBulletDiffRow({ item }: { item: DisplayChange }) {
 }
 
 function BulletDiffRow({ item }: { item: DisplayChange }) {
-  const bulletPos =
-    item.parsed.bulletIndex !== undefined ? item.parsed.bulletIndex + 1 : null;
+  const bulletPos = item.parsed.bulletIndex !== undefined ? item.parsed.bulletIndex + 1 : null;
   const attributionHint =
     item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
 
@@ -1558,8 +1566,7 @@ function ExperienceEntryDiff({ items }: { items: DisplayChange[] }) {
     (i) => i.change.field_type === 'experience' && isTechStackPath(i.change.field_path)
   );
   const other = items.filter(
-    (i) =>
-      i.change.field_type === 'experience' && !isTechStackPath(i.change.field_path)
+    (i) => i.change.field_type === 'experience' && !isTechStackPath(i.change.field_path)
   );
   const bullets = items.filter((i) => i.change.field_type === 'description');
   const sortedOther = [...other].sort((a, b) =>
@@ -1742,7 +1749,10 @@ function SkillsGroupedView({
       <div className="flex flex-col gap-4">
         {observation.groups.map((grp) => {
           const label = grp.group_label || grp.group_id;
-          const valuesText = grp.values.map((c) => c.text).filter(Boolean).join(', ');
+          const valuesText = grp.values
+            .map((c) => c.text)
+            .filter(Boolean)
+            .join(', ');
           return (
             <div key={grp.group_id} className="m-0 p-0">
               <div
@@ -1758,8 +1768,7 @@ function SkillsGroupedView({
                 </span>
                 <div className="min-w-0">
                   <p className="m-0">
-                    <span className="font-semibold text-neutral-950">{label}:</span>{' '}
-                    {valuesText}
+                    <span className="font-semibold text-neutral-950">{label}:</span> {valuesText}
                   </p>
                   {grp.group_why ? <RationaleNote text={grp.group_why} /> : null}
                 </div>
@@ -1808,8 +1817,7 @@ function SkillsGroupedView({
               </span>
               <div className="min-w-0">
                 <p className="m-0">
-                  <span className="font-semibold text-neutral-950">{entry.group}:</span>{' '}
-                  {line}
+                  <span className="font-semibold text-neutral-950">{entry.group}:</span> {line}
                 </p>
               </div>
             </div>
