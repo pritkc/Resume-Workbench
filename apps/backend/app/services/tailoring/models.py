@@ -656,6 +656,7 @@ class TailoringLLMResponseV2(BaseModel):
     projects: dict[str, CompactBulletDiff] = Field(default_factory=dict)
     skills: list[TailoredSkillsGroup] | None = None
     bold_keywords: list[str] = Field(default_factory=list)
+    bold_keywords_why: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -776,6 +777,7 @@ class TailoringResponseContract(BaseModel):
             "=== SUMMARY ===",
             "WHY:",
             "=== BOLD KEYWORDS ===",
+            "WHY:",
             "",
             "Editable addresses:",
         ]

@@ -57,6 +57,7 @@ G0: Technical Skills | Python, [RETAIN], Kafka
 G0-WHY: Keeps breadth while adding Kafka.
 
 === BOLD KEYWORDS ===
+WHY: Chosen for backend API relevance.
 Python, Kafka, FastAPI
 """,
         _contract(),
@@ -75,6 +76,8 @@ Python, Kafka, FastAPI
         {"value": "Kafka"},
     ]
     assert diff["bold_keywords"] == ["Python", "Kafka", "FastAPI"]
+    assert diff["bold_keywords_why"] == "Chosen for backend API relevance."
+    assert "WHY: Chosen for backend API relevance." not in diff["bold_keywords"]
 
 
 def test_sparse_sections_are_padded_as_retain() -> None:
@@ -208,6 +211,21 @@ B0: Valid project rewrite.
 
     assert diff["projects"]["0"]["bullets"]["0"]["value"] == "Valid project rewrite."
     assert any("projects[7] out of range" in warning for warning in parsed.warnings)
+
+
+def test_bold_keyword_why_is_not_parsed_as_keyword() -> None:
+    parsed = parse_resume_section_output(
+        """
+=== BOLD KEYWORDS ===
+WHY: Terms match backed source evidence.
+Python, Kafka
+""",
+        _contract(),
+    )
+    diff = to_compact_diff(parsed, _contract())
+
+    assert diff["bold_keywords"] == ["Python", "Kafka"]
+    assert diff["bold_keywords_why"] == "Terms match backed source evidence."
 
 
 def test_jd_section_helpers_parse_wrapper() -> None:

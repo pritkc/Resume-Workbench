@@ -12,7 +12,16 @@ _LOCKED_FIELDS = frozenset([
     "id", "company", "location", "start_date", "end_date", "date", "years",
     "github", "website", "customSections",
 ])
-_VALID_TOP_LEVEL = frozenset(["summary", "experience", "projects", "skills", "bold_keywords"])
+_VALID_TOP_LEVEL = frozenset([
+    "summary",
+    "experience",
+    "projects",
+    "skills",
+    "bold_keywords",
+    "bold_keywords_why",
+])
+
+
 @dataclass
 class DiffValidationResult:
     valid: bool
@@ -372,5 +381,9 @@ def validate_compact_diff(
     if "summary" in diff:
         errors.extend(_tailored_cell_errors(diff.get("summary"), "summary", strict=strict))
 
-    return DiffValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
+    if "bold_keywords_why" in diff:
+        why = diff.get("bold_keywords_why")
+        if why is not None and (not isinstance(why, str) or not why.strip()):
+            errors.append("bold_keywords_why must be a non-empty string when present")
 
+    return DiffValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)

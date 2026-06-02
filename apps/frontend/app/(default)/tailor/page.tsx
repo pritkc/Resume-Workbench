@@ -1339,6 +1339,7 @@ function TailorPageContent() {
           pipelineTiming={pendingResult?.data?.pipeline_timing}
           artifacts={pendingResult?.data?.artifacts}
           skillsObservation={pendingResult?.data?.skills_observability ?? null}
+          warnings={pendingResult?.data?.warnings ?? []}
           errorMessage={diffConfirmError ?? undefined}
           resumePreview={pendingResult?.data?.resume_preview ?? null}
         />

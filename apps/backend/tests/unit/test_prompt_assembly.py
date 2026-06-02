@@ -16,7 +16,7 @@ from app.services.tailoring.contracts import build_response_contract
 def test_assemble_full_contains_craft_and_mode_without_embedded_diff_rules() -> None:
     assembled = assemble_tailoring_system_prompt("full")
     assert "OUTPUT FORMAT:" not in assembled
-    assert "ROLE & GOAL:" in assembled
+    assert "Senior software hiring manager" in assembled
 
 
 def test_assemble_light_contains_light_touch() -> None:
@@ -37,7 +37,7 @@ def test_render_user_prompt_fills_slots() -> None:
     assert "MODE:" not in text
     assert "$extract_jd_intel_output" not in text
     assert "OUTPUT TEMPLATE:" in text
-    assert "Return plain text only" in text
+    assert "Return plain section-header text only" in text
     assert "CONTENT RULES:" in text
     assert "CLAIM CALIBRATION:" in text
 
@@ -55,7 +55,7 @@ def test_render_user_prompt_injects_custom_instructions_before_full_run_rules() 
     assert "override all other tailoring instructions for this run" in text
     assert "Prioritize fintech platform experience." in text
     assert text.index("Prioritize fintech platform experience.") < text.index(
-        "RUN SEQUENCE"
+        "OPERATING ORDER"
     )
 
 
@@ -99,8 +99,8 @@ def test_build_prompt_context_validates_current_prompt_canaries() -> None:
         resume_payload=TailoringResumePayload(),
         original_resume_markdown="",
     )
-    validate_prompt_canaries(ctx.user_prompt, ("JD coverage themes",))
-    assert "translation candidates, not mandatory insertions" in ctx.user_prompt
+    validate_prompt_canaries(ctx.user_prompt, ("HOOKS/THEMES",))
+    assert "translation candidates, not resume copy or mandatory insertions" in ctx.user_prompt
 
 
 def test_tailoring_resume_to_llm_prompt_education_and_skills_without_group_ids(
@@ -245,7 +245,7 @@ def test_full_system_prompt_has_no_thinking_trace_instruction() -> None:
 
 def test_full_system_prompt_has_role_and_goal() -> None:
     system = assemble_tailoring_system_prompt("full")
-    assert "ROLE & GOAL:" in system
+    assert "Senior software hiring manager" in system
 
 
 def test_section_output_template_in_user_prompt() -> None:
@@ -352,7 +352,7 @@ def test_section_output_rules_forbid_mixed_retain_in_scalar_cells() -> None:
         assert "[retain] must be the entire value or absent" in lower
         assert "never mix [retain] with added text" in lower
         assert "for comma-separated scalar cells like stack" in lower
-        assert "for skills only" in lower
+        assert "for skills, output every g# group" in lower
 
 
 def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
@@ -364,9 +364,9 @@ def test_resume_diff_rules_prefer_broader_profile_over_jd_copy() -> None:
         response_contract_json="{}",
     ).lower()
     assert "jd as a lens, not a new identity" in lower
-    assert "translation candidates, not mandatory insertions" in lower
-    assert "do not force every bullet to connect" in lower
-    assert "at most 1-2 substantive bullet rewrites per role" in lower
+    assert "translation candidates, not resume copy or mandatory insertions" in lower
+    assert "do not rebuild every section around the posting" in lower
+    assert "follow each row's budget" in lower
     assert "preserve impressive superset skills" in lower
 
 
@@ -387,7 +387,7 @@ def test_resume_diff_rules_allows_plausible_new_claims() -> None:
     lower = assemble_tailoring_system_prompt("full").lower()
     assert "claim policy" in lower
     assert "interview-defensible" in lower
-    assert "source evidence supports" in lower
+    assert "source evidence" in lower
 
 
 def test_resume_diff_rules_lock_project_count_and_limit_tool_promotion() -> None:
@@ -398,7 +398,7 @@ def test_resume_diff_rules_lock_project_count_and_limit_tool_promotion() -> None
         original_resume_json="{}",
         response_contract_json="{}",
     ).lower()
-    assert "projects: preserve source bullet count and shape" in lower
+    assert "keep names, source bullet count, and project shape stable" in lower
     assert "keep names stable" in lower
     assert "preserve listed indexes only" in lower
 
@@ -411,9 +411,9 @@ def test_resume_diff_rules_apply_bans_globally_and_keep_skills_specific() -> Non
         original_resume_json="{}",
         response_contract_json="{}",
     ).lower()
-    assert "use avoid to demote generic or low-signal wording" in lower
+    assert "avoid: demote generic or low-signal wording" in lower
     assert "preserve impressive superset skills" in lower
-    assert "not keyword stuffing" in lower
+    assert "never keyword-stuff" in lower
 
 
 def test_resume_diff_rules_forbid_markdown_fences() -> None:
@@ -448,11 +448,11 @@ def test_section_tailoring_restores_original_content_rules_without_json_contract
         assert "the source resume is the candidate superset" in lower
         assert "never keyword-stuff" in lower
         assert "tech_stacks values contain only named tools" in lower
-        assert "skill values must be specific tools" in lower
+        assert "values must be specific tools" in lower
         assert "one idea per bullet" in lower
         assert "claim calibration:" in lower
         assert "do not claim org-wide architecture" in lower
-        assert "openers (never use as primary verb)" in lower
+        assert "inflated openers as primary verbs" in lower
         assert "impossible wins unsupported by source evidence" in lower
         assert "return valid json only" not in lower
         assert "tailored cell:" not in lower
@@ -470,7 +470,7 @@ def test_full_prompt_preserves_project_bullet_count_and_stacks() -> None:
         output_template="=== PROJECT 0 ===\nSTACK: [RETAIN]",
     )
     lower = user.lower()
-    assert "projects: preserve source bullet count and shape" in lower
+    assert "keep names, source bullet count, and project shape stable" in lower
     assert "stack:" in lower
 
 
@@ -483,15 +483,15 @@ def test_full_prompt_retains_closest_two_projects_and_superset_skills() -> None:
         response_contract_json="{}",
     )
     lower = user.lower()
-    assert "edit at most the closest two projects" in lower
+    assert "projects: edit at most the closest two" in lower
     assert "preserve impressive superset skills" in lower
     assert "do not copy jd titles or secondary role labels" in lower
     assert "when in doubt, keep the existing qualifier or omit" in lower
-    assert "at most 1-2 bullets per experience" in lower
+    assert "follow each row's budget" in lower
     assert "[retain]" in lower
-    assert "translation candidates, not mandatory insertions" in lower
+    assert "translation candidates, not resume copy or mandatory insertions" in lower
     assert "career story" in lower
-    assert "story retention" in lower
+    assert "recognizable original story" in lower
 
 
 def test_full_prompt_uses_coverage_hooks_not_jd_insertion_commands() -> None:
@@ -505,10 +505,10 @@ def test_full_prompt_uses_coverage_hooks_not_jd_insertion_commands() -> None:
     lower = user.lower()
     assert "every bullet connects" not in lower
     assert "weave into summary and bullets" not in lower
-    assert "jd coverage themes" in lower
-    assert "competency hooks, not resume copy" in lower
-    assert "coverage signals, not phrases to weave" in lower
-    assert "do not force every bullet to connect" in lower
+    assert "hooks/themes" in lower
+    assert "competency hooks and translation candidates" in lower
+    assert "ats visibility only" in lower
+    assert "do not rebuild every section around the posting" in lower
 
 
 def test_full_prompt_splits_experience_sparse_diffs_from_project_shape() -> None:
@@ -520,10 +520,9 @@ def test_full_prompt_splits_experience_sparse_diffs_from_project_shape() -> None
         response_contract_json="{}",
     )
     lower = user.lower()
-    assert "for roles with 2 or fewer bullets, touch at most one bullet" in lower
+    assert "for roles with 2 or fewer bullets, touch at most one" in lower
     assert "omit a whole experience or project section" in lower
-    assert "projects: preserve source bullet count and shape" in lower
-    assert "do not compress multiple project bullets into one" in lower
+    assert "keep names, source bullet count, and project shape stable" in lower
 
 
 def test_jd_extractor_prompts_use_neutral_hooks_not_mirror_language() -> None:
@@ -551,7 +550,7 @@ def test_resume_diff_rules_handles_pivot_roles_from_candidate_identity() -> None
         original_resume_json="{}",
         response_contract_json="{}",
     ).lower()
-    assert "preserving the source identity" in lower
+    assert "preserving source identity" in lower
     assert "use the jd as a lens, not a new identity" in lower
 
 
@@ -559,18 +558,17 @@ def test_full_system_prompt_aligns_titles_to_target_domain() -> None:
     """Title qualifiers should move toward the JD domain instead of generic AI/backend labels."""
     system = assemble_tailoring_system_prompt("full")
     lower = system.lower()
-    assert "target role domain" in lower
-    assert "generic ai/backend" in lower
+    assert "scope/platform/domain qualifiers" in lower
+    assert "generic labels" in lower
 
 
 def test_full_system_prompt_uses_broader_competencies_and_plausible_claims() -> None:
     """System prompt should ask for translation beyond exact JD language."""
     system = assemble_tailoring_system_prompt("full")
     lower = system.lower()
-    assert "broader competencies behind the jd" in lower
-    assert "broader adjacent framing" in lower
-    assert "do not add new named vendor products" in lower
-    assert "do not borrow jd vocabulary" in lower
+    assert "candidate's original narrative" in lower
+    assert "translate jd language" in lower
+    assert "new named tools, vendors, platforms" in lower
 
 
 def test_resume_diff_rules_remove_keyword_weave_and_vendor_substitution_paths() -> None:
@@ -581,10 +579,10 @@ def test_resume_diff_rules_remove_keyword_weave_and_vendor_substitution_paths() 
         original_resume_json="{}",
         response_contract_json="{}",
     ).lower()
-    assert "keyword stuffing" in lower
+    assert "never keyword-stuff" in lower
     assert "do not copy jd titles" in lower
     assert "keep names stable" in lower
-    assert "do not force every bullet to connect" in lower
+    assert "do not rebuild every section around the posting" in lower
 
 
 def test_resume_diff_rules_has_locked_fields() -> None:

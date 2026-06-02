@@ -223,6 +223,12 @@ async def generate_tailored_resume(
             or llm_response_v2.bold_keywords
             or (llm_response_v2.summary and not legacy_full_body_response)
         )
+        if has_compact_content:
+            filtered_bold_keywords = filter_basic_resume_terms(llm_response_v2.bold_keywords)
+            if filtered_bold_keywords != llm_response_v2.bold_keywords:
+                llm_response_v2 = llm_response_v2.model_copy(
+                    update={"bold_keywords": filtered_bold_keywords}
+                )
 
     declared_changes: list = []
     with track("tailoring_internal", "apply_compact_diff"):
@@ -300,11 +306,7 @@ async def generate_tailored_resume(
         location_source=location_source,
         location_value=location_value,
     )
-    bold_keywords = (
-        filter_basic_resume_terms(llm_response_v2.bold_keywords)
-        if has_compact_content
-        else []
-    )
+    bold_keywords = llm_response_v2.bold_keywords if has_compact_content else []
 
     skills_observability: dict[str, Any] | None = None
     if (

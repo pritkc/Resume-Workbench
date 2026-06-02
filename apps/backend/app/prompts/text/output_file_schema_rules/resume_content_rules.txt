@@ -1,6 +1,3 @@
-CONTENT PRECEDENCE:
-- Section-header OUTPUT RULES own response syntax. These rules own locks, calibration, signal strategy, and writing policy.
-
 LOCKS:
 - Never emit locked fields: id, company, location, start_date, end_date, date, years, github, website, customSections.
 - Do not alter company names, dates, locations, schools, GPA, base factual claims, or source-owned identifiers.
@@ -11,35 +8,21 @@ LOCKS:
 
 --- SIGNAL STRATEGY ---
 
-CORE LENS:
+SIGNAL RULES:
 - The source resume is the candidate superset; the JD is a prioritization lens.
 - Show a broad tech-role profile first, then selected JD-aligned evidence. Do not rebuild every section around the posting.
-- Map to JD themes through candidate mechanisms, systems, tools, and outcomes. Avoid 1:1 paraphrases of JD responsibilities.
-- A keyword once in the right evidence beats repetition across summary, stacks, bullets, skills, and bold_keywords.
-- Keep direct JD terms to the few bullets where they are natural; do not make every section repeat the same JD nouns.
-
-ATS AND KEYWORDS:
-- Use exact ATS terms only when high-signal, technical, and supported by the candidate story.
-- Place the strongest supported terms early in the summary and strongest bullets.
+- Use exact JD/ATS terms only when high-signal, source-supported, and natural in the edited cell.
+- Do not add JD-only tools, vendors, platforms, methods, OSes, languages, or architectures to stacks, skills, bullets, projects, or bold_keywords.
+- One strong keyword in the right evidence beats repetition across summary, stacks, bullets, skills, and bold_keywords.
+- Map JD themes through candidate mechanisms, systems, tools, and outcomes. Avoid 1:1 paraphrases of JD responsibilities.
 - Never keyword-stuff, write hollow ATS bait, or add basic office/chat/project tools to summary, bullets, tech_stacks, skills, or bold_keywords.
-- BOLD_KEYWORDS: use 1-3 word terms only; prefer tools, languages, platforms, frameworks, data methods, and product systems; avoid sentences, soft skills, and generic domain phrases.
-- Do not include basic tools, generic role/domain labels, responsibility phrases, or weak umbrella terms in bold_keywords.
-- Examples of low-signal bold terms to exclude: Data Analysis, Process Mapping, Workflow Visualization, Process Optimization.
-- Also exclude: methodology and process labels (SDLC, Agile, Scrum, CI/CD pipeline, test automation), generic infrastructure categories (Relational Databases, Cloud Storage, Distributed Systems, Message Queue), and competency phrases (Test Case Design, Project Management, Stakeholder Communication, Defect Tracking). When the JD names no high-signal tools, draw bold_keywords only from tools, languages, and platforms present in the resume evidence.
 
-TECH STACKS:
-- tech_stacks values contain only named tools, languages, platforms, frameworks, or products.
-- Include tools used in the source evidence or required by the rewritten action; do not add JD-only tools because the JD names them.
+FIELD RULES:
+- BOLD_KEYWORDS: 6-10 high-signal 1-3 word terms plus short WHY; prefer tools, languages, platforms, frameworks, data methods, and product systems; avoid sentences, soft skills, generic role/domain labels, responsibility phrases, weak umbrella terms, and basic tools.
+- tech_stacks values contain only named tools, languages, platforms, frameworks, or products; include source-evidenced tools or tools required by the rewritten action; exclude table-stakes productivity/project/collaboration tools.
 - Do not promote tools from tech_stacks into bullet text unless the source bullet names the tool or the action logically requires it.
-- Exclude from tech_stacks any tool that is an assumed baseline for the role's level and domain. Ask: would a technical recruiter scanning resumes for this posting find this tool a differentiator, or an expected given? Productivity suites, generic project trackers, collaboration apps, and commodity document tools are excluded regardless of whether the JD names them.
-
-SKILLS:
-- Target 4-5 dense groups only when the source skills support them; do not pad.
-- Preserve strong engineering/data skills as the profile backbone; put JD-critical credible groups first.
-- Add only a few JD-specific values across the skills section unless already present.
-- Skill values must be specific tools, products, methods, or technologies, not responsibility phrases.
-- Retain adjacent evidenced skills even when they are not JD-critical; avoid turning skills into a JD mirror.
-- Do not invent skill group ids; alignment is OUTPUT TEMPLATE ordering only. Explain all chips inside each G#-WHY line compactly, covering retain vs edit vs add-for-JD in positional order.
+- Skills: target 4-5 dense groups; preserve the source backbone; remove original skills only when remotely useless to the role; values must be specific tools, products, methods, or technologies, not responsibility phrases.
+- Do not invent skill group ids; alignment is OUTPUT TEMPLATE ordering only. Explain retain/edit/remove decisions in each G#-WHY line.
 
 --- WRITING POLICY ---
 
@@ -76,18 +59,7 @@ CLAIM CALIBRATION:
 
 --- BANNED PATTERNS ---
 
-OPENERS (never use as primary verb):
-spearheaded, leveraged, orchestrated, utilized, facilitated, pioneered, revolutionized, masterminded, improved, enhanced, streamlined
-
-JARGON (never use):
-synergy, robust, scalable, holistic, proactive, cutting-edge, state-of-the-art, dynamic, innovative, visionary, seamless, game-changer, thought leader, best-in-class, impactful
-
-PHRASES (never use):
-proven track record, results-driven, results-oriented, team player, passionate about, self-starter, detail-oriented, go-getter, stakeholder alignment, responsible for [duty list], in order to, as part of an effort to, so as to enhance/improve, deeply committed to
-
-PATTERNS (never):
-- Em dash anywhere in output.
-- Dangling participial chains at bullet endings.
-- Adjective pileups or inflated scope for short tenures.
-- Multiple bullets in one role with the same outcome type.
-- Impossible wins unsupported by source evidence.
+STYLE FILTER:
+- Avoid inflated openers as primary verbs: spearheaded, leveraged, orchestrated, utilized, facilitated, pioneered, revolutionized, masterminded, improved, enhanced, streamlined.
+- Avoid empty business jargon and stock resume phrases such as synergy, robust, scalable, holistic, proactive, cutting-edge, proven track record, results-driven, team player, responsible for, in order to, and deeply committed to.
+- Never use em dashes, dangling participial endings, adjective pileups, repeated outcome patterns within a role, or impossible wins unsupported by source evidence.

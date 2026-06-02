@@ -132,7 +132,7 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         PromptCatalogSection(
             id="tailoring_craft_block",
             label="Craft block (role, voice, ATS, tailoring approach)",
-            note="PRIMARY RUN RULES, ROLE & GOAL, PROCESS — full tailor only. Primary tailoring now fills a section-header output template.",
+            note="PRIMARY RUN RULES — full tailor only. Primary tailoring fills a section-header output template.",
             policy="user_editable_future",
             children=craft_children,
         ),

@@ -21,6 +21,7 @@ class SectionParseResult:
     projects: dict[int, dict[str, Any]] = field(default_factory=dict)
     skills: dict[int, dict[str, Any]] = field(default_factory=dict)
     bold_keywords: list[str] = field(default_factory=list)
+    bold_keywords_why: str | None = None
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -245,7 +246,9 @@ def parse_resume_section_output(
                 continue
 
             if section == "BOLD_KEYWORDS":
-                if label in {"BOLD", "KEYWORDS", "BOLD KEYWORDS"}:
+                if label == "WHY":
+                    result.bold_keywords_why = value
+                elif label in {"BOLD", "KEYWORDS", "BOLD KEYWORDS"}:
                     result.bold_keywords.extend(_parse_csv_values(value))
                 else:
                     result.bold_keywords.extend(_parse_csv_values(line))
@@ -388,6 +391,8 @@ def to_compact_diff(
         "projects": {},
         "bold_keywords": parsed.bold_keywords,
     }
+    if parsed.bold_keywords_why:
+        diff["bold_keywords_why"] = parsed.bold_keywords_why
 
     for idx, count in enumerate(contract.experience_bullet_counts):
         entry = parsed.experience.get(idx, {})

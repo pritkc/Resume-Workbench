@@ -131,6 +131,45 @@ def test_enrich_change_manifest_sets_reason_from_tailored_cells() -> None:
     assert summary_enriched.reason == "Matched cloud JD keywords."
 
 
+def test_bold_keywords_reason_is_added_to_manifest_for_diff_review() -> None:
+    original = {"summary": "Old", "workExperience": [], "personalProjects": [], "skills": {"groups": []}}
+    applied = copy.deepcopy(original)
+    llm = TailoringLLMResponseV2(
+        summary=None,
+        experience={},
+        projects={},
+        bold_keywords=["Go", "Python"],
+        bold_keywords_why="Selected source-supported backend terms for ATS scanning.",
+    )
+
+    merged = supplement_change_manifest_with_unchanged_cell_rationales([], llm, original, applied)
+    row = next(c for c in merged if c.path == "bold_keywords")
+
+    assert row.action == "replace"
+    assert row.value == "Go, Python"
+    assert row.reason == "Selected source-supported backend terms for ATS scanning."
+
+
+def test_enrich_change_manifest_sets_bold_keyword_reason_when_row_exists() -> None:
+    changes = [
+        ResumeChange(
+            path="bold_keywords",
+            action="replace",
+            original=None,
+            value="Go, Python",
+            reason="Generic reason.",
+        )
+    ]
+    llm = TailoringLLMResponseV2(
+        bold_keywords=["Go", "Python"],
+        bold_keywords_why="Chosen because both terms are source-supported.",
+    )
+
+    enriched = enrich_change_manifest_with_tailored_cells(changes, llm)
+
+    assert enriched[0].reason == "Chosen because both terms are source-supported."
+
+
 def test_enrich_maps_description_path_to_bullet_why() -> None:
     original = {
         "summary": "S",

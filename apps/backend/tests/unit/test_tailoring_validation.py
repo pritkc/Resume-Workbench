@@ -105,6 +105,7 @@ def _full_envelope_strict_diff() -> dict[str, Any]:
             },
         ],
         "bold_keywords": ["Go", "Python"],
+        "bold_keywords_why": "Selected source-supported ATS terms.",
     }
 
 
@@ -205,6 +206,15 @@ def test_full_envelope_requires_why() -> None:
     diff["summary"] = {"value": "No why here"}  # type: ignore[assignment]
     result = validate_compact_diff(diff, contract)
     assert result.valid is False
+
+
+def test_bold_keywords_why_must_be_non_empty_when_present() -> None:
+    contract = _make_strict_contract()
+    diff = _full_envelope_strict_diff()
+    diff["bold_keywords_why"] = "   "
+    result = validate_compact_diff(diff, contract)
+    assert result.valid is False
+    assert any("bold_keywords_why" in e for e in result.errors)
 
 
 # ── Unknown top-level keys ────────────────────────────────────────────────────
@@ -394,4 +404,3 @@ def test_tailored_skills_group_serializes_values_as_compact_array() -> None:
         values=[SkillValueCell(value="Test Planning"), SkillValueCell(value=None)],
     )
     assert g.model_dump(exclude_none=False)["values"] == ["Test Planning", None]
-

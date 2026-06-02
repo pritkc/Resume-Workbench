@@ -15,7 +15,7 @@
 ### `tailor_resume_full` (three-way split)
 
 - **`tailor_resume_full/user.txt`:** JD first, then **`$content_rules`**, resume, and **`$output_template`**; the LLM returns section-header text that is parsed back into the compact diff.
-- **`tailor_resume_full/system.txt`:** **`PRIMARY RUN RULES`** (top, edit often), **ROLE & GOAL**, **PROCESS** only — full-tailor framing.
+- **`tailor_resume_full/system.txt`:** **`PRIMARY RUN RULES`** only — compact full-tailor framing for role, priority, title calibration, and claim policy.
 - **`output_file_schema_rules/resume_content_rules.txt`:** Section-header-compatible content bible: locks, signal strategy, ATS, skills, writing policy, claim calibration, and banned patterns. It intentionally excludes JSON-only format/schema instructions.
 - **`output_file_schema_rules/resume_diff_output.txt`:** Legacy compact JSON **output bible** for any phase still using that diff format.
 

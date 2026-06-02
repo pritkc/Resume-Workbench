@@ -48,6 +48,7 @@ interface DiffPreviewModalProps {
   artifacts?: ArtifactSummary[];
   /** Sparse skills QA rows from tailoring pipeline (tags + optional LLM whys). */
   skillsObservation?: SkillsObservationPayload | null;
+  warnings?: string[];
   errorMessage?: string;
   resumePreview?: ResumePreview | null;
 }
@@ -921,6 +922,7 @@ export interface TailorDiffReadonlyBodyProps {
   changeBreakdown?: TailoringStageBreakdown | null;
   artifacts?: ArtifactSummary[];
   artifactGalleryTitle?: string;
+  warnings?: string[];
   errorMessage?: string;
   emptyFallback?: ReactNode;
   /** Tailored preview (improved snapshot) — used for human-readable section titles. */
@@ -935,6 +937,7 @@ export function TailorDiffReadonlyBody({
   changeBreakdown,
   artifacts,
   artifactGalleryTitle = 'Preview Snapshot',
+  warnings = [],
   errorMessage,
   emptyFallback,
   resumePreview = null,
@@ -1081,6 +1084,20 @@ export function TailorDiffReadonlyBody({
         </div>
       )}
 
+      {warnings.length > 0 ? (
+        <div className="mt-3 rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] leading-snug text-amber-950">
+          <div className="mb-1 flex items-center gap-1.5 font-semibold">
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            Resume warnings
+          </div>
+          <ul className="list-disc space-y-1 pl-5">
+            {warnings.map((warning, index) => (
+              <li key={`${index}-${warning}`}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className={cn('w-full bg-white pl-2.5 text-neutral-900 sm:pl-3', DIFF_BODY)}>
         <div className="mt-4 flex flex-col gap-8 pb-4">
           {artifacts && artifacts.length > 0 && (
@@ -1147,6 +1164,7 @@ export function DiffPreviewModal({
   changeManifest,
   artifacts,
   skillsObservation = null,
+  warnings = [],
   errorMessage,
   resumePreview = null,
 }: DiffPreviewModalProps) {
@@ -1240,6 +1258,7 @@ export function DiffPreviewModal({
             changeManifest={changeManifest}
             changeBreakdown={changeBreakdown ?? null}
             artifacts={artifacts}
+            warnings={warnings}
             errorMessage={errorMessage}
             resumePreview={resumePreview}
             skillsObservation={skillsObservation}
@@ -1810,4 +1829,3 @@ function SkillsGroupedView({
     </div>
   );
 }
-

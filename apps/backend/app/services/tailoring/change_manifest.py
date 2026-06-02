@@ -331,6 +331,8 @@ def _skills_tailored_reason(resp: TailoringLLMResponseV2) -> str | None:
 def _tailored_reason_for_manifest_path(path: str, resp: TailoringLLMResponseV2) -> str | None:
     if path == "summary":
         return resp.summary.why if resp.summary else None
+    if path == "bold_keywords":
+        return resp.bold_keywords_why
 
     m = re.match(r"^workExperience\[(\d+)\]\.position$", path)
     if m:
@@ -432,6 +434,21 @@ def supplement_change_manifest_with_unchanged_cell_rationales(
                     reason=summary_cell.why,
                 ),
             )
+
+    keywords_text = ", ".join(
+        _clean_text(item) for item in llm_response.bold_keywords if _clean_text(item)
+    )
+    if keywords_text or llm_response.bold_keywords_why:
+        add_if_absent(
+            "bold_keywords",
+            ResumeChange(
+                path="bold_keywords",
+                action="replace",
+                original=None,
+                value=keywords_text,
+                reason=llm_response.bold_keywords_why or "Selected bold keywords for target job.",
+            ),
+        )
 
     orig_exp = original.get("workExperience") or []
     app_exp = applied.get("workExperience") or []
