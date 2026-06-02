@@ -27,6 +27,7 @@ import {
 } from '@dnd-kit/sortable';
 import { DraggableListItem } from '../draggable-list-item';
 import { SkillGroupValuesDnd } from '../skill-group-values-dnd';
+import { BuilderFormField } from '../builder-form-field';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 /** Split pasted or typed draft text into individual skill tags (comma, semicolon, or line break). */
@@ -184,39 +185,39 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
 
               return (
                 <DraggableListItem key={group.id} id={group.id}>
-                  <div className="group/skill entry-card-editor relative border border-black/20 bg-white">
+                  <div className="group/skill entry-card-editor relative">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => handleRemove(group.id)}
                       aria-label={t('builder.additionalForm.removeGroup')}
-                      className="absolute right-1 top-1 z-10 h-7 w-7 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/skill:opacity-100 group-focus-within/skill:opacity-100"
+                      className="absolute right-1 top-1 z-10 h-7 w-7 border border-border bg-card/95 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/skill:opacity-100 group-focus-within/skill:opacity-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
 
-                    <div className="mb-2 flex flex-wrap items-end gap-2 border-b border-black/10 pb-2 pr-8">
-                      <div className="min-w-0 flex-1">
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-black/50">
-                          {t('builder.additionalForm.groupLabel')}
-                        </span>
+                    <div className="mb-2 flex flex-wrap items-end gap-2 border-b border-border pb-2 pr-8">
+                      <BuilderFormField
+                        label={t('builder.additionalForm.groupLabel')}
+                        className="min-w-0 flex-1"
+                      >
                         <Input
                           pasteMode="plainTextSingleParagraph"
                           value={group.label}
                           onChange={(event) => handleLabelChange(group.id, event.target.value)}
                           placeholder={t('builder.additionalForm.groupLabelPlaceholder')}
-                          className="mt-0.5 h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0"
+                          className="builder-field-input w-full"
                         />
-                      </div>
+                      </BuilderFormField>
                     </div>
 
                     <div className="space-y-1">
                       <div className="mb-0.5 flex items-baseline justify-between gap-2">
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-black/50">
+                        <span className="builder-field-label">
                           {t('builder.additionalForm.groupValues')}
                         </span>
-                        <span className="max-w-[min(100%,14rem)] text-right font-mono text-[9px] leading-snug text-black/40">
+                        <span className="builder-form-hint max-w-[min(100%,14rem)] text-right">
                           {t('builder.additionalForm.valuesReorderHint')}
                         </span>
                       </div>
@@ -242,7 +243,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
                           }
                         }}
                         placeholder={t('builder.additionalForm.addValuePlaceholder')}
-                        className="h-7 w-full min-w-0 rounded-none border border-black/20 bg-white px-2 font-mono text-sm text-black placeholder:text-black/35 focus:border-black focus:outline-none"
+                        className="builder-field-input w-full min-w-0 font-mono"
                       />
                     </div>
                   </div>
@@ -254,10 +255,8 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
       </DndContext>
 
       {groups.length === 0 && (
-        <div className="border border-dashed border-black/25 bg-white px-2 py-3 text-center">
-          <p className="font-mono text-[11px] text-black/50">
-            {t('builder.additionalForm.emptyState')}
-          </p>
+        <div className="border border-dashed border-border bg-card px-2 py-3 text-center">
+          <p className="builder-form-hint">{t('builder.additionalForm.emptyState')}</p>
         </div>
       )}
 
@@ -277,7 +276,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
               onChange
             );
           }}
-          className="font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
+          className="builder-field-caption inline-flex items-center underline decoration-black/20 underline-offset-2 hover:text-foreground"
         >
           <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
           {t('builder.additionalForm.addGroup')}

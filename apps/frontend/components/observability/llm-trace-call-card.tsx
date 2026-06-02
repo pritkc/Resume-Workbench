@@ -34,7 +34,7 @@ function PreviewPane({
 }): React.ReactElement {
   const { t } = useTranslations();
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-md border border-slate-200 bg-white p-3 shadow-sm lg:h-full lg:min-h-0">
+    <div className="flex min-w-0 flex-1 flex-col rounded-md border border-slate-200 bg-card p-3 shadow-sm lg:h-full lg:min-h-0">
       <div className="mb-1 flex shrink-0 items-end justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="font-mono text-xs font-semibold uppercase tracking-wide text-slate-800">
@@ -79,7 +79,7 @@ export function LlmTraceCallCard({
     <article
       className={`rounded-md border p-4 ${
         call.success
-          ? 'border-slate-200/90 bg-white shadow-sm'
+          ? 'border-slate-200/90 bg-card shadow-sm'
           : 'border-red-200 bg-red-50/80 shadow-sm'
       }`}
     >
@@ -93,7 +93,7 @@ export function LlmTraceCallCard({
               className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px] uppercase ${
                 call.success
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : 'border-red-200 bg-white text-red-800'
+                  : 'border-red-200 bg-card text-red-800'
               }`}
             >
               {call.success ? (
@@ -228,14 +228,14 @@ export function LlmTraceCallCard({
             <span
               className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${
                 compactEnvelope.valid === false
-                  ? 'border-amber-300 bg-white text-amber-900'
-                  : 'border-emerald-300 bg-white text-emerald-900'
+                  ? 'border-amber-300 bg-card text-amber-900'
+                  : 'border-emerald-300 bg-card text-emerald-900'
               }`}
             >
               {compactEnvelope.valid === false ? 'issues' : 'ok'}
             </span>
             {typeof compactEnvelope.phase === 'string' && compactEnvelope.phase ? (
-              <span className="rounded border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] uppercase text-slate-700">
+              <span className="rounded border border-slate-200 bg-card px-2 py-0.5 font-mono text-[10px] uppercase text-slate-700">
                 {compactEnvelope.phase}
               </span>
             ) : null}
@@ -330,7 +330,7 @@ export function LlmTraceCallCard({
               />
             </div>
 
-            <details className="rounded-md border border-slate-200 bg-white p-3">
+            <details className="rounded-md border border-slate-200 bg-card p-3">
               <summary className="cursor-pointer font-mono text-xs font-semibold uppercase tracking-wide text-slate-700">
                 Request context (JSON)
               </summary>

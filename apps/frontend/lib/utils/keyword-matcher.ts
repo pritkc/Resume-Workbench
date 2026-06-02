@@ -283,3 +283,21 @@ export function calculateMatchStats(
 
   return { matchedKeywords, matchCount, totalKeywords, matchPercentage };
 }
+
+/**
+ * Return JD keywords not found in resume text, sorted by length descending.
+ */
+export function getMissingKeywords(
+  resumeText: string,
+  jdKeywords: Set<string>,
+  limit = 10
+): string[] {
+  const { matchedKeywords } = calculateMatchStats(resumeText, jdKeywords);
+  const missing: string[] = [];
+  for (const keyword of jdKeywords) {
+    if (!matchedKeywords.has(keyword)) {
+      missing.push(keyword);
+    }
+  }
+  return missing.sort((a, b) => b.length - a.length || a.localeCompare(b)).slice(0, limit);
+}

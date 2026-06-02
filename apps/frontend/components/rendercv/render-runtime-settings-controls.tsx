@@ -48,10 +48,10 @@ export function RenderRuntimeSettingsControls({
   return (
     <div className="space-y-2">
       <div
-        className="flex flex-col gap-1 border border-black/20 bg-white px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-1 border border-border bg-card px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between"
         title="PDF title, date format, and defaults for the RenderCV output."
       >
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black/50">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           Runtime
         </p>
         <Button
@@ -66,7 +66,7 @@ export function RenderRuntimeSettingsControls({
               })
             )
           }
-          className="h-7 gap-1 px-2 font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/25 underline-offset-2 hover:bg-transparent hover:text-black"
+          className="h-7 gap-1 px-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground underline decoration-black/25 underline-offset-2 hover:bg-transparent hover:text-foreground"
           title="Restore all runtime settings to defaults."
         >
           <RotateCcw className="h-3 w-3" />

@@ -5,6 +5,7 @@ import {
   DEFAULT_RENDER_THEME_SETTINGS,
   normalizeRenderThemeSettings,
   type RenderThemeSettings,
+  type ArtifactSummary,
 } from '@/lib/types/render-theme';
 
 const fetchResumeRenderPreview = vi.fn();
@@ -18,6 +19,8 @@ vi.mock('@/lib/api/resume', () => ({
 const baseSettings: RenderThemeSettings = {
   ...DEFAULT_RENDER_THEME_SETTINGS,
 };
+
+const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
 
 describe('RenderPreviewPanel', () => {
   beforeEach(() => {
@@ -120,13 +123,37 @@ describe('RenderPreviewPanel', () => {
     expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
   });
 
-  it('keeps a single compact preview header when artifacts load', async () => {
+  it('does not render an internal preview header bar', async () => {
     render(<RenderPreviewPanel resumeId="resume-123" settings={baseSettings} />);
 
     await screen.findByAltText('preview.png');
 
-    expect(screen.getAllByText('Preview')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Refresh preview' })).toBeInTheDocument();
+    expect(screen.queryByText('Preview')).not.toBeInTheDocument();
+  });
+
+  it('keeps fetched artifacts after parent re-renders with empty initial artifacts', async () => {
+    const onLoadingChange = vi.fn();
+    const { rerender } = render(
+      <RenderPreviewPanel
+        resumeId="resume-123"
+        settings={baseSettings}
+        initialArtifacts={EMPTY_ARTIFACTS}
+        onLoadingChange={onLoadingChange}
+      />
+    );
+
+    expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
+
+    rerender(
+      <RenderPreviewPanel
+        resumeId="resume-123"
+        settings={baseSettings}
+        initialArtifacts={EMPTY_ARTIFACTS}
+        onLoadingChange={onLoadingChange}
+      />
+    );
+
+    expect(screen.getByAltText('preview.png')).toBeInTheDocument();
   });
 
   it('opens large browser preview modal instead of navigating to raw PNG', async () => {
@@ -137,7 +164,7 @@ describe('RenderPreviewPanel', () => {
     });
     fireEvent.click(openPreviewButton);
 
-    expect(await screen.findByText('Large Preview')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Large Preview' })).toBeInTheDocument();
     expect(screen.getByAltText('preview.png large preview')).toBeInTheDocument();
   });
 });

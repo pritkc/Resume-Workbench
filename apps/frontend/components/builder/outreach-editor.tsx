@@ -53,10 +53,10 @@ export function OutreachEditor({
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white px-2 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-2 py-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <Mail className="h-3.5 w-3.5 shrink-0 text-black/40" aria-hidden />
-          <h2 className="truncate font-mono text-[11px] font-semibold uppercase tracking-widest text-black">
+          <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <h2 className="truncate font-mono text-[11px] font-semibold uppercase tracking-widest text-foreground">
             {t('outreach.title')}
           </h2>
         </div>
@@ -127,14 +127,14 @@ export function OutreachEditor({
           className={cn(
             'min-h-[100px] w-full flex-1 p-2',
             'font-mono text-[13px] leading-relaxed',
-            'border border-black/20 bg-white',
+            'border border-border bg-card',
             'resize-y',
-            'focus:border-black focus:outline-none focus:ring-0',
-            'placeholder:text-black/30'
+            'focus:border-primary focus:outline-none focus:ring-0',
+            'placeholder:text-muted-foreground'
           )}
         />
         <div className="mt-1 flex shrink-0 justify-end pt-1">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-black/45">
+          <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
             {t('builder.contentStats.wordsChars', { wordCount, charCount })}
           </span>
         </div>

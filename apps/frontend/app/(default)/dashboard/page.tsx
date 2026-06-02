@@ -196,10 +196,10 @@ function ResumeRowActions({
           <MoreVertical className="h-3.5 w-3.5" />
         </Button>
         {menuOpen ? (
-          <div className="absolute right-0 top-full z-30 mt-0.5 min-w-[168px] border border-black bg-white py-0.5 shadow-[2px_2px_0_0_rgba(0,0,0,0.12)]">
+          <div className="absolute right-0 top-full z-30 mt-0.5 min-w-[168px] border border-border bg-card py-0.5 shadow-[2px_2px_0_0_rgba(0,0,0,0.12)]">
             <button
               type="button"
-              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1] disabled:opacity-40"
+              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-secondary disabled:opacity-40"
               disabled={resume.is_active}
               onClick={() => {
                 onSetActive();
@@ -210,7 +210,7 @@ function ResumeRowActions({
             </button>
             <button
               type="button"
-              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1]"
+              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-secondary"
               onClick={() => {
                 onPin();
                 setMenuOpen(false);
@@ -220,7 +220,7 @@ function ResumeRowActions({
             </button>
             <button
               type="button"
-              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1]"
+              className="w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-secondary"
               onClick={() => {
                 onDuplicate();
                 setMenuOpen(false);
@@ -237,7 +237,7 @@ function ResumeRowActions({
                 }
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-[#F8F7F1]"
+                className="block w-full px-2.5 py-1 text-left text-[11px] font-mono hover:bg-secondary"
                 onClick={() => setMenuOpen(false)}
               >
                 {labels.llmTrace}
@@ -490,7 +490,7 @@ export default function DashboardPage() {
         return {
           text: t('dashboard.status.processing'),
           icon: <Loader2 className="h-3 w-3 animate-spin" />,
-          color: 'text-blue-700',
+          color: 'text-primary',
         };
       case 'ready':
         return {
@@ -617,7 +617,7 @@ export default function DashboardPage() {
     const updatedTooltip = formatDateTimeTooltip(updatedRaw);
     const busy = rowActionBusyId === resume.resume_id;
     return (
-      <div key={resume.resume_id} className={`${TABLE_GRID} border-b border-black/10 px-2 py-0.5`}>
+      <div key={resume.resume_id} className={`${TABLE_GRID} border-b border-border px-2 py-0.5`}>
         <div className="flex min-h-[26px] min-w-0 items-center gap-1">
           <Link
             href={`/builder?id=${resume.resume_id}`}
@@ -626,7 +626,7 @@ export default function DashboardPage() {
             {title}
           </Link>
           {resume.is_active ? (
-            <Star className="h-3 w-3 shrink-0 fill-blue-700 text-blue-700" aria-label="Active" />
+            <Star className="h-3 w-3 shrink-0 fill-blue-700 text-primary" aria-label="Active" />
           ) : null}
           {resume.is_pinned ? (
             <Pin className="h-3 w-3 shrink-0 text-gray-600" aria-label="Pinned" />
@@ -708,7 +708,7 @@ export default function DashboardPage() {
 
       {!activeResumeId ? (
         !isLlmConfigured && !statusLoading ? (
-          <div className="border border-black bg-white px-3 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
+          <div className="border border-border bg-card px-3 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
                 <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">
@@ -732,7 +732,7 @@ export default function DashboardPage() {
             onOpenChange={setIsUploadDialogOpen}
             onUploadComplete={handleUploadComplete}
             trigger={
-              <div className="cursor-pointer border border-black bg-white px-3 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)] transition-transform hover:translate-x-px hover:translate-y-px hover:shadow-none">
+              <div className="cursor-pointer border border-border bg-card px-3 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)] transition-transform hover:translate-x-px hover:translate-y-px hover:shadow-none">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="space-y-1">
                     <h1 className="font-serif text-xl font-bold uppercase tracking-tight">
@@ -740,7 +740,7 @@ export default function DashboardPage() {
                     </h1>
                     <p className="text-[12px] text-gray-600">{t('dashboard.initializeSequence')}</p>
                   </div>
-                  <div className="flex items-center gap-2 border border-black bg-[#F8F7F1] px-3 py-2">
+                  <div className="flex items-center gap-2 border border-border bg-secondary px-3 py-2">
                     <Upload className="h-4 w-4" />
                     <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em]">
                       {t('dashboard.uploadResume')}
@@ -752,7 +752,7 @@ export default function DashboardPage() {
           />
         )
       ) : (
-        <section className="border border-black bg-white px-2 py-2 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
+        <section className="border border-border bg-card px-2 py-2 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <Link
@@ -834,8 +834,8 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="border border-black bg-white shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-black bg-[#F8F7F1] px-2 py-1.5">
+      <section className="border border-border bg-card shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-secondary px-2 py-1.5">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-gray-600">
             {t('dashboard.myResumes')}
           </p>
@@ -844,7 +844,7 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        <div className="sticky top-2 z-10 border-b border-black bg-white px-2 py-1.5">
+        <div className="sticky top-2 z-10 border-b border-border bg-card px-2 py-1.5">
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto_minmax(0,0.85fr)]">
             <label className="relative block sm:col-span-2 lg:col-span-1">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -859,7 +859,7 @@ export default function DashboardPage() {
             <select
               value={companyFilter}
               onChange={(event) => setCompanyFilter(event.target.value)}
-              className="h-8 border border-black bg-white px-2 font-mono text-xs"
+              className="h-8 border border-border bg-card px-2 font-mono text-xs"
             >
               <option value="">All companies</option>
               {resumeCompanies.map((company) => (
@@ -872,7 +872,7 @@ export default function DashboardPage() {
             <select
               value={roleFilter}
               onChange={(event) => setRoleFilter(event.target.value)}
-              className="h-8 border border-black bg-white px-2 font-mono text-xs"
+              className="h-8 border border-border bg-card px-2 font-mono text-xs"
             >
               <option value="">All roles</option>
               {resumeRoles.map((role) => (
@@ -882,13 +882,13 @@ export default function DashboardPage() {
               ))}
             </select>
 
-            <div className="flex h-8 border border-black bg-[#F8F7F1]">
+            <div className="flex h-8 border border-border bg-secondary">
               {(['all', '7d', '30d', '90d'] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => setDateFilter(option)}
-                  className={`min-w-[44px] flex-1 border-r border-black px-1.5 font-mono text-[10px] font-bold uppercase tracking-wide last:border-r-0 ${
+                  className={`min-w-[44px] flex-1 border-r border-border px-1.5 font-mono text-[10px] font-bold uppercase tracking-wide last:border-r-0 ${
                     dateFilter === option
                       ? 'bg-black text-white'
                       : 'text-gray-600 hover:bg-[#ECEADF]'
@@ -902,7 +902,7 @@ export default function DashboardPage() {
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as SortOption)}
-              className="h-8 border border-black bg-white px-2 font-mono text-xs"
+              className="h-8 border border-border bg-card px-2 font-mono text-xs"
             >
               <option value="updated">Updated</option>
               <option value="created">Created</option>
@@ -927,7 +927,7 @@ export default function DashboardPage() {
         ) : (
           <div className="overflow-x-auto">
             <div className="min-w-[720px]">
-              <div className={`${TABLE_GRID} border-b border-black bg-[#ECEADF] px-2 py-1`}>
+              <div className={`${TABLE_GRID} border-b border-border bg-[#ECEADF] px-2 py-1`}>
                 {['Resume', 'Code', 'Role', 'Company', 'Loc.', 'Updated', ''].map((label, col) => (
                   <span
                     key={`col-${col}`}
@@ -939,7 +939,7 @@ export default function DashboardPage() {
               </div>
               {pinnedFiltered.length > 0 ? (
                 <div>
-                  <div className="border-b border-black bg-[#E8E6DC] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-700">
+                  <div className="border-b border-border bg-[#E8E6DC] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-700">
                     Pinned
                   </div>
                   {pinnedFiltered.map((resume) => renderResumeRow(resume))}
@@ -948,7 +948,7 @@ export default function DashboardPage() {
               {unpinnedFiltered.length > 0 ? (
                 <div>
                   {pinnedFiltered.length > 0 ? (
-                    <div className="border-b border-black bg-[#E8E6DC] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-700">
+                    <div className="border-b border-border bg-[#E8E6DC] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-700">
                       All
                     </div>
                   ) : null}

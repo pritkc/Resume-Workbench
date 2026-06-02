@@ -40,7 +40,7 @@ export function LlmTraceGenerationGroup({
 
   return (
     <details
-      className="group rounded-md border border-slate-200/90 bg-slate-50/40 shadow-sm open:bg-white"
+      className="group rounded-md border border-slate-200/90 bg-slate-50/40 shadow-sm open:bg-card"
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -86,7 +86,7 @@ export function LlmTraceGenerationGroup({
                 href={`/llm-traces?trace_id=${encodeURIComponent(traceKey)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block text-[11px] font-medium text-blue-700 underline-offset-2 hover:underline"
+                className="inline-block text-[11px] font-medium text-primary underline-offset-2 hover:underline"
               >
                 Open only this generation
               </Link>
@@ -99,7 +99,7 @@ export function LlmTraceGenerationGroup({
                   }
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block text-[11px] font-medium text-blue-700 underline-offset-2 hover:underline"
+                  className="inline-block text-[11px] font-medium text-primary underline-offset-2 hover:underline"
                 >
                   Open all for this resume
                 </Link>

@@ -57,7 +57,7 @@ const FILTER_BTN =
   'rounded-md border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300';
 const FILTER_ACTIVE = 'border-slate-800 bg-slate-800 text-white';
 const FILTER_IDLE =
-  'border-slate-200/80 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50';
+  'border-slate-200/80 bg-card text-slate-600 hover:border-slate-300 hover:bg-slate-50';
 
 function scrollToElementId(id: string): void {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -73,7 +73,7 @@ function StatCard({
   secondary?: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="rounded-md border border-slate-200/80 bg-white p-3 shadow-sm">
+    <div className="rounded-md border border-slate-200/80 bg-card p-3 shadow-sm">
       <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
       <div className="mt-1.5 text-slate-900">{primary}</div>
       {secondary ? <div className="mt-1 text-xs text-slate-500">{secondary}</div> : null}
@@ -243,7 +243,7 @@ export function LLMTraceViewer({
             key={jumpSelectKey}
             defaultValue=""
             aria-label="Jump to section"
-            className="h-9 w-full max-w-md rounded-md border border-slate-200/80 bg-white px-2 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+            className="h-9 w-full max-w-md rounded-md border border-slate-200/80 bg-card px-2 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
             onChange={(e) => {
               const v = e.target.value;
               if (!v) return;
@@ -267,7 +267,7 @@ export function LLMTraceViewer({
             Query & refresh
           </h2>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,14rem)] lg:items-start">
-            <div className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm">
+            <div className="rounded-md border border-slate-200/80 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2 text-slate-500">
                 <Activity className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
                 <span className="text-xs font-medium text-slate-600">Filters</span>
@@ -493,7 +493,7 @@ export function LLMTraceViewer({
           <h2 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
             Operation breakdown
           </h2>
-          <div className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm">
+          <div className="rounded-md border border-slate-200/80 bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2 text-slate-500">
               <Database className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
               <span className="text-xs font-medium text-slate-600">By operation</span>
@@ -561,7 +561,7 @@ export function LLMTraceViewer({
             <code className="rounded bg-slate-100 px-1 font-mono">trace_id</code> (one API request
             such as a resume preview). Calls inside run in pipeline order.
           </p>
-          <div className="rounded-md border border-slate-200/80 bg-white p-4 shadow-sm">
+          <div className="rounded-md border border-slate-200/80 bg-card p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-slate-500">
                 <Braces className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -622,13 +622,13 @@ export function LLMTraceViewer({
           <h2 className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Notes</h2>
           <ul className="mt-2 list-disc space-y-1 pl-4 marker:text-slate-300">
             <li>
-              <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] text-slate-800">
+              <code className="rounded bg-card px-1 py-0.5 font-mono text-[11px] text-slate-800">
                 trace_id
               </code>{' '}
               is one browser/API generation run; the timeline groups all LLM calls under it.
             </li>
             <li>
-              <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] text-slate-800">
+              <code className="rounded bg-card px-1 py-0.5 font-mono text-[11px] text-slate-800">
                 request_scope
               </code>{' '}
               is better for watching a class of requests (e.g. preview or confirm).

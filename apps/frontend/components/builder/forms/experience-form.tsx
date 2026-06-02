@@ -30,6 +30,8 @@ import {
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
 import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
+import { BuilderFormField } from '../builder-form-field';
+import { BuilderHelpCallout } from '../builder-help-callout';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface ExperienceFormProps {
@@ -37,11 +39,9 @@ interface ExperienceFormProps {
   onChange: (data: Experience[]) => void;
 }
 
-const fldLabel = 'block font-mono text-[10px] uppercase tracking-wider text-black/50';
-const inp =
-  'h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0';
+const inp = 'builder-field-input w-full';
 const addTextBtn =
-  'font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black';
+  'builder-field-caption inline-flex items-center underline decoration-black/20 underline-offset-2 hover:text-foreground';
 
 export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
@@ -187,8 +187,8 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
   return (
     <div className="space-y-2">
       {data.length === 0 ? (
-        <div className="border border-dashed border-black/25 bg-white px-2 py-3 text-center">
-          <p className="mb-1.5 font-mono text-[11px] text-black/45">
+        <div className="border border-dashed border-border bg-card px-2 py-3 text-center">
+          <p className="mb-1.5 font-mono text-[11px] text-muted-foreground">
             {t('builder.genericItemForm.noEntries', { label: t('resume.sections.experience') })}
           </p>
           <button type="button" onClick={handleAdd} className={addTextBtn}>
@@ -208,17 +208,19 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-2">
-              <p className="font-mono text-[9px] leading-snug text-black/40">
-                Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on the left of
-                each bullet to reorder.
-              </p>
+              <BuilderHelpCallout
+                id="experience-bullets"
+                title={t('builder.forms.experience.bulletsHelpTitle')}
+              >
+                <p>{t('builder.forms.experience.bulletsHelpBody')}</p>
+              </BuilderHelpCallout>
               {data.map((item) => {
                 const highlights = getExperienceHighlightsEditor(item);
                 const techStack = getExperienceTechStack(item);
 
                 return (
                   <DraggableListItem key={item.id} id={item.id}>
-                    <div className="group entry-card-editor relative border border-black/20 bg-white">
+                    <div className="group entry-card-editor relative">
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -230,10 +232,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                       </Button>
 
                       <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
-                        <div>
-                          <span className={fldLabel}>
-                            {t('builder.forms.experience.fields.position')}
-                          </span>
+                        <BuilderFormField label={t('builder.forms.experience.fields.position')}>
                           <Input
                             pasteMode="plainTextSingleParagraph"
                             value={getExperiencePosition(item)}
@@ -241,13 +240,10 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'position', e.target.value)
                             }
                             placeholder={t('builder.forms.experience.placeholders.position')}
-                            className={`mt-0.5 ${inp}`}
+                            className={inp}
                           />
-                        </div>
-                        <div>
-                          <span className={fldLabel}>
-                            {t('builder.forms.experience.fields.company')}
-                          </span>
+                        </BuilderFormField>
+                        <BuilderFormField label={t('builder.forms.experience.fields.company')}>
                           <Input
                             pasteMode="plainTextSingleParagraph"
                             value={item.company || ''}
@@ -255,13 +251,10 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'company', e.target.value)
                             }
                             placeholder={t('builder.forms.experience.placeholders.company')}
-                            className={`mt-0.5 ${inp}`}
+                            className={inp}
                           />
-                        </div>
-                        <div>
-                          <span className={fldLabel}>
-                            {t('builder.genericItemForm.fields.location')}
-                          </span>
+                        </BuilderFormField>
+                        <BuilderFormField label={t('builder.genericItemForm.fields.location')}>
                           <Input
                             pasteMode="plainTextSingleParagraph"
                             value={item.location || ''}
@@ -269,11 +262,10 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'location', e.target.value)
                             }
                             placeholder={t('builder.forms.experience.placeholders.location')}
-                            className={`mt-0.5 ${inp}`}
+                            className={inp}
                           />
-                        </div>
-                        <div>
-                          <span className={fldLabel}>Start Date</span>
+                        </BuilderFormField>
+                        <BuilderFormField label="Start Date">
                           <Input
                             pasteMode="plainTextSingleParagraph"
                             value={item.start_date || ''}
@@ -281,11 +273,10 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'start_date', e.target.value)
                             }
                             placeholder="2021-01"
-                            className={`mt-0.5 ${inp}`}
+                            className={inp}
                           />
-                        </div>
-                        <div>
-                          <span className={fldLabel}>End Date</span>
+                        </BuilderFormField>
+                        <BuilderFormField label="End Date">
                           <Input
                             pasteMode="plainTextSingleParagraph"
                             value={item.end_date || ''}
@@ -293,53 +284,46 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                               handleTextFieldChange(item.id, 'end_date', e.target.value)
                             }
                             placeholder="present or 2024-03"
-                            className={`mt-0.5 ${inp}`}
+                            className={inp}
                           />
-                        </div>
-                        <div className="md:col-span-2">
-                          <span className={fldLabel}>
-                            {t('builder.genericItemForm.fields.date')}
-                          </span>
+                        </BuilderFormField>
+                        <BuilderFormField
+                          label={t('builder.genericItemForm.fields.date')}
+                          hint={t('builder.forms.experience.dateFieldHint')}
+                          className="md:col-span-2"
+                        >
                           <Input
                             pasteMode="plainTextSingleParagraph"
                             value={getExperienceExplicitDate(item)}
                             onChange={(e) => handleTextFieldChange(item.id, 'date', e.target.value)}
                             placeholder={t('builder.forms.experience.placeholders.date')}
-                            className={`mt-0.5 ${inp}`}
+                            className={inp}
                           />
-                          <p
-                            className="mt-0.5 font-sans text-[11px] text-black/40"
-                            title="If blank, the preview uses start and end dates."
-                          >
-                            If blank, the preview uses start and end dates.
-                          </p>
-                        </div>
+                        </BuilderFormField>
                       </div>
 
-                      <div className="mb-2">
-                        <span className={fldLabel}>
-                          {t('builder.forms.experience.fields.techStackOptional')}
-                        </span>
-                        <div className="mt-0.5">
-                          <RichTextEditor
-                            value={techStack}
-                            onChange={(html) => handleTextFieldChange(item.id, 'techStack', html)}
-                            placeholder={t('builder.forms.experience.placeholders.techStack')}
-                            minHeight="40px"
-                            toolbarMode="none"
-                          />
-                        </div>
-                      </div>
+                      <BuilderFormField
+                        label={t('builder.forms.experience.fields.techStackOptional')}
+                        className="mb-2"
+                      >
+                        <RichTextEditor
+                          value={techStack}
+                          onChange={(html) => handleTextFieldChange(item.id, 'techStack', html)}
+                          placeholder={t('builder.forms.experience.placeholders.techStack')}
+                          minHeight="40px"
+                          toolbarMode="none"
+                        />
+                      </BuilderFormField>
 
                       <div>
                         <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className={fldLabel}>
+                          <span className="builder-field-label block">
                             {t('builder.genericItemForm.fields.highlights')}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleAddHighlight(item.id)}
-                            className="shrink-0 font-mono text-[11px] text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
+                            className="builder-field-caption shrink-0 underline decoration-black/20 underline-offset-2 hover:text-foreground"
                           >
                             <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
                             {t('builder.genericItemForm.actions.addPoint')}

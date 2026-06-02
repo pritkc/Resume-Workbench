@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { AlignCenter, AlignJustify, AlignLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlignCenter, AlignJustify, AlignLeft, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useTranslations } from '@/lib/i18n';
@@ -20,6 +20,7 @@ interface SummaryFormProps {
 export const SummaryForm: React.FC<SummaryFormProps> = ({ value, onChange }) => {
   const { t } = useTranslations();
   const { html, alignment } = parseSummaryFormatting(value);
+  const [showAlignmentMenu, setShowAlignmentMenu] = useState(false);
 
   const updateSummary = (nextHtml: string, nextAlignment: SummaryAlignment = alignment) => {
     onChange(formatSummaryValue(nextHtml, nextAlignment));
@@ -33,24 +34,45 @@ export const SummaryForm: React.FC<SummaryFormProps> = ({ value, onChange }) => 
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-1">
-        {alignmentTools.map((tool) => (
+      <div className="flex items-center justify-end">
+        <div className="relative">
           <Button
-            key={tool.id}
             type="button"
             variant="ghost"
             size="icon-sm"
-            onClick={() => updateSummary(html, tool.id)}
-            aria-label={tool.label}
-            title={tool.label}
-            className={cn(
-              'rounded-none border border-black/15 bg-white',
-              alignment === tool.id && 'bg-blue-700 text-white hover:bg-blue-800 hover:text-white'
-            )}
+            onClick={() => setShowAlignmentMenu((open) => !open)}
+            aria-label={t('builder.summary.alignmentMenu')}
+            title={t('builder.summary.alignmentMenu')}
+            className="h-7 w-7 rounded-none border border-border bg-card"
           >
-            <tool.icon className="h-3.5 w-3.5" />
+            <MoreHorizontal className="h-3.5 w-3.5" />
           </Button>
-        ))}
+          {showAlignmentMenu ? (
+            <div className="absolute right-0 top-full z-20 mt-1 flex gap-0.5 border border-border bg-card p-1 shadow-sm">
+              {alignmentTools.map((tool) => (
+                <Button
+                  key={tool.id}
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => {
+                    updateSummary(html, tool.id);
+                    setShowAlignmentMenu(false);
+                  }}
+                  aria-label={tool.label}
+                  title={tool.label}
+                  className={cn(
+                    'rounded-none border border-border bg-card',
+                    alignment === tool.id &&
+                      'bg-primary text-white hover:bg-primary/90 hover:text-white'
+                  )}
+                >
+                  <tool.icon className="h-3.5 w-3.5" />
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
       <RichTextEditor
         value={html}

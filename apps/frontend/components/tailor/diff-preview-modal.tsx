@@ -91,6 +91,7 @@ interface DisplayChange {
 interface OrderedSection {
   key: string;
   title: ReactNode;
+  jumpLabel: string;
   items: DisplayChange[];
 }
 
@@ -717,6 +718,7 @@ function buildOrderedSections(
     sections.push({
       key: 'summary',
       title: <span>Professional summary</span>,
+      jumpLabel: 'Professional summary',
       items: summaryItems,
     });
   }
@@ -726,6 +728,7 @@ function buildOrderedSections(
     sections.push({
       key: 'personal',
       title: <span>Contact</span>,
+      jumpLabel: 'Contact',
       items: personalItems.sort((a, b) => a.change.field_path.localeCompare(b.change.field_path)),
     });
   }
@@ -735,6 +738,7 @@ function buildOrderedSections(
     sections.push({
       key: 'keywords',
       title: <span>Bold keywords</span>,
+      jumpLabel: 'Bold keywords',
       items: keywordItems.sort((a, b) => a.change.field_path.localeCompare(b.change.field_path)),
     });
   }
@@ -753,9 +757,11 @@ function buildOrderedSections(
     const items = displayChanges
       .filter((item) => item.parsed.section === 'experience' && item.parsed.entryIndex === index)
       .sort(compareWithinEntry);
+    const company = resumePreview?.workExperience?.[index]?.company?.trim();
     sections.push({
       key: `experience-${index}`,
       title: <ExperienceSectionTitle resumePreview={resumePreview} index={index} />,
+      jumpLabel: company || `Experience ${index + 1}`,
       items,
     });
   }
@@ -772,9 +778,11 @@ function buildOrderedSections(
     const items = displayChanges
       .filter((item) => item.parsed.section === 'project' && item.parsed.entryIndex === index)
       .sort(compareWithinEntry);
+    const projectName = resumePreview?.personalProjects?.[index]?.name?.trim();
     sections.push({
       key: `project-${index}`,
       title: <ProjectSectionTitle resumePreview={resumePreview} index={index} />,
+      jumpLabel: projectName || `Project ${index + 1}`,
       items,
     });
   }
@@ -793,9 +801,11 @@ function buildOrderedSections(
     const items = displayChanges
       .filter((item) => item.parsed.section === 'education' && item.parsed.entryIndex === index)
       .sort(compareWithinEntry);
+    const institution = resumePreview?.education?.[index]?.institution?.trim();
     sections.push({
       key: `education-${index}`,
       title: <EducationSectionTitle resumePreview={resumePreview} index={index} />,
+      jumpLabel: institution || `Education ${index + 1}`,
       items,
     });
   }
@@ -807,6 +817,7 @@ function buildOrderedSections(
     sections.push({
       key: 'skills',
       title: <span>Skills</span>,
+      jumpLabel: 'Skills',
       items: skillsItems,
     });
   }
@@ -818,6 +829,7 @@ function buildOrderedSections(
     sections.push({
       key: 'other',
       title: <span>Other</span>,
+      jumpLabel: 'Other',
       items: otherItems,
     });
   }
@@ -945,6 +957,7 @@ export function TailorDiffReadonlyBody({
 }: TailorDiffReadonlyBodyProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [showMetaDetails, setShowMetaDetails] = useState(false);
+  const [activeJumpKey, setActiveJumpKey] = useState<string | null>(null);
 
   const skillsObsNormalized = useMemo(
     () => coerceSkillsObservationPayload(skillsObservation),
@@ -1004,7 +1017,7 @@ export function TailorDiffReadonlyBody({
       return <>{emptyFallback}</>;
     }
     return (
-      <div className="rounded-sm border border-dashed border-neutral-300 bg-white px-4 py-8 text-center text-[15px] font-medium leading-relaxed text-neutral-600">
+      <div className="rounded-sm border border-dashed border-neutral-300 bg-card px-4 py-8 text-center text-[15px] font-medium leading-relaxed text-neutral-600">
         No line-level tailoring changes recorded for this view.
       </div>
     );
@@ -1057,7 +1070,7 @@ export function TailorDiffReadonlyBody({
           <Button
             variant="outline"
             size="xs"
-            className="border-[#1f2328] bg-white text-black shadow-none hover:bg-[#f6f8fa]"
+            className="border-[#1f2328] bg-card text-foreground shadow-none hover:bg-[#f6f8fa]"
             onClick={() => setShowMetaDetails((value) => !value)}
           >
             {showMetaDetails ? 'Hide breakdown' : 'Breakdown'}
@@ -1105,11 +1118,26 @@ export function TailorDiffReadonlyBody({
         </div>
       ) : null}
 
-      <div className={cn('w-full bg-white text-neutral-900', DIFF_BODY)}>
+      <div className={cn('w-full bg-card text-neutral-900', DIFF_BODY)}>
         <div className="mt-4 flex flex-col gap-6 pb-4">
           {artifacts && artifacts.length > 0 && (
             <ArtifactGallery artifacts={artifacts} title={artifactGalleryTitle} />
           )}
+
+          {orderedSections.length > 1 ? (
+            <DiffSectionJumpNav
+              sections={orderedSections}
+              activeKey={activeJumpKey}
+              onJump={(key) => {
+                setActiveJumpKey(key);
+                setExpandedSections((prev) => new Set(prev).add(key));
+                document.getElementById(`diff-section-${key}`)?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                });
+              }}
+            />
+          ) : null}
 
           {orderedSections.map((section, sectionIndex) => {
             const category = sectionCategoryFromKey(section.key);
@@ -1139,7 +1167,7 @@ export function TailorDiffReadonlyBody({
               );
 
             return (
-              <div key={section.key}>
+              <div key={section.key} id={`diff-section-${section.key}`} className="scroll-mt-2">
                 {showCategory ? (
                   <h2 className={DIFF_CATEGORY}>
                     <span className="h-px min-w-4 flex-1 bg-neutral-200" aria-hidden />
@@ -1149,6 +1177,7 @@ export function TailorDiffReadonlyBody({
                 ) : null}
                 <ChangeSection
                   title={section.title}
+                  sectionLabel={section.jumpLabel}
                   count={section.items.length}
                   isExpanded={expandedSections.has(section.key)}
                   onToggle={() => toggleSection(section.key)}
@@ -1212,14 +1241,14 @@ export function DiffPreviewModal({
           }
         }}
       >
-        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden border border-[#1f2328] bg-white p-0 shadow-lg">
+        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden border border-[#1f2328] bg-card p-0 shadow-lg">
           <DialogHeader className="shrink-0 border-b border-[#d0d7de] px-5 py-4">
-            <DialogTitle className="text-lg font-semibold tracking-tight text-black">
+            <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
               {t('tailor.missingDiffDialog.title')}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="px-5 py-4 text-[13px] leading-relaxed text-black">
+          <div className="px-5 py-4 text-[13px] leading-relaxed text-foreground">
             {t('tailor.missingDiffDialog.description')}
           </div>
           <div className="flex items-start gap-2 px-5 pb-1 text-[12px] text-amber-800">
@@ -1256,14 +1285,14 @@ export function DiffPreviewModal({
         }
       }}
     >
-      <DialogContent className="flex max-h-[95vh] w-[94vw] max-w-7xl flex-col gap-0 overflow-hidden border border-[#1f2328] bg-white p-0 shadow-2xl">
-        <DialogHeader className="shrink-0 border-b border-[#1f2328] bg-white px-4 py-3 sm:px-5">
-          <DialogTitle className="text-lg font-bold tracking-tight text-black">
+      <DialogContent className="flex max-h-[95vh] w-[94vw] max-w-7xl flex-col gap-0 overflow-hidden border border-[#1f2328] bg-card p-0 shadow-2xl">
+        <DialogHeader className="shrink-0 border-b border-[#1f2328] bg-card px-4 py-3 sm:px-5">
+          <DialogTitle className="text-lg font-bold tracking-tight text-foreground">
             {t('tailor.diffModal.title')}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 pb-4 pt-3 sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-card px-4 pb-4 pt-3 sm:px-5">
           <TailorDiffReadonlyBody
             detailedChanges={detailedChanges}
             changeManifest={changeManifest}
@@ -1276,12 +1305,12 @@ export function DiffPreviewModal({
           />
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#1f2328] bg-white px-4 py-3 sm:px-5">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#1f2328] bg-card px-4 py-3 sm:px-5">
           <Button
             variant="outline"
             onClick={onReject}
             disabled={isConfirming}
-            className="gap-2 border-[#1f2328] bg-white text-black hover:bg-[#f6f8fa]"
+            className="gap-2 border-[#1f2328] bg-card text-foreground hover:bg-[#f6f8fa]"
           >
             <X className="w-4 h-4" />
             {t('tailor.diffModal.rejectButton')}
@@ -1322,10 +1351,10 @@ interface StatCardProps {
 
 function InlineStat({ label, value, variant }: StatCardProps) {
   const colors = {
-    success: 'border-[#1a7f37] bg-[#dafbe1] text-black',
-    warning: 'border-[#9a6700] bg-[#fff8c5] text-black',
-    danger: 'border-[#cf222e] bg-[#ffebe9] text-black',
-    info: 'border-[#0969da] bg-[#ddf4ff] text-black',
+    success: 'border-[#1a7f37] bg-[#dafbe1] text-foreground',
+    warning: 'border-[#9a6700] bg-[#fff8c5] text-foreground',
+    danger: 'border-[#cf222e] bg-[#ffebe9] text-foreground',
+    info: 'border-[#0969da] bg-[#ddf4ff] text-foreground',
   };
 
   return (
@@ -1372,18 +1401,65 @@ function SourceBadge({ item }: { item: DisplayChange }) {
 
 interface ChangeSectionProps {
   title: React.ReactNode;
+  sectionLabel: string;
   count: number;
   isExpanded: boolean;
   onToggle: () => void;
   children: React.ReactNode;
 }
 
-function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeSectionProps) {
+function DiffSectionJumpNav({
+  sections,
+  activeKey,
+  onJump,
+}: {
+  sections: OrderedSection[];
+  activeKey: string | null;
+  onJump: (key: string) => void;
+}) {
   return (
-    <section className="m-0 overflow-hidden rounded-sm border border-neutral-200 bg-white shadow-[0_1px_0_rgba(27,31,36,0.04)]">
+    <div className="sticky top-0 z-20 -mx-1 mb-3 border-b border-neutral-200 bg-card/95 px-1 pb-1 backdrop-blur-sm">
+      <div className="flex gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {sections.map((section) => {
+          const isActive = activeKey === section.key;
+          return (
+            <button
+              key={section.key}
+              type="button"
+              onClick={() => onJump(section.key)}
+              aria-label={`Jump to ${section.jumpLabel}`}
+              className={cn(
+                'shrink-0 whitespace-nowrap border px-2 py-1 font-sans text-[11px] transition-colors',
+                isActive
+                  ? 'border-neutral-900 bg-neutral-900 text-white'
+                  : 'border-neutral-200 bg-card text-neutral-700 hover:border-neutral-400 hover:text-neutral-950'
+              )}
+            >
+              {section.jumpLabel}
+              <span className="ml-1 tabular-nums opacity-75">{section.items.length}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChangeSection({
+  title,
+  sectionLabel,
+  count,
+  isExpanded,
+  onToggle,
+  children,
+}: ChangeSectionProps) {
+  return (
+    <section className="m-0 overflow-hidden rounded-sm border border-neutral-200 bg-card shadow-[0_1px_0_rgba(27,31,36,0.04)]">
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${sectionLabel}`}
         className={cn(
           'flex w-full items-start justify-between gap-3 border-0 bg-neutral-50 px-2.5 py-2 text-left',
           'transition-colors hover:bg-neutral-100'
@@ -1414,7 +1490,7 @@ function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeS
         </span>
         <span
           className={cn(
-            'shrink-0 rounded-sm border border-neutral-200 bg-white px-1.5 py-0.5 text-xs font-bold tabular-nums text-neutral-500',
+            'shrink-0 rounded-sm border border-neutral-200 bg-card px-1.5 py-0.5 text-xs font-bold tabular-nums text-neutral-500',
             DIFF_FONT
           )}
           title="Changes in this section"
@@ -1556,7 +1632,7 @@ function DiffChangeBody({
 
 function TitleDiffRow({ item, label = 'Role' }: { item: DisplayChange; label?: string }) {
   return (
-    <div className="m-0 rounded-sm border border-neutral-200 bg-white px-2.5 py-2">
+    <div className="m-0 rounded-sm border border-neutral-200 bg-card px-2.5 py-2">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
         <p className={cn('m-0 text-[11px] font-bold uppercase tracking-wide text-neutral-500')}>
           {label}
@@ -1572,7 +1648,7 @@ function TechBulletDiffRow({ item }: { item: DisplayChange }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-2 rounded-sm border border-neutral-200 bg-white px-2.5 py-2',
+        'grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-2 rounded-sm border border-neutral-200 bg-card px-2.5 py-2',
         DIFF_FONT
       )}
     >
@@ -1598,7 +1674,7 @@ function BulletDiffRow({ item }: { item: DisplayChange }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-2 rounded-sm border border-neutral-200 bg-white px-2.5 py-2',
+        'grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-2 rounded-sm border border-neutral-200 bg-card px-2.5 py-2',
         DIFF_FONT
       )}
     >
@@ -1710,7 +1786,7 @@ function ChangeItem({ item }: { item: DisplayChange }) {
   }
 
   return (
-    <div className="m-0 rounded-sm border border-neutral-200 bg-white px-2.5 py-2">
+    <div className="m-0 rounded-sm border border-neutral-200 bg-card px-2.5 py-2">
       <div className="min-w-0">
         <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span

@@ -117,7 +117,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /Skills/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Jump to Skills' })).toBeInTheDocument();
     expect(screen.getByText('Go')).toBeInTheDocument();
   });
 
@@ -134,7 +134,7 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.getByText('new summary')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Professional summary/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Professional summary' }));
     expect(screen.queryByText('new summary')).not.toBeInTheDocument();
   });
 

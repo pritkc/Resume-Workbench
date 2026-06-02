@@ -77,7 +77,7 @@ export function Dropdown({
           onClick={() => setIsOpen(!isOpen)}
           disabled={disabled}
           className={`
-            w-full flex items-center justify-between border border-black bg-white font-mono text-sm
+            w-full flex items-center justify-between border border-border bg-card font-mono text-sm
             transition-all duration-150 ease-out shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]
             hover:shadow-none hover:translate-y-[2px] hover:translate-x-[2px]
             disabled:opacity-50 disabled:cursor-not-allowed rounded-none
@@ -87,7 +87,7 @@ export function Dropdown({
           <div className="flex-1 text-left min-w-0">
             {selectedOption ? (
               <div>
-                <div className="font-bold text-black truncate">{selectedOption.label}</div>
+                <div className="font-bold text-foreground truncate">{selectedOption.label}</div>
                 {selectedOption.description && (
                   <div
                     className={`text-xs text-gray-500 font-normal truncate ${isCompact ? 'mt-0.5' : 'mt-1'}`}
@@ -109,16 +109,16 @@ export function Dropdown({
 
         {/* Dropdown Menu */}
         {isOpen && (
-          <div className="absolute top-full left-0 right-0 mt-1 z-50 border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] rounded-none">
+          <div className="absolute top-full left-0 right-0 mt-1 z-50 border border-border bg-card shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] rounded-none">
             <div className="max-h-64 overflow-y-auto">
               {options.map((option, index) => (
                 <React.Fragment key={option.id}>
                   <button
                     onClick={() => handleSelect(option.id)}
-                    className={`w-full text-left font-mono transition-colors duration-150 border border-black ${
+                    className={`w-full text-left font-mono transition-colors duration-150 border border-border ${
                       option.id === value
                         ? 'bg-green-700 text-white'
-                        : 'bg-white text-black hover:bg-gray-50'
+                        : 'bg-card text-foreground hover:bg-gray-50'
                     } ${isCompact ? 'px-3 py-2.5' : 'px-4 py-3'} ${index > 0 ? '-mt-[1px]' : ''} active:bg-gray-100`}
                   >
                     <div className="flex items-start justify-between gap-2">

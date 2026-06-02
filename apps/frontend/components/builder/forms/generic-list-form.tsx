@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
+import { BuilderFormField } from '../builder-form-field';
 import { useTranslations } from '@/lib/i18n';
 
 interface GenericListFormProps {
@@ -28,7 +29,6 @@ export const GenericListForm: React.FC<GenericListFormProps> = ({
   const finalPlaceholder = placeholder ?? t('builder.customSections.itemsPlaceholder');
 
   const handleChange = (value: string) => {
-    // Split by newlines, filter empty lines
     const newItems = value.split('\n').filter((item) => item.trim() !== '');
     onChange(newItems);
   };
@@ -37,7 +37,6 @@ export const GenericListForm: React.FC<GenericListFormProps> = ({
     return arr?.join('\n') || '';
   };
 
-  // Explicitly allow Enter key to create newlines
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
       e.stopPropagation();
@@ -45,16 +44,15 @@ export const GenericListForm: React.FC<GenericListFormProps> = ({
   };
 
   return (
-    <div>
-      <div className="panel-section-header">{finalLabel}</div>
+    <BuilderFormField label={finalLabel}>
       <Textarea
         pasteMode="plainText"
         value={formatItems(items)}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={finalPlaceholder}
-        className="min-h-[80px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm focus-visible:border-black focus-visible:ring-0"
+        className="builder-field-textarea min-h-[80px]"
       />
-    </div>
+    </BuilderFormField>
   );
 };

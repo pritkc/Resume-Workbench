@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { BuilderFormField } from '../builder-form-field';
 import { useTranslations } from '@/lib/i18n';
 
 interface GenericTextFormProps {
@@ -28,7 +28,6 @@ export const GenericTextForm: React.FC<GenericTextFormProps> = ({
   const finalLabel = label ?? t('builder.customSections.contentLabel');
   const finalPlaceholder = placeholder ?? t('builder.customSections.defaultTextPlaceholder');
 
-  // Explicitly allow Enter key to create newlines
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
       e.stopPropagation();
@@ -36,16 +35,15 @@ export const GenericTextForm: React.FC<GenericTextFormProps> = ({
   };
 
   return (
-    <div className="space-y-2">
-      <Label className="text-[11px] font-medium text-gray-700">{finalLabel}</Label>
+    <BuilderFormField label={finalLabel}>
       <Textarea
         pasteMode="plainTextMultiline"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={finalPlaceholder}
-        className="min-h-[100px] rounded-none border-black/15 bg-white text-[13px] text-gray-900 focus-visible:border-blue-700 focus-visible:ring-0 focus-visible:ring-offset-0"
+        className="builder-field-textarea min-h-[100px]"
       />
-    </div>
+    </BuilderFormField>
   );
 };

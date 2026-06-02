@@ -217,7 +217,7 @@ const Resume: React.FC<ResumeProps> = ({
 
   return (
     <div
-      className={`${baseStyles['resume-body']} bg-white text-black w-full mx-auto resume-template-${mergedSettings.template}`}
+      className={`${baseStyles['resume-body']} bg-card text-foreground w-full mx-auto resume-template-${mergedSettings.template}`}
       style={cssVars}
     >
       {mergedSettings.template === 'swiss-single' && (

@@ -7,6 +7,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Plus, Trash2 } from 'lucide-react';
 import type { CustomSectionItem } from '@/components/dashboard/resume-component';
 import { useTranslations } from '@/lib/i18n';
+import { BuilderFormField } from '../builder-form-field';
 
 interface GenericItemFormProps {
   items: CustomSectionItem[];
@@ -23,11 +24,9 @@ interface GenericItemFormProps {
   descriptionPlaceholder?: string;
 }
 
-const fldLabel = 'block font-mono text-[10px] uppercase tracking-wider text-black/50';
-const inp =
-  'h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0';
+const inp = 'builder-field-input w-full';
 const addTextBtn =
-  'font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black';
+  'builder-field-caption inline-flex items-center underline decoration-black/20 underline-offset-2 hover:text-foreground';
 
 /**
  * Generic Item Form Component
@@ -142,10 +141,7 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
 
       <div className="space-y-2">
         {items.map((item) => (
-          <div
-            key={item.id}
-            className="group entry-card-editor relative border border-black/20 bg-white"
-          >
+          <div key={item.id} className="group entry-card-editor relative">
             <Button
               variant="ghost"
               size="icon-sm"
@@ -157,65 +153,59 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
             </Button>
 
             <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
-              <div>
-                <span className={fldLabel}>{t('builder.genericItemForm.fields.title')}</span>
+              <BuilderFormField label={t('builder.genericItemForm.fields.title')}>
                 <Input
                   pasteMode="plainTextSingleParagraph"
                   value={item.title || ''}
                   onChange={(e) => handleChange(item.id, 'title', e.target.value)}
                   placeholder={finalTitlePlaceholder}
-                  className={`mt-0.5 ${inp}`}
+                  className={inp}
                 />
-              </div>
+              </BuilderFormField>
               {showSubtitle && (
-                <div>
-                  <span className={fldLabel}>
-                    {t('builder.genericItemForm.fields.organization')}
-                  </span>
+                <BuilderFormField label={t('builder.genericItemForm.fields.organization')}>
                   <Input
                     pasteMode="plainTextSingleParagraph"
                     value={item.subtitle || ''}
                     onChange={(e) => handleChange(item.id, 'subtitle', e.target.value)}
                     placeholder={finalSubtitlePlaceholder}
-                    className={`mt-0.5 ${inp}`}
+                    className={inp}
                   />
-                </div>
+                </BuilderFormField>
               )}
               {showLocation && (
-                <div>
-                  <span className={fldLabel}>{t('builder.genericItemForm.fields.location')}</span>
+                <BuilderFormField label={t('builder.genericItemForm.fields.location')}>
                   <Input
                     pasteMode="plainTextSingleParagraph"
                     value={item.location || ''}
                     onChange={(e) => handleChange(item.id, 'location', e.target.value)}
                     placeholder={finalLocationPlaceholder}
-                    className={`mt-0.5 ${inp}`}
+                    className={inp}
                   />
-                </div>
+                </BuilderFormField>
               )}
               {showYears && (
-                <div>
-                  <span className={fldLabel}>{t('builder.genericItemForm.fields.years')}</span>
+                <BuilderFormField label={t('builder.genericItemForm.fields.years')}>
                   <Input
                     pasteMode="plainTextSingleParagraph"
                     value={item.years || ''}
                     onChange={(e) => handleChange(item.id, 'years', e.target.value)}
                     placeholder={finalYearsPlaceholder}
-                    className={`mt-0.5 ${inp}`}
+                    className={inp}
                   />
-                </div>
+                </BuilderFormField>
               )}
             </div>
 
             <div>
               <div className="mb-1 flex items-center justify-between gap-2">
-                <span className={fldLabel}>
+                <span className="builder-field-label block">
                   {t('builder.genericItemForm.fields.descriptionPoints')}
                 </span>
                 <button
                   type="button"
                   onClick={() => handleAddDescription(item.id)}
-                  className="shrink-0 font-mono text-[11px] text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
+                  className="builder-field-caption shrink-0 underline decoration-black/20 underline-offset-2 hover:text-foreground"
                 >
                   <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
                   {t('builder.genericItemForm.actions.addPoint')}
@@ -237,7 +227,7 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
                     size="icon-sm"
                     aria-label={t('common.delete')}
                     onClick={() => handleRemoveDescription(item.id, idx)}
-                    className="h-7 w-7 shrink-0 self-end border border-black/15 text-black/40 hover:text-red-600"
+                    className="h-7 w-7 shrink-0 self-end border border-border text-muted-foreground hover:text-red-600"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -248,8 +238,8 @@ export const GenericItemForm: React.FC<GenericItemFormProps> = ({
         ))}
 
         {items.length === 0 && (
-          <div className="border border-dashed border-black/25 bg-white px-2 py-3 text-center">
-            <p className="mb-1.5 font-mono text-[11px] text-black/45">
+          <div className="border border-dashed border-border bg-card px-2 py-3 text-center">
+            <p className="mb-1.5 font-mono text-[11px] text-muted-foreground">
               {t('builder.genericItemForm.noEntries', { label: finalItemLabel })}
             </p>
             <button type="button" onClick={handleAdd} className={addTextBtn}>

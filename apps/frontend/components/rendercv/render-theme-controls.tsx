@@ -113,8 +113,8 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
 
   return (
     <div className="space-y-2">
-      <div className="flex h-7 items-center gap-3 border border-black/20 bg-white px-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-black/50">Theme</span>
+      <div className="flex h-7 items-center gap-3 border border-border bg-card px-2">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Theme</span>
         <div className="min-w-[140px] flex-1">
           <RenderCvSelect
             value={settings.theme_id}

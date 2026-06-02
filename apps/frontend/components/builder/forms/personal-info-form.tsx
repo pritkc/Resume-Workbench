@@ -1,25 +1,42 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PersonalInfo } from '@/components/dashboard/resume-component';
 import { useTranslations } from '@/lib/i18n';
-import { Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { getEditableProfileLinks } from '@/lib/utils/rendercv-fields';
+import { cn } from '@/lib/utils';
+import { BuilderFormField } from '../builder-form-field';
 
 interface PersonalInfoFormProps {
   data: PersonalInfo;
   onChange: (data: PersonalInfo) => void;
 }
 
-const fieldLabel = 'font-mono text-[10px] uppercase tracking-wider text-black/50';
-const inputClass =
-  'h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0';
+const inputClass = 'builder-field-input w-full';
+
+function inferIconFromUrl(url: string): string | null {
+  const normalized = url.toLowerCase();
+  if (normalized.includes('linkedin.com')) return 'linkedin-in';
+  if (normalized.includes('github.com')) return 'github';
+  if (normalized.includes('twitter.com') || normalized.includes('x.com')) return 'x-twitter';
+  return null;
+}
+
+function inferLabelFromUrl(url: string): string {
+  const normalized = url.toLowerCase();
+  if (normalized.includes('linkedin.com')) return 'LinkedIn';
+  if (normalized.includes('github.com')) return 'GitHub';
+  if (normalized.includes('twitter.com') || normalized.includes('x.com')) return 'X';
+  return '';
+}
 
 export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
   const profileLinks = getEditableProfileLinks(data);
+  const [expandedAdvanced, setExpandedAdvanced] = useState<Record<number, boolean>>({});
 
   const buildLegacyProfileState = (
     links: Array<{
@@ -110,11 +127,23 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
     value: string
   ) => {
     const nextProfileLinks = [...profileLinks];
-    nextProfileLinks[index] = {
-      ...nextProfileLinks[index],
-      [field]: value || null,
-      ...(field === 'fontawesome_icon' ? { fontAwesomeIcon: value || null } : {}),
-    };
+    const current = { ...nextProfileLinks[index], [field]: value || null };
+    if (field === 'fontawesome_icon') {
+      current.fontAwesomeIcon = value || null;
+    }
+    if (field === 'url' && value) {
+      if (!current.label) {
+        current.label = inferLabelFromUrl(value);
+      }
+      if (!current.fontawesome_icon && !current.fontAwesomeIcon) {
+        const inferred = inferIconFromUrl(value);
+        if (inferred) {
+          current.fontawesome_icon = inferred;
+          current.fontAwesomeIcon = inferred;
+        }
+      }
+    }
+    nextProfileLinks[index] = current;
     onChange({
       ...data,
       ...buildLegacyProfileState(nextProfileLinks),
@@ -143,11 +172,14 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
     });
   };
 
+  const toggleAdvanced = (index: number) => {
+    setExpandedAdvanced((current) => ({ ...current, [index]: !current[index] }));
+  };
+
   return (
-    <div className="entry-card-editor space-y-3 border border-black/20 bg-white">
+    <div className="entry-card-editor space-y-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <div className="space-y-0.5">
-          <span className={fieldLabel}>{t('resume.personalInfo.name')}</span>
+        <BuilderFormField label={t('resume.personalInfo.name')} htmlFor="name">
           <Input
             pasteMode="plainTextSingleParagraph"
             id="name"
@@ -156,9 +188,8 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             placeholder={t('builder.personalInfoForm.placeholders.name')}
             className={inputClass}
           />
-        </div>
-        <div className="space-y-0.5">
-          <span className={fieldLabel}>Headline</span>
+        </BuilderFormField>
+        <BuilderFormField label="Headline" htmlFor="headline">
           <Input
             pasteMode="plainTextSingleParagraph"
             id="headline"
@@ -167,9 +198,12 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             placeholder={t('builder.personalInfoForm.placeholders.title')}
             className={inputClass}
           />
-        </div>
-        <div className="space-y-0.5 sm:col-span-2">
-          <span className={fieldLabel}>{t('resume.personalInfo.location')}</span>
+        </BuilderFormField>
+        <BuilderFormField
+          label={t('resume.personalInfo.location')}
+          htmlFor="location"
+          className="sm:col-span-2"
+        >
           <Input
             pasteMode="plainTextSingleParagraph"
             id="location"
@@ -178,9 +212,8 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             placeholder={t('builder.personalInfoForm.placeholders.location')}
             className={inputClass}
           />
-        </div>
-        <div className="space-y-0.5">
-          <span className={fieldLabel}>{t('resume.personalInfo.email')}</span>
+        </BuilderFormField>
+        <BuilderFormField label={t('resume.personalInfo.email')} htmlFor="email">
           <Input
             pasteMode="plainTextSingleParagraph"
             id="email"
@@ -190,9 +223,8 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             placeholder={t('builder.personalInfoForm.placeholders.email')}
             className={inputClass}
           />
-        </div>
-        <div className="space-y-0.5">
-          <span className={fieldLabel}>{t('resume.personalInfo.phone')}</span>
+        </BuilderFormField>
+        <BuilderFormField label={t('resume.personalInfo.phone')} htmlFor="phone">
           <Input
             pasteMode="plainTextSingleParagraph"
             id="phone"
@@ -202,9 +234,8 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             placeholder={t('builder.personalInfoForm.placeholders.phone')}
             className={inputClass}
           />
-        </div>
-        <div className="space-y-0.5 sm:col-span-2">
-          <span className={fieldLabel}>Photo URL</span>
+        </BuilderFormField>
+        <BuilderFormField label="Photo URL" htmlFor="photo" className="sm:col-span-2">
           <Input
             pasteMode="plainTextSingleParagraph"
             id="photo"
@@ -213,9 +244,8 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             placeholder="https://…"
             className={inputClass}
           />
-        </div>
-        <div className="space-y-0.5 sm:col-span-2">
-          <span className={fieldLabel}>Website</span>
+        </BuilderFormField>
+        <BuilderFormField label="Website" htmlFor="website" className="sm:col-span-2">
           <Input
             pasteMode="plainTextSingleParagraph"
             id="website"
@@ -224,65 +254,84 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             placeholder="https://…"
             className={inputClass}
           />
-        </div>
+        </BuilderFormField>
       </div>
 
-      <div className="border-t border-black/10 pt-2">
+      <div className="border-t border-border pt-2">
         <div className="mb-1.5 flex items-center justify-between">
-          <span className={fieldLabel}>Connections</span>
+          <span className="builder-field-label block">Connections</span>
           <button
             type="button"
             onClick={handleAddProfileLink}
-            className="font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
+            className="builder-field-caption underline decoration-black/20 underline-offset-2 hover:text-foreground"
           >
             + Add link
           </button>
         </div>
         {profileLinks.length === 0 ? (
-          <p className="font-mono text-[10px] text-black/35">No extra links.</p>
+          <p className="builder-field-caption">No extra links.</p>
         ) : (
-          <div className="space-y-1">
-            {profileLinks.map((item, index) => (
-              <div
-                key={index}
-                className="field-row flex min-h-[28px] items-center gap-1.5 border-b border-black/5 py-1 last:border-0"
-              >
-                <Input
-                  pasteMode="plainTextSingleParagraph"
-                  value={item.label || ''}
-                  onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
-                  placeholder="Label"
-                  className={`${inputClass} w-24 shrink-0 sm:w-28`}
-                />
-                <Input
-                  pasteMode="plainTextSingleParagraph"
-                  value={item.url || ''}
-                  onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
-                  placeholder="https://…"
-                  className={`${inputClass} min-w-0 flex-1`}
-                />
-                <Input
-                  pasteMode="plainTextSingleParagraph"
-                  value={item.fontawesome_icon || item.fontAwesomeIcon || ''}
-                  onChange={(e) =>
-                    handleProfileLinkChange(index, 'fontawesome_icon', e.target.value)
-                  }
-                  placeholder="Icon (opt.)"
-                  title="Font Awesome icon id"
-                  className={`${inputClass} hidden w-28 shrink-0 sm:block`}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('common.delete')}
-                  onClick={() => handleRemoveProfileLink(index)}
-                  className="h-7 w-7 shrink-0 border border-black/20 text-red-600 hover:border-red-600 hover:bg-transparent"
+          <div className="space-y-2">
+            {profileLinks.map((item, index) => {
+              const showAdvanced = expandedAdvanced[index] ?? false;
+              return (
+                <div
+                  key={index}
+                  className="space-y-1 border-b border-border/5 pb-2 last:border-0 last:pb-0"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ))}
+                  <div className="field-row flex items-center gap-1.5">
+                    <Input
+                      pasteMode="plainTextSingleParagraph"
+                      value={item.label || ''}
+                      onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
+                      placeholder="Label"
+                      className={cn(inputClass, 'w-28 shrink-0 sm:w-32')}
+                    />
+                    <Input
+                      pasteMode="plainTextSingleParagraph"
+                      value={item.url || ''}
+                      onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
+                      placeholder="https://…"
+                      className={cn(inputClass, 'min-w-0 flex-1')}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t('common.delete')}
+                      onClick={() => handleRemoveProfileLink(index)}
+                      className="h-8 w-8 shrink-0 border border-border text-red-600 hover:border-red-600 hover:bg-transparent"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleAdvanced(index)}
+                    className="inline-flex items-center gap-1 builder-field-caption hover:text-foreground"
+                  >
+                    {showAdvanced ? (
+                      <ChevronUp className="h-3 w-3" aria-hidden />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" aria-hidden />
+                    )}
+                    {t('builder.personalInfoForm.advancedLinkOptions')}
+                  </button>
+                  {showAdvanced ? (
+                    <Input
+                      pasteMode="plainTextSingleParagraph"
+                      value={item.fontawesome_icon || item.fontAwesomeIcon || ''}
+                      onChange={(e) =>
+                        handleProfileLinkChange(index, 'fontawesome_icon', e.target.value)
+                      }
+                      placeholder={t('builder.personalInfoForm.iconPlaceholder')}
+                      title="Font Awesome icon id"
+                      className={inputClass}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

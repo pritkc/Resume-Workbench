@@ -44,7 +44,7 @@ export function HighlightedResumeView({ resumeData, keywords }: HighlightedResum
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-black/10 bg-white px-2.5 py-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-card px-2.5 py-1.5">
         <FileUser className="h-3.5 w-3.5 text-gray-500" aria-hidden />
         <h3 className="text-[12px] font-semibold text-gray-800">
           {t('builder.jdMatch.yourResume')}
@@ -212,8 +212,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-black/10 bg-white">
-      <div className="flex items-center gap-1.5 border-b border-black/10 bg-gray-50/80 px-2 py-1.5">
+    <div className="border border-border bg-card">
+      <div className="flex items-center gap-1.5 border-b border-border bg-gray-50/80 px-2 py-1.5">
         <span className="text-gray-500 [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">
           {title}
@@ -234,7 +234,7 @@ function HighlightedText({ text, keywords }: { text: string; keywords: Set<strin
     <span>
       {segments.map((segment, i) =>
         segment.isMatch ? (
-          <mark key={i} className="bg-yellow-200 text-black px-0.5">
+          <mark key={i} className="bg-yellow-200 text-foreground px-0.5">
             {segment.text}
           </mark>
         ) : (
@@ -254,7 +254,7 @@ function SkillTag({ text, keywords }: { text: string; keywords: Set<string> }) {
   return (
     <span
       className={`inline-block px-2 py-0.5 text-xs ${
-        isMatch ? 'bg-yellow-200 text-black font-medium' : 'bg-[#F0F0E8] text-gray-600'
+        isMatch ? 'bg-yellow-200 text-foreground font-medium' : 'bg-background text-gray-600'
       }`}
     >
       {text}

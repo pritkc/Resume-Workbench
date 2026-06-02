@@ -38,7 +38,7 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
               <div className="flex flex-wrap gap-1.5 pl-10 sm:pl-0">
                 {traceId ? (
                   <span
-                    className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700"
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
                     title={traceId}
                   >
                     trace: {traceId}
@@ -46,7 +46,7 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
                 ) : null}
                 {resumeCode ? (
                   <span
-                    className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700"
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
                     title={resumeCode}
                   >
                     resume code: {resumeCode}
@@ -54,7 +54,7 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
                 ) : null}
                 {resumeId ? (
                   <span
-                    className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700"
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
                     title={resumeId}
                   >
                     resume id: {resumeId}
@@ -62,7 +62,7 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
                 ) : null}
                 {requestScope ? (
                   <span
-                    className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700"
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
                     title={requestScope}
                   >
                     scope: {requestScope}
@@ -76,7 +76,7 @@ export default async function LLMTracesPage({ searchParams }: PageProps) {
             <summary className="cursor-pointer list-none marker:hidden hover:text-slate-700 [&::-webkit-details-marker]:hidden">
               <span className="border-b border-dotted border-slate-300">About this page</span>
             </summary>
-            <div className="mt-1 rounded-md border border-slate-200 bg-white p-2 text-left text-[11px] leading-snug text-slate-600">
+            <div className="mt-1 rounded-md border border-slate-200 bg-card p-2 text-left text-[11px] leading-snug text-slate-600">
               <p className="m-0">
                 Internal live logger for model calls: newest calls system-wide, filtered by request
                 scope, or a single flow via trace ID.

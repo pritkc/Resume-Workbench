@@ -89,7 +89,7 @@ export const HighlightBulletsRichTextDnd: React.FC<HighlightBulletsRichTextDndPr
                   size="icon-sm"
                   aria-label={deleteAriaLabel}
                   onClick={() => onRemoveLine(idx)}
-                  className="absolute right-1 top-1 z-10 h-7 w-7 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
+                  className="absolute right-1 top-1 z-10 h-7 w-7 border border-border bg-card/95 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

@@ -43,8 +43,8 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
 
   return (
     <div className="space-y-2">
-      <div className="flex h-7 items-center justify-between gap-2 border border-black/20 bg-white px-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-black/50">Locale</span>
+      <div className="flex h-7 items-center justify-between gap-2 border border-border bg-card px-2">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Locale</span>
         <button
           type="button"
           onClick={() =>
@@ -81,7 +81,7 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
             onChange={(value) => updateLocale(['present'], value)}
           />
         </RenderCvRow>
-        <div className="grid border-b border-black/10 md:grid-cols-2">
+        <div className="grid border-b border-border md:grid-cols-2">
           <RenderCvRow label="Month" density="compact">
             <RenderCvInput value={settings.locale.month} onChange={(value) => updateLocale(['month'], value)} />
           </RenderCvRow>
@@ -92,7 +92,7 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
             />
           </RenderCvRow>
         </div>
-        <div className="grid border-b border-black/10 md:grid-cols-2">
+        <div className="grid border-b border-border md:grid-cols-2">
           <RenderCvRow label="Year" density="compact">
             <RenderCvInput value={settings.locale.year} onChange={(value) => updateLocale(['year'], value)} />
           </RenderCvRow>
@@ -115,7 +115,7 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
       </RenderCvSection>
 
       <RenderCvSection title="Date names">
-        <div className="grid border-b border-black/10 md:grid-cols-2">
+        <div className="grid border-b border-border md:grid-cols-2">
           <RenderCvRow
             label="Abbreviations"
             description="Comma-separated month abbreviations."

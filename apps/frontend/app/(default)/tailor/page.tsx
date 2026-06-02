@@ -319,11 +319,11 @@ function LiveGenerationPanel({
     !hasResumeStream;
 
   return (
-    <div className="border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.06)]">
-      <div className="flex flex-col gap-3 border-b border-black bg-[#F8F7F1] px-4 py-3 md:flex-row md:items-center md:justify-between">
+    <div className="border border-border bg-card shadow-[4px_4px_0px_0px_rgba(0,0,0,0.06)]">
+      <div className="flex flex-col gap-3 border-b border-border bg-secondary px-4 py-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-blue-700" />
+            <Activity className="h-4 w-4 text-primary" />
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-700">
               Running now
             </p>
@@ -358,15 +358,15 @@ function LiveGenerationPanel({
           </div>
         )}
         {!hasAnyStream ? (
-          <div className="border border-dashed border-black/30 bg-white p-5 font-mono text-sm text-gray-500">
+          <div className="border border-dashed border-border bg-card p-5 font-mono text-sm text-gray-500">
             Connecting to the live stream...
           </div>
         ) : (
           <div className="space-y-3">
             {hasJdStream ? (
-              <div className="border border-black/20 bg-white p-3">
+              <div className="border border-border bg-card p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-primary">
                     JD Intel
                   </p>
                   <span className="font-mono text-[10px] text-gray-400">
@@ -377,9 +377,9 @@ function LiveGenerationPanel({
               </div>
             ) : null}
             {hasResumeStream ? (
-              <div className="border border-black/20 bg-white p-3">
+              <div className="border border-border bg-card p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-primary">
                     Resume Output
                   </p>
                   <span className="font-mono text-[10px] text-gray-400">
@@ -1126,8 +1126,8 @@ function TailorPageContent() {
         backgroundSize: '40px 40px',
       }}
     >
-      <div className="mx-auto w-full max-w-6xl border border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black bg-[#F8F7F1] px-4 py-3">
+      <div className="mx-auto w-full max-w-6xl border border-border bg-card shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-secondary px-4 py-3">
           <div className="space-y-1">
             <LinkButton href="/dashboard" variant="ghost" size="xs" className="px-0">
               <ArrowLeft className="w-4 h-4" />
@@ -1137,7 +1137,7 @@ function TailorPageContent() {
               {t('tailor.heroTitle')}
             </h1>
           </div>
-          <div className="rounded-none border border-black bg-white px-2.5 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
+          <div className="rounded-none border border-border bg-card px-2.5 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
             {promptLoading ? t('common.loading') : selectedPromptId}
           </div>
         </div>
@@ -1168,12 +1168,12 @@ function TailorPageContent() {
         )}
 
         <div className="space-y-4 p-4">
-          <div className="border border-black bg-[#F8F7F1] p-3">
+          <div className="border border-border bg-secondary p-3">
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
               {t('tailor.selectResume')}
             </p>
             <select
-              className="mt-2 h-10 w-full border border-black bg-white px-3 font-mono text-sm"
+              className="mt-2 h-10 w-full border border-border bg-card px-3 font-mono text-sm"
               value={sourceResumeId ?? ''}
               disabled={resumeListLoading || resumeOptions.length === 0}
               onChange={(e) => {
@@ -1192,7 +1192,7 @@ function TailorPageContent() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <div className="border border-black bg-[#F0F0E8] p-3">
+            <div className="border border-border bg-background p-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
                   {t('tailor.pasteJobDescription')}
@@ -1203,7 +1203,7 @@ function TailorPageContent() {
               </div>
               <Textarea
                 placeholder={t('tailor.jobDescriptionPlaceholder')}
-                className="min-h-[420px] border border-black bg-white font-mono text-sm focus:ring-0 focus:border-blue-700 resize-none rounded-none"
+                className="min-h-[420px] border border-border bg-card font-mono text-sm focus:ring-0 focus:border-primary resize-none rounded-none"
                 value={jobDescription}
                 onChange={(e) => {
                   jobDescriptionRef.current = e.target.value;
@@ -1215,7 +1215,7 @@ function TailorPageContent() {
             </div>
 
             <div className="space-y-3">
-              <div className="border border-black bg-[#F8F7F1] p-3">
+              <div className="border border-border bg-secondary p-3">
                 <Dropdown
                   options={
                     promptOptions.length > 0
@@ -1248,7 +1248,7 @@ function TailorPageContent() {
                 />
               </div>
 
-              <div className="border border-black bg-[#F8F7F1] p-3">
+              <div className="border border-border bg-secondary p-3">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
                     {t('tailor.customInstructionsLabel')}
@@ -1259,7 +1259,7 @@ function TailorPageContent() {
                 </div>
                 <Textarea
                   placeholder={t('tailor.customInstructionsPlaceholder')}
-                  className="min-h-[220px] border border-black bg-white font-mono text-xs focus:ring-0 focus:border-blue-700 resize-none rounded-none"
+                  className="min-h-[220px] border border-border bg-card font-mono text-xs focus:ring-0 focus:border-primary resize-none rounded-none"
                   value={customPromptInstructions}
                   onChange={(e) => {
                     customPromptInstructionsRef.current = e.target.value;

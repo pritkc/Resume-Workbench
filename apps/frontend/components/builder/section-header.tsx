@@ -75,7 +75,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
 
   return (
     <div className={cn('group/section space-y-0', isHidden ? 'opacity-60' : '')}>
-      <div className="relative mb-1.5 flex items-center gap-2 border-b border-black/15 pb-1.5">
+      <div className="relative mb-1.5 flex items-center gap-2 border-b border-border pb-1.5">
         {!isPersonalInfo &&
           (isEditing ? (
             <span className="inline-block w-7 shrink-0" aria-hidden />
@@ -89,8 +89,8 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
                   : t('builder.sectionHeader.showSection')
               }
               className={cn(
-                'h-7 w-7 shrink-0 border border-black/15',
-                section.isVisible ? 'text-black/50' : 'text-black/25'
+                'h-7 w-7 shrink-0 border border-border',
+                section.isVisible ? 'text-muted-foreground' : 'text-muted-foreground/50'
               )}
               onClick={onToggleVisibility}
               title={
@@ -115,14 +115,14 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
                 value={editedName}
                 onChange={(e) => setEditedName(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="h-7 max-w-[min(100%,14rem)] rounded-none border border-black/30 bg-white px-2 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
+                className="h-7 max-w-[min(100%,14rem)] rounded-none border border-border bg-card px-2 font-mono text-sm focus-visible:border-primary focus-visible:ring-0"
                 autoFocus
               />
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t('common.save')}
-                className="h-7 w-7 shrink-0 border border-black/20 text-black hover:bg-black/[0.04]"
+                className="h-7 w-7 shrink-0 border border-border text-foreground hover:bg-accent"
                 onClick={handleSaveEdit}
               >
                 <Check className="h-3.5 w-3.5" />
@@ -131,7 +131,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t('common.cancel')}
-                className="h-7 w-7 shrink-0 border border-black/20 text-black/50 hover:bg-black/[0.04] hover:text-black"
+                className="h-7 w-7 shrink-0 border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
                 onClick={handleCancelEdit}
               >
                 <X className="h-3.5 w-3.5" />
@@ -139,15 +139,13 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
             </div>
           ) : (
             <>
-              <h3 className="truncate font-mono text-[12px] font-semibold uppercase tracking-wide text-black">
-                {section.displayName}
-              </h3>
+              <h3 className="truncate text-sm font-semibold text-foreground">{section.displayName}</h3>
               {!isPersonalInfo && (
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   aria-label={t('builder.sectionHeader.renameSection')}
-                  className="h-7 w-7 shrink-0 text-black/35 hover:text-black"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={handleStartEdit}
                   title={t('builder.sectionHeader.renameSection')}
                 >
@@ -155,12 +153,12 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
                 </Button>
               )}
               {!section.isDefault && (
-                <span className="shrink-0 border border-black/15 bg-black/[0.03] px-1 py-0.5 font-mono text-[9px] uppercase tracking-wider text-black/45">
+                <span className="shrink-0 border border-border bg-muted px-1 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
                   {t('builder.sectionHeader.customTag')}
                 </span>
               )}
               {isHidden && (
-                <span className="shrink-0 border border-black/20 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wider text-black/50">
+                <span className="shrink-0 border border-border px-1 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
                   {t('builder.sectionHeader.hiddenFromPdfTag')}
                 </span>
               )}
@@ -172,7 +170,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
           <button
             type="button"
             onClick={addEntry.onClick}
-            className="inline-flex shrink-0 items-center gap-0.5 font-mono text-[10px] uppercase tracking-wide text-black/45 underline decoration-black/15 underline-offset-2 hover:text-black"
+            className="builder-field-caption inline-flex shrink-0 items-center gap-0.5 underline decoration-black/20 underline-offset-2 hover:text-foreground"
           >
             <Plus className="h-3 w-3" aria-hidden />
             {addEntry.label}
@@ -184,7 +182,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
             variant="ghost"
             size="icon-sm"
             aria-label={t('builder.sectionHeader.deleteSection')}
-            className="h-7 w-7 shrink-0 border border-black/15 bg-white/95 text-black/45 opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/section:opacity-100 group-focus-within/section:opacity-100"
+            className="h-7 w-7 shrink-0 border border-border bg-card/95 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/section:opacity-100 group-focus-within/section:opacity-100"
             onClick={handleDeleteClick}
             title={
               section.isDefault

@@ -9,10 +9,10 @@ import { CopyCharBar } from '@/components/settings/prompt-field-chrome';
 import { AutosizePromptTextarea } from '@/components/settings/autosize-prompt-textarea';
 import { buildPromptAdvisorClipboardText } from '@/lib/prompt-advisor-copy';
 
-const cardClass = 'scroll-mt-6 rounded-lg border border-slate-200/70 bg-white px-3 py-3 sm:px-4';
+const cardClass = 'scroll-mt-6 rounded-lg border border-slate-200/70 bg-card px-3 py-3 sm:px-4';
 
 const textareaClass =
-  'w-full resize-y whitespace-pre-wrap rounded-md border border-slate-200/80 bg-slate-50/50 px-2 py-2 font-mono text-[12px] leading-relaxed text-slate-800 focus-visible:border-slate-300 focus-visible:bg-white focus-visible:outline-none';
+  'w-full resize-y whitespace-pre-wrap rounded-md border border-slate-200/80 bg-slate-50/50 px-2 py-2 font-mono text-[12px] leading-relaxed text-slate-800 focus-visible:border-slate-300 focus-visible:bg-card focus-visible:outline-none';
 
 const shippedPreClass =
   'whitespace-pre-wrap break-words rounded-md border border-slate-100 bg-slate-50/80 p-2.5 font-mono text-[11px] leading-relaxed text-slate-700';

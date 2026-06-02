@@ -19,9 +19,9 @@ export function textToArray(value: string): string[] {
 
 export function RenderCvSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border border-black/20 bg-white">
-      <div className="border-b border-black/10 px-2 py-1">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black/50">
+    <section className="border border-border bg-card">
+      <div className="border-b border-border px-2 py-1">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           {title}
         </p>
       </div>
@@ -40,7 +40,7 @@ export function RenderCvQuickNav({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap gap-0 border-b border-black/20 bg-white">
+    <div className="sticky top-0 z-10 flex flex-wrap gap-0 border-b border-border bg-card">
       {items.map((item) => (
         <button
           key={item.id}
@@ -49,8 +49,8 @@ export function RenderCvQuickNav({
           className={cn(
             '-mb-px inline-flex h-7 items-center border-b-2 border-transparent px-3 font-mono text-[11px] uppercase tracking-widest transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black',
             item.id === activeId
-              ? 'border-black font-bold text-black'
-              : 'text-black/50 hover:text-black'
+              ? 'border-border font-bold text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {item.label}
@@ -80,7 +80,7 @@ export function RenderCvRow({
   return (
     <div
       className={cn(
-        'grid border-b border-black/10 last:border-b-0',
+        'grid border-b border-border last:border-b-0',
         isCompact
           ? 'gap-2 px-2 py-1.5 md:grid-cols-[minmax(0,140px)_minmax(0,1fr)] md:items-center'
           : 'gap-2 px-2.5 py-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center'
@@ -89,19 +89,19 @@ export function RenderCvRow({
       <div title={labelTitle}>
         <p
           className={cn(
-            'font-mono uppercase tracking-wide text-black',
+            'font-mono uppercase tracking-wide text-foreground',
             isCompact ? 'text-[11px]' : 'text-sm font-medium'
           )}
         >
           {label}
         </p>
         {description && !isCompact ? (
-          <p className="mt-1 font-sans text-xs text-black/40">{description}</p>
+          <p className="mt-1 font-sans text-xs text-muted-foreground">{description}</p>
         ) : null}
       </div>
       <div className={cn(isCompact ? 'space-y-1' : 'space-y-1.5')}>
         {children}
-        {fieldHint ? <p className="font-sans text-xs text-black/40">{fieldHint}</p> : null}
+        {fieldHint ? <p className="font-sans text-xs text-muted-foreground">{fieldHint}</p> : null}
       </div>
     </div>
   );
@@ -124,7 +124,7 @@ export function RenderCvInput({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="h-7 rounded-none border border-black/30 bg-white px-2 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
+      className="h-7 rounded-none border border-border bg-card px-2 font-mono text-sm focus-visible:border-primary focus-visible:ring-0"
     />
   );
 }
@@ -146,7 +146,7 @@ export function RenderCvTextarea({
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="min-h-[56px] rounded-none border border-black/30 bg-white px-2 py-1.5 font-sans text-sm focus-visible:border-black focus-visible:ring-0"
+      className="min-h-[56px] rounded-none border border-border bg-card px-2 py-1.5 font-sans text-sm focus-visible:border-primary focus-visible:ring-0"
     />
   );
 }
@@ -172,14 +172,14 @@ export function RenderCvAutocompleteInput({
           value={current}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="h-7 min-w-0 flex-1 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
+          className="h-7 min-w-0 flex-1 rounded-none border border-border font-mono text-sm focus-visible:border-primary focus-visible:ring-0"
         />
       ) : null}
       <select
         value={options.includes(current) ? current : ''}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'h-7 min-w-0 rounded-none border border-black/30 bg-white px-2 font-mono text-[11px]',
+          'h-7 min-w-0 rounded-none border border-border bg-card px-2 font-mono text-[11px]',
           isPreset ? 'w-full' : 'w-full min-w-[9rem] shrink-0 sm:w-auto'
         )}
       >
@@ -242,7 +242,7 @@ export function RenderCvColorInput({
       className="flex flex-wrap items-center gap-2"
       title="Supports hex, rgb(...), hsl(...), and named colors."
     >
-      <label className="relative inline-flex h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-none border border-black/30 bg-white">
+      <label className="relative inline-flex h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-none border border-border bg-card">
         <span className="absolute inset-px" style={{ backgroundColor: pickerValue }} />
         <input
           type="color"
@@ -256,7 +256,7 @@ export function RenderCvColorInput({
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-7 min-w-0 flex-1 rounded-none border border-black/30 font-mono text-xs focus-visible:border-black focus-visible:ring-0"
+        className="h-7 min-w-0 flex-1 rounded-none border border-border font-mono text-xs focus-visible:border-primary focus-visible:ring-0"
       />
     </div>
   );
@@ -366,7 +366,7 @@ export function RenderCvDimensionInput({
         }}
         placeholder={parsedPlaceholder.amount || placeholder}
         inputMode="decimal"
-        className="h-7 w-20 rounded-none border border-black/30 font-mono text-sm focus-visible:border-black focus-visible:ring-0"
+        className="h-7 w-20 rounded-none border border-border font-mono text-sm focus-visible:border-primary focus-visible:ring-0"
       />
       <select
         value={draftUnit}
@@ -378,7 +378,7 @@ export function RenderCvDimensionInput({
             onChange(formatDimensionValue(normalized, unit));
           }
         }}
-        className="unit-selector-select h-7 min-w-[3.5rem] rounded-none border border-black/30 bg-white px-1 font-mono text-[9px] uppercase focus:border-black"
+        className="unit-selector-select h-7 min-w-[3.5rem] rounded-none border border-border bg-card px-1 font-mono text-[9px] uppercase focus:border-primary"
       >
         {RENDER_DIMENSION_UNITS.map((unit) => (
           <option key={unit} value={unit}>
@@ -408,10 +408,10 @@ export function RenderCvBulletPicker({
           aria-pressed={value === option}
           onClick={() => onChange(option)}
           className={cn(
-            'flex h-7 w-7 items-center justify-center border border-black/20 text-sm transition',
+            'flex h-7 w-7 items-center justify-center border border-border text-sm transition',
             value === option
-              ? 'border-black bg-black text-white'
-              : 'border-black/20 bg-white text-black/70 hover:border-black hover:text-black'
+              ? 'border-border bg-black text-white'
+              : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground'
           )}
         >
           {option}
@@ -434,7 +434,7 @@ export function RenderCvSelect<T extends string>({
     <select
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
-      className="h-7 w-full rounded-none border border-black/30 bg-white px-2 font-mono text-sm focus:border-black"
+      className="h-7 w-full rounded-none border border-border bg-card px-2 font-mono text-sm focus:border-primary"
     >
       {options.map((option) => (
         <option key={option.id} value={option.id}>
@@ -456,7 +456,7 @@ export function RenderCvToggle({
     <label className="inline-flex cursor-pointer items-center gap-2">
       <span
         className={cn(
-          'relative inline-flex h-4 w-8 shrink-0 items-center rounded-full border border-black transition-colors',
+          'relative inline-flex h-4 w-8 shrink-0 items-center rounded-full border border-border transition-colors',
           checked ? 'bg-black' : 'bg-black/20'
         )}
       >
@@ -468,12 +468,12 @@ export function RenderCvToggle({
         />
         <span
           className={cn(
-            'inline-block h-3 w-3 transform rounded-full bg-white transition-transform',
+            'inline-block h-3 w-3 transform rounded-full bg-card transition-transform',
             checked ? 'translate-x-4' : 'translate-x-0.5'
           )}
         />
       </span>
-      <span className="font-mono text-[10px] uppercase tracking-wider text-black/50">
+      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
         {checked ? 'On' : 'Off'}
       </span>
     </label>

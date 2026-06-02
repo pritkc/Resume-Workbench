@@ -45,7 +45,7 @@ const SECTION_LABELS: Record<RawYamlSection, string> = {
 };
 
 const YAML_SOFT_CTA =
-  'h-6 rounded-none border border-black/18 bg-white px-2.5 text-[10px] font-mono font-medium uppercase tracking-wide text-black/72 shadow-[0_1px_0_0_rgba(0,0,0,0.06)] hover:border-black/30 hover:bg-black/[0.03] hover:text-black disabled:opacity-50';
+  'h-6 rounded-none border border-border bg-card px-2.5 text-[10px] font-mono font-medium uppercase tracking-wide text-foreground/72 shadow-[0_1px_0_0_rgba(0,0,0,0.06)] hover:border-border hover:bg-muted hover:text-foreground disabled:opacity-50';
 
 const LINE_HEIGHT_PX = 24;
 const EDITOR_PADDING_PX = 16;
@@ -135,7 +135,7 @@ function highlightYamlLine(line: string): React.ReactNode {
       {listPrefix && <span className="text-rose-700">{listPrefix}</span>}
       {keyMatch ? (
         <>
-          <span className="text-blue-700">{keyMatch[1]}</span>
+          <span className="text-primary">{keyMatch[1]}</span>
           <span className="text-slate-500">{keyMatch[2]}</span>
           {renderScalar(keyMatch[3])}
         </>
@@ -367,7 +367,7 @@ export function RawYamlEditor({
   return (
     <div className="space-y-1.5">
       <div
-        className="mb-0.5 flex min-h-7 flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-sm border border-black/15 bg-white px-2 py-1 shadow-[0_1px_0_0_rgba(0,0,0,0.04)]"
+        className="mb-0.5 flex min-h-7 flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-sm border border-border bg-card px-2 py-1 shadow-[0_1px_0_0_rgba(0,0,0,0.04)]"
         title={SECTION_DESCRIPTIONS[section]}
       >
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -410,7 +410,7 @@ export function RawYamlEditor({
             </Button>
           ) : null}
         </div>
-        <p className="shrink-0 font-mono text-[10px] text-black/40">
+        <p className="shrink-0 font-mono text-[10px] text-muted-foreground">
           {statusLabel} · Ln {cursorPosition.line} · Col {cursorPosition.column} · {lines.length}{' '}
           lines
         </p>
@@ -457,10 +457,10 @@ export function RawYamlEditor({
         </div>
       )}
 
-      <div className="overflow-hidden border border-black/15 bg-white">
+      <div className="overflow-hidden border border-border bg-card">
         <div className="flex min-h-[min(52vh,420px)]">
           <div
-            className="select-none overflow-hidden border-r border-black/10 bg-[#F4EFE2] py-2 pr-2 pl-1.5 font-mono text-[11px] leading-6 text-right text-slate-500"
+            className="select-none overflow-hidden border-r border-border bg-[#F4EFE2] py-2 pr-2 pl-1.5 font-mono text-[11px] leading-6 text-right text-slate-500"
             style={{ width: gutterWidth }}
           >
             <div style={{ transform: `translateY(-${scrollState.top}px)` }}>
@@ -487,7 +487,7 @@ export function RawYamlEditor({
             </div>
           </div>
 
-          <div className="relative flex-1 overflow-hidden bg-white">
+          <div className="relative flex-1 overflow-hidden bg-card">
             <div
               className="pointer-events-none absolute left-0 right-0 bg-blue-100/60"
               style={{
@@ -556,7 +556,7 @@ export function RawYamlEditor({
           </div>
         </div>
 
-        <div className="border-t border-black/10 bg-slate-800 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-slate-200">
+        <div className="border-t border-border bg-slate-800 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-slate-200">
           {activeError?.line
             ? `Error near line ${activeError.line}${activeError.column ? `, column ${activeError.column}` : ''}`
             : `Editing ${SECTION_LABELS[section]} YAML`}

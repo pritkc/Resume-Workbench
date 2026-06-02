@@ -185,7 +185,7 @@ export default function PromptCatalogPage(): React.ReactElement {
                 {t('settings.promptCatalog.catalogAboutSummary')}
               </span>
             </summary>
-            <div className="mt-1 rounded-md border border-slate-200 bg-white p-2 text-left text-[11px] leading-snug text-slate-600">
+            <div className="mt-1 rounded-md border border-slate-200 bg-card p-2 text-left text-[11px] leading-snug text-slate-600">
               <p className="m-0">{t('settings.promptCatalog.catalogAboutBody')}</p>
               <p className="mt-1.5 m-0 text-slate-500">
                 {t('settings.promptCatalog.catalogNavHint')}
@@ -209,7 +209,7 @@ export default function PromptCatalogPage(): React.ReactElement {
                 key={jumpSelectKey}
                 defaultValue=""
                 aria-label={t('settings.promptCatalog.jumpToPlaceholder')}
-                className="h-9 w-full max-w-md rounded-md border border-slate-200/80 bg-white px-2 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+                className="h-9 w-full max-w-md rounded-md border border-slate-200/80 bg-card px-2 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
                 onChange={(e) => {
                   const v = e.target.value;
                   if (!v) return;

@@ -21,6 +21,7 @@ import {
   groupTimeRangeLabel,
   type TraceCallGroup,
 } from '@/lib/observability/llm-trace-helpers';
+import { useTranslations } from '@/lib/i18n';
 
 type TracePanelTab = 'trace' | 'timeline' | 'raw-prompts';
 
@@ -199,6 +200,7 @@ export function GenerationObservabilityPanel({
   resumeId?: string | null;
   resumeCode?: string | null;
 }) {
+  const { t } = useTranslations();
   const [activeTab, setActiveTab] = useState<TracePanelTab>('trace');
   const [calls, setCalls] = useState<LLMCallRecord[]>([]);
   const [archivedGroups, setArchivedGroups] = useState<TraceCallGroup[]>([]);
@@ -270,7 +272,7 @@ export function GenerationObservabilityPanel({
 
   if (!traceId && !generationRunId && !resumeFilter) {
     return (
-      <div className="border border-black/15 bg-white p-3 font-mono text-xs text-gray-600">
+      <div className="border border-border bg-card p-3 font-mono text-xs text-gray-600">
         No generation trace is linked to this resume. This is expected for older or manually created
         resumes.
       </div>
@@ -278,12 +280,12 @@ export function GenerationObservabilityPanel({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col border border-black/15 bg-[#F0F0E8]">
-      <section className="shrink-0 border-b border-black/10 bg-white px-3 py-2">
+    <div className="flex min-h-0 flex-1 flex-col border border-border bg-background">
+      <section className="shrink-0 border-b border-border bg-card px-3 py-2">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-blue-700" />
+              <Activity className="h-4 w-4 text-primary" />
               <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-gray-900">
                 Generation Trace
               </h3>
@@ -304,10 +306,9 @@ export function GenerationObservabilityPanel({
                       ? `/llm-traces?resume_code=${encodeURIComponent(resumeCode)}`
                       : `/llm-traces?resume_id=${encodeURIComponent(resumeId || '')}`
                 }
+                className="inline-flex h-7 items-center border border-border bg-card px-2 font-sans text-[11px] text-foreground hover:bg-accent"
               >
-                <Button size="xs" variant="outline">
-                  Open Full Trace
-                </Button>
+                {t('builder.generationTrace.openFullTrace')}
               </Link>
             ) : null}
             <Button size="xs" variant="outline" onClick={() => void refresh()}>
@@ -330,10 +331,10 @@ export function GenerationObservabilityPanel({
               key={id}
               type="button"
               onClick={() => setActiveTab(id)}
-              className={`border border-black/20 px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
+              className={`border border-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
                 activeTab === id
                   ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-black/[0.04]'
+                  : 'bg-card text-foreground hover:bg-accent'
               }`}
             >
               {label}
@@ -358,23 +359,25 @@ export function GenerationObservabilityPanel({
 
         {activeTab === 'trace' && (
           <div className="space-y-3">
-            <div className="grid gap-2 md:grid-cols-4">
-              <Metric label="Calls" value={formatNumber(summary?.total_calls)} />
-              <Metric label="LLM Time" value={formatDuration(summary?.latency_total_ms)} />
-              <Metric label="Tokens" value={formatNumber(summary?.total_tokens)} />
-              <Metric label="Cost" value={formatCurrency(summary?.estimated_cost_usd)} />
+            <div className="flex flex-wrap items-stretch divide-x divide-black/10 border border-border bg-card">
+              <InlineMetric label="Calls" value={formatNumber(summary?.total_calls)} />
+              <InlineMetric label="LLM Time" value={formatDuration(summary?.latency_total_ms)} />
+              <InlineMetric label="Tokens" value={formatNumber(summary?.total_tokens)} />
+              <InlineMetric label="Cost" value={formatCurrency(summary?.estimated_cost_usd)} />
             </div>
-            <div className="border border-black/20 bg-white">
-              <div className="border-b border-black/10 bg-[#F8F7F1] px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gray-600">
+            <div className="border border-border bg-card">
+              <div className="sticky top-0 z-[1] border-b border-border bg-secondary px-2 py-1.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-gray-600">
                 LLM Operations
               </div>
-              <div className="divide-y divide-black/10">
-                {(summary?.operations ?? []).map((operation) => (
+              <div>
+                {(summary?.operations ?? []).map((operation, index) => (
                   <div
                     key={operation.operation}
-                    className="grid gap-2 px-2 py-2 font-mono text-[11px] text-gray-800 md:grid-cols-[minmax(0,1fr)_80px_90px_80px]"
+                    className={`grid gap-2 px-2 py-2 font-sans text-[11px] text-gray-800 md:grid-cols-[minmax(0,1fr)_80px_90px_80px] ${
+                      index % 2 === 1 ? 'bg-black/[0.02]' : 'bg-card'
+                    }`}
                   >
-                    <span className="truncate" title={operation.operation}>
+                    <span className="truncate font-mono" title={operation.operation}>
                       {operation.operation}
                     </span>
                     <span>{operation.calls} calls</span>
@@ -396,7 +399,7 @@ export function GenerationObservabilityPanel({
         {activeTab === 'timeline' && (
           <div className="space-y-3">
             {timing ? (
-              <div className="border border-black/20 bg-white p-2">
+              <div className="border border-border bg-card p-2">
                 <div className="mb-2 flex flex-wrap gap-2">
                   <Metric label="Total" value={formatDuration(timing.total_duration_ms)} />
                   <Metric label="LLM" value={formatDuration(timing.llm_latency_total_ms)} />
@@ -406,7 +409,7 @@ export function GenerationObservabilityPanel({
                   {timing.process_timings.map((process) => (
                     <div
                       key={process.process_key}
-                      className="grid gap-2 border-t border-black/10 px-1 py-1.5 font-mono text-[11px] text-gray-800 md:grid-cols-[minmax(0,1fr)_90px]"
+                      className="grid gap-2 border-t border-border px-1 py-1.5 font-mono text-[11px] text-gray-800 md:grid-cols-[minmax(0,1fr)_90px]"
                     >
                       <span>{process.process_key}</span>
                       <span>{formatDuration(process.duration_ms)}</span>
@@ -415,19 +418,19 @@ export function GenerationObservabilityPanel({
                 </div>
               </div>
             ) : (
-              <div className="border border-black/20 bg-white px-3 py-3 font-mono text-[11px] text-gray-500">
+              <div className="border border-border bg-card px-3 py-3 font-mono text-[11px] text-gray-500">
                 No process timing was found for this generation run.
               </div>
             )}
 
-            <div className="border border-black/20 bg-white">
-              <div className="border-b border-black/10 bg-[#F8F7F1] px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gray-600">
+            <div className="border border-border bg-card">
+              <div className="border-b border-border bg-secondary px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gray-600">
                 LLM Call Timeline
               </div>
               {sortedCalls.map((call) => (
                 <div
                   key={call.llm_call_id}
-                  className="grid gap-2 border-b border-black/10 px-2 py-2 font-mono text-[11px] text-gray-800 last:border-b-0 md:grid-cols-[145px_minmax(0,1fr)_90px_90px]"
+                  className="grid gap-2 border-b border-border px-2 py-2 font-mono text-[11px] text-gray-800 last:border-b-0 md:grid-cols-[145px_minmax(0,1fr)_90px_90px]"
                 >
                   <span>{formatTimestamp(call.created_at)}</span>
                   <span className="truncate" title={call.operation}>
@@ -449,22 +452,22 @@ export function GenerationObservabilityPanel({
         {activeTab === 'raw-prompts' && (
           <div className="space-y-3">
             {sortedCalls.map((call) => (
-              <details key={call.llm_call_id} open className="border border-black/20 bg-white">
+              <details key={call.llm_call_id} open className="border border-border bg-card">
                 <summary className="cursor-pointer px-2 py-2 font-mono text-[11px] font-semibold text-gray-900">
                   <FileText className="mr-1 inline h-3.5 w-3.5" />
                   {call.operation} · {call.model_name} · {formatDuration(call.latency_ms)}
                 </summary>
-                <div className="border-t border-black/10 p-2">
+                <div className="border-t border-border p-2">
                   <div className="mb-2 flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wide text-gray-500">
                     <span>{call.request_kind}</span>
                     <span>{call.json_mode ? 'json' : 'text'}</span>
                     <span>{call.finish_reason || 'finish N/A'}</span>
                   </div>
-                  <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-words border border-black/10 bg-[#FAFAF7] p-2 font-mono text-[11px] leading-relaxed text-gray-800">
+                  <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-words border border-border bg-muted p-2 font-mono text-[11px] leading-relaxed text-foreground/90">
                     {call.prompt_preview || 'Prompt preview not stored.'}
                   </pre>
                   {call.response_preview ? (
-                    <pre className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap break-words border border-black/10 bg-white p-2 font-mono text-[11px] leading-relaxed text-gray-700">
+                    <pre className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap break-words border border-border bg-card p-2 font-mono text-[11px] leading-relaxed text-gray-700">
                       {call.response_preview}
                     </pre>
                   ) : null}
@@ -472,13 +475,22 @@ export function GenerationObservabilityPanel({
               </details>
             ))}
             {sortedCalls.length === 0 ? (
-              <div className="border border-black/20 bg-white px-3 py-3 font-mono text-[11px] text-gray-500">
+              <div className="border border-border bg-card px-3 py-3 font-mono text-[11px] text-gray-500">
                 No raw prompt rows found for this trace.
               </div>
             ) : null}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function InlineMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-[5.5rem] flex-1 px-3 py-2">
+      <div className="font-sans text-sm font-semibold tabular-nums text-gray-900">{value}</div>
+      <div className="font-sans text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
     </div>
   );
 }
@@ -498,8 +510,8 @@ function ArchivedGenerationRuns({ groups }: { groups: TraceCallGroup[] }) {
   }
 
   return (
-    <div className="border border-black/20 bg-white">
-      <div className="border-b border-black/10 bg-[#F8F7F1] px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gray-600">
+    <div className="border border-border bg-card">
+      <div className="border-b border-border bg-secondary px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gray-600">
         Archived Generation Requests
       </div>
       <div className="divide-y divide-black/10">
@@ -507,7 +519,7 @@ function ArchivedGenerationRuns({ groups }: { groups: TraceCallGroup[] }) {
           const operations = [...new Set(group.calls.map((call) => call.operation))];
           return (
             <details key={group.traceKey} className="group">
-              <summary className="cursor-pointer list-none px-2 py-2 font-mono text-[11px] text-gray-900 hover:bg-black/[0.03]">
+              <summary className="cursor-pointer list-none px-2 py-2 font-mono text-[11px] text-gray-900 hover:bg-muted">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>
                     {shortId(group.traceKey)} · {group.calls.length} calls ·{' '}
@@ -519,7 +531,7 @@ function ArchivedGenerationRuns({ groups }: { groups: TraceCallGroup[] }) {
                   </span>
                 </div>
               </summary>
-              <div className="border-t border-black/10 px-2 py-2 font-mono text-[11px] text-gray-700">
+              <div className="border-t border-border px-2 py-2 font-mono text-[11px] text-gray-700">
                 {operations.join(', ') || 'No operations recorded.'}
               </div>
             </details>

@@ -36,35 +36,7 @@ import { GenericItemForm } from './forms/generic-item-form';
 import { GenericListForm } from './forms/generic-list-form';
 import { AddSectionButton } from './add-section-dialog';
 import { DraggableSectionWrapper } from './draggable-section-wrapper';
-
-function CvSectionJumpNav({
-  sections,
-}: {
-  sections: Array<{ id: string; label: string }>;
-}) {
-  return (
-    <div className="sticky top-0 z-[12] mb-0 border-b border-black/15 bg-[#F0F0E8]/95 shadow-[0_1px_0_0_rgba(0,0,0,0.06)] backdrop-blur-sm">
-      <p className="sr-only">Jump to section</p>
-      <div className="flex gap-1.5 overflow-x-auto py-0.5 pl-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {sections.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() =>
-              document.getElementById(`cv-section-${id}`)?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start',
-              })
-            }
-            className="shrink-0 whitespace-nowrap rounded-none border border-black/15 bg-white/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-black/55 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] hover:border-black/25 hover:text-black"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { CvSectionNav } from './cv-section-nav';
 import {
   getSectionMeta,
   getAllSections,
@@ -489,8 +461,8 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
 
   if (!dndMounted) {
     return (
-      <div className="space-y-3 pb-10">
-        <CvSectionJumpNav sections={jumpSectionTargets} />
+      <div className="space-y-2 pb-10">
+        <CvSectionNav sections={jumpSectionTargets} />
         {sectionRows.map(({ section, isPersonalInfo, sectionContent }) => (
           <div
             key={section.id}
@@ -516,8 +488,8 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
         items={sortedAllSections.map((s) => s.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="space-y-3 pb-10">
-          <CvSectionJumpNav sections={jumpSectionTargets} />
+        <div className="space-y-2 pb-10">
+          <CvSectionNav sections={jumpSectionTargets} />
           {sectionRows.map(({ section, isPersonalInfo, sectionContent }) =>
             isPersonalInfo ? (
               <div key={section.id} className="relative">

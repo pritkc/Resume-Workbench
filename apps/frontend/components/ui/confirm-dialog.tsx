@@ -93,12 +93,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[320px] gap-0 border-2 border-black bg-[#F0F0E8] p-0 shadow-[4px_4px_0_#000] sm:max-w-[320px]">
+      <DialogContent className="max-w-[320px] gap-0 border-2 border-border bg-background p-0 shadow-sw-card sm:max-w-[320px]">
         <DialogHeader className={`p-4 pb-3 ${accent}`}>
-          <DialogTitle className="pr-8 font-mono text-sm font-semibold uppercase tracking-wide text-black">
+          <DialogTitle className="pr-8 font-mono text-sm font-semibold uppercase tracking-wide text-foreground">
             {title}
           </DialogTitle>
-          <DialogDescription className="mt-1.5 font-sans text-xs leading-snug text-black/50">
+          <DialogDescription className="mt-1.5 font-sans text-xs leading-snug text-muted-foreground">
             {description}
           </DialogDescription>
         </DialogHeader>
@@ -109,7 +109,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             </div>
           </div>
         )}
-        <DialogFooter className="flex flex-row justify-end gap-2 border-t border-black/20 bg-white/80 p-3">
+        <DialogFooter className="flex flex-row justify-end gap-2 border-t border-border bg-card/80 p-3">
           {showCancelButton && (
             <Button
               variant="builderOutline"

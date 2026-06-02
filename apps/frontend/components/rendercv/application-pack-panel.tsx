@@ -23,20 +23,20 @@ export function ApplicationPackPanel({
   const changeBreakdown = data?.change_breakdown;
 
   return (
-    <div className="space-y-4 border border-black bg-[#F8F7F1] p-4">
+    <div className="space-y-4 border border-border bg-secondary p-4">
       <div className="flex items-center gap-2">
-        <div className="h-2 w-2 bg-blue-700" />
+        <div className="h-2 w-2 bg-primary" />
         <p className="font-mono text-xs font-bold uppercase tracking-wider">Application Pack</p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="border border-black bg-white p-3">
+        <div className="border border-border bg-card p-3">
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Prompt
           </p>
           <p className="mt-2 font-mono text-sm uppercase">{selectedPromptId}</p>
         </div>
-        <div className="border border-black bg-white p-3">
+        <div className="border border-border bg-card p-3">
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Theme
           </p>
@@ -44,7 +44,7 @@ export function ApplicationPackPanel({
             {themeSettings.theme_id} / {themeSettings.density_profile}
           </p>
         </div>
-        <div className="border border-black bg-white p-3">
+        <div className="border border-border bg-card p-3">
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Output
           </p>
@@ -61,7 +61,7 @@ export function ApplicationPackPanel({
       />
 
       {changeBreakdown && (
-        <div className="border border-black bg-white p-4">
+        <div className="border border-border bg-card p-4">
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Change Attribution
           </p>
@@ -80,7 +80,7 @@ export function ApplicationPackPanel({
         </div>
       )}
 
-      <div className="border border-black bg-white p-4">
+      <div className="border border-border bg-card p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -118,7 +118,7 @@ export function ApplicationPackPanel({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="border border-black bg-white p-4">
+        <div className="border border-border bg-card p-4">
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Cover Letter
           </p>
@@ -126,7 +126,7 @@ export function ApplicationPackPanel({
             {data?.cover_letter || 'Generated cover letter will appear here.'}
           </p>
         </div>
-        <div className="border border-black bg-white p-4">
+        <div className="border border-border bg-card p-4">
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Outreach
           </p>
@@ -137,7 +137,7 @@ export function ApplicationPackPanel({
       </div>
 
       {warnings.length > 0 && (
-        <div className="border border-black bg-white p-4">
+        <div className="border border-border bg-card p-4">
           <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
             Warnings
           </p>
@@ -162,7 +162,7 @@ function AttributionCard({
   detail?: string;
 }) {
   return (
-    <div className="border border-black bg-[#F8F7F1] p-3">
+    <div className="border border-border bg-secondary p-3">
       <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500">
         {label}
       </p>

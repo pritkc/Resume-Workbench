@@ -29,6 +29,7 @@ import {
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
 import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
+import { BuilderFormField } from '../builder-form-field';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface ProjectsFormProps {
@@ -36,11 +37,9 @@ interface ProjectsFormProps {
   onChange: (data: Project[]) => void;
 }
 
-const fldLabel = 'block font-mono text-[10px] uppercase tracking-wider text-black/50';
-const inp =
-  'h-7 rounded-none border border-black/30 bg-white px-2 text-sm focus-visible:border-black focus-visible:ring-0';
+const inp = 'builder-field-input w-full';
 const addTextBtn =
-  'font-mono text-[11px] uppercase tracking-wide text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black';
+  'builder-field-caption inline-flex items-center underline decoration-black/20 underline-offset-2 hover:text-foreground';
 
 export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
@@ -173,12 +172,6 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
     <div className="space-y-2">
       <div className="space-y-2">
         {data.length > 0 ? (
-          <p className="font-mono text-[9px] leading-snug text-black/40">
-            Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on each bullet or
-            project card to reorder.
-          </p>
-        ) : null}
-        {data.length > 0 ? (
           <DndContext
             id={listDndId}
             sensors={sensors}
@@ -196,7 +189,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                   return (
                     <DraggableListItem key={item.id} id={item.id}>
                       <div
-                        className={`group entry-card-editor relative border border-black/20 bg-white ${
+                        className={`group entry-card-editor relative ${
                           item.includeInResume === false ? 'opacity-60' : ''
                         }`}
                       >
@@ -215,7 +208,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                                 ? t('builder.forms.projects.actions.showOnResume')
                                 : t('builder.forms.projects.actions.hideFromResume')
                             }
-                            className="h-7 w-7 border border-black/15 text-black/50 opacity-70 hover:bg-black/[0.04] group-hover:opacity-100"
+                            className="h-7 w-7 border border-border text-muted-foreground opacity-70 hover:bg-accent group-hover:opacity-100"
                             onClick={() =>
                               updateItem(item.id, (row) => ({
                                 ...row,
@@ -241,34 +234,28 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                         </div>
 
                         <div className="mb-2 grid grid-cols-1 gap-2 pr-[4.25rem] md:grid-cols-2">
-                          <div>
-                            <span className={fldLabel}>
-                              {t('builder.forms.projects.fields.projectName')}
-                            </span>
+                          <BuilderFormField label={t('builder.forms.projects.fields.projectName')}>
                             <Input
                               pasteMode="plainTextSingleParagraph"
                               value={item.name || ''}
                               onChange={(e) => handleFieldChange(item.id, 'name', e.target.value)}
                               placeholder={t('builder.forms.projects.placeholders.projectName')}
-                              className={`mt-0.5 ${inp}`}
+                              className={inp}
                             />
-                          </div>
-                          <div>
-                            <span className={fldLabel}>
-                              {t('builder.genericItemForm.fields.date')}
-                            </span>
+                          </BuilderFormField>
+                          <BuilderFormField label={t('builder.genericItemForm.fields.date')}>
                             <Input
                               pasteMode="plainTextSingleParagraph"
                               value={getProjectDate(item)}
                               onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
                               placeholder={t('builder.forms.projects.placeholders.date')}
-                              className={`mt-0.5 ${inp}`}
+                              className={inp}
                             />
-                          </div>
-                          <div className="md:col-span-2">
-                            <span className={fldLabel}>
-                              {t('builder.forms.projects.fields.techStackOptional')}
-                            </span>
+                          </BuilderFormField>
+                          <BuilderFormField
+                            label={t('builder.forms.projects.fields.techStackOptional')}
+                            className="md:col-span-2"
+                          >
                             <Textarea
                               pasteMode="plainTextMultiline"
                               value={getProjectTechStack(item)}
@@ -276,27 +263,33 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                                 handleFieldChange(item.id, 'techStack', e.target.value)
                               }
                               placeholder={t('builder.forms.projects.placeholders.techStack')}
-                              className="mt-0.5 min-h-[72px] rounded-none border border-black/30 bg-white px-2 py-1.5 text-sm shadow-none focus-visible:border-black focus-visible:ring-0"
+                              className="builder-field-textarea min-h-[72px]"
                             />
-                          </div>
-                          <div>
-                            <span className={fldLabel}>
-                              <Github className="mr-1 inline h-3 w-3 align-text-bottom" />
-                              Repo
-                            </span>
+                          </BuilderFormField>
+                          <BuilderFormField
+                            label={
+                              <>
+                                <Github className="mr-1 inline h-3 w-3 align-text-bottom" />
+                                Repo
+                              </>
+                            }
+                          >
                             <Input
                               pasteMode="plainTextSingleParagraph"
                               value={item.github || ''}
                               onChange={(e) => handleFieldChange(item.id, 'github', e.target.value)}
                               placeholder="github.com/org/repo"
-                              className={`mt-0.5 ${inp}`}
+                              className={inp}
                             />
-                          </div>
-                          <div>
-                            <span className={fldLabel}>
-                              <Globe className="mr-1 inline h-3 w-3 align-text-bottom" />
-                              Link
-                            </span>
+                          </BuilderFormField>
+                          <BuilderFormField
+                            label={
+                              <>
+                                <Globe className="mr-1 inline h-3 w-3 align-text-bottom" />
+                                Link
+                              </>
+                            }
+                          >
                             <Input
                               pasteMode="plainTextSingleParagraph"
                               value={item.website || ''}
@@ -304,20 +297,20 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                                 handleFieldChange(item.id, 'website', e.target.value)
                               }
                               placeholder="your-project.com"
-                              className={`mt-0.5 ${inp}`}
+                              className={inp}
                             />
-                          </div>
+                          </BuilderFormField>
                         </div>
 
                         <div>
                           <div className="mb-1 flex items-center justify-between gap-2">
-                            <span className={fldLabel}>
+                            <span className="builder-field-label block">
                               {t('builder.genericItemForm.fields.highlights')}
                             </span>
                             <button
                               type="button"
                               onClick={() => handleAddHighlight(item.id)}
-                              className="shrink-0 font-mono text-[11px] text-black/50 underline decoration-black/20 underline-offset-2 hover:text-black"
+                              className="builder-field-caption shrink-0 underline decoration-black/20 underline-offset-2 hover:text-foreground"
                             >
                               <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
                               {t('builder.genericItemForm.actions.addPoint')}
@@ -343,8 +336,8 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
         ) : null}
 
         {data.length === 0 && (
-          <div className="border border-dashed border-black/25 bg-white px-2 py-3 text-center">
-            <p className="mb-1.5 font-mono text-[11px] text-black/45">
+          <div className="border border-dashed border-border bg-card px-2 py-3 text-center">
+            <p className="mb-1.5 font-mono text-[11px] text-muted-foreground">
               {t('builder.genericItemForm.noEntries', { label: t('resume.sections.projects') })}
             </p>
             <button type="button" onClick={handleAdd} className={addTextBtn}>

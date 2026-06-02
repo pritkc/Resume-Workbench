@@ -56,10 +56,10 @@ export function CoverLetterEditor({
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white px-2 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-2 py-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <FileText className="h-3.5 w-3.5 shrink-0 text-black/40" aria-hidden />
-          <h2 className="truncate font-mono text-[11px] font-semibold uppercase tracking-widest text-black">
+          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <h2 className="truncate font-mono text-[11px] font-semibold uppercase tracking-widest text-foreground">
             {t('coverLetter.title')}
           </h2>
         </div>
@@ -136,7 +136,7 @@ export function CoverLetterEditor({
           className={cn(
             'flex min-h-0 w-full flex-1 flex-col',
             layout === 'letter' &&
-              'max-w-[min(28rem,100%)] border border-black/15 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.04)] md:min-h-[min(72vh,820px)]'
+              'max-w-[min(28rem,100%)] border border-border bg-card shadow-[0_1px_0_0_rgba(0,0,0,0.04)] md:min-h-[min(72vh,820px)]'
           )}
         >
           <textarea
@@ -147,17 +147,17 @@ export function CoverLetterEditor({
             className={cn(
               'min-h-[120px] w-full flex-1 p-2.5',
               'font-mono text-[13px] leading-relaxed',
-              layout === 'letter' ? 'border-0 bg-transparent' : 'border border-black/20 bg-white',
+              layout === 'letter' ? 'border-0 bg-transparent' : 'border border-border bg-card',
               'resize-y',
               'focus:outline-none focus:ring-0',
               layout === 'letter'
                 ? 'focus-visible:ring-1 focus-visible:ring-black/15'
-                : 'focus:border-black',
-              'placeholder:text-black/30'
+                : 'focus:border-primary',
+              'placeholder:text-muted-foreground'
             )}
           />
-          <div className="flex shrink-0 justify-end border-t border-black/10 px-2 py-1">
-            <span className="font-mono text-[10px] uppercase tracking-wide text-black/45">
+          <div className="flex shrink-0 justify-end border-t border-border px-2 py-1">
+            <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
               {t('builder.contentStats.wordsChars', { wordCount, charCount })}
             </span>
           </div>

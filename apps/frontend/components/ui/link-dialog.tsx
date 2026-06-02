@@ -117,7 +117,7 @@ export const LinkDialog: React.FC<LinkDialogProps> = ({ editor, onClose }) => {
       {/* Dialog */}
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <div
-          className="relative w-full max-w-md border-2 border-black bg-white shadow-[4px_4px_0px_0px_#000000] p-6"
+          className="relative w-full max-w-md border-2 border-border bg-card shadow-[4px_4px_0px_0px_#000000] p-6"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button */}
@@ -144,7 +144,7 @@ export const LinkDialog: React.FC<LinkDialogProps> = ({ editor, onClose }) => {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Link text"
-                className="rounded-none border-black bg-white"
+                className="rounded-none border-border bg-card"
                 autoFocus
               />
             </div>
@@ -159,7 +159,7 @@ export const LinkDialog: React.FC<LinkDialogProps> = ({ editor, onClose }) => {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://example.com"
-                className="rounded-none border-black bg-white"
+                className="rounded-none border-border bg-card"
               />
             </div>
 

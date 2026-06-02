@@ -43,6 +43,7 @@
     "builder": "Resume Builder",
     "tailor": "Tailor Resume",
     "settings": "Settings",
+    "home": "Home",
     "backToDashboard": "Back to Dashboard",
     "goToSettings": "Go to Settings"
   },
@@ -117,6 +118,7 @@
     "renameTitleError": "Could not rename resume. Try again.",
     "unsavedDraft": "Unsaved Draft",
     "metadata": {
+      "panelTitle": "Application metadata",
       "hint": "Role, company, location, and bold keywords for the dashboard and PDF. Included with “Copy for LLM” together with the CV block — nothing else is sent externally.",
       "role": "Role",
       "company": "Company",
@@ -211,16 +213,36 @@
       "deleteDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone."
     },
     "previewTabs": {
-      "resume": "RESUME",
-      "utilities": "UTILITIES",
-      "utilitiesShort": "UTIL",
-      "coverLetter": "COVER LETTER",
-      "outreach": "OUTREACH MAIL",
-      "jdMatch": "JD MATCH",
-      "jdTailorDiff": "TAILOR DIFF",
-      "jdTailorDiffShort": "DIFF",
-      "additionalQuestions": "ADDITIONAL QUESTIONS",
-      "additionalQuestionsShort": "+QUESTIONS"
+      "resume": "Resume",
+      "utilities": "Letters",
+      "utilitiesShort": "Letters",
+      "coverLetter": "Cover Letter",
+      "outreach": "Outreach",
+      "jdMatch": "JD Match",
+      "jdTailorDiff": "Tailor Diff",
+      "jdTailorDiffShort": "Diff",
+      "additionalQuestions": "Questions",
+      "additionalQuestionsShort": "Questions",
+      "generationTrace": "Generation Trace",
+      "generationTraceShort": "Trace"
+    },
+    "overflowMenu": "More navigation",
+    "helpCallout": {
+      "showTips": "Show tips",
+      "collapse": "Collapse tips",
+      "expand": "Expand tips",
+      "dismiss": "Dismiss tips"
+    },
+    "sectionNav": {
+      "jumpLabel": "Jump to section",
+      "previous": "Previous section",
+      "next": "Next section"
+    },
+    "summary": {
+      "alignmentMenu": "Text alignment"
+    },
+    "generationTrace": {
+      "openFullTrace": "Open full trace"
     },
     "utilities": {
       "subTabLetters": "Cover letter & outreach",
@@ -245,7 +267,7 @@
       "outreachEmpty": "No outreach message yet — paste text or use Generate above."
     },
     "generateClMessage": {
-      "toolbarLabel": "Generate CL + Message",
+      "toolbarLabel": "Generate both",
       "buttonAria": "Generate cover letter and outreach message"
     },
     "footer": {
@@ -352,7 +374,8 @@
       "stats": {
         "keywordsExtracted": "{count} keywords extracted",
         "matchesFound": "{count} matches found",
-        "matchRateLabel": "Match Rate:"
+        "matchRateLabel": "Match rate",
+        "missingKeywordsTitle": "Top missing keywords"
       }
     },
     "jdTailorDiff": {
@@ -394,6 +417,9 @@
       "experience": {
         "addJob": "Add Job",
         "addFirstJob": "Add First Job",
+        "bulletsHelpTitle": "Bullet formatting tips",
+        "bulletsHelpBody": "Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on the left of each bullet to reorder.",
+        "dateFieldHint": "If blank, the preview uses start and end dates.",
         "fields": {
           "jobTitle": "Job Title",
           "position": "Position",
@@ -416,6 +442,7 @@
       "education": {
         "addSchool": "Add School",
         "addFirstSchool": "Add First School",
+        "dateFieldHint": "If blank, the preview uses start and end dates.",
         "fields": {
           "institution": "Institution",
           "degree": "Degree",
@@ -529,6 +556,8 @@
       "resetDefaults": "Reset to Defaults"
     },
     "personalInfoForm": {
+      "advancedLinkOptions": "Advanced",
+      "iconPlaceholder": "Icon (optional)",
       "placeholders": {
         "name": "John Doe",
         "title": "Software Engineer",
