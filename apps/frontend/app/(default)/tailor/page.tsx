@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { LinkButton } from '@/components/ui/link-button';
 import { Textarea } from '@/components/ui/textarea';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
 import type { ImprovedResult } from '@/components/common/resume_previewer_context';
@@ -1128,10 +1129,10 @@ function TailorPageContent() {
       <div className="mx-auto w-full max-w-6xl border border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black bg-[#F8F7F1] px-4 py-3">
           <div className="space-y-1">
-            <Button variant="ghost" size="xs" className="px-0" onClick={() => router.back()}>
+            <LinkButton href="/dashboard" variant="ghost" size="xs" className="px-0">
               <ArrowLeft className="w-4 h-4" />
               {t('common.back')}
-            </Button>
+            </LinkButton>
             <h1 className="font-serif text-2xl font-bold uppercase tracking-tight">
               {t('tailor.heroTitle')}
             </h1>

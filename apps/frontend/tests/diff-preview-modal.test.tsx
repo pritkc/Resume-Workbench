@@ -237,9 +237,51 @@ describe('DiffPreviewModal', () => {
     const oldBullet = screen.getByText('Built dashboard');
     expect(oldBullet).toHaveClass('line-through');
     expect(screen.getByText('Built analytics dashboard')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Directly maps to analytics ownership/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Directly maps to analytics ownership/i)).toHaveClass('bg-yellow-100');
+  });
+
+  it('shows compact bullet indexes and highlighted reasons for changed points', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        resumePreview={resumePreview}
+        detailedChanges={[
+          {
+            field_path: 'summary',
+            field_type: 'summary',
+            change_type: 'modified',
+            original_value: 'old summary',
+            new_value: 'new summary',
+            confidence: 'medium',
+          },
+          {
+            field_path: 'workExperience[0].description[1]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Built dashboard',
+            new_value: 'Built analytics dashboard',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'summary',
+            action: 'replace',
+            original: 'old summary',
+            value: 'new summary',
+            reason: 'Updated summary',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('#2')).toBeInTheDocument();
+    expect(screen.queryByText('Bullet 2')).not.toBeInTheDocument();
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
   });
 
   it('renders unchanged rows with a bullet and retained rationale', () => {
@@ -275,9 +317,7 @@ describe('DiffPreviewModal', () => {
 
     expect(screen.getByLabelText('Bullet 1')).toBeInTheDocument();
     expect(screen.getByText('Built APIs')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Original story is already targeted/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Original story is already targeted/i)).toBeInTheDocument();
   });
 
   it('shows project diffs when project path uses alias form', () => {

@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bot,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Wrench,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTranslations } from '@/lib/i18n';
@@ -23,8 +32,7 @@ import { cn } from '@/lib/utils';
 const DIFF_FONT = 'font-sans antialiased';
 const DIFF_BODY = `${DIFF_FONT} text-[15px] font-medium leading-[1.55] text-neutral-900`;
 const DIFF_BODY_SM = `${DIFF_FONT} text-[13px] font-medium leading-snug text-neutral-800`;
-const DIFF_MICRO = `${DIFF_FONT} text-[11px] font-semibold uppercase tracking-wide text-neutral-500`;
-const DIFF_CATEGORY = `${DIFF_FONT} mt-10 border-b border-neutral-200 pb-2 text-xs font-bold uppercase tracking-[0.12em] text-neutral-500 first:mt-0`;
+const DIFF_CATEGORY = `${DIFF_FONT} mt-8 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-neutral-500 first:mt-0`;
 
 interface DiffPreviewModalProps {
   isOpen: boolean;
@@ -1025,22 +1033,27 @@ export function TailorDiffReadonlyBody({
 
   return (
     <>
-      <div className="mb-4 border-b border-neutral-200 pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className={cn('m-0 min-w-0 leading-snug text-neutral-800', DIFF_BODY)}>
-            <span className="tabular-nums text-lg font-semibold text-neutral-950">
-              {stats.total}
-            </span>{' '}
-            <span className="font-semibold text-neutral-700">
-              row{stats.total === 1 ? '' : 's'} changed
-            </span>
-            {stats.verify > 0 ? (
-              <span className="ml-2 inline-flex items-center gap-1 rounded-sm border border-amber-700/30 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden /> {stats.verify} to
-                verify
+      <div className="mb-5 rounded-sm border border-neutral-200 bg-neutral-50/80 px-3 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className={cn('m-0 min-w-0 leading-snug text-neutral-800', DIFF_BODY)}>
+              <span className="tabular-nums text-xl font-bold text-neutral-950">{stats.total}</span>{' '}
+              <span className="font-semibold text-neutral-700">
+                row{stats.total === 1 ? '' : 's'} changed
               </span>
-            ) : null}
-          </p>
+              {stats.verify > 0 ? (
+                <span className="ml-2 inline-flex items-center gap-1 rounded-sm border border-amber-700/30 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-950">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden /> {stats.verify} to
+                  verify
+                </span>
+              ) : null}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <InlineStat label="From model" value={stats.ai} variant="success" />
+              <InlineStat label="Cleanup / checks" value={stats.system} variant="warning" />
+              <InlineStat label="Resume areas" value={orderedSections.length} variant="info" />
+            </div>
+          </div>
           <Button
             variant="outline"
             size="xs"
@@ -1092,8 +1105,8 @@ export function TailorDiffReadonlyBody({
         </div>
       ) : null}
 
-      <div className={cn('w-full bg-white pl-2.5 text-neutral-900 sm:pl-3', DIFF_BODY)}>
-        <div className="mt-4 flex flex-col gap-8 pb-4">
+      <div className={cn('w-full bg-white text-neutral-900', DIFF_BODY)}>
+        <div className="mt-4 flex flex-col gap-6 pb-4">
           {artifacts && artifacts.length > 0 && (
             <ArtifactGallery artifacts={artifacts} title={artifactGalleryTitle} />
           )}
@@ -1128,7 +1141,11 @@ export function TailorDiffReadonlyBody({
             return (
               <div key={section.key}>
                 {showCategory ? (
-                  <h2 className={DIFF_CATEGORY}>{CATEGORY_TITLE[category]}</h2>
+                  <h2 className={DIFF_CATEGORY}>
+                    <span className="h-px min-w-4 flex-1 bg-neutral-200" aria-hidden />
+                    <span>{CATEGORY_TITLE[category]}</span>
+                    <span className="h-px min-w-4 flex-1 bg-neutral-200" aria-hidden />
+                  </h2>
                 ) : null}
                 <ChangeSection
                   title={section.title}
@@ -1321,6 +1338,38 @@ function InlineStat({ label, value, variant }: StatCardProps) {
   );
 }
 
+function SourceBadge({ item }: { item: DisplayChange }) {
+  const isCleanup = item.source === 'system';
+  const isVerify = item.needsVerification;
+  const label = isCleanup ? 'Cleanup change' : isVerify ? 'Needs verification' : 'Model change';
+  const title = isCleanup
+    ? 'Changed by deterministic cleanup or local checks after the model response'
+    : isVerify
+      ? 'Added by the model and worth manually verifying'
+      : 'Attributed to model tailoring';
+  const Icon = isCleanup ? Wrench : isVerify ? AlertTriangle : Bot;
+
+  return (
+    <span
+      className={cn(
+        'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border',
+        isCleanup
+          ? 'border-amber-300 bg-amber-50 text-amber-950'
+          : isVerify
+            ? 'border-amber-500 bg-amber-100 text-amber-950'
+            : 'border-emerald-300 bg-emerald-50 text-emerald-950',
+        DIFF_FONT
+      )}
+      title={title}
+    >
+      <Icon className="h-3 w-3" aria-hidden />
+      <span className="sr-only">
+        {label}: {title}
+      </span>
+    </span>
+  );
+}
+
 interface ChangeSectionProps {
   title: React.ReactNode;
   count: number;
@@ -1331,13 +1380,13 @@ interface ChangeSectionProps {
 
 function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeSectionProps) {
   return (
-    <section className="m-0">
+    <section className="m-0 overflow-hidden rounded-sm border border-neutral-200 bg-white shadow-[0_1px_0_rgba(27,31,36,0.04)]">
       <button
         type="button"
         onClick={onToggle}
         className={cn(
-          'flex w-full items-start justify-between gap-3 border-0 border-b border-neutral-200 bg-transparent p-0 pb-3 text-left',
-          'transition-colors hover:border-neutral-300'
+          'flex w-full items-start justify-between gap-3 border-0 bg-neutral-50 px-2.5 py-2 text-left',
+          'transition-colors hover:bg-neutral-100'
         )}
       >
         <span className="flex min-w-0 flex-1 items-start gap-2.5">
@@ -1365,7 +1414,7 @@ function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeS
         </span>
         <span
           className={cn(
-            'shrink-0 pt-1 text-xs font-semibold tabular-nums text-neutral-400',
+            'shrink-0 rounded-sm border border-neutral-200 bg-white px-1.5 py-0.5 text-xs font-bold tabular-nums text-neutral-500',
             DIFF_FONT
           )}
           title="Changes in this section"
@@ -1375,7 +1424,7 @@ function ChangeSection({ title, count, isExpanded, onToggle, children }: ChangeS
       </button>
 
       {isExpanded ? (
-        <div className={cn('mt-4 flex flex-col gap-5', DIFF_FONT)}>{children}</div>
+        <div className={cn('flex flex-col gap-2 px-2.5 py-2.5', DIFF_FONT)}>{children}</div>
       ) : null}
     </section>
   );
@@ -1399,17 +1448,33 @@ function RationaleNote({ text }: { text?: string | null }) {
   );
 }
 
+function HighlightedRationale({ text }: { text?: string | null }) {
+  if (!text?.trim()) return null;
+  return (
+    <p
+      className={cn(
+        'm-0 min-w-0 rounded-sm bg-yellow-100 px-1.5 py-0.5 text-[12px] font-semibold leading-snug text-yellow-950 ring-1 ring-yellow-300/70',
+        DIFF_FONT
+      )}
+    >
+      {text.trim()}
+    </p>
+  );
+}
+
 function DiffTextPair({
   before,
   after,
   rationale,
+  showRationale = true,
 }: {
   before?: string;
   after?: string;
   rationale?: string;
+  showRationale?: boolean;
 }) {
   return (
-    <div className={cn('flex flex-col gap-2', DIFF_FONT)}>
+    <div className={cn('flex flex-col gap-1', DIFF_FONT)}>
       {before ? (
         <p
           className={cn(
@@ -1421,12 +1486,18 @@ function DiffTextPair({
         </p>
       ) : null}
       {after ? <p className={cn('m-0 text-neutral-950', DIFF_BODY)}>{after}</p> : null}
-      <RationaleNote text={rationale} />
+      {showRationale ? <RationaleNote text={rationale} /> : null}
     </div>
   );
 }
 
-function DiffChangeBody({ item }: { item: DisplayChange }) {
+function DiffChangeBody({
+  item,
+  showRationale = true,
+}: {
+  item: DisplayChange;
+  showRationale?: boolean;
+}) {
   const { change } = item;
   const unchangedFlag = item.semanticUnchanged;
   const displayLine = (change.original_value ?? change.new_value)?.trim() || '';
@@ -1434,24 +1505,32 @@ function DiffChangeBody({ item }: { item: DisplayChange }) {
   return (
     <>
       {change.change_type === 'added' && change.new_value && (
-        <DiffTextPair after={change.new_value} rationale={item.aiRationale} />
+        <DiffTextPair
+          after={change.new_value}
+          rationale={item.aiRationale}
+          showRationale={showRationale}
+        />
       )}
       {change.change_type === 'removed' && change.original_value && (
-        <DiffTextPair before={change.original_value} rationale={item.aiRationale} />
+        <DiffTextPair
+          before={change.original_value}
+          rationale={item.aiRationale}
+          showRationale={showRationale}
+        />
       )}
       {change.change_type === 'modified' &&
         (unchangedFlag ? (
           displayLine ? (
             <>
               <p className={cn('m-0', DIFF_BODY)}>{displayLine}</p>
-              <RationaleNote text={item.aiRationale} />
+              {showRationale ? <RationaleNote text={item.aiRationale} /> : null}
             </>
           ) : (
             <>
               <p className={cn('m-0 text-neutral-500', DIFF_BODY_SM)}>
                 No textual change on this row — retained as-is.
               </p>
-              <RationaleNote text={item.aiRationale} />
+              {showRationale ? <RationaleNote text={item.aiRationale} /> : null}
             </>
           )
         ) : (
@@ -1459,6 +1538,7 @@ function DiffChangeBody({ item }: { item: DisplayChange }) {
             before={change.original_value ?? '(empty)'}
             after={change.new_value ?? '(empty)'}
             rationale={item.aiRationale}
+            showRationale={showRationale}
           />
         ))}
       {item.cleanupNote && !unchangedFlag ? (
@@ -1475,56 +1555,37 @@ function DiffChangeBody({ item }: { item: DisplayChange }) {
 }
 
 function TitleDiffRow({ item, label = 'Role' }: { item: DisplayChange; label?: string }) {
-  const attributionHint =
-    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
   return (
-    <div className="m-0 border-0 p-0">
-      {attributionHint ? (
-        <div className="mb-2 flex justify-end">
-          <span className={DIFF_MICRO}>{attributionHint}</span>
-        </div>
-      ) : !item.semanticUnchanged ? (
-        <span className="sr-only">Attributed to model tailoring</span>
-      ) : null}
-      <p
-        className={cn(
-          'mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500',
-          DIFF_FONT
-        )}
-      >
-        {label}
-      </p>
+    <div className="m-0 rounded-sm border border-neutral-200 bg-white px-2.5 py-2">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <p className={cn('m-0 text-[11px] font-bold uppercase tracking-wide text-neutral-500')}>
+          {label}
+        </p>
+        <SourceBadge item={item} />
+      </div>
       <DiffChangeBody item={item} />
     </div>
   );
 }
 
 function TechBulletDiffRow({ item }: { item: DisplayChange }) {
-  const attributionHint =
-    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
   return (
-    <div className={cn('grid grid-cols-[1.35rem_minmax(0,1fr)] items-start gap-x-3.5', DIFF_FONT)}>
-      <span
-        className={cn(
-          'flex justify-end pt-[0.4rem] text-[16px] font-semibold leading-none text-neutral-400'
-        )}
-        aria-hidden
-      >
-        •
+    <div
+      className={cn(
+        'grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-2 rounded-sm border border-neutral-200 bg-white px-2.5 py-2',
+        DIFF_FONT
+      )}
+    >
+      <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-neutral-100 text-[15px] font-bold leading-none text-neutral-500">
+        #
       </span>
       <div className="min-w-0">
-        <p
-          className={cn('mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500')}
-        >
-          Tech stack
-        </p>
-        {attributionHint ? (
-          <div className="mb-1.5 flex justify-end">
-            <span className={DIFF_MICRO}>{attributionHint}</span>
-          </div>
-        ) : !item.semanticUnchanged ? (
-          <span className="sr-only">Attributed to model tailoring</span>
-        ) : null}
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+          <p className={cn('m-0 text-[11px] font-bold uppercase tracking-wide text-neutral-500')}>
+            Tech stack
+          </p>
+          <SourceBadge item={item} />
+        </div>
         <DiffChangeBody item={item} />
       </div>
     </div>
@@ -1533,28 +1594,26 @@ function TechBulletDiffRow({ item }: { item: DisplayChange }) {
 
 function BulletDiffRow({ item }: { item: DisplayChange }) {
   const bulletPos = item.parsed.bulletIndex !== undefined ? item.parsed.bulletIndex + 1 : null;
-  const attributionHint =
-    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
-
+  const label = bulletPos ? `#${bulletPos}` : '#';
   return (
-    <div className={cn('grid grid-cols-[1.35rem_minmax(0,1fr)] items-start gap-x-3.5', DIFF_FONT)}>
-      <span className="flex justify-end pt-[0.35rem] leading-none text-neutral-400">
-        <span
-          className={cn('text-[16px] font-semibold', DIFF_FONT)}
-          aria-label={bulletPos ? `Bullet ${bulletPos}` : 'Bullet'}
-        >
-          •
-        </span>
+    <div
+      className={cn(
+        'grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-2 rounded-sm border border-neutral-200 bg-white px-2.5 py-2',
+        DIFF_FONT
+      )}
+    >
+      <span
+        className={cn(
+          'flex h-6 w-8 items-center justify-center rounded-sm bg-neutral-100 text-[12px] font-black leading-none text-neutral-700',
+          DIFF_FONT
+        )}
+        aria-label={bulletPos ? `Bullet ${bulletPos}` : 'Bullet'}
+      >
+        {label}
       </span>
-      <div className="min-w-0">
-        {attributionHint ? (
-          <div className="mb-1.5 flex justify-end">
-            <span className={DIFF_MICRO}>{attributionHint}</span>
-          </div>
-        ) : !item.semanticUnchanged ? (
-          <span className="sr-only">Attributed to model tailoring</span>
-        ) : null}
-        <DiffChangeBody item={item} />
+      <div className="min-w-0 space-y-1">
+        <HighlightedRationale text={item.aiRationale} />
+        <DiffChangeBody item={item} showRationale={false} />
       </div>
     </div>
   );
@@ -1573,7 +1632,7 @@ function ExperienceEntryDiff({ items }: { items: DisplayChange[] }) {
     a.change.field_path.localeCompare(b.change.field_path)
   );
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       {title.map((item) => (
         <TitleDiffRow key={item.change.field_path} item={item} />
       ))}
@@ -1603,7 +1662,7 @@ function ProjectEntryDiff({ items }: { items: DisplayChange[] }) {
     a.change.field_path.localeCompare(b.change.field_path)
   );
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       {title.map((item) => (
         <TitleDiffRow key={item.change.field_path} item={item} label="Project name" />
       ))}
@@ -1627,7 +1686,7 @@ function EducationEntryDiff({ items }: { items: DisplayChange[] }) {
     a.change.field_path.localeCompare(b.change.field_path)
   );
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       {sortedMeta.map((item) => (
         <ChangeItem key={item.change.field_path} item={item} />
       ))}
@@ -1646,38 +1705,25 @@ function ChangeItem({ item }: { item: DisplayChange }) {
       : null;
   const isBullet = bulletPos !== null;
 
-  const unchangedFlag = item.semanticUnchanged;
-
-  const attributionHint =
-    item.source === 'system' ? 'cleanup' : item.needsVerification ? 'verify' : null;
-
   if (isBullet) {
     return <BulletDiffRow item={item} />;
   }
 
   return (
-    <div className="m-0 p-0">
+    <div className="m-0 rounded-sm border border-neutral-200 bg-white px-2.5 py-2">
       <div className="min-w-0">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span
             className={cn(
-              'text-[12px] font-semibold uppercase tracking-wide text-neutral-600',
+              'text-[11px] font-bold uppercase tracking-wide text-neutral-500',
               DIFF_FONT
             )}
           >
             {item.contextLabel}
           </span>
-          {attributionHint ? (
-            <span className={cn('shrink-0', DIFF_MICRO)}>{attributionHint}</span>
-          ) : unchangedFlag ? null : (
-            <span className="sr-only">
-              Attributed to {item.source === 'ai' ? 'model' : 'cleanup'}
-            </span>
-          )}
+          <SourceBadge item={item} />
         </div>
-        <div className="mt-2">
-          <DiffChangeBody item={item} />
-        </div>
+        <DiffChangeBody item={item} />
       </div>
     </div>
   );

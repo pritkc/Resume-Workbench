@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   AlertCircle,
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react';
 import { ResumeUploadDialog } from '@/components/dashboard/resume-upload-dialog';
 import { Button } from '@/components/ui/button';
+import { LinkButton } from '@/components/ui/link-button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import {
@@ -120,7 +120,7 @@ type ResumeRowActionsProps = {
   resume: ResumeListItem;
   busy: boolean;
   tailorDisabled: boolean;
-  onTailor: () => void;
+  tailorHref: string;
   onSetActive: () => void;
   onPin: () => void;
   onDuplicate: () => void;
@@ -139,7 +139,7 @@ function ResumeRowActions({
   resume,
   busy,
   tailorDisabled,
-  onTailor,
+  tailorHref,
   onSetActive,
   onPin,
   onDuplicate,
@@ -161,17 +161,28 @@ function ResumeRowActions({
 
   return (
     <div className="flex shrink-0 items-center justify-end gap-0.5">
-      <Button
-        type="button"
-        variant="default"
-        size="xs"
-        className="h-7 w-7 shrink-0 p-0"
-        title={labels.tailor}
-        disabled={tailorDisabled || busy}
-        onClick={onTailor}
-      >
-        <PenLine className="h-3.5 w-3.5" />
-      </Button>
+      {tailorDisabled || busy ? (
+        <Button
+          type="button"
+          variant="default"
+          size="xs"
+          className="h-7 w-7 shrink-0 p-0"
+          title={labels.tailor}
+          disabled
+        >
+          <PenLine className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <LinkButton
+          href={tailorHref}
+          variant="default"
+          size="xs"
+          className="h-7 w-7 shrink-0 p-0"
+          title={labels.tailor}
+        >
+          <PenLine className="h-3.5 w-3.5" />
+        </LinkButton>
+      )}
       <div className="relative" ref={wrapRef}>
         <Button
           type="button"
@@ -249,7 +260,6 @@ function ResumeRowActions({
 
 export default function DashboardPage() {
   const { t } = useTranslations();
-  const router = useRouter();
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('loading');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -646,9 +656,7 @@ export default function DashboardPage() {
             busy={busy}
             tailorDisabled={resume.processing_status !== 'ready' || !isLlmConfigured}
             labels={actionLabels}
-            onTailor={() => {
-              router.push(`/tailor?source=${encodeURIComponent(resume.resume_id)}`);
-            }}
+            tailorHref={`/tailor?source=${encodeURIComponent(resume.resume_id)}`}
             onSetActive={() => void handleSetActiveResume(resume.resume_id)}
             onPin={() => void handlePinResume(resume.resume_id, !resume.is_pinned)}
             onDuplicate={() => void handleDuplicateResume(resume.resume_id)}
@@ -664,15 +672,15 @@ export default function DashboardPage() {
         <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
           {t('dashboard.title')}
         </p>
-        <Button
+        <LinkButton
+          href="/settings"
           variant="outline"
           size="xs"
           className="h-7 w-7 p-0"
           title={t('nav.settings')}
-          onClick={() => router.push('/settings')}
         >
           <Settings className="h-3.5 w-3.5" />
-        </Button>
+        </LinkButton>
       </div>
 
       {activeResumeId && !isLlmConfigured && !statusLoading && (
@@ -747,13 +755,12 @@ export default function DashboardPage() {
         <section className="border border-black bg-white px-2 py-2 shadow-[3px_3px_0_0_rgba(0,0,0,0.06)]">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <button
-                type="button"
+              <Link
+                href={`/builder?id=${activeResumeId}`}
                 className="min-w-0 truncate text-left font-serif text-base font-bold leading-tight hover:text-blue-800"
-                onClick={() => router.push(`/builder?id=${activeResumeId}`)}
               >
                 {activeTitle}
-              </button>
+              </Link>
               <div
                 className={`flex shrink-0 items-center gap-1 font-mono text-[10px] uppercase ${activeStatus.color}`}
               >
@@ -763,15 +770,15 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-0.5">
-              <Button
+              <LinkButton
+                href={`/builder?id=${activeResumeId}`}
                 variant="outline"
                 size="xs"
                 className="h-7 w-7 p-0"
                 title={t('builder.title')}
-                onClick={() => router.push(`/builder?id=${activeResumeId}`)}
               >
                 <FileText className="h-3.5 w-3.5" />
-              </Button>
+              </LinkButton>
               {(processingStatus === 'failed' || processingStatus === 'processing') && (
                 <>
                   <Button
@@ -799,23 +806,29 @@ export default function DashboardPage() {
                   </Button>
                 </>
               )}
-              <Button
-                size="xs"
-                className="h-7 w-7 p-0"
-                title={t('dashboard.createResume')}
-                onClick={() => {
-                  if (isTailorEnabled) {
-                    router.push(
-                      activeResumeId
-                        ? `/tailor?source=${encodeURIComponent(activeResumeId)}`
-                        : '/tailor'
-                    );
+              {isTailorEnabled ? (
+                <LinkButton
+                  href={
+                    activeResumeId
+                      ? `/tailor?source=${encodeURIComponent(activeResumeId)}`
+                      : '/tailor'
                   }
-                }}
-                disabled={!isTailorEnabled}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
+                  size="xs"
+                  className="h-7 w-7 p-0"
+                  title={t('dashboard.createResume')}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </LinkButton>
+              ) : (
+                <Button
+                  size="xs"
+                  className="h-7 w-7 p-0"
+                  title={t('dashboard.createResume')}
+                  disabled
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           </div>
         </section>

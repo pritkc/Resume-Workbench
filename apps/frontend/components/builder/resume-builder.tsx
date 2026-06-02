@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { type ResumeData } from '@/components/dashboard/resume-component';
 import { ResumeForm } from './resume-form';
@@ -13,6 +13,7 @@ import { UtilitiesWorkspace } from './utilities-workspace';
 import { GenerationObservabilityPanel } from './generation-observability-panel';
 import { AdditionalQuestionsPanel } from '@/components/application/additional-questions-panel';
 import { Button } from '@/components/ui/button';
+import { LinkButton } from '@/components/ui/link-button';
 import { Input } from '@/components/ui/input';
 import { RetroTabs } from '@/components/ui/retro-tabs';
 import { ConfirmDialog, type ConfirmDialogProps } from '@/components/ui/confirm-dialog';
@@ -30,6 +31,8 @@ import {
   Check,
   Sparkles,
   Loader2,
+  Home,
+  Settings,
 } from 'lucide-react';
 import { type ResumePreview, useResumePreview } from '@/components/common/resume_previewer_context';
 import { TailorDiffReadonlyBody } from '@/components/tailor/diff-preview-modal';
@@ -279,7 +282,6 @@ const ResumeBuilderContent = () => {
     [improvedData?.data?.theme_settings]
   );
   const searchParams = useSearchParams();
-  const router = useRouter();
   const resumeId = searchParams.get('id');
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const [paneMode, setPaneMode] = useState<PaneMode>('split');
@@ -1845,16 +1847,36 @@ const ResumeBuilderContent = () => {
         <div className="sticky top-0 z-30 border-b border-black bg-white no-print">
           <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1.5 py-1 md:px-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <Button
+              <LinkButton
+                href="/dashboard"
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => router.push('/dashboard')}
                 aria-label={t('nav.backToDashboard')}
                 title={t('nav.backToDashboard')}
                 className={toolbarIconButtonClass}
               >
                 <ArrowLeft className="h-4 w-4" />
-              </Button>
+              </LinkButton>
+              <LinkButton
+                href="/"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Go to main page"
+                title="Go to main page"
+                className={toolbarIconButtonClass}
+              >
+                <Home className="h-3.5 w-3.5" />
+              </LinkButton>
+              <LinkButton
+                href="/settings"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('nav.settings')}
+                title={t('nav.settings')}
+                className={toolbarIconButtonClass}
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </LinkButton>
 
               <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0">
                 {isEditingResumeTitle && resumeId ? (
