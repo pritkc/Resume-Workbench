@@ -462,6 +462,54 @@ class TestImproveResume:
         )
         assert result.bold_keywords == ["Kubernetes", "microservices", "CI/CD", "REST APIs"]
 
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=True)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
+    async def test_critique_setting_runs_critique_and_rewrite(
+        self, mock_llm, _critique_on, sample_resume, sample_job_keywords, sample_job_description
+    ):
+        mock_llm.side_effect = [
+            _llm_compact_output(summary="First-pass summary."),
+            (
+                "=== OVERALL ASSESSMENT ===\n"
+                "Good draft, but the summary can be sharper.\n\n"
+                "=== RED FLAGS ===\n\n"
+                "=== MISSED KEYWORDS ===\n\n"
+                "=== WEAK BULLETS ===\n"
+                "W0-LOCATION: SUMMARY\n"
+                "W0-CURRENT: First-pass summary.\n"
+                "W0-ISSUE: Too generic.\n"
+                "W0-SUGGESTION: Add stronger platform wording.\n\n"
+                "=== SUGGESTIONS ===\n"
+                "S0-LOCATION: SUMMARY\n"
+                "S0-ACTION: Make the summary more role-specific."
+            ),
+            (
+                "=== SUMMARY ===\n"
+                "SUMMARY: Rewritten platform engineering summary.\n"
+                "WHY: Addresses the critique.\n\n"
+                "=== BOLD KEYWORDS ===\n"
+                "BOLD: Kubernetes\n"
+                "WHY: Relevant target keyword."
+            ),
+        ]
+
+        result = await generate_tailored_resume(
+            original_resume="# Resume markdown",
+            job_description=sample_job_description,
+            job_keywords=sample_job_keywords,
+            prompt_id="full",
+            original_resume_data=sample_resume,
+            cleanup_source_data=sample_resume,
+        )
+
+        operations = [call.kwargs["operation"] for call in mock_llm.call_args_list]
+        assert operations == ["resume_generate_full", "critique_resume", "rewrite_resume"]
+        assert result.resume_data["summary"] == "Rewritten platform engineering summary."
+        assert result.critique_analysis
+        assert result.critique_analysis["overall_assessment"] == (
+            "Good draft, but the summary can be sharper."
+        )
+
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
     async def test_raises_on_invalid_json(self, mock_llm, _critique_off):

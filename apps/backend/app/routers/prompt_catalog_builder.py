@@ -79,6 +79,7 @@ def _probe_system_message(step_name: str) -> str:
             critique_resume_output="{}",
             jd_intel_blob={},
             response_contract="{}",
+            output_template="=== SUMMARY ===\nWHY:",
         )
         return s
     if step_name == "cover_letter":

@@ -10,4 +10,4 @@ SECOND-PASS CONTRACT:
 - Do not restart from scratch or broaden the edit beyond the critique.
 - Scale back inflated scope to what the original resume supports.
 - Add missing keywords only where candidate evidence supports them naturally.
-- Follow the shared output schema for JSON shape, style bans, calibration, and retention cells.
+- Follow the section-header output template for syntax, style bans, calibration, and retention cells.

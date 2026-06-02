@@ -35,7 +35,11 @@ from app.services.tailoring.preservation import (
 )
 from app.services.tailoring.skills_observability import build_skills_observability_v1
 from app.services.tailoring.validation import DiffValidationResult, validate_compact_diff
-from app.services.tailoring.llm_calls import run_primary_tailoring
+from app.services.tailoring.llm_calls import (
+    run_primary_tailoring,
+    run_resume_critique,
+    run_resume_rewrite,
+)
 from app.services.tailoring.prompting import build_prompt_context
 from app.services.tailoring.jd_intel_blob import filter_basic_resume_terms
 
@@ -47,6 +51,10 @@ LiveEventSink = Callable[[str, dict[str, Any]], Awaitable[None]]
 _ORIGIN_COMPACT_VALIDATE_PRIMARY = (
     "orchestration.generate_tailored_resume — after run_primary_tailoring / complete text "
     "(operation resume_generate_full); validate_compact_diff at orchestration.py ~175–187"
+)
+_ORIGIN_COMPACT_VALIDATE_REWRITE = (
+    "orchestration.generate_tailored_resume — after optional run_resume_rewrite / complete text "
+    "(operation rewrite_resume); validate_compact_diff before apply_compact_diff"
 )
 
 def _trace_attach_compact_validation(
@@ -204,11 +212,46 @@ async def generate_tailored_resume(
     )
 
     critique_analysis: dict[str, object] | None = None
+    parse_warnings = list(primary_result.parse_warnings)
+    parse_errors = list(primary_result.parse_errors)
     if resolved_prompt_id == "full" and get_enable_critique():
-        logger.info(
-            "Skipping critique/rewrite for section-header primary tailoring v1; "
-            "rewrite prompts still expect compact JSON."
-        )
+        try:
+            with track("tailoring_internal", "critique_resume_llm_call"):
+                critique_raw_text, critique_analysis = await run_resume_critique(
+                    prompt_context=prompt_context,
+                    primary_result=primary_result,
+                    live_metadata=live_metadata,
+                )
+            with track("tailoring_internal", "rewrite_resume_llm_call"):
+                rewrite_result = await run_resume_rewrite(
+                    prompt_context=prompt_context,
+                    primary_result=primary_result,
+                    critique_raw_text=critique_raw_text,
+                    response_contract=response_contract,
+                    max_tokens=adaptive_max_tokens,
+                    live_metadata=live_metadata,
+                )
+            with track("tailoring_internal", "rewrite_compact_diff_validation"):
+                rewrite_response_v2_pre = TailoringLLMResponseV2.model_validate(
+                    rewrite_result.compact_diff
+                )
+                rewrite_validation_result = validate_compact_diff(
+                    rewrite_response_v2_pre.model_dump(exclude_none=False),
+                    response_contract,
+                )
+            _log_compact_validation("Rewrite tailor", rewrite_validation_result)
+            _trace_attach_compact_validation(
+                operation="rewrite_resume",
+                phase_display="rewrite_tailor",
+                validation_result=rewrite_validation_result,
+                origin_note=_ORIGIN_COMPACT_VALIDATE_REWRITE,
+            )
+            result = rewrite_result.compact_diff
+            parse_warnings.extend(rewrite_result.parse_warnings)
+            parse_errors.extend(rewrite_result.parse_errors)
+        except Exception as exc:
+            logger.warning("Critique/rewrite pass failed; using primary tailoring output.", exc_info=True)
+            parse_warnings.append(f"Critique/rewrite pass failed; used primary tailoring output: {exc}")
 
     _check_for_truncation(result)
 
@@ -275,9 +318,9 @@ async def generate_tailored_resume(
             job_keywords=job_keywords,
             prompt_id=prompt_context.prompt_id,
         )
-    warnings.extend(primary_result.parse_warnings)
-    if primary_result.parse_errors:
-        warnings.extend(primary_result.parse_errors)
+    warnings.extend(parse_warnings)
+    if parse_errors:
+        warnings.extend(parse_errors)
     with track("tailoring_internal", "change_manifest_build"):
         computed_llm_changes = build_change_manifest(original_resume_data, raw_llm_resume_data)
         applied_changes = build_change_manifest(original_resume_data, resume_data)

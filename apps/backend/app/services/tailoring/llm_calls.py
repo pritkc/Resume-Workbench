@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from hashlib import sha256
+import json
 from typing import Any, Awaitable, Callable
 
 from app.config import get_step_llm_config
 from app.llm import complete as complete_json, complete_stream
-from app.prompts import PROMPT_VERSIONS
+from app.prompts import PROMPT_VERSIONS, get_prompt
 from app.services.tailoring.prompting import TailoringPromptContext
 from app.services.tailoring.models import TailoringResponseContract
 from app.services.tailoring.section_format import (
@@ -125,6 +127,98 @@ async def run_primary_tailoring(
         if isinstance(raw_text, dict):
             return PrimaryTailoringResult(compact_diff=raw_text, raw_text="")
         parsed = parse_resume_section_output(raw_text, response_contract)
+    compact_diff = to_compact_diff(parsed, response_contract)
+    return PrimaryTailoringResult(
+        compact_diff=compact_diff,
+        raw_text=raw_text,
+        parse_warnings=parsed.warnings,
+        parse_errors=parsed.errors,
+    )
+
+
+def _raw_primary_output(primary_result: PrimaryTailoringResult) -> str:
+    if primary_result.raw_text.strip():
+        return primary_result.raw_text
+    return json.dumps(primary_result.compact_diff, separators=(",", ":"), ensure_ascii=True)
+
+
+async def run_resume_critique(
+    *,
+    prompt_context: TailoringPromptContext,
+    primary_result: PrimaryTailoringResult,
+    max_tokens: int = 3500,
+    live_metadata: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Run the optional critique step and parse it back to the legacy dict shape."""
+
+    critique_prompt = get_prompt("critique_resume")
+    system_prompt, user_prompt = critique_prompt.build_messages(
+        original_resume=prompt_context.original_resume_json,
+        tailor_resume_full_output=_raw_primary_output(primary_result),
+        jd_intel_blob=prompt_context.jd_intel_blob,
+    )
+    raw_text = await complete_json(
+        prompt=user_prompt,
+        system_prompt=system_prompt,
+        config=get_step_llm_config("critique_resume"),
+        max_tokens=max_tokens,
+        timeout_seconds=120,
+        retries=1,
+        operation="critique_resume",
+        metadata={
+            **(live_metadata or {}),
+            "prompt_id": prompt_context.prompt_id,
+            "prompt_version": PROMPT_VERSIONS.get("critique_resume", "unknown"),
+            "prompt_hash": sha256(user_prompt.encode()).hexdigest()[:12],
+        },
+        retry_hint=(
+            "Return the complete critique as raw section-header text with "
+            "OVERALL ASSESSMENT, RED FLAGS, MISSED KEYWORDS, WEAK BULLETS, and SUGGESTIONS."
+        ),
+    )
+    return raw_text, critique_prompt.parse_response(raw_text)
+
+
+async def run_resume_rewrite(
+    *,
+    prompt_context: TailoringPromptContext,
+    primary_result: PrimaryTailoringResult,
+    critique_raw_text: str,
+    response_contract: TailoringResponseContract,
+    max_tokens: int,
+    live_metadata: dict[str, Any] | None = None,
+) -> PrimaryTailoringResult:
+    """Run the optional rewrite step and parse section-header output to compact diff."""
+
+    rewrite_prompt = get_prompt("rewrite_resume")
+    system_prompt, user_prompt = rewrite_prompt.build_messages(
+        original_resume=prompt_context.original_resume_json,
+        tailor_resume_full_output=_raw_primary_output(primary_result),
+        critique_resume_output=critique_raw_text,
+        jd_intel_blob=prompt_context.jd_intel_blob,
+        response_contract=prompt_context.response_contract_json,
+        output_template=prompt_context.output_template,
+    )
+    raw_text = await complete_json(
+        prompt=user_prompt,
+        system_prompt=system_prompt,
+        config=get_step_llm_config("rewrite_resume"),
+        max_tokens=max_tokens,
+        timeout_seconds=170,
+        retries=1,
+        operation="rewrite_resume",
+        metadata={
+            **(live_metadata or {}),
+            "prompt_id": prompt_context.prompt_id,
+            "prompt_version": PROMPT_VERSIONS.get("rewrite_resume", "unknown"),
+            "prompt_hash": sha256(user_prompt.encode()).hexdigest()[:12],
+        },
+        retry_hint=(
+            "Return raw section-header text only. Use [RETAIN] for unchanged cells. "
+            "Include SUMMARY and BOLD KEYWORDS."
+        ),
+    )
+    parsed = parse_resume_section_output(raw_text, response_contract)
     compact_diff = to_compact_diff(parsed, response_contract)
     return PrimaryTailoringResult(
         compact_diff=compact_diff,

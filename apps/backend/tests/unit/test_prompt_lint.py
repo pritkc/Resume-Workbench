@@ -84,6 +84,22 @@ def test_critique_system_has_core_task_heading() -> None:
     assert "YOUR TASK:" in system_txt
 
 
+@pytest.mark.parametrize(
+    "prompt_path",
+    [
+        "critique_resume/system.txt",
+        "rewrite_resume/user.txt",
+        "answer_questions/system.txt",
+        "answer_questions/user.txt",
+    ],
+)
+def test_migrated_steps_use_section_header_output_not_json_contract(prompt_path: str) -> None:
+    prompt_txt = read_shipped_txt(prompt_path).lower()
+    assert "section-header" in prompt_txt
+    assert "valid json only" not in prompt_txt
+    assert "return valid json" not in prompt_txt
+
+
 # ── All shipped user templates: no unsubstituted $ placeholders ──────────────
 
 def _get_empty_kwargs_for_step(step_name: str) -> dict[str, str]:
@@ -197,4 +213,4 @@ def test_prompt_text_readme_documents_runtime_context_fields() -> None:
 
     assert "$tailored_resume" in readme
     assert "$content_rules" in readme
-    assert "$resume_diff_rules" in readme
+    assert "$output_template" in readme

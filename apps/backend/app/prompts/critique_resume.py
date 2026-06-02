@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.prompts._constants import PROMPT_VERSIONS
 from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "critique_resume"
 STEP_LABEL = "Critique Resume"
-STEP_VERSION = "v1.0"
+STEP_VERSION = PROMPT_VERSIONS["critique_resume"]
 FILE_PATH = "prompts/critique_resume.py"
 SYSTEM_PROMPT_FILES = ("apps/backend/app/prompts/text/critique_resume/system.txt",)
 USER_PROMPT_FILE = "apps/backend/app/prompts/text/critique_resume/user.txt"
@@ -26,7 +27,7 @@ DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
     "original_resume": "Original master resume JSON — used to validate scope claims in the diff",
-    "tailor_resume_full_output": "Tailored diff JSON from tailor_resume_full",
+    "tailor_resume_full_output": "Tailored resume output from tailor_resume_full",
     "extract_jd_intel_output": (
         "JD blob placeholder — expanded from jd_intel_blob before render_user_template substitution"
     ),
@@ -60,3 +61,9 @@ def build_messages(
         tailor_resume_full_output=tailor_resume_full_output,
     )
     return system, user
+
+
+def parse_response(raw_text: str) -> dict[str, Any]:
+    from app.services.tailoring.section_format import parse_critique_section_output
+
+    return parse_critique_section_output(raw_text)

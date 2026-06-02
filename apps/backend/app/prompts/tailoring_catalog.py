@@ -123,7 +123,7 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         PromptCatalogSection(
             id="tailoring_rt_resume_diff_rules",
             label="{resume_diff_rules}",
-            content="Legacy compact JSON schema still used by critique/rewrite fallback prompts.",
+            content="Legacy compact JSON schema retained for fallback compatibility.",
             policy="runtime_injected",
         ),
     ]

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from typing import Any
 
 from app.config import get_step_llm_config
-from app.llm import complete_json
+from app.llm import complete
 from app.prompts import PROMPT_VERSIONS
 from app.prompts.answer_questions import build_messages as build_application_questions_messages
 from app.schemas import (
@@ -95,6 +96,88 @@ def _fallback_answer(question: str) -> str:
         "Based on my resume and the role requirements shared, my experience aligns well with "
         f"\"{_truncate_text(question, 120)}\" and I can provide more specific detail as needed."
     )
+
+
+def parse_application_question_section_response(raw: Any) -> dict[str, Any]:
+    """Parse section-header answer text into the legacy {"answers": [...]} payload."""
+
+    if isinstance(raw, dict):
+        return raw
+    text = str(raw or "").strip()
+    if not text:
+        return {"answers": []}
+
+    start_idx = text.find("{")
+    end_idx = text.rfind("}")
+    if start_idx != -1 and end_idx > start_idx:
+        try:
+            parsed = json.loads(text[start_idx : end_idx + 1])
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
+
+    answers: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    current_field: str | None = None
+    header_re = re.compile(r"^===\s*ANSWER\s+([^=]+?)\s*===$", re.IGNORECASE)
+
+    def flush_current() -> None:
+        nonlocal current
+        if current is None:
+            return
+        answer = str(current.get("answer") or "").strip()
+        current["answer"] = " ".join(answer.split())
+        current["warnings"] = _sanitize_warning_list(current.get("warnings"))
+        answers.append(current)
+        current = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        header = header_re.match(line.strip())
+        if header:
+            flush_current()
+            current = {
+                "question_id": header.group(1).strip(),
+                "answer": "",
+                "confidence": "medium",
+                "warnings": [],
+            }
+            current_field = None
+            continue
+        if current is None:
+            continue
+
+        if ":" in line:
+            label_raw, _, value_raw = line.partition(":")
+            label = label_raw.strip().casefold()
+            value = value_raw.strip()
+            if label == "confidence":
+                current["confidence"] = value
+                current_field = None
+                continue
+            if label in {"warning", "warnings"}:
+                if value:
+                    current.setdefault("warnings", []).append(value)
+                current_field = "warnings"
+                continue
+            if label == "answer":
+                current["answer"] = value
+                current_field = "answer"
+                continue
+
+        stripped = line.strip()
+        if not stripped:
+            if current_field == "answer" and current.get("answer"):
+                current["answer"] = f"{current.get('answer')} "
+            continue
+        if current_field == "answer":
+            current["answer"] = f"{current.get('answer') or ''} {stripped}".strip()
+        elif current_field == "warnings":
+            current.setdefault("warnings", []).append(stripped)
+
+    flush_current()
+    return {"answers": answers}
 
 
 def normalize_generated_answers(
@@ -311,7 +394,7 @@ async def generate_application_question_answers(
         questions=json.dumps(question_payload, separators=(",", ":"), ensure_ascii=True),
     )
 
-    raw_result = await complete_json(
+    raw_content = await complete(
         prompt=prompt,
         system_prompt=system_prompt,
         config=get_step_llm_config("answer_questions"),
@@ -325,9 +408,10 @@ async def generate_application_question_answers(
             "prompt_version": PROMPT_VERSIONS.get("application_questions_generate", "unknown"),
         },
         retry_hint=(
-            "Return complete JSON with one answer object for every question_id. "
-            "Do not omit any question_id."
+            "Return complete section-header text with one === ANSWER question_id === "
+            "section for every question_id. Do not omit any question_id."
         ),
     )
 
+    raw_result = parse_application_question_section_response(raw_content)
     return normalize_generated_answers(raw_result, questions)

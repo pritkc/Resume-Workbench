@@ -77,12 +77,15 @@ def test_second_pass_prompts_preserve_anti_mirror_guards() -> None:
         critique_resume_output="{}",
         jd_intel_blob={},
         response_contract="{}",
+        output_template="=== SUMMARY ===\nWHY:",
     )
     combined = "\n".join([critique_system, critique_user, rewrite_system, rewrite_user]).lower()
 
     assert "jd is only a prioritization lens" in combined
     assert "do not introduce named vendor products" in combined
     assert "do not increase jd noun repetition" in combined
+    assert "=== summary ===" in combined
+    assert "output template:" in combined
     assert "must appear in diff" not in combined
     assert "exact forms, exact capitalization" not in combined
 

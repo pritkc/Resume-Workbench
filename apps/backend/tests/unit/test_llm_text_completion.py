@@ -138,25 +138,20 @@ async def test_complete_raises_instead_of_returning_truncated_text(
 @patch("app.llm._record_llm_attempt")
 @patch("app.llm._get_reasoning_effort", return_value=None)
 @patch("app.llm._supports_temperature", return_value=False)
-@patch("app.llm.get_router")
+@patch("app.llm._stream_acompletion")
 async def test_complete_stream_accumulates_chunks_and_emits_timing(
-    mock_get_router,
+    mock_stream_acompletion,
     _mock_supports_temperature,
     _mock_reasoning_effort,
     mock_record_attempt,
 ):
-    router = SimpleNamespace(
-        acompletion=AsyncMock(
-            return_value=_AsyncChunks(
-                [
-                    _chunk("Hello"),
-                    _chunk(" world", "stop"),
-                ]
-            )
-        )
+    mock_stream_acompletion.return_value = _AsyncChunks(
+        [
+            _chunk("Hello"),
+            _chunk(" world", "stop"),
+        ]
     )
     config = LLMConfig(provider="openai", model="gpt-test", api_key="test-key")
-    mock_get_router.return_value = (router, config)
     events: list[tuple[str, dict]] = []
     deltas: list[str] = []
 
@@ -168,6 +163,7 @@ async def test_complete_stream_accumulates_chunks_and_emits_timing(
 
     result = await complete_stream(
         prompt="Say hello.",
+        config=config,
         max_tokens=64,
         retries=0,
         operation="resume_generate_full",
@@ -192,25 +188,20 @@ async def test_complete_stream_accumulates_chunks_and_emits_timing(
 @patch("app.llm._record_llm_attempt")
 @patch("app.llm._get_reasoning_effort", return_value=None)
 @patch("app.llm._supports_temperature", return_value=False)
-@patch("app.llm.get_router")
+@patch("app.llm._stream_acompletion")
 async def test_complete_stream_emits_safe_text_deltas_only_when_enabled(
-    mock_get_router,
+    mock_stream_acompletion,
     _mock_supports_temperature,
     _mock_reasoning_effort,
     _mock_record_attempt,
 ):
-    router = SimpleNamespace(
-        acompletion=AsyncMock(
-            return_value=_AsyncChunks(
-                [
-                    _chunk("JD intel "),
-                    _chunk("line", "stop"),
-                ]
-            )
-        )
+    mock_stream_acompletion.return_value = _AsyncChunks(
+        [
+            _chunk("JD intel "),
+            _chunk("line", "stop"),
+        ]
     )
     config = LLMConfig(provider="openai", model="gpt-test", api_key="test-key")
-    mock_get_router.return_value = (router, config)
     events: list[tuple[str, dict]] = []
 
     async def event_sink(event_type: str, data: dict) -> None:
@@ -218,6 +209,7 @@ async def test_complete_stream_emits_safe_text_deltas_only_when_enabled(
 
     result = await complete_stream(
         prompt="Analyze JD.",
+        config=config,
         max_tokens=64,
         retries=0,
         operation="extract_jd_intel_output",
@@ -231,3 +223,49 @@ async def test_complete_stream_emits_safe_text_deltas_only_when_enabled(
     assert "".join(str(event["text_delta"]) for event in text_delta_events) == result
     assert {event["stream_kind"] for event in text_delta_events} == {"jd_intel"}
     assert all("prompt" not in event for event in text_delta_events)
+
+
+@pytest.mark.asyncio
+@patch("app.llm.complete", new_callable=AsyncMock)
+@patch("app.llm._record_llm_attempt")
+@patch("app.llm._get_reasoning_effort", return_value=None)
+@patch("app.llm._supports_temperature", return_value=False)
+@patch("app.llm._stream_acompletion")
+async def test_complete_stream_falls_back_on_transient_provider_unavailable(
+    mock_stream_acompletion,
+    _mock_supports_temperature,
+    _mock_reasoning_effort,
+    mock_record_attempt,
+    mock_complete,
+):
+    mock_stream_acompletion.side_effect = RuntimeError(
+        "ServiceUnavailableError: This model is currently experiencing high demand. "
+        '"status": "UNAVAILABLE"'
+    )
+    mock_complete.return_value = "Finished non-stream fallback."
+    config = LLMConfig(provider="gemini", model="gemini-test", api_key="test-key")
+    events: list[tuple[str, dict]] = []
+
+    async def event_sink(event_type: str, data: dict) -> None:
+        events.append((event_type, data))
+
+    result = await complete_stream(
+        prompt="Write resume sections.",
+        config=config,
+        max_tokens=128,
+        retries=1,
+        operation="resume_generate_full",
+        event_sink=event_sink,
+        include_delta_text=True,
+        stream_kind="resume_output",
+    )
+
+    assert result == "Finished non-stream fallback."
+    mock_stream_acompletion.assert_awaited_once()
+    mock_complete.assert_awaited_once()
+    mock_record_attempt.assert_not_called()
+    completed_events = [data for event_type, data in events if event_type == "llm.completed"]
+    assert completed_events[0]["success"] is False
+    assert completed_events[0]["streaming_fallback_used"] is True
+    assert completed_events[-1]["success"] is True
+    assert completed_events[-1]["streaming_fallback_used"] is True

@@ -546,3 +546,78 @@ def _extract_section(raw: str, section_name: str) -> str:
         elif in_section:
             lines.append(line.rstrip())
     return "\n".join(lines).strip()
+
+
+def parse_critique_section_output(raw: str) -> dict[str, Any]:
+    """Parse section-header critique text back into the legacy critique JSON shape."""
+
+    result: dict[str, Any] = {
+        "overall_assessment": "",
+        "red_flags": [],
+        "missed_keywords": [],
+        "weak_bullets": [],
+        "suggestions": [],
+    }
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    header_re = re.compile(r"^===\s*([A-Z][A-Z\s]+?)\s*===$", re.IGNORECASE)
+
+    for raw_line in raw.splitlines():
+        line = raw_line.rstrip()
+        header = header_re.match(line.strip())
+        if header:
+            current = re.sub(r"\s+", "_", header.group(1).strip().upper())
+            sections.setdefault(current, [])
+            continue
+        if current is not None:
+            sections.setdefault(current, []).append(line)
+
+    overall = "\n".join(sections.get("OVERALL_ASSESSMENT", [])).strip()
+    if overall:
+        result["overall_assessment"] = " ".join(overall.split())
+
+    def parse_rows(section_name: str, prefix: str, fields: set[str]) -> list[dict[str, str]]:
+        rows: dict[int, dict[str, str]] = {}
+        active: tuple[int, str] | None = None
+        label_re = re.compile(
+            rf"^{re.escape(prefix)}(\d+)-([A-Z_]+)\s*:\s*(.*)$",
+            re.IGNORECASE,
+        )
+        for raw_item_line in sections.get(section_name, []):
+            item_line = raw_item_line.strip()
+            if not item_line:
+                continue
+            match = label_re.match(item_line)
+            if match:
+                index = int(match.group(1))
+                key = match.group(2).strip().lower()
+                value = match.group(3).strip()
+                if key not in fields:
+                    active = None
+                    continue
+                rows.setdefault(index, {})[key] = value
+                active = (index, key)
+                continue
+            if active is not None:
+                index, key = active
+                prior = rows.setdefault(index, {}).get(key, "")
+                rows[index][key] = f"{prior} {item_line}".strip()
+        return [rows[index] for index in sorted(rows)]
+
+    result["red_flags"] = parse_rows(
+        "RED_FLAGS",
+        "R",
+        {"location", "severity", "issue"},
+    )
+    result["missed_keywords"] = parse_rows(
+        "MISSED_KEYWORDS",
+        "K",
+        {"keyword", "location", "suggestion"},
+    )
+    result["weak_bullets"] = parse_rows(
+        "WEAK_BULLETS",
+        "W",
+        {"location", "current", "issue", "suggestion"},
+    )
+    result["suggestions"] = parse_rows("SUGGESTIONS", "S", {"location", "action"})
+    return result

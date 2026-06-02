@@ -17,5 +17,10 @@ $tailor_resume_full_output
 RESPONSE CONTRACT:
 $response_contract
 
-OUTPUT SCHEMA:
-$resume_diff_rules
+OUTPUT TEMPLATE:
+$output_template
+
+OUTPUT RULES:
+- Return plain section-header text only. No markdown fences, no JSON, no commentary.
+- Fill only the section-header template addresses needed for critique fixes; use [RETAIN] for unchanged cells.
+- Preserve listed indexes only. Do not add, drop, combine, or renumber bullets or skill positions.

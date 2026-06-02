@@ -37,19 +37,18 @@ CONSISTENCY:
 - Use the same employer names, role titles, and dates consistently throughout
 
 FORMAT:
-- Return valid JSON only with this exact shape:
-{
-  "answers": [
-    {
-      "question_id": "q_0",
-      "answer": "string",
-      "confidence": "high|medium|low",
-      "warnings": ["optional warning — include if answer is weak, salary-related, EEOC, or needs candidate review"]
-    }
-  ]
-}
-- Return one answer object for every input question_id
-- Do not include markdown or extra keys
+- Return raw section-header text only.
+- Return one answer section for every input question_id.
+- Use the exact input question_id in the header.
+- Use CONFIDENCE as high, medium, or low.
+- Include WARNING only when the answer is weak, salary-related, EEOC, or needs candidate review.
+- Put the final plain-text answer after ANSWER:
+
+=== ANSWER q_0 ===
+CONFIDENCE: high
+WARNING: optional warning text
+ANSWER:
+answer body
 
 JOB TARGET (JSON):
 $job_target

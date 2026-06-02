@@ -976,6 +976,29 @@ def get_router(config: LLMConfig | None = None) -> tuple[Router, LLMConfig]:
     return router, config
 
 
+async def _stream_acompletion(
+    *,
+    config: LLMConfig,
+    model_name: str,
+    kwargs: dict[str, Any],
+) -> Any:
+    """Call LiteLLM streaming directly.
+
+    Router logs handled mid-stream provider failures as ERROR when no model
+    fallback exists. Streaming cannot be resumed safely inside Router anyway,
+    so complete_stream owns the fallback to non-stream completion.
+    """
+
+    direct_kwargs = dict(kwargs)
+    direct_kwargs["model"] = model_name
+    if config.api_key:
+        direct_kwargs["api_key"] = config.api_key
+    api_base = _normalize_api_base(config.provider, config.api_base)
+    if api_base:
+        direct_kwargs["api_base"] = api_base
+    return await litellm.acompletion(**direct_kwargs)
+
+
 def _supports_temperature(provider: str, model: str) -> bool:
     """Return whether passing `temperature` is supported for this model/provider combo.
 
@@ -1431,6 +1454,23 @@ async def complete_stream(
 ) -> str:
     """Make a streamed completion request and return the final collected text."""
 
+    def should_use_non_stream_fallback(error: Exception, attempt_number: int) -> bool:
+        if attempt_number != 0:
+            return False
+        message = str(error).casefold()
+        fallback_markers = (
+            "stream",
+            "streaming",
+            "unsupported",
+            "not support",
+            "serviceunavailable",
+            "service unavailable",
+            "temporarily unavailable",
+            "high demand",
+            'status": "unavailable',
+        )
+        return any(marker in message for marker in fallback_markers)
+
     async def emit(event_type: str, data: dict[str, Any]) -> None:
         if event_sink is not None:
             await event_sink(event_type, data)
@@ -1463,7 +1503,8 @@ async def complete_stream(
             },
         )
 
-    router, config = get_router(config)
+    if config is None:
+        config = get_llm_config()
     model_name = get_model_name(config)
 
     messages = []
@@ -1533,7 +1574,11 @@ async def complete_stream(
             }
             await emit("llm.started", event_metadata)
 
-            stream = await router.acompletion(**kwargs)
+            stream = await _stream_acompletion(
+                config=config,
+                model_name=model_name,
+                kwargs=kwargs,
+            )
             async for chunk in stream:
                 last_chunk = chunk
                 chunk_finish = _extract_stream_finish_reason(chunk)
@@ -1630,11 +1675,7 @@ async def complete_stream(
             )
             return content
         except Exception as e:
-            message = str(e).casefold()
-            if attempt == 0 and any(
-                marker in message
-                for marker in ("stream", "streaming", "unsupported", "not support")
-            ):
+            if should_use_non_stream_fallback(e, attempt):
                 await emit(
                     "llm.completed",
                     {

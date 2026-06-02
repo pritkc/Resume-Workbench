@@ -224,16 +224,15 @@ class TestCoverLetterPromptInputs:
 
 class TestGeneratedMessages:
     @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
-    async def test_combined_generation_uses_single_json_call(
+    async def test_combined_generation_uses_single_text_call(
         self, mock_complete, sample_resume, sample_job_description
     ):
         mock_complete.return_value = """
-<<COVER_LETTER>>
+=== COVER LETTER ===
 Thanks for considering my application.
-<<END_COVER_LETTER>>
-<<OUTREACH_MESSAGE>>
+
+=== OUTREACH MESSAGE ===
 Open to a quick intro call this week?
-<<END_OUTREACH_MESSAGE>>
 """.strip()
 
         cover_letter, outreach = await generate_cover_letter_and_outreach(
@@ -246,6 +245,8 @@ Open to a quick intro call this week?
         assert "JOB TARGET (JSON):" in prompt
         assert "JD INTELLIGENCE:" in prompt
         assert "RESUME (JSON" in prompt
+        assert "=== COVER LETTER ===" in prompt
+        assert "=== OUTREACH MESSAGE ===" in prompt
         assert "personalInfo" in prompt or "summary" in prompt
         assert kwargs["operation"] == "cover_letter_outreach_generate"
         assert kwargs["max_tokens"] == 800
@@ -288,6 +289,21 @@ Open to a quick intro call this week?
     def test_combined_parser_accepts_json_fallback(self):
         cover_letter, outreach = parse_combined_message_response(
             '{"cover_letter":"Thanks for your time.","outreach_message":"Worth a quick chat?"}'
+        )
+
+        assert cover_letter == "Thanks for your time."
+        assert outreach == "Worth a quick chat?"
+
+    def test_combined_parser_accepts_legacy_tag_fallback(self):
+        cover_letter, outreach = parse_combined_message_response(
+            """
+<<COVER_LETTER>>
+Thanks for your time.
+<<END_COVER_LETTER>>
+<<OUTREACH_MESSAGE>>
+Worth a quick chat?
+<<END_OUTREACH_MESSAGE>>
+""".strip()
         )
 
         assert cover_letter == "Thanks for your time."

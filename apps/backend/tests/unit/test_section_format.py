@@ -10,6 +10,7 @@ from app.services.tailoring.section_format import (
     extract_jd_intel_section,
     jd_keywords_from_section_blob,
     parse_jd_metadata,
+    parse_critique_section_output,
     parse_resume_section_output,
     section_jd_wrapper,
     to_compact_diff,
@@ -226,6 +227,49 @@ Python, Kafka
 
     assert diff["bold_keywords"] == ["Python", "Kafka"]
     assert diff["bold_keywords_why"] == "Terms match backed source evidence."
+
+
+def test_parse_critique_section_output_to_legacy_dict() -> None:
+    parsed = parse_critique_section_output(
+        """
+=== OVERALL ASSESSMENT ===
+Strong fit signal with credible backend evidence, but one bullet overclaims ownership.
+
+=== RED FLAGS ===
+R0-LOCATION: experience.0.bullets.1
+R0-SEVERITY: medium
+R0-ISSUE: Scope sounds broader than source evidence.
+
+=== MISSED KEYWORDS ===
+K0-KEYWORD: Kubernetes
+K0-LOCATION: experience.0.tech_stacks
+K0-SUGGESTION: Add only if source evidence supports it in that role.
+
+=== WEAK BULLETS ===
+W0-LOCATION: projects.0.bullets.0
+W0-CURRENT: Built a dashboard.
+W0-ISSUE: Missing mechanism and outcome.
+W0-SUGGESTION: Name the backend component and observable result.
+
+=== SUGGESTIONS ===
+S0-LOCATION: summary
+S0-ACTION: Keep backend identity and add one source-supported platform signal.
+""",
+    )
+
+    assert parsed["overall_assessment"].startswith("Strong fit signal")
+    assert parsed["red_flags"] == [
+        {
+            "location": "experience.0.bullets.1",
+            "severity": "medium",
+            "issue": "Scope sounds broader than source evidence.",
+        }
+    ]
+    assert parsed["missed_keywords"][0]["keyword"] == "Kubernetes"
+    assert parsed["weak_bullets"][0]["suggestion"] == (
+        "Name the backend component and observable result."
+    )
+    assert parsed["suggestions"][0]["action"].startswith("Keep backend identity")
 
 
 def test_jd_section_helpers_parse_wrapper() -> None:

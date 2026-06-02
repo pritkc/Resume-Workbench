@@ -12,6 +12,7 @@ from app.services.application_questions import (
     generate_application_question_answers,
     merge_answers_for_partial_regeneration,
     normalize_generated_answers,
+    parse_application_question_section_response,
 )
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.tailoring.section_format import section_jd_wrapper
@@ -56,6 +57,40 @@ def test_normalize_generated_answers_uses_fallback_when_model_skips_questions() 
     assert normalized[0].confidence == "high"
     assert normalized[1].question_id == "q_1"
     assert "fallback answer" in normalized[1].warnings[0].lower()
+
+
+def test_parse_application_question_section_response_to_legacy_payload() -> None:
+    parsed = parse_application_question_section_response(
+        """
+=== ANSWER q_0 ===
+CONFIDENCE: high
+ANSWER:
+My backend API experience maps directly to this platform role.
+
+=== ANSWER q_1 ===
+CONFIDENCE: low
+WARNING: Candidate should confirm work authorization before submitting.
+ANSWER:
+I am authorized to work in the United States.
+""",
+    )
+
+    assert parsed == {
+        "answers": [
+            {
+                "question_id": "q_0",
+                "answer": "My backend API experience maps directly to this platform role.",
+                "confidence": "high",
+                "warnings": [],
+            },
+            {
+                "question_id": "q_1",
+                "answer": "I am authorized to work in the United States.",
+                "confidence": "low",
+                "warnings": ["Candidate should confirm work authorization before submitting."],
+            },
+        ]
+    }
 
 
 def test_merge_answers_for_partial_regeneration_keeps_existing_non_target_answers() -> None:
@@ -129,32 +164,27 @@ def test_answer_questions_prompt_documents_input_source_distinction() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_application_question_answers_calls_single_json_completion(
+async def test_generate_application_question_answers_calls_single_text_completion(
     sample_resume: dict,
     sample_job_description: str,
 ) -> None:
-    mock_complete_json = AsyncMock(
-        return_value={
-            "answers": [
-                {
-                    "question_id": "q_0",
-                    "answer": "My experience aligns with the role requirements.",
-                    "confidence": "high",
-                    "warnings": [],
-                },
-                {
-                    "question_id": "q_1",
-                    "answer": "I enjoy collaborating across teams to deliver outcomes.",
-                    "confidence": "medium",
-                    "warnings": [],
-                },
-            ]
-        }
+    mock_complete = AsyncMock(
+        return_value="""
+=== ANSWER q_0 ===
+CONFIDENCE: high
+ANSWER:
+My experience aligns with the role requirements.
+
+=== ANSWER q_1 ===
+CONFIDENCE: medium
+ANSWER:
+I enjoy collaborating across teams to deliver outcomes.
+""".strip()
     )
 
     with patch(
-        "app.services.application_questions.complete_json",
-        new=mock_complete_json,
+        "app.services.application_questions.complete",
+        new=mock_complete,
     ):
         answers, warnings = await generate_application_question_answers(
             resume_data=sample_resume,
@@ -169,8 +199,8 @@ async def test_generate_application_question_answers_calls_single_json_completio
 
     assert warnings == []
     assert [item.question_id for item in answers] == ["q_0", "q_1"]
-    assert mock_complete_json.await_count == 1
-    kwargs = mock_complete_json.await_args.kwargs
+    assert mock_complete.await_count == 1
+    kwargs = mock_complete.await_args.kwargs
     assert kwargs["operation"] == "application_questions_generate"
     assert "question_count" in kwargs["metadata"]
 
@@ -180,7 +210,7 @@ async def test_generate_application_question_answers_uses_section_jd_keywords(
     sample_resume: dict,
     sample_job_description: str,
 ) -> None:
-    mock_complete_json = AsyncMock(return_value={"answers": []})
+    mock_complete = AsyncMock(return_value="=== ANSWER q_0 ===\nCONFIDENCE: medium\nANSWER:\n")
     wrapper = section_jd_wrapper(
         """
 === JD METADATA ===
@@ -195,8 +225,8 @@ MUST-MATCH: Python, Kubernetes
     )
 
     with patch(
-        "app.services.application_questions.complete_json",
-        new=mock_complete_json,
+        "app.services.application_questions.complete",
+        new=mock_complete,
     ):
         await generate_application_question_answers(
             resume_data=sample_resume,
@@ -207,7 +237,7 @@ MUST-MATCH: Python, Kubernetes
             job_keywords=wrapper,
         )
 
-    prompt = mock_complete_json.await_args.kwargs["prompt"]
+    prompt = mock_complete.await_args.kwargs["prompt"]
     assert "Platform Engineer" in prompt
     assert "Python" in prompt
     assert "Kubernetes" in prompt

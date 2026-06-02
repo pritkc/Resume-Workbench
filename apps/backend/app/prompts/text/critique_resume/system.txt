@@ -31,20 +31,29 @@ SUGGESTIONS:
 - Use locations: summary, experience.N, experience.N.bullets.M, experience.N.position, experience.N.tech_stacks, projects.N, projects.N.bullets.M, skills.
 
 OUTPUT:
-- Valid JSON only. No markdown or commentary.
-- Required keys:
-{
-  "overall_assessment": "One sentence: fit signal (strong/borderline/weak) + primary strength + primary gap",
-  "red_flags": [
-    { "location": "experience.0.bullets.2", "issue": "...", "severity": "high|medium|low" }
-  ],
-  "missed_keywords": [
-    { "keyword": "Kubernetes", "location": "experience.0.tech_stacks", "suggestion": "Add only if candidate used it in this role's date window" }
-  ],
-  "weak_bullets": [
-    { "location": "experience.1.bullets.0", "current": "...", "issue": "...", "suggestion": "Rewrite direction: name the component, mechanism, and observable outcome" }
-  ],
-  "suggestions": [
-    { "location": "experience.0.bullets.1", "action": "Specific implementable fix" }
-  ]
-}
+- Return raw section-header text only. No markdown, JSON, or commentary.
+- Use these headers exactly: === OVERALL ASSESSMENT ===, === RED FLAGS ===, === MISSED KEYWORDS ===, === WEAK BULLETS ===, === SUGGESTIONS ===.
+- Format rows exactly with indexed labels:
+
+=== OVERALL ASSESSMENT ===
+One sentence: fit signal (strong/borderline/weak) + primary strength + primary gap.
+
+=== RED FLAGS ===
+R0-LOCATION:
+R0-SEVERITY:
+R0-ISSUE:
+
+=== MISSED KEYWORDS ===
+K0-KEYWORD:
+K0-LOCATION:
+K0-SUGGESTION:
+
+=== WEAK BULLETS ===
+W0-LOCATION:
+W0-CURRENT:
+W0-ISSUE:
+W0-SUGGESTION:
+
+=== SUGGESTIONS ===
+S0-LOCATION:
+S0-ACTION:
