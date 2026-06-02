@@ -56,7 +56,7 @@ function SortableValueRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="group/svrow flex min-h-[26px] items-center gap-1 rounded-none border border-border bg-card px-1 py-0.5"
+      className="group/svrow inline-flex min-h-0 items-center gap-0.5 rounded-none border-0 bg-transparent px-0 py-0"
     >
       <div
         {...attributes}
@@ -66,7 +66,7 @@ function SortableValueRow({
       >
         <GripVertical className="h-3.5 w-3.5" />
       </div>
-      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">{label}</span>
+      <span className="min-w-0 truncate font-serif text-[12px] text-foreground">{label}</span>
       <button
         type="button"
         className="shrink-0 text-muted-foreground opacity-70 transition-opacity hover:text-red-600 group-hover/svrow:opacity-100"
@@ -131,16 +131,18 @@ export const SkillGroupValuesDnd: React.FC<SkillGroupValuesDndProps> = ({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
           {values.map((val, idx) => (
-            <SortableValueRow
-              key={rowIds[idx] ?? `${scopeId}-v-${idx}`}
-              id={rowIds[idx]!}
-              label={val}
-              onRemove={() => onRemove(idx)}
-              removeAriaLabel={removeAriaLabel}
-              gripTitle={gripTitle}
-            />
+            <React.Fragment key={rowIds[idx] ?? `${scopeId}-v-${idx}`}>
+              {idx > 0 ? <span className="text-muted-foreground/50">, </span> : null}
+              <SortableValueRow
+                id={rowIds[idx]!}
+                label={val}
+                onRemove={() => onRemove(idx)}
+                removeAriaLabel={removeAriaLabel}
+                gripTitle={gripTitle}
+              />
+            </React.Fragment>
           ))}
         </div>
       </SortableContext>

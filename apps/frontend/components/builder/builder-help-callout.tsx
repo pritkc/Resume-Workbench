@@ -65,7 +65,7 @@ export function BuilderHelpCallout({ id, title, children, className }: BuilderHe
   return (
     <div
       className={cn(
-        'shrink-0 border border-border bg-card font-sans text-[12px] leading-snug text-foreground/90',
+        'builder-help-callout shrink-0 border border-border bg-card font-sans text-[12px] leading-snug text-foreground/90',
         className
       )}
     >

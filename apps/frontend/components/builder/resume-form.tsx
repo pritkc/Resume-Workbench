@@ -36,7 +36,6 @@ import { GenericItemForm } from './forms/generic-item-form';
 import { GenericListForm } from './forms/generic-list-form';
 import { AddSectionButton } from './add-section-dialog';
 import { DraggableSectionWrapper } from './draggable-section-wrapper';
-import { CvSectionNav } from './cv-section-nav';
 import {
   getSectionMeta,
   getAllSections,
@@ -266,11 +265,6 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
     handleSectionMetaUpdate(updatedSections);
   };
 
-  const jumpSectionTargets = sortedAllSections.map((s) => ({
-    id: s.id,
-    label: s.displayName,
-  }));
-
   // Render default section forms
   const renderDefaultSection = (section: SectionMeta) => {
     const isPersonalInfo = section.id === 'personalInfo';
@@ -338,16 +332,8 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
 
     if (isPersonalInfo) {
       return (
-        <div id={`cv-section-${section.id}`} className="scroll-mt-[4.5rem] pl-3">
-          <SectionHeader
-            section={section}
-            onRename={(name) => handleRename(section.id, name)}
-            onDelete={() => handleDelete(section.id)}
-            onToggleVisibility={() => handleToggleVisibility(section.id)}
-            canDelete={false}
-          >
-            {renderContent()}
-          </SectionHeader>
+        <div id={`cv-section-${section.id}`} className="scroll-mt-2">
+          {renderContent()}
         </div>
       );
     }
@@ -461,13 +447,12 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
 
   if (!dndMounted) {
     return (
-      <div className="space-y-2 pb-10">
-        <CvSectionNav sections={jumpSectionTargets} />
+      <div className="resume-canvas-editor space-y-0 pb-10">
         {sectionRows.map(({ section, isPersonalInfo, sectionContent }) => (
           <div
             key={section.id}
             id={isPersonalInfo ? undefined : `cv-section-${section.id}`}
-            className={`relative scroll-mt-[4.5rem] ${isPersonalInfo ? '' : 'pl-3'}`}
+            className={`relative scroll-mt-2 ${isPersonalInfo ? '' : ''}`}
           >
             {sectionContent}
           </div>
@@ -488,8 +473,7 @@ export const ResumeForm: React.FC<ResumeFormProps> = ({ resumeData, onUpdate }) 
         items={sortedAllSections.map((s) => s.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="space-y-2 pb-10">
-          <CvSectionNav sections={jumpSectionTargets} />
+        <div className="resume-canvas-editor space-y-0 pb-10">
           {sectionRows.map(({ section, isPersonalInfo, sectionContent }) =>
             isPersonalInfo ? (
               <div key={section.id} className="relative">

@@ -1,9 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Education } from '@/components/dashboard/resume-component';
 import { Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
@@ -28,17 +26,13 @@ import {
   getEducationSummary,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
-import { BuilderFormField } from '../builder-form-field';
+import { InlineResumeField, InlineResumeTextarea, ResumeCanvasAddLink } from '../inline-resume-field';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface EducationFormProps {
   data: Education[];
   onChange: (data: Education[]) => void;
 }
-
-const inp = 'builder-field-input w-full';
-const addTextBtn =
-  'builder-field-caption inline-flex items-center underline decoration-black/20 underline-offset-2 hover:text-foreground';
 
 export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
@@ -53,14 +47,10 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-
     if (!over || active.id === over.id) return;
-
     const oldIndex = data.findIndex((item) => item.id === active.id);
     const newIndex = data.findIndex((item) => item.id === over.id);
-
     if (oldIndex === -1 || newIndex === -1) return;
-
     onChange(arrayMove(data, oldIndex, newIndex));
   };
 
@@ -108,13 +98,8 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
   ) => {
     updateItem(id, (item) => {
       if (field === 'date') {
-        return {
-          ...item,
-          date: value,
-          years: value,
-        };
+        return { ...item, date: value, years: value };
       }
-
       if (field === 'summary') {
         const highlights = getEducationHighlightsEditor(item);
         return {
@@ -123,11 +108,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
           description: buildEducationDescription(value, highlights),
         };
       }
-
-      return {
-        ...item,
-        [field]: value,
-      };
+      return { ...item, [field]: value };
     });
   };
 
@@ -135,7 +116,6 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
     updateItem(id, (item) => {
       const highlights = [...getEducationHighlightsEditor(item)];
       highlights[index] = value;
-
       return {
         ...item,
         highlights,
@@ -159,7 +139,6 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
     updateItem(id, (item) => {
       const highlights = [...getEducationHighlightsEditor(item)];
       highlights.splice(index, 1);
-
       return {
         ...item,
         highlights,
@@ -168,178 +147,182 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
     });
   };
 
-  return (
-    <div className="space-y-2">
-      {data.length === 0 ? (
-        <div className="border border-dashed border-border bg-card px-2 py-3 text-center">
-          <p className="mb-1.5 font-mono text-[11px] text-muted-foreground">
-            {t('builder.genericItemForm.noEntries', { label: t('resume.sections.education') })}
-          </p>
-          <button type="button" onClick={handleAdd} className={addTextBtn}>
-            <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
-            {t('builder.forms.education.addFirstSchool')}
-          </button>
-        </div>
-      ) : (
-        <DndContext
-          id={listDndId}
-          sensors={sensors}
-          collisionDetection={resumeSortableCollision}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={data.map((item) => item.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-2">
-              {data.map((item) => {
-                const highlights = getEducationHighlightsEditor(item);
+  if (data.length === 0) {
+    return (
+      <div className="py-2 text-center">
+        <p className="mb-1 text-[11px] text-muted-foreground">
+          {t('builder.genericItemForm.noEntries', { label: t('resume.sections.education') })}
+        </p>
+        <ResumeCanvasAddLink onClick={handleAdd}>
+          <Plus className="inline h-3 w-3" aria-hidden />
+          {t('builder.forms.education.addFirstSchool')}
+        </ResumeCanvasAddLink>
+      </div>
+    );
+  }
 
-                return (
-                  <DraggableListItem key={item.id} id={item.id}>
-                    <div className="group entry-card-editor relative">
+  return (
+    <div className="space-y-1">
+      <DndContext
+        id={listDndId}
+        sensors={sensors}
+        collisionDetection={resumeSortableCollision}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={data.map((item) => item.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-0">
+            {data.map((item) => {
+              const highlights = getEducationHighlightsEditor(item);
+
+              return (
+                <DraggableListItem key={item.id} id={item.id}>
+                  <div className="resume-canvas-entry pr-6">
+                    <div className="resume-canvas-entry-actions">
                       <Button
                         variant="ghost"
                         size="icon-sm"
                         aria-label={t('common.delete')}
-                        className="absolute right-1 top-1 h-7 w-7 border border-red-600/25 text-red-600 opacity-70 hover:bg-red-600/[0.06] group-hover:opacity-100"
+                        className="h-6 w-6 text-red-600/80 hover:text-red-600"
                         onClick={() => handleRemove(item.id)}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
+                    </div>
 
-                      <div className="mb-2 grid grid-cols-1 gap-2 pr-8 md:grid-cols-2">
-                        <BuilderFormField label={t('builder.forms.education.fields.institution')}>
-                          <Input
-                            pasteMode="plainTextSingleParagraph"
-                            value={item.institution || ''}
-                            onChange={(e) =>
-                              handleFieldChange(item.id, 'institution', e.target.value)
-                            }
-                            placeholder={t('builder.forms.education.placeholders.institution')}
-                            className={inp}
-                          />
-                        </BuilderFormField>
-                        <BuilderFormField label={t('builder.forms.education.fields.degree')}>
-                          <Input
-                            pasteMode="plainTextSingleParagraph"
-                            value={item.degree || ''}
-                            onChange={(e) => handleFieldChange(item.id, 'degree', e.target.value)}
-                            placeholder={t('builder.forms.education.placeholders.degree')}
-                            className={inp}
-                          />
-                        </BuilderFormField>
-                        <BuilderFormField label={t('builder.forms.education.fields.area')}>
-                          <Input
-                            pasteMode="plainTextSingleParagraph"
-                            value={item.area || ''}
-                            onChange={(e) => handleFieldChange(item.id, 'area', e.target.value)}
-                            placeholder={t('builder.forms.education.placeholders.area')}
-                            className={inp}
-                          />
-                        </BuilderFormField>
-                        <BuilderFormField label={t('builder.genericItemForm.fields.location')}>
-                          <Input
-                            pasteMode="plainTextSingleParagraph"
-                            value={item.location || ''}
-                            onChange={(e) => handleFieldChange(item.id, 'location', e.target.value)}
-                            placeholder={t('builder.forms.education.placeholders.location')}
-                            className={inp}
-                          />
-                        </BuilderFormField>
-                        <BuilderFormField label="Start Date">
-                          <Input
-                            pasteMode="plainTextSingleParagraph"
-                            value={item.start_date || ''}
-                            onChange={(e) =>
-                              handleFieldChange(item.id, 'start_date', e.target.value)
-                            }
-                            placeholder="2014"
-                            className={inp}
-                          />
-                        </BuilderFormField>
-                        <BuilderFormField label="End Date">
-                          <Input
-                            pasteMode="plainTextSingleParagraph"
-                            value={item.end_date || ''}
-                            onChange={(e) => handleFieldChange(item.id, 'end_date', e.target.value)}
-                            placeholder="2018 or present"
-                            className={inp}
-                          />
-                        </BuilderFormField>
-                        <BuilderFormField
-                          label={t('builder.genericItemForm.fields.date')}
-                          hint={t('builder.forms.education.dateFieldHint')}
-                          className="md:col-span-2"
-                        >
-                          <Input
-                            pasteMode="plainTextSingleParagraph"
-                            value={getEducationExplicitDate(item)}
-                            onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
-                            placeholder={t('builder.forms.education.placeholders.date')}
-                            className={inp}
-                          />
-                        </BuilderFormField>
-                      </div>
-
-                      <BuilderFormField
-                        label={t('builder.genericItemForm.fields.summaryOptional')}
-                        className="mb-2"
-                      >
-                        <Textarea
-                          pasteMode="plainTextMultiline"
-                          value={getEducationSummary(item)}
-                          onChange={(e) => handleFieldChange(item.id, 'summary', e.target.value)}
-                          className="builder-field-textarea min-h-[44px]"
-                          placeholder={t('builder.forms.education.placeholders.summary')}
-                          rows={2}
+                    <div className="resume-canvas-role-row">
+                      <div className="flex min-w-0 flex-wrap items-baseline gap-x-1">
+                        <InlineResumeField
+                          pasteMode="plainTextSingleParagraph"
+                          value={item.degree || ''}
+                          onChange={(e) => handleFieldChange(item.id, 'degree', e.target.value)}
+                          placeholder={t('builder.forms.education.placeholders.degree')}
+                          className="resume-canvas-field-title w-auto max-w-full"
+                          aria-label={t('builder.forms.education.fields.degree')}
                         />
-                      </BuilderFormField>
+                        <span className="text-muted-foreground/40">,</span>
+                        <InlineResumeField
+                          pasteMode="plainTextSingleParagraph"
+                          value={item.area || ''}
+                          onChange={(e) => handleFieldChange(item.id, 'area', e.target.value)}
+                          placeholder={t('builder.forms.education.placeholders.area')}
+                          className="resume-canvas-field-title w-auto max-w-full"
+                          aria-label={t('builder.forms.education.fields.area')}
+                        />
+                      </div>
+                      <InlineResumeField
+                        pasteMode="plainTextSingleParagraph"
+                        value={getEducationExplicitDate(item)}
+                        onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
+                        placeholder={t('builder.forms.education.placeholders.date')}
+                        fieldSize="small"
+                        align="right"
+                        className="resume-canvas-field-meta w-auto max-w-[9rem] shrink-0 justify-self-end"
+                        aria-label={t('builder.genericItemForm.fields.date')}
+                      />
+                    </div>
 
-                      <div>
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="builder-field-label block">
-                            {t('builder.genericItemForm.fields.highlights')}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleAddHighlight(item.id)}
-                            className="builder-field-caption shrink-0 underline decoration-black/20 underline-offset-2 hover:text-foreground"
-                          >
-                            <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
-                            {t('builder.genericItemForm.actions.addPoint')}
-                          </button>
-                        </div>
+                    <InlineResumeField
+                      pasteMode="plainTextSingleParagraph"
+                      value={item.institution || ''}
+                      onChange={(e) => handleFieldChange(item.id, 'institution', e.target.value)}
+                      placeholder={t('builder.forms.education.placeholders.institution')}
+                      fieldSize="small"
+                      className="resume-canvas-field-meta"
+                      aria-label={t('builder.forms.education.fields.institution')}
+                    />
+
+                    <InlineResumeTextarea
+                      pasteMode="plainTextMultiline"
+                      value={getEducationSummary(item)}
+                      onChange={(e) => handleFieldChange(item.id, 'summary', e.target.value)}
+                      placeholder={t('builder.forms.education.placeholders.summary')}
+                      fieldSize="small"
+                      rows={1}
+                      className="mt-0.5 min-h-[1.5rem] text-muted-foreground"
+                      aria-label={t('builder.genericItemForm.fields.summaryOptional')}
+                    />
+
+                    {highlights.length > 0 ? (
+                      <div className="resume-canvas-bullets">
                         {highlights.map((highlight, idx) => (
-                          <div key={idx} className="mb-1.5 flex gap-1.5 last:mb-0">
-                            <Textarea
-                              pasteMode="plainTextSingleParagraph"
+                          <div key={idx} className="resume-canvas-bullet-row group/hl">
+                            <InlineResumeTextarea
+                              pasteMode="plainTextMultiline"
                               value={highlight}
                               onChange={(e) => handleHighlightChange(item.id, idx, e.target.value)}
-                              className="builder-field-textarea min-h-[36px] flex-1"
                               placeholder={t('builder.forms.education.placeholders.highlight')}
-                              rows={2}
+                              fieldSize="small"
+                              rows={1}
+                              className="min-h-[1.5rem] min-w-0 flex-1"
                             />
                             <Button
                               variant="ghost"
                               size="icon-sm"
                               aria-label={t('common.delete')}
                               onClick={() => handleRemoveHighlight(item.id, idx)}
-                              className="h-7 w-7 shrink-0 self-end border border-border text-muted-foreground hover:text-red-600"
+                              className="absolute right-0 top-0 h-6 w-6 text-muted-foreground opacity-0 hover:text-red-600 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  </DraggableListItem>
-                );
-              })}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
+                    ) : null}
+                    <ResumeCanvasAddLink
+                      className="mt-1"
+                      onClick={() => handleAddHighlight(item.id)}
+                    >
+                      <Plus className="inline h-3 w-3" aria-hidden />
+                      {t('builder.genericItemForm.actions.addPoint')}
+                    </ResumeCanvasAddLink>
+
+                    <details className="resume-canvas-advanced">
+                      <summary>Location · start / end dates</summary>
+                      <div className="mt-1 space-y-1">
+                        <InlineResumeField
+                          pasteMode="plainTextSingleParagraph"
+                          value={item.location || ''}
+                          onChange={(e) => handleFieldChange(item.id, 'location', e.target.value)}
+                          placeholder={t('builder.forms.education.placeholders.location')}
+                          fieldSize="small"
+                          aria-label={t('builder.genericItemForm.fields.location')}
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <InlineResumeField
+                            pasteMode="plainTextSingleParagraph"
+                            value={item.start_date || ''}
+                            onChange={(e) =>
+                              handleFieldChange(item.id, 'start_date', e.target.value)
+                            }
+                            placeholder="2014"
+                            fieldSize="small"
+                            aria-label="Start Date"
+                          />
+                          <InlineResumeField
+                            pasteMode="plainTextSingleParagraph"
+                            value={item.end_date || ''}
+                            onChange={(e) => handleFieldChange(item.id, 'end_date', e.target.value)}
+                            placeholder="2018"
+                            fieldSize="small"
+                            aria-label="End Date"
+                          />
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                </DraggableListItem>
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
+      <ResumeCanvasAddLink onClick={handleAdd} className="mt-1">
+        <Plus className="inline h-3 w-3" aria-hidden />
+        {t('builder.forms.education.addSchool')}
+      </ResumeCanvasAddLink>
     </div>
   );
 };

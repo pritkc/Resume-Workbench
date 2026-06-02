@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { SkillGroup, SkillsSection } from '@/components/dashboard/resume-component';
 import {
@@ -27,7 +26,7 @@ import {
 } from '@dnd-kit/sortable';
 import { DraggableListItem } from '../draggable-list-item';
 import { SkillGroupValuesDnd } from '../skill-group-values-dnd';
-import { BuilderFormField } from '../builder-form-field';
+import { InlineResumeField, ResumeCanvasAddLink } from '../inline-resume-field';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 /** Split pasted or typed draft text into individual skill tags (comma, semicolon, or line break). */
@@ -185,66 +184,56 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
 
               return (
                 <DraggableListItem key={group.id} id={group.id}>
-                  <div className="group/skill entry-card-editor relative">
+                  <div className="group/skill resume-canvas-entry pr-6">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => handleRemove(group.id)}
                       aria-label={t('builder.additionalForm.removeGroup')}
-                      className="absolute right-1 top-1 z-10 h-7 w-7 border border-border bg-card/95 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/skill:opacity-100 group-focus-within/skill:opacity-100"
+                      className="resume-canvas-entry-actions h-6 w-6 text-red-600/80 hover:text-red-600"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
 
-                    <div className="mb-2 flex flex-wrap items-end gap-2 border-b border-border pb-2 pr-8">
-                      <BuilderFormField
-                        label={t('builder.additionalForm.groupLabel')}
-                        className="min-w-0 flex-1"
-                      >
-                        <Input
-                          pasteMode="plainTextSingleParagraph"
-                          value={group.label}
-                          onChange={(event) => handleLabelChange(group.id, event.target.value)}
-                          placeholder={t('builder.additionalForm.groupLabelPlaceholder')}
-                          className="builder-field-input w-full"
+                    <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                      <InlineResumeField
+                        pasteMode="plainTextSingleParagraph"
+                        value={group.label}
+                        onChange={(event) => handleLabelChange(group.id, event.target.value)}
+                        placeholder={t('builder.additionalForm.groupLabelPlaceholder')}
+                        className="resume-canvas-field-title w-auto min-w-[5rem] max-w-[10rem] shrink-0"
+                        aria-label={t('builder.additionalForm.groupLabel')}
+                      />
+                      <span className="pt-1 text-muted-foreground/50">:</span>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <SkillGroupValuesDnd
+                          scopeId={group.id}
+                          values={values}
+                          onReorder={(from, to) => handleReorderValues(group.id, from, to)}
+                          onRemove={(vi) => handleRemoveValue(group.id, vi)}
+                          removeAriaLabel={t('common.delete')}
+                          gripTitle={t('builder.additionalForm.reorderGripTitle')}
                         />
-                      </BuilderFormField>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="mb-0.5 flex items-baseline justify-between gap-2">
-                        <span className="builder-field-label">
-                          {t('builder.additionalForm.groupValues')}
-                        </span>
-                        <span className="builder-form-hint max-w-[min(100%,14rem)] text-right">
-                          {t('builder.additionalForm.valuesReorderHint')}
-                        </span>
-                      </div>
-                      <SkillGroupValuesDnd
-                        scopeId={group.id}
-                        values={values}
-                        onReorder={(from, to) => handleReorderValues(group.id, from, to)}
-                        onRemove={(vi) => handleRemoveValue(group.id, vi)}
-                        removeAriaLabel={t('common.delete')}
-                        gripTitle={t('builder.additionalForm.reorderGripTitle')}
-                      />
-                      <input
-                        type="text"
-                        value={draftByGroupId[group.id] ?? ''}
-                        onChange={(e) =>
-                          setDraftByGroupId((d) => ({ ...d, [group.id]: e.target.value }))
-                        }
-                        onPaste={(e) => handleDraftPaste(group.id, e)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddDraft(group.id);
+                        <InlineResumeField
+                          pasteMode="plainTextSingleParagraph"
+                          value={draftByGroupId[group.id] ?? ''}
+                          onChange={(e) =>
+                            setDraftByGroupId((d) => ({ ...d, [group.id]: e.target.value }))
                           }
-                        }}
-                        placeholder={t('builder.additionalForm.addValuePlaceholder')}
-                        className="builder-field-input w-full min-w-0 font-mono"
-                      />
+                          onPaste={(e) => handleDraftPaste(group.id, e)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddDraft(group.id);
+                            }
+                          }}
+                          placeholder={t('builder.additionalForm.addValuePlaceholder')}
+                          fieldSize="small"
+                          className="min-w-[8rem]"
+                          aria-label={t('builder.additionalForm.groupValues')}
+                        />
+                      </div>
                     </div>
                   </div>
                 </DraggableListItem>
@@ -255,14 +244,11 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
       </DndContext>
 
       {groups.length === 0 && (
-        <div className="border border-dashed border-border bg-card px-2 py-3 text-center">
-          <p className="builder-form-hint">{t('builder.additionalForm.emptyState')}</p>
-        </div>
+        <p className="py-1 text-[11px] text-muted-foreground">{t('builder.additionalForm.emptyState')}</p>
       )}
 
       {!hideFooterAdd ? (
-        <button
-          type="button"
+        <ResumeCanvasAddLink
           onClick={() => {
             updateGroups(
               [
@@ -276,11 +262,10 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
               onChange
             );
           }}
-          className="builder-field-caption inline-flex items-center underline decoration-black/20 underline-offset-2 hover:text-foreground"
         >
-          <Plus className="mr-0.5 inline h-3 w-3 align-middle" />
+          <Plus className="inline h-3 w-3" aria-hidden />
           {t('builder.additionalForm.addGroup')}
-        </button>
+        </ResumeCanvasAddLink>
       ) : null}
     </div>
   );

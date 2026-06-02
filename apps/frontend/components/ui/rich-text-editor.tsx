@@ -23,6 +23,8 @@ interface RichTextEditorProps {
   minHeight?: string;
   /** `full` toolbar, `hint` line, or `none` (editor only — use a section-level hint when needed). */
   toolbarMode?: 'full' | 'hint' | 'none';
+  /** `card` = bordered box; `inline` = borderless resume-canvas style */
+  surface?: 'card' | 'inline';
   /**
    * When true, paste uses text/plain and merges YAML-style wrapped lines.
    * Defaults to true when toolbarMode is `none`; set explicitly for full/hint toolbars.
@@ -45,10 +47,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   className,
   minHeight = '60px',
   toolbarMode = 'full',
+  surface = 'card',
   plainTextPaste,
 }) => {
   const usePlainTextPaste = plainTextPaste ?? toolbarMode === 'none';
   const plainTextPasteRef = useRef(usePlainTextPaste);
+  const surfaceClass =
+    surface === 'inline'
+      ? 'rich-text-editor-shell w-full border-0 bg-transparent px-0 py-0 text-sm text-foreground rounded-none focus-within:ring-0'
+      : 'w-full border border-border bg-card px-2.5 py-1.5 text-sm text-foreground rounded-none focus-within:ring-1 focus-within:ring-blue-700';
 
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -182,8 +189,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         ) : null}
         <div
           className={cn(
-            'w-full border border-border bg-card',
-            'px-2.5 py-1.5 text-sm text-gray-400 rounded-none'
+            surfaceClass,
+            surface === 'card' && 'text-gray-400'
           )}
           style={{ minHeight }}
         >
@@ -208,9 +215,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       ) : null}
       <div
         className={cn(
-          'w-full border border-border bg-card',
-          'px-2.5 py-1.5 text-sm text-foreground rounded-none',
-          'focus-within:ring-1 focus-within:ring-blue-700',
+          surfaceClass,
           '[&_.ProseMirror]:min-h-[32px] [&_.ProseMirror]:outline-none',
           '[&_.ProseMirror_p]:m-0',
           '[&_.ProseMirror_a]:text-primary [&_.ProseMirror_a]:underline'

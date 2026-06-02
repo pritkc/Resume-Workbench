@@ -64,6 +64,10 @@ export const HighlightBulletsRichTextDnd: React.FC<HighlightBulletsRichTextDndPr
     onReorder(oldIndex, newIndex);
   };
 
+  if (highlights.length === 0) {
+    return null;
+  }
+
   return (
     <DndContext
       id={`highlight-dnd-${scopeId}-${instanceId}`}
@@ -72,24 +76,25 @@ export const HighlightBulletsRichTextDnd: React.FC<HighlightBulletsRichTextDndPr
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-        <div className="space-y-0">
+        <div className="resume-canvas-bullets">
           {highlights.map((highlight, idx) => (
             <SortableHighlightRow key={rowIds[idx] ?? idx} id={rowIds[idx]!}>
-              <div className="group/hl relative mb-1.5 last:mb-0">
+              <div className="resume-canvas-bullet-row group/hl">
                 <RichTextEditor
                   value={highlight}
                   onChange={(html) => onChangeLine(idx, html)}
                   placeholder={placeholder}
-                  minHeight="36px"
+                  minHeight="24px"
                   toolbarMode="none"
-                  className="[&_.ProseMirror]:pr-8"
+                  surface="inline"
+                  className="min-w-0 flex-1 [&_.ProseMirror]:pr-7"
                 />
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   aria-label={deleteAriaLabel}
                   onClick={() => onRemoveLine(idx)}
-                  className="absolute right-1 top-1 z-10 h-7 w-7 border border-border bg-card/95 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-red-600/30 hover:bg-red-50/90 hover:text-red-700 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
+                  className="absolute right-0 top-0 z-10 h-6 w-6 text-muted-foreground opacity-0 hover:text-red-600 group-hover/hl:opacity-100 group-focus-within/hl:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

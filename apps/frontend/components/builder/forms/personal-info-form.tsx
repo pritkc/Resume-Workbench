@@ -1,21 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PersonalInfo } from '@/components/dashboard/resume-component';
 import { useTranslations } from '@/lib/i18n';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { getEditableProfileLinks } from '@/lib/utils/rendercv-fields';
-import { cn } from '@/lib/utils';
-import { BuilderFormField } from '../builder-form-field';
+import { InlineResumeField, ResumeCanvasAddLink } from '../inline-resume-field';
 
 interface PersonalInfoFormProps {
   data: PersonalInfo;
   onChange: (data: PersonalInfo) => void;
 }
-
-const inputClass = 'builder-field-input w-full';
 
 function inferIconFromUrl(url: string): string | null {
   const normalized = url.toLowerCase();
@@ -30,13 +26,21 @@ function inferLabelFromUrl(url: string): string {
   if (normalized.includes('linkedin.com')) return 'LinkedIn';
   if (normalized.includes('github.com')) return 'GitHub';
   if (normalized.includes('twitter.com') || normalized.includes('x.com')) return 'X';
-  return '';
+  return 'Link';
+}
+
+function displayLinkLabel(label: string | undefined, url: string | null | undefined): string {
+  const trimmed = label?.trim();
+  if (trimmed) return trimmed;
+  if (url) return inferLabelFromUrl(url);
+  return 'Link';
 }
 
 export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChange }) => {
   const { t } = useTranslations();
   const profileLinks = getEditableProfileLinks(data);
   const [expandedAdvanced, setExpandedAdvanced] = useState<Record<number, boolean>>({});
+  const [showExtras, setShowExtras] = useState(false);
 
   const buildLegacyProfileState = (
     links: Array<{
@@ -177,164 +181,186 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
   };
 
   return (
-    <div className="entry-card-editor space-y-3">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <BuilderFormField label={t('resume.personalInfo.name')} htmlFor="name">
-          <Input
+    <div className="resume-canvas-header group/header">
+      <div className="resume-canvas-header-inner">
+        <InlineResumeField
+          pasteMode="plainTextSingleParagraph"
+          id="name"
+          value={data.name || ''}
+          onChange={(e) => handleChange('name', e.target.value)}
+          placeholder={t('builder.personalInfoForm.placeholders.name')}
+          fieldSize="hero"
+          align="center"
+          aria-label={t('resume.personalInfo.name')}
+        />
+        <InlineResumeField
+          pasteMode="plainTextSingleParagraph"
+          id="headline"
+          value={data.headline || data.title || ''}
+          onChange={(e) => handleChange('headline', e.target.value)}
+          placeholder={t('builder.personalInfoForm.placeholders.title')}
+          fieldSize="small"
+          align="center"
+          className="resume-canvas-field-headline resume-canvas-field-meta"
+          aria-label="Headline"
+        />
+
+        <div className="resume-canvas-header-contact">
+          <InlineResumeField
             pasteMode="plainTextSingleParagraph"
-            id="name"
-            value={data.name || ''}
-            onChange={(e) => handleChange('name', e.target.value)}
-            placeholder={t('builder.personalInfoForm.placeholders.name')}
-            className={inputClass}
-          />
-        </BuilderFormField>
-        <BuilderFormField label="Headline" htmlFor="headline">
-          <Input
-            pasteMode="plainTextSingleParagraph"
-            id="headline"
-            value={data.headline || data.title || ''}
-            onChange={(e) => handleChange('headline', e.target.value)}
-            placeholder={t('builder.personalInfoForm.placeholders.title')}
-            className={inputClass}
-          />
-        </BuilderFormField>
-        <BuilderFormField
-          label={t('resume.personalInfo.location')}
-          htmlFor="location"
-          className="sm:col-span-2"
-        >
-          <Input
-            pasteMode="plainTextSingleParagraph"
-            id="location"
             value={data.location || ''}
             onChange={(e) => handleChange('location', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.location')}
-            className={inputClass}
+            fieldSize="small"
+            align="center"
+            className="resume-canvas-field-meta max-w-[9rem]"
+            aria-label={t('resume.personalInfo.location')}
           />
-        </BuilderFormField>
-        <BuilderFormField label={t('resume.personalInfo.email')} htmlFor="email">
-          <Input
+          <span className="text-muted-foreground/40" aria-hidden>
+            ·
+          </span>
+          <InlineResumeField
             pasteMode="plainTextSingleParagraph"
-            id="email"
             type="email"
             value={data.email || ''}
             onChange={(e) => handleChange('email', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.email')}
-            className={inputClass}
+            fieldSize="small"
+            align="center"
+            className="resume-canvas-field-meta max-w-[12rem]"
+            aria-label={t('resume.personalInfo.email')}
           />
-        </BuilderFormField>
-        <BuilderFormField label={t('resume.personalInfo.phone')} htmlFor="phone">
-          <Input
+          <span className="text-muted-foreground/40" aria-hidden>
+            ·
+          </span>
+          <InlineResumeField
             pasteMode="plainTextSingleParagraph"
-            id="phone"
             type="tel"
             value={data.phone || ''}
             onChange={(e) => handleChange('phone', e.target.value)}
             placeholder={t('builder.personalInfoForm.placeholders.phone')}
-            className={inputClass}
+            fieldSize="small"
+            align="center"
+            className="resume-canvas-field-meta max-w-[9rem]"
+            aria-label={t('resume.personalInfo.phone')}
           />
-        </BuilderFormField>
-        <BuilderFormField label="Photo URL" htmlFor="photo" className="sm:col-span-2">
-          <Input
-            pasteMode="plainTextSingleParagraph"
-            id="photo"
-            value={data.photo || data.photoUrl || ''}
-            onChange={(e) => handleChange('photo', e.target.value)}
-            placeholder="https://…"
-            className={inputClass}
-          />
-        </BuilderFormField>
-        <BuilderFormField label="Website" htmlFor="website" className="sm:col-span-2">
-          <Input
-            pasteMode="plainTextSingleParagraph"
-            id="website"
-            value={data.website || ''}
-            onChange={(e) => handleChange('website', e.target.value)}
-            placeholder="https://…"
-            className={inputClass}
-          />
-        </BuilderFormField>
+
+          {profileLinks.map((item, index) => (
+            <React.Fragment key={index}>
+              <span className="text-muted-foreground/40" aria-hidden>
+                ·
+              </span>
+              <span className="resume-canvas-header-link-item group/link">
+                <InlineResumeField
+                  pasteMode="plainTextSingleParagraph"
+                  value={item.url || ''}
+                  onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
+                  placeholder={displayLinkLabel(item.label, item.url).toLowerCase()}
+                  fieldSize="small"
+                  className="resume-canvas-field-meta max-w-[8.5rem]"
+                  aria-label={displayLinkLabel(item.label, item.url)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('common.delete')}
+                  onClick={() => handleRemoveProfileLink(index)}
+                  className="h-4 w-4 shrink-0 text-red-600/70 opacity-0 hover:text-red-600 group-hover/link:opacity-100"
+                >
+                  <Trash2 className="h-2.5 w-2.5" />
+                </Button>
+              </span>
+            </React.Fragment>
+          ))}
+
+          <span className="text-muted-foreground/40" aria-hidden>
+            ·
+          </span>
+          <ResumeCanvasAddLink onClick={handleAddProfileLink} className="text-[10px]">
+            + link
+          </ResumeCanvasAddLink>
+
+          {!showExtras ? (
+            <button
+              type="button"
+              className="resume-canvas-header-advanced-toggle"
+              onClick={() => setShowExtras(true)}
+            >
+              · extras
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="border-t border-border pt-2">
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="builder-field-label block">Connections</span>
+      {showExtras ? (
+        <div className="resume-canvas-header-extras">
+          <InlineResumeField
+            pasteMode="plainTextSingleParagraph"
+            value={data.website || ''}
+            onChange={(e) => handleChange('website', e.target.value)}
+            placeholder="Website"
+            fieldSize="small"
+            className="resume-canvas-field-meta max-w-[12rem]"
+            aria-label="Website"
+          />
+          <InlineResumeField
+            pasteMode="plainTextSingleParagraph"
+            value={data.photo || data.photoUrl || ''}
+            onChange={(e) => handleChange('photo', e.target.value)}
+            placeholder="Photo URL"
+            fieldSize="small"
+            className="resume-canvas-field-meta max-w-[12rem]"
+            aria-label="Photo URL"
+          />
+          {profileLinks.map((item, index) => {
+            const showAdvanced = expandedAdvanced[index] ?? false;
+            return (
+              <div key={`adv-${index}`} className="inline-flex items-center gap-1">
+                <InlineResumeField
+                  pasteMode="plainTextSingleParagraph"
+                  value={item.label || ''}
+                  onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
+                  placeholder="Label"
+                  fieldSize="small"
+                  className="w-16 shrink-0"
+                />
+                <button
+                  type="button"
+                  onClick={() => toggleAdvanced(index)}
+                  className="inline-flex items-center text-[10px] text-muted-foreground"
+                  aria-label="Link icon"
+                >
+                  {showAdvanced ? (
+                    <ChevronUp className="h-3 w-3" aria-hidden />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" aria-hidden />
+                  )}
+                </button>
+                {showAdvanced ? (
+                  <InlineResumeField
+                    pasteMode="plainTextSingleParagraph"
+                    value={item.fontawesome_icon || item.fontAwesomeIcon || ''}
+                    onChange={(e) =>
+                      handleProfileLinkChange(index, 'fontawesome_icon', e.target.value)
+                    }
+                    placeholder={t('builder.personalInfoForm.iconPlaceholder')}
+                    fieldSize="small"
+                    className="w-20"
+                  />
+                ) : null}
+              </div>
+            );
+          })}
           <button
             type="button"
-            onClick={handleAddProfileLink}
-            className="builder-field-caption underline decoration-black/20 underline-offset-2 hover:text-foreground"
+            className="resume-canvas-header-advanced-toggle"
+            onClick={() => setShowExtras(false)}
           >
-            + Add link
+            hide extras
           </button>
         </div>
-        {profileLinks.length === 0 ? (
-          <p className="builder-field-caption">No extra links.</p>
-        ) : (
-          <div className="space-y-2">
-            {profileLinks.map((item, index) => {
-              const showAdvanced = expandedAdvanced[index] ?? false;
-              return (
-                <div
-                  key={index}
-                  className="space-y-1 border-b border-border/5 pb-2 last:border-0 last:pb-0"
-                >
-                  <div className="field-row flex items-center gap-1.5">
-                    <Input
-                      pasteMode="plainTextSingleParagraph"
-                      value={item.label || ''}
-                      onChange={(e) => handleProfileLinkChange(index, 'label', e.target.value)}
-                      placeholder="Label"
-                      className={cn(inputClass, 'w-28 shrink-0 sm:w-32')}
-                    />
-                    <Input
-                      pasteMode="plainTextSingleParagraph"
-                      value={item.url || ''}
-                      onChange={(e) => handleProfileLinkChange(index, 'url', e.target.value)}
-                      placeholder="https://…"
-                      className={cn(inputClass, 'min-w-0 flex-1')}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('common.delete')}
-                      onClick={() => handleRemoveProfileLink(index)}
-                      className="h-8 w-8 shrink-0 border border-border text-red-600 hover:border-red-600 hover:bg-transparent"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleAdvanced(index)}
-                    className="inline-flex items-center gap-1 builder-field-caption hover:text-foreground"
-                  >
-                    {showAdvanced ? (
-                      <ChevronUp className="h-3 w-3" aria-hidden />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" aria-hidden />
-                    )}
-                    {t('builder.personalInfoForm.advancedLinkOptions')}
-                  </button>
-                  {showAdvanced ? (
-                    <Input
-                      pasteMode="plainTextSingleParagraph"
-                      value={item.fontawesome_icon || item.fontAwesomeIcon || ''}
-                      onChange={(e) =>
-                        handleProfileLinkChange(index, 'fontawesome_icon', e.target.value)
-                      }
-                      placeholder={t('builder.personalInfoForm.iconPlaceholder')}
-                      title="Font Awesome icon id"
-                      className={inputClass}
-                    />
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      ) : null}
     </div>
   );
 };
