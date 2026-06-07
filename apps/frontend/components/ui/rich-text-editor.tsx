@@ -90,7 +90,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       isInternalUpdateRef.current = true;
       const html = editor.getHTML();
       // Convert <p> tags to plain content since we're in bullet mode
-      const cleanHtml = html.replace(/<p>/g, '').replace(/<\/p>/g, '').trim();
+      const cleanHtml = html.replace(/<p>/g, '').replace(/<\/p>/g, '');
       onChange(cleanHtml);
       // Reset flag after a tick to ensure it stays true through the render cycle
       setTimeout(() => {
@@ -147,7 +147,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // Sync external value changes (e.g., from parent reset)
   useEffect(() => {
     if (editor && !isInternalUpdateRef.current) {
-      const currentContent = editor.getHTML().replace(/<p>/g, '').replace(/<\/p>/g, '').trim();
+      const currentContent = editor.getHTML().replace(/<p>/g, '').replace(/<\/p>/g, '');
 
       if (value !== currentContent) {
         editor.commands.setContent(value || '');
@@ -188,10 +188,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </p>
         ) : null}
         <div
-          className={cn(
-            surfaceClass,
-            surface === 'card' && 'text-gray-400'
-          )}
+          className={cn(surfaceClass, surface === 'card' && 'text-gray-400')}
           style={{ minHeight }}
         >
           {placeholder}

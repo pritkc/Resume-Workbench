@@ -21,13 +21,17 @@ import {
 } from '@dnd-kit/sortable';
 import {
   buildProjectDescription,
-  getProjectDate,
+  getProjectDateEditor,
   getProjectHighlightsEditor,
-  getProjectTechStack,
+  getProjectTechStackEditor,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
 import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
-import { InlineResumeField, InlineResumeTextarea, ResumeCanvasAddLink } from '../inline-resume-field';
+import {
+  InlineResumeField,
+  InlineResumeTextarea,
+  ResumeCanvasAddLink,
+} from '../inline-resume-field';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface ProjectsFormProps {
@@ -153,10 +157,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
         collisionDetection={resumeSortableCollision}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext
-          items={data.map((item) => item.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={data.map((item) => item.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-0">
             {data.map((item) => {
               const highlights = getProjectHighlightsEditor(item);
@@ -212,7 +213,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                       />
                       <InlineResumeField
                         pasteMode="plainTextSingleParagraph"
-                        value={getProjectDate(item)}
+                        value={getProjectDateEditor(item)}
                         onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
                         placeholder={t('builder.forms.projects.placeholders.date')}
                         fieldSize="small"
@@ -226,7 +227,7 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                       <span className="resume-canvas-inline-label">Stack</span>
                       <InlineResumeTextarea
                         pasteMode="plainTextMultiline"
-                        value={getProjectTechStack(item)}
+                        value={getProjectTechStackEditor(item)}
                         onChange={(e) => handleFieldChange(item.id, 'techStack', e.target.value)}
                         placeholder={t('builder.forms.projects.placeholders.techStack')}
                         fieldSize="small"
@@ -237,13 +238,13 @@ export const ProjectsForm: React.FC<ProjectsFormProps> = ({ data, onChange }) =>
                     </div>
 
                     <HighlightBulletsRichTextDnd
-                        scopeId={`pr-${item.id}`}
-                        highlights={highlights}
-                        onReorder={(from, to) => handleReorderHighlights(item.id, from, to)}
-                        onChangeLine={(idx, html) => handleHighlightChange(item.id, idx, html)}
-                        onRemoveLine={(idx) => handleRemoveHighlight(item.id, idx)}
-                        placeholder={t('builder.forms.projects.placeholders.highlight')}
-                        deleteAriaLabel={t('common.delete')}
+                      scopeId={`pr-${item.id}`}
+                      highlights={highlights}
+                      onReorder={(from, to) => handleReorderHighlights(item.id, from, to)}
+                      onChangeLine={(idx, html) => handleHighlightChange(item.id, idx, html)}
+                      onRemoveLine={(idx) => handleRemoveHighlight(item.id, idx)}
+                      placeholder={t('builder.forms.projects.placeholders.highlight')}
+                      deleteAriaLabel={t('common.delete')}
                     />
                     <ResumeCanvasAddLink
                       className="mt-1"

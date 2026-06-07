@@ -338,6 +338,54 @@ def test_rendercv_engine_applies_summary_alignment_to_typst(
     assert "data-summary-align" not in typst
 
 
+def test_rendercv_engine_expands_project_stack_header_without_changing_experience(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    resume = {
+        "personalInfo": {"name": "Test User", "email": "test@example.com"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "title": "Engineer",
+                "company": "Acme",
+                "years": "2024 - Present",
+                "techStack": "Python, FastAPI",
+                "description": ["Built APIs."],
+            }
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Tiny",
+                "techStack": (
+                    "Python, FastAPI, PostgreSQL, React, Docker, Kubernetes, Terraform"
+                ),
+                "description": ["Built a compact project."],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+
+    bundle = render_resume_bundle(
+        resume,
+        RenderThemeSettings(theme_id="classic"),
+        identifier="project_stack_header",
+    )
+
+    typst = bundle.typst_path.read_text(encoding="utf-8")
+    assert bundle.pdf_path is not None and bundle.pdf_path.exists()
+    assert "#let resume-matcher-project-entry(" in typst
+    assert "#resume-matcher-project-entry(" in typst
+    assert "#regular-entry(" in typst
+    assert "let project-header-gap = 0.25cm" in typst
+    assert "minimum-stack-width" in typst
+
+
 def test_rendercv_engine_is_deterministic_for_same_input(
     sample_resume: dict,
     tmp_path: Path,

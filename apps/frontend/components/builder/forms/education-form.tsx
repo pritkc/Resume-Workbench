@@ -21,12 +21,16 @@ import {
 } from '@dnd-kit/sortable';
 import {
   buildEducationDescription,
-  getEducationExplicitDate,
+  getEducationExplicitDateEditor,
   getEducationHighlightsEditor,
-  getEducationSummary,
+  getEducationSummaryEditor,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
-import { InlineResumeField, InlineResumeTextarea, ResumeCanvasAddLink } from '../inline-resume-field';
+import {
+  InlineResumeField,
+  InlineResumeTextarea,
+  ResumeCanvasAddLink,
+} from '../inline-resume-field';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 interface EducationFormProps {
@@ -119,7 +123,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
       return {
         ...item,
         highlights,
-        description: buildEducationDescription(getEducationSummary(item), highlights),
+        description: buildEducationDescription(getEducationSummaryEditor(item), highlights),
       };
     });
   };
@@ -130,7 +134,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
       return {
         ...item,
         highlights,
-        description: buildEducationDescription(getEducationSummary(item), highlights),
+        description: buildEducationDescription(getEducationSummaryEditor(item), highlights),
       };
     });
   };
@@ -142,7 +146,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
       return {
         ...item,
         highlights,
-        description: buildEducationDescription(getEducationSummary(item), highlights),
+        description: buildEducationDescription(getEducationSummaryEditor(item), highlights),
       };
     });
   };
@@ -169,10 +173,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
         collisionDetection={resumeSortableCollision}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext
-          items={data.map((item) => item.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={data.map((item) => item.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-0">
             {data.map((item) => {
               const highlights = getEducationHighlightsEditor(item);
@@ -214,7 +215,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
                       </div>
                       <InlineResumeField
                         pasteMode="plainTextSingleParagraph"
-                        value={getEducationExplicitDate(item)}
+                        value={getEducationExplicitDateEditor(item)}
                         onChange={(e) => handleFieldChange(item.id, 'date', e.target.value)}
                         placeholder={t('builder.forms.education.placeholders.date')}
                         fieldSize="small"
@@ -236,7 +237,7 @@ export const EducationForm: React.FC<EducationFormProps> = ({ data, onChange }) 
 
                     <InlineResumeTextarea
                       pasteMode="plainTextMultiline"
-                      value={getEducationSummary(item)}
+                      value={getEducationSummaryEditor(item)}
                       onChange={(e) => handleFieldChange(item.id, 'summary', e.target.value)}
                       placeholder={t('builder.forms.education.placeholders.summary')}
                       fieldSize="small"

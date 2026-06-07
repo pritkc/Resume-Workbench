@@ -28,6 +28,15 @@ function cleanText(value?: string | null): string {
   return value?.trim() || '';
 }
 
+function editorText(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      return value;
+    }
+  }
+  return '';
+}
+
 /** Collapse simple HTML to plain text for comparing rich-text summary vs bullets. */
 function plainTextFromRich(html: string): string {
   const t = cleanText(html);
@@ -250,6 +259,10 @@ export function getExperiencePosition(experience?: Experience): string {
   return cleanText(experience?.position || experience?.title);
 }
 
+export function getExperiencePositionEditor(experience?: Experience): string {
+  return editorText(experience?.position, experience?.title);
+}
+
 export function getExperienceDate(experience?: Experience): string {
   return buildStructuredDateRange(
     experience?.start_date,
@@ -262,8 +275,16 @@ export function getExperienceExplicitDate(experience?: Experience): string {
   return cleanText(experience?.date || experience?.years);
 }
 
+export function getExperienceExplicitDateEditor(experience?: Experience): string {
+  return editorText(experience?.date, experience?.years);
+}
+
 export function getExperienceTechStack(experience?: Experience): string {
   return cleanText(experience?.techStack);
+}
+
+export function getExperienceTechStackEditor(experience?: Experience): string {
+  return editorText(experience?.techStack);
 }
 
 function stripLeadingTechStackDuplicates(
@@ -339,10 +360,21 @@ export function getEducationExplicitDate(education?: Education): string {
   return cleanText(education?.date || education?.years);
 }
 
+export function getEducationExplicitDateEditor(education?: Education): string {
+  return editorText(education?.date, education?.years);
+}
+
 export function getEducationSummary(education?: Education): string {
   const summary = cleanText(education?.summary);
   if (summary) {
     return summary;
+  }
+  return splitDescriptionLines(education?.description)[0] || '';
+}
+
+export function getEducationSummaryEditor(education?: Education): string {
+  if (typeof education?.summary === 'string') {
+    return education.summary;
   }
   return splitDescriptionLines(education?.description)[0] || '';
 }
@@ -399,8 +431,16 @@ export function getProjectTechStack(project?: Project): string {
   return cleanText(project?.techStack ?? project?.role);
 }
 
+export function getProjectTechStackEditor(project?: Project): string {
+  return editorText(project?.techStack, project?.role);
+}
+
 export function getProjectDate(project?: Project): string {
   return cleanText(project?.date || project?.years);
+}
+
+export function getProjectDateEditor(project?: Project): string {
+  return editorText(project?.date, project?.years);
 }
 
 function projectStackRawForStrip(project?: Project): string {

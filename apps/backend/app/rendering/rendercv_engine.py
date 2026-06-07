@@ -46,6 +46,97 @@ _SUMMARY_SECTION_RE = re.compile(
     r"(?ims)(?P<prefix>^==\s+summary[:\s]*\r?\n(?:\r?\n)?)(?P<body>.*?)(?=\r?\n==\s+|\Z)"
 )
 _TYPST_DIMENSION_RE = re.compile(r"^\d+(?:\.\d+)?(?:cm|mm|in|pt|em|ex)$")
+_REGULAR_ENTRY_CALL = "#regular-entry("
+_PROJECT_ENTRY_CALL = "#resume-matcher-project-entry("
+_PROJECT_ENTRY_HELPER = r"""
+
+// Resume Workbench project headers: keep project names left and tech stacks right,
+// while giving tech stacks the extra room left by short project names.
+#let resume-matcher-project-entry(main-column, date-and-location-column, main-column-second-row: none) = {
+  metadata("skip-content-area")
+
+  context {
+    let config = rendercv-config.get()
+    let entries-date-and-location-width = config.at("entries-date-and-location-width")
+    let entries-highlights-bullet = config.at("entries-highlights-bullet")
+    let entries-highlights-nested-bullet = config.at("entries-highlights-nested-bullet")
+    let entries-highlights-space-between-items = config.at(
+      "entries-highlights-space-between-items",
+    )
+    let entries-highlights-space-between-bullet-and-text = config.at(
+      "entries-highlights-space-between-bullet-and-text",
+    )
+    let entries-highlights-space-above = config.at("entries-highlights-space-above")
+    let typography-line-spacing = config.at("typography-line-spacing")
+    let entries-allow-page-break = config.at("entries-allow-page-break")
+    let sections-space-between-regular-entries = config.at("sections-space-between-regular-entries")
+    let entries-side-space = config.at("entries-side-space")
+    let justify = config.at("justify")
+    let typography-date-and-location-column-alignment = config.at("typography-date-and-location-column-alignment")
+    let entries-highlights-space-left = config.at("entries-highlights-space-left")
+    let start-align = config.at("start-align")
+
+    set list(
+      marker: (entries-highlights-bullet, entries-highlights-nested-bullet),
+      indent: entries-highlights-space-left,
+      spacing: entries-highlights-space-between-items + typography-line-spacing,
+      body-indent: entries-highlights-space-between-bullet-and-text,
+    )
+    let list-depth = state("list-depth", 0)
+    show list.item: i => {
+      list-depth.update(d => d + 1)
+      i
+      list-depth.update(d => d - 1)
+    }
+    show list: l => {
+      context if list-depth.get() == 1 {
+        v(entries-highlights-space-above)
+      }
+      context if list-depth.get() == 2 {
+        v(entries-highlights-space-between-items)
+      }
+      l
+    }
+    set par(
+      spacing: typography-line-spacing,
+      leading: typography-line-spacing,
+      justify: justify,
+    )
+    block(
+      {
+        if repr(main-column) != "[ ]" or repr(date-and-location-column) != "[ ]" {
+          layout(size => {
+            let project-header-gap = 0.25cm
+            let minimum-stack-width = calc.min(entries-date-and-location-width, size.width * 45%)
+            let max-main-width = size.width - minimum-stack-width - project-header-gap
+            let main-column-width = if max-main-width > 0cm {
+              calc.min(measure(main-column).width, max-main-width)
+            } else {
+              size.width * 50%
+            }
+            grid(
+              columns: (main-column-width, 1fr),
+              column-gutter: project-header-gap,
+              align: (start-align, typography-date-and-location-column-alignment),
+              main-column,
+              date-and-location-column,
+            )
+          })
+        }
+        set align(start-align)
+        main-column-second-row
+      },
+      breakable: entries-allow-page-break,
+      below: sections-space-between-regular-entries + typography-line-spacing,
+      inset: (
+        left: entries-side-space,
+        right: entries-side-space,
+      ),
+      width: 100%,
+    )
+  }
+}
+"""
 
 
 def _reset_rendercv_typst_caches() -> None:
@@ -242,6 +333,238 @@ def _apply_summary_alignment_to_typst(
         typst_path.write_text(updated, encoding="utf-8")
 
 
+def _matching_typst_delimiter(text: str, open_index: int) -> int | None:
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    opening = text[open_index]
+    closing = pairs.get(opening)
+    if closing is None:
+        return None
+
+    stack = [closing]
+    in_string = False
+    escape = False
+    for index in range(open_index + 1, len(text)):
+        char = text[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char in pairs:
+            stack.append(pairs[char])
+            continue
+        if stack and char == stack[-1]:
+            stack.pop()
+            if not stack:
+                return index
+    return None
+
+
+def _top_level_typst_commas(text: str) -> list[int]:
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    stack: list[str] = []
+    commas: list[int] = []
+    in_string = False
+    escape = False
+    for index, char in enumerate(text):
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char in pairs:
+            stack.append(pairs[char])
+            continue
+        if stack and char == stack[-1]:
+            stack.pop()
+            continue
+        if char == "," and not stack:
+            commas.append(index)
+    return commas
+
+
+def _regular_entry_has_summary_right_column(call_body: str) -> bool:
+    commas = _top_level_typst_commas(call_body)
+    if not commas:
+        return False
+    second_arg_start = commas[0] + 1
+    second_arg_end = commas[1] if len(commas) > 1 else len(call_body)
+    return "#summary[" in call_body[second_arg_start:second_arg_end]
+
+
+def _typst_block_is_empty(block: str) -> bool:
+    stripped = block.strip()
+    if not stripped.startswith("[") or not stripped.endswith("]"):
+        return False
+    return not stripped[1:-1].strip()
+
+
+def _move_leading_summary_row_to_right_column(call_body: str) -> str | None:
+    commas = _top_level_typst_commas(call_body)
+    if len(commas) < 2:
+        return None
+
+    second_arg_start = commas[0] + 1
+    second_arg_end = commas[1]
+    if not _typst_block_is_empty(call_body[second_arg_start:second_arg_end]):
+        return None
+
+    match = re.search(r"main-column-second-row:\s*\[", call_body[second_arg_end:])
+    if match is None:
+        return None
+    second_row_open = second_arg_end + match.end() - 1
+    second_row_close = _matching_typst_delimiter(call_body, second_row_open)
+    if second_row_close is None:
+        return None
+
+    second_row_body_start = second_row_open + 1
+    second_row_body = call_body[second_row_body_start:second_row_close]
+    leading_whitespace = len(second_row_body) - len(second_row_body.lstrip())
+    summary_start = second_row_body_start + leading_whitespace
+    if not call_body.startswith("#summary[", summary_start):
+        return None
+
+    summary_open = summary_start + len("#summary")
+    summary_close = _matching_typst_delimiter(call_body, summary_open)
+    if summary_close is None:
+        return None
+
+    summary_block = call_body[second_row_body_start:summary_close + 1]
+    right_column = f"\n  [{summary_block}\n  ]"
+    return (
+        call_body[:second_arg_start]
+        + right_column
+        + call_body[second_arg_end:second_row_body_start]
+        + call_body[summary_close + 1:]
+    )
+
+
+def _move_inline_project_summary_to_right_column(call_body: str) -> str | None:
+    commas = _top_level_typst_commas(call_body)
+    if len(commas) < 2:
+        return None
+
+    first_arg_end = commas[0]
+    second_arg_start = commas[0] + 1
+    second_arg_end = commas[1]
+    if not _typst_block_is_empty(call_body[second_arg_start:second_arg_end]):
+        return None
+
+    first_arg = call_body[:first_arg_end]
+    first_arg_open = first_arg.find("[")
+    if first_arg_open == -1:
+        return None
+    first_arg_close = _matching_typst_delimiter(first_arg, first_arg_open)
+    if first_arg_close is None:
+        return None
+
+    first_body_start = first_arg_open + 1
+    first_body_end = first_arg_close
+    first_body = first_arg[first_body_start:first_body_end]
+    if not first_body.lstrip().startswith("#strong["):
+        return None
+
+    summary_start = first_arg.find("#summary[", first_body_start, first_body_end)
+    if summary_start == -1:
+        return None
+    summary_open = summary_start + len("#summary")
+    summary_close = _matching_typst_delimiter(first_arg, summary_open)
+    if summary_close is None:
+        return None
+
+    summary_line_start = first_arg.rfind("\n", first_body_start, summary_start) + 1
+    summary_block = first_arg[summary_line_start:summary_close + 1]
+    first_body_before = first_arg[first_body_start:summary_line_start].rstrip()
+    first_body_after = first_arg[summary_close + 1:first_body_end]
+    patched_first_arg = (
+        first_arg[:first_body_start]
+        + first_body_before
+        + "\n"
+        + first_arg[first_body_end:first_arg_end]
+    )
+    right_column = f"\n  [{summary_block}\n  ]"
+    second_row = (
+        f",\n  main-column-second-row: [{first_body_after}\n  ]"
+        if first_body_after.strip()
+        else ""
+    )
+
+    return (
+        patched_first_arg
+        + ","
+        + right_column
+        + second_row
+        + call_body[second_arg_end:]
+    )
+
+
+def _project_entry_call_body(call_body: str) -> str | None:
+    if _regular_entry_has_summary_right_column(call_body):
+        return call_body
+    moved_leading_summary = _move_leading_summary_row_to_right_column(call_body)
+    if moved_leading_summary is not None:
+        return moved_leading_summary
+    return _move_inline_project_summary_to_right_column(call_body)
+
+
+def _patch_project_tech_stack_entries(typst: str) -> str:
+    output: list[str] = []
+    cursor = 0
+    replacement_count = 0
+    while True:
+        start = typst.find(_REGULAR_ENTRY_CALL, cursor)
+        if start == -1:
+            output.append(typst[cursor:])
+            break
+        open_paren = start + len(_REGULAR_ENTRY_CALL) - 1
+        close_paren = _matching_typst_delimiter(typst, open_paren)
+        if close_paren is None:
+            output.append(typst[cursor:])
+            break
+        call_body = typst[open_paren + 1:close_paren]
+        output.append(typst[cursor:start])
+        project_call_body = _project_entry_call_body(call_body)
+        if project_call_body is not None:
+            output.append(_PROJECT_ENTRY_CALL)
+            output.append(project_call_body)
+            replacement_count += 1
+        else:
+            output.append(_REGULAR_ENTRY_CALL)
+            output.append(call_body)
+        output.append(")")
+        cursor = close_paren + 1
+
+    updated = "".join(output)
+    if replacement_count == 0 or _PROJECT_ENTRY_CALL in typst:
+        return updated
+    import_line_end = updated.find("\n", updated.find("#import "))
+    if import_line_end == -1:
+        return updated
+    return updated[: import_line_end + 1] + _PROJECT_ENTRY_HELPER + updated[import_line_end + 1:]
+
+
+def _apply_project_tech_stack_layout_to_typst(typst_path: Path) -> None:
+    try:
+        original = typst_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    updated = _patch_project_tech_stack_entries(original)
+    if updated != original:
+        typst_path.write_text(updated, encoding="utf-8")
+
+
 def render_resume_bundle(
     resume_data: dict[str, Any],
     theme_settings: RenderThemeSettings,
@@ -287,6 +610,8 @@ def render_resume_bundle(
                 generated_typst,
                 heading_gap=_resolve_summary_heading_gap(payload),
             )
+        if generated_typst is not None:
+            _apply_project_tech_stack_layout_to_typst(generated_typst)
         if generated_typst is not None:
             _apply_freeflow_typst_patch(generated_typst, theme_settings)
         generated_pdf = _generate_pdf_with_ats_profile(

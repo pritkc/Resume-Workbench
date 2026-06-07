@@ -45,7 +45,10 @@ import { TailorDiffReadonlyBody } from '@/components/tailor/diff-preview-modal';
 import { RenderThemeControls } from '@/components/rendercv/render-theme-controls';
 import { RenderLocaleControls } from '@/components/rendercv/render-locale-controls';
 import { RenderRuntimeSettingsControls } from '@/components/rendercv/render-runtime-settings-controls';
-import { RenderPreviewPanel, type RenderPreviewPanelHandle } from '@/components/rendercv/render-preview-panel';
+import {
+  RenderPreviewPanel,
+  type RenderPreviewPanelHandle,
+} from '@/components/rendercv/render-preview-panel';
 import {
   downloadResumePdf,
   downloadCoverLetterPdf,
@@ -611,10 +614,11 @@ const ResumeBuilderContent = () => {
   }, [isResizingPane]);
 
   const markDraftDirty = useCallback(
-    (nextMode: EditorMode) => {
+    (nextMode: EditorMode, options?: { hasRawIssue?: boolean }) => {
       draftVersionRef.current += 1;
       setHasUnsavedChanges(true);
-      setAutosaveState(nextMode === 'raw' && rawYamlIssue ? 'invalid' : 'dirty');
+      const hasRawIssue = options?.hasRawIssue ?? Boolean(rawYamlIssue);
+      setAutosaveState(nextMode === 'raw' && hasRawIssue ? 'invalid' : 'dirty');
       setAutosaveError(null);
       if (nextMode === 'visual') {
         setYamlNeedsSync(true);
@@ -624,26 +628,30 @@ const ResumeBuilderContent = () => {
   );
 
   const applyDraftResponse = useCallback(
-    (response: ResumeDraftResponse, version: number) => {
+    (response: ResumeDraftResponse, version: number, savedRawYamlSections?: RawYamlSections) => {
       const nextData = (response.data.processed_resume || resumeData) as ResumeData;
       const nextThemeSettings = response.data.theme_settings
         ? normalizeRenderThemeSettings(response.data.theme_settings)
         : themeSettings;
+      const isRawSave = savedRawYamlSections != null;
+      const nextRawYamlSections = isRawSave ? savedRawYamlSections : response.yaml_sections;
 
       setLastSavedData(nextData);
       setLastSavedThemeSettings(nextThemeSettings);
-      lastSavedRawYamlSectionsRef.current = response.yaml_sections;
+      lastSavedRawYamlSectionsRef.current = nextRawYamlSections;
 
       if (draftVersionRef.current === version) {
         setResumeData(nextData);
         setThemeSettings(nextThemeSettings);
-        setRawYamlSections(response.yaml_sections);
+        if (!isRawSave) {
+          setRawYamlSections(response.yaml_sections);
+        }
         setRawYamlIssue(null);
         setYamlNeedsSync(false);
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
         localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextThemeSettings));
-        localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(response.yaml_sections));
+        localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextRawYamlSections));
         setHasUnsavedChanges(false);
         setAutosaveState('saved');
         setAutosaveError(null);
@@ -651,7 +659,7 @@ const ResumeBuilderContent = () => {
           buildDraftSnapshot({
             resumeData: nextData,
             themeSettings: nextThemeSettings,
-            rawYamlSections: response.yaml_sections,
+            rawYamlSections: nextRawYamlSections,
             yamlNeedsSync: false,
           })
         );
@@ -1212,8 +1220,9 @@ const ResumeBuilderContent = () => {
           setAutosaveError(null);
         }
 
+        const rawSectionsAtSave = editorMode === 'raw' ? rawYamlSections : undefined;
         const response = await saveResumeDraft(resumeId, payload);
-        applyDraftResponse(response, version);
+        applyDraftResponse(response, version, rawSectionsAtSave);
         return true;
       } catch (error) {
         const issue =
@@ -1228,7 +1237,7 @@ const ResumeBuilderContent = () => {
         }
         if (editorMode === 'raw') {
           setRawYamlIssue(issue);
-          if (issue.section) {
+          if (manual && issue.section) {
             setEditorSection(issue.section);
           }
           setAutosaveState('invalid');
@@ -1322,7 +1331,7 @@ const ResumeBuilderContent = () => {
       setRawYamlSections(nextSections);
       setRawYamlIssue(null);
       localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
-      markDraftDirty('raw');
+      markDraftDirty('raw', { hasRawIssue: false });
       queueHistoryCommit(
         buildDraftSnapshot({
           rawYamlSections: nextSections,
@@ -1562,7 +1571,7 @@ const ResumeBuilderContent = () => {
       localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
 
       setRawYamlIssue(null);
-      markDraftDirty('raw');
+      markDraftDirty('raw', { hasRawIssue: false });
       queueHistoryCommit(
         buildDraftSnapshot({
           rawYamlSections: nextSections,

@@ -22,10 +22,10 @@ import {
 } from '@dnd-kit/sortable';
 import {
   buildExperienceDescription,
-  getExperienceExplicitDate,
+  getExperienceExplicitDateEditor,
   getExperienceHighlightsEditor,
-  getExperiencePosition,
-  getExperienceTechStack,
+  getExperiencePositionEditor,
+  getExperienceTechStackEditor,
 } from '@/lib/utils/rendercv-fields';
 import { DraggableListItem } from '../draggable-list-item';
 import { HighlightBulletsRichTextDnd } from '../highlight-bullets-dnd';
@@ -118,7 +118,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights,
-        description: buildExperienceDescription(getExperienceTechStack(item), highlights),
+        description: buildExperienceDescription(getExperienceTechStackEditor(item), highlights),
       };
     });
   };
@@ -129,7 +129,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights,
-        description: buildExperienceDescription(getExperienceTechStack(item), highlights),
+        description: buildExperienceDescription(getExperienceTechStackEditor(item), highlights),
       };
     });
   };
@@ -141,7 +141,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights,
-        description: buildExperienceDescription(getExperienceTechStack(item), highlights),
+        description: buildExperienceDescription(getExperienceTechStackEditor(item), highlights),
       };
     });
   };
@@ -154,7 +154,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
       return {
         ...item,
         highlights: next,
-        description: buildExperienceDescription(getExperienceTechStack(item), next),
+        description: buildExperienceDescription(getExperienceTechStackEditor(item), next),
       };
     });
   };
@@ -181,14 +181,11 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
         collisionDetection={resumeSortableCollision}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext
-          items={data.map((item) => item.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={data.map((item) => item.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-0">
             {data.map((item) => {
               const highlights = getExperienceHighlightsEditor(item);
-              const techStack = getExperienceTechStack(item);
+              const techStack = getExperienceTechStackEditor(item);
 
               return (
                 <DraggableListItem key={item.id} id={item.id}>
@@ -208,17 +205,15 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                     <div className="resume-canvas-role-row">
                       <InlineResumeField
                         pasteMode="plainTextSingleParagraph"
-                        value={getExperiencePosition(item)}
-                        onChange={(e) =>
-                          handleTextFieldChange(item.id, 'position', e.target.value)
-                        }
+                        value={getExperiencePositionEditor(item)}
+                        onChange={(e) => handleTextFieldChange(item.id, 'position', e.target.value)}
                         placeholder={t('builder.forms.experience.placeholders.position')}
                         className="resume-canvas-field-title min-w-0 flex-1"
                         aria-label={t('builder.forms.experience.fields.position')}
                       />
                       <InlineResumeField
                         pasteMode="plainTextSingleParagraph"
-                        value={getExperienceExplicitDate(item)}
+                        value={getExperienceExplicitDateEditor(item)}
                         onChange={(e) => handleTextFieldChange(item.id, 'date', e.target.value)}
                         placeholder={t('builder.forms.experience.placeholders.date')}
                         fieldSize="small"
@@ -232,9 +227,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                       <InlineResumeField
                         pasteMode="plainTextSingleParagraph"
                         value={item.company || ''}
-                        onChange={(e) =>
-                          handleTextFieldChange(item.id, 'company', e.target.value)
-                        }
+                        onChange={(e) => handleTextFieldChange(item.id, 'company', e.target.value)}
                         placeholder={t('builder.forms.experience.placeholders.company')}
                         fieldSize="small"
                         className="resume-canvas-field-title min-w-0"
@@ -243,9 +236,7 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                       <InlineResumeField
                         pasteMode="plainTextSingleParagraph"
                         value={item.location || ''}
-                        onChange={(e) =>
-                          handleTextFieldChange(item.id, 'location', e.target.value)
-                        }
+                        onChange={(e) => handleTextFieldChange(item.id, 'location', e.target.value)}
                         placeholder={t('builder.forms.experience.placeholders.location')}
                         fieldSize="small"
                         align="right"
@@ -269,13 +260,13 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
                     </div>
 
                     <HighlightBulletsRichTextDnd
-                        scopeId={`xp-${item.id}`}
-                        highlights={highlights}
-                        onReorder={(from, to) => handleReorderHighlights(item.id, from, to)}
-                        onChangeLine={(idx, html) => handleHighlightChange(item.id, idx, html)}
-                        onRemoveLine={(idx) => handleRemoveHighlight(item.id, idx)}
-                        placeholder={t('builder.forms.experience.placeholders.highlight')}
-                        deleteAriaLabel={t('common.delete')}
+                      scopeId={`xp-${item.id}`}
+                      highlights={highlights}
+                      onReorder={(from, to) => handleReorderHighlights(item.id, from, to)}
+                      onChangeLine={(idx, html) => handleHighlightChange(item.id, idx, html)}
+                      onRemoveLine={(idx) => handleRemoveHighlight(item.id, idx)}
+                      placeholder={t('builder.forms.experience.placeholders.highlight')}
+                      deleteAriaLabel={t('common.delete')}
                     />
                     <ResumeCanvasAddLink
                       className="mt-1"
