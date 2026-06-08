@@ -22,12 +22,13 @@ This folder is the working map for agents operating in the current `resume-workk
 
 1. [quickstart.md](quickstart.md)
 2. [scope-and-principles.md](scope-and-principles.md)
-3. [architecture/backend-architecture.md](architecture/backend-architecture.md)
-4. [architecture/frontend-architecture.md](architecture/frontend-architecture.md)
-5. [apis/api-flow-maps.md](apis/api-flow-maps.md)
-6. [llm-integration.md](llm-integration.md)
-7. [llm-prompt-inventory.md](llm-prompt-inventory.md)
-8. [llm-observability.md](llm-observability.md)
+3. [testing-playbook.md](testing-playbook.md)
+4. [architecture/backend-architecture.md](architecture/backend-architecture.md)
+5. [architecture/frontend-architecture.md](architecture/frontend-architecture.md)
+6. [apis/api-flow-maps.md](apis/api-flow-maps.md)
+7. [llm-integration.md](llm-integration.md)
+8. [llm-prompt-inventory.md](llm-prompt-inventory.md)
+9. [llm-observability.md](llm-observability.md)
 
 ## Design reference (`docs/agent/design/`)
 

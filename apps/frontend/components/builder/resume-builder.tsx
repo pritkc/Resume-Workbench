@@ -251,7 +251,7 @@ const ResumeBuilderContent = () => {
   const [lastSavedData, setLastSavedData] = useState<ResumeData>(() => initialData);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [, setLoadingState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const [loadingState, setLoadingState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const [themeSettings, setThemeSettings] = useState<RenderThemeSettings>(
     DEFAULT_RENDER_THEME_SETTINGS
   );
@@ -294,6 +294,7 @@ const ResumeBuilderContent = () => {
   );
   const searchParams = useSearchParams();
   const resumeId = searchParams.get('id');
+  const isResumePreviewReady = !resumeId || loadingState === 'loaded' || Boolean(improvedPreview);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const previewPanelRef = useRef<RenderPreviewPanelHandle | null>(null);
   const [previewRefreshing, setPreviewRefreshing] = useState(false);
@@ -2550,17 +2551,18 @@ const ResumeBuilderContent = () => {
               )}
             >
               <div className="preview-panel-scroll h-full min-h-0 overflow-y-auto overscroll-contain px-0.5 py-0.5 md:px-1">
-                {(activeTab === 'resume' || activeTab === 'jd-tailor-diff') && (
-                  <RenderPreviewPanel
-                    ref={previewPanelRef}
-                    resumeId={resumeId}
-                    settings={themeSettings}
-                    draftRequest={previewDraftRequest}
-                    initialArtifacts={improvedArtifacts}
-                    stale={false}
-                    onLoadingChange={setPreviewRefreshing}
-                  />
-                )}
+                {(activeTab === 'resume' || activeTab === 'jd-tailor-diff') &&
+                  isResumePreviewReady && (
+                    <RenderPreviewPanel
+                      ref={previewPanelRef}
+                      resumeId={resumeId}
+                      settings={themeSettings}
+                      draftRequest={previewDraftRequest}
+                      initialArtifacts={improvedArtifacts}
+                      stale={false}
+                      onLoadingChange={setPreviewRefreshing}
+                    />
+                  )}
 
                 {activeTab === 'utilities' && (
                   <div className="flex min-h-0 flex-1 justify-center py-1.5 md:py-2">

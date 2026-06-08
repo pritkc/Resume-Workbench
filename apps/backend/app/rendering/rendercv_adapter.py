@@ -68,6 +68,13 @@ _DEFAULT_RENDERCV_SECTION_KEYS: tuple[str, ...] = (
     "projects",
     "skills",
 )
+_TECH_STACK_SEPARATOR_LABELS = {
+    ",": ",",
+    "•": "•",
+    "·": "·",
+    "|": "|",
+    "/": "/",
+}
 
 
 def _section_meta_order_key(meta: dict[str, Any]) -> int:
@@ -443,6 +450,43 @@ def _resolve_bold_keywords(theme_settings: RenderThemeSettings) -> list[str]:
     return keywords
 
 
+def _resume_workbench_style(theme_settings: RenderThemeSettings) -> dict[str, Any]:
+    settings = theme_settings.settings if isinstance(theme_settings.settings, dict) else {}
+    value = settings.get("resume_workbench_style")
+    return value if isinstance(value, dict) else {}
+
+
+def _tech_stack_separator(theme_settings: RenderThemeSettings) -> str:
+    style = _resume_workbench_style(theme_settings)
+    tech_stack = style.get("tech_stack")
+    raw = tech_stack.get("separator") if isinstance(tech_stack, dict) else None
+    return raw if raw in _TECH_STACK_SEPARATOR_LABELS else "•"
+
+
+def _looks_like_tech_stack(value: str, parts: list[str]) -> bool:
+    if len(parts) > 1:
+        return True
+    if "." in value or ":" in value or ";" in value:
+        return False
+    return len(value.split()) <= 4
+
+
+def _format_tech_stack_summary(stack: str, theme_settings: RenderThemeSettings) -> str:
+    cleaned = _clean_text(stack)
+    if not cleaned:
+        return ""
+
+    separator = _tech_stack_separator(theme_settings)
+    parts = [part.strip() for part in cleaned.split(",") if part.strip()]
+    if not _looks_like_tech_stack(cleaned, parts):
+        return cleaned
+    if len(parts) > 1:
+        joiner = ", " if separator == "," else f" {separator} "
+        cleaned = joiner.join(parts)
+
+    return f"**Stack:** {cleaned}"
+
+
 def _bold_keyword_in_text(text: str, keyword: str) -> str:
     escaped = re.escape(keyword)
     pattern = re.compile(
@@ -499,14 +543,16 @@ def _experience_entries(
     entries: list[dict[str, Any]],
     *,
     bold_keywords: list[str],
+    theme_settings: RenderThemeSettings,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in entries:
         stack = _clean_text(
             item.get("techStack") or item.get("tech_stacks") or item.get("summary")
         )
+        formatted_stack = _format_tech_stack_summary(stack, theme_settings)
         bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
-        while stack and bullets and _clean_text(bullets[0]) == stack:
+        while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
             bullets = bullets[1:]
         rows.append(
             {
@@ -514,7 +560,7 @@ def _experience_entries(
                 "position": item.get("position") or item.get("title") or "Role",
                 **_entry_date_fields(item),
                 "location": _clean_text(item.get("location")),
-                "summary": stack,
+                "summary": formatted_stack,
                 "highlights": [
                     _bold_keywords_in_bullet(point, bold_keywords)
                     for point in bullets
@@ -557,6 +603,7 @@ def _project_entries(
     entries: list[dict[str, Any]],
     *,
     bold_keywords: list[str],
+    theme_settings: RenderThemeSettings,
 ) -> list[dict[str, Any]]:
     project_rows: list[dict[str, Any]] = []
     for item in entries:
@@ -578,15 +625,16 @@ def _project_entries(
             or item.get("summary")
             or item.get("role")
         )
+        formatted_stack = _format_tech_stack_summary(stack, theme_settings)
         bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
-        while stack and bullets and _clean_text(bullets[0]) == stack:
+        while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
             bullets = bullets[1:]
         project_rows.append(
             {
                 "name": name,
                 "date": _clean_text(item.get("date") or item.get("years")),
-                "tech_stacks": stack,
-                "summary": stack,
+                "tech_stacks": formatted_stack,
+                "summary": formatted_stack,
                 "highlights": [_bold_keywords_in_bullet(point, bold_keywords) for point in bullets if point],
             }
         )
@@ -671,11 +719,13 @@ def resume_to_rendercv_payload(
     experience = _experience_entries(
         resume_data.get("workExperience") or [],
         bold_keywords=bold_keywords,
+        theme_settings=theme_settings,
     )
     education = _education_entries(resume_data.get("education") or [])
     projects = _project_entries(
         resume_data.get("personalProjects") or [],
         bold_keywords=bold_keywords,
+        theme_settings=theme_settings,
     )
     skills = _skills_sections(skills_section)
 
@@ -775,6 +825,7 @@ def resume_to_rendercv_payload(
         settings.pop("bold_keywords", None)
         settings.pop("show_summary_section", None)
         settings.pop("show_summary_heading", None)
+        settings.pop("resume_workbench_style", None)
     if locale:
         payload["locale"] = locale
     if settings:

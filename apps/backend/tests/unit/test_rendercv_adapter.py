@@ -98,8 +98,78 @@ def test_rendercv_experience_bullets_omit_stack_when_description_prefixed() -> N
         "skills": {"groups": []},
     }
     payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
-    assert payload["cv"]["sections"]["experience"][0]["summary"] == "Go, gRPC"
+    assert payload["cv"]["sections"]["experience"][0]["summary"] == "**Stack:** Go • gRPC"
     assert payload["cv"]["sections"]["experience"][0]["highlights"] == ["Built APIs"]
+
+
+def test_rendercv_formats_work_and_project_stack_with_configured_separator() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Eng",
+                "company": "Acme",
+                "techStack": "Go, gRPC",
+                "description": ["Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Demo",
+                "techStack": "Rust, WASM",
+                "description": ["Shipped CLI"],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {},
+            "settings": {
+                "resume_workbench_style": {
+                    "tech_stack": {"separator": "|"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    payload = resume_to_rendercv_payload(resume, theme_settings)
+
+    assert payload["cv"]["sections"]["experience"][0]["summary"] == "**Stack:** Go | gRPC"
+    assert payload["cv"]["sections"]["projects"][0]["summary"] == "**Stack:** Rust | WASM"
+
+
+def test_rendercv_payload_strips_app_only_workbench_settings() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {},
+            "settings": {
+                "resume_workbench_style": {
+                    "colors": {"company": "#123456"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    payload = resume_to_rendercv_payload(resume, theme_settings)
+
+    assert "resume_workbench_style" not in payload.get("settings", {})
 
 
 def test_rendercv_adapter_supports_classic_and_moderncv(sample_resume: dict) -> None:

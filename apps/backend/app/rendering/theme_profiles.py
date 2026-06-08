@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 import json
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Any, Literal
 
 
@@ -83,7 +85,8 @@ _ACCENT_COLORS: dict[AccentColor, str] = {
     "red": "rgb(220, 38, 38)",
 }
 _FIXED_LINK_COLOR = "rgb(0, 79, 144)"
-_APP_RUNTIME_SETTING_KEYS = {"show_summary_heading"}
+_APP_RUNTIME_SETTING_KEYS = {"show_summary_heading", "resume_workbench_style"}
+_CALIBRI_FALLBACK_FONT = "Arial"
 
 _DENSITY_MAP: dict[DensityProfile, dict[str, str]] = {
     "compact": {
@@ -250,6 +253,63 @@ def _enforce_fixed_link_color(design: dict[str, Any]) -> dict[str, Any]:
         colors = {}
         design["colors"] = colors
     colors["links"] = _FIXED_LINK_COLOR
+    return design
+
+
+@lru_cache(maxsize=16)
+def _font_family_available(font_family: str) -> bool:
+    normalized = " ".join(font_family.split()).strip()
+    if not normalized:
+        return False
+
+    fc_match = shutil.which("fc-match")
+    if fc_match:
+        try:
+            result = subprocess.run(
+                [fc_match, normalized],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            result = None
+        if result and result.returncode == 0:
+            return normalized.casefold() in result.stdout.casefold()
+
+    candidates = [
+        Path("/Library/Fonts") / f"{normalized}.ttf",
+        Path("/Library/Fonts") / f"{normalized}.otf",
+        Path("/Library/Fonts/Microsoft") / f"{normalized}.ttf",
+        Path("/Library/Fonts/Microsoft") / f"{normalized}.otf",
+        Path.home() / "Library/Fonts" / f"{normalized}.ttf",
+        Path.home() / "Library/Fonts" / f"{normalized}.otf",
+        Path("/System/Library/Fonts/Supplemental") / f"{normalized}.ttf",
+        Path("/System/Library/Fonts/Supplemental") / f"{normalized}.otf",
+    ]
+    return any(path.exists() for path in candidates)
+
+
+def _resolve_font_family(font_family: Any) -> Any:
+    if not isinstance(font_family, str):
+        return font_family
+    normalized = " ".join(font_family.split()).strip()
+    if normalized.casefold() != "calibri":
+        return font_family
+    if _font_family_available("Calibri"):
+        return font_family
+    return _CALIBRI_FALLBACK_FONT
+
+
+def _apply_safe_font_fallbacks(design: dict[str, Any]) -> dict[str, Any]:
+    typography = design.get("typography")
+    if not isinstance(typography, dict):
+        return design
+    font_family = typography.get("font_family")
+    if not isinstance(font_family, dict):
+        return design
+    for key, value in list(font_family.items()):
+        font_family[key] = _resolve_font_family(value)
     return design
 
 
@@ -515,7 +575,8 @@ def _build_sparse_design_from_profile(
         design = _deep_merge(design, active_profile.design)
 
     design["theme"] = theme_id
-    return _enforce_fixed_link_color(design)
+    _enforce_fixed_link_color(design)
+    return _apply_safe_font_fallbacks(design)
 
 
 @dataclass(frozen=True)
@@ -779,7 +840,9 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
         resolved = _resolve_theme_profile_state(
             settings.theme_id, settings.theme_profiles.get(settings.theme_id)
         )
-        resolved_design = _enforce_fixed_link_color(deepcopy(resolved["design"]))
+        resolved_design = _apply_safe_font_fallbacks(
+            _enforce_fixed_link_color(deepcopy(resolved["design"]))
+        )
         return _strip_unknown_template_keys(resolved_design)
 
     density = _LEGACY_DENSITY_MAP[settings.density_profile]
@@ -833,6 +896,7 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
         merged = _deep_merge(merged, settings.design)
     merged["theme"] = settings.theme_id
     _enforce_fixed_link_color(merged)
+    _apply_safe_font_fallbacks(merged)
     return _strip_unknown_template_keys(merged)
 
 

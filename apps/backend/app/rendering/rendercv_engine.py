@@ -41,13 +41,20 @@ _PREVIEW_RENDERCV_IMPORT_RE = re.compile(
     re.MULTILINE,
 )
 _PAGE_SIZE_LINE_RE = re.compile(r"^(\s*)(page-size:\s*\"[^\"]+\",)\s*$", re.MULTILINE)
+_RENDERCV_WITH_DATE_LINE_RE = re.compile(r"^(\s*)date:\s*datetime\(", re.MULTILINE)
 _SUMMARY_HEADING_RE = re.compile(r"(?im)^==\s+summary[:\s]*\r?\n(?:\r?\n)?")
 _SUMMARY_SECTION_RE = re.compile(
     r"(?ims)(?P<prefix>^==\s+summary[:\s]*\r?\n(?:\r?\n)?)(?P<body>.*?)(?=\r?\n==\s+|\Z)"
 )
-_TYPST_DIMENSION_RE = re.compile(r"^\d+(?:\.\d+)?(?:cm|mm|in|pt|em|ex)$")
+_TYPST_DIMENSION_RE = re.compile(r"^-?\d+(?:\.\d+)?(?:cm|mm|in|pt|em|ex)$")
+_HEX_COLOR_RE = re.compile(r"^#(?P<value>[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+_RGB_COLOR_RE = re.compile(
+    r"^rgb\s*\(\s*(?P<r>\d{1,3})\s*,\s*(?P<g>\d{1,3})\s*,\s*(?P<b>\d{1,3})\s*\)$",
+    re.IGNORECASE,
+)
 _REGULAR_ENTRY_CALL = "#regular-entry("
 _PROJECT_ENTRY_CALL = "#resume-matcher-project-entry("
+_RENDERCV_VENDOR_IMPORT_LINE = f'#import "{_FREEFLOW_TYST_LIB_NAME}": *'
 _PROJECT_ENTRY_HELPER = r"""
 
 // Resume Workbench project headers: keep project names left and tech stacks right,
@@ -151,6 +158,82 @@ def _reset_rendercv_typst_caches() -> None:
     get_typst_compiler.cache_clear()
 
 
+def _resume_workbench_style(theme_settings: RenderThemeSettings) -> dict[str, Any]:
+    settings_payload = theme_settings.settings
+    if not isinstance(settings_payload, dict):
+        return {}
+    style = settings_payload.get("resume_workbench_style")
+    return style if isinstance(style, dict) else {}
+
+
+def _nested_style_dict(root: dict[str, Any], *path: str) -> dict[str, Any]:
+    cursor: Any = root
+    for key in path:
+        if not isinstance(cursor, dict):
+            return {}
+        cursor = cursor.get(key)
+    return cursor if isinstance(cursor, dict) else {}
+
+
+def _typst_color_expr(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+
+    hex_match = _HEX_COLOR_RE.match(stripped)
+    if hex_match:
+        raw = hex_match.group("value")
+        if len(raw) == 3:
+            raw = "".join(ch * 2 for ch in raw)
+        r = int(raw[0:2], 16)
+        g = int(raw[2:4], 16)
+        b = int(raw[4:6], 16)
+        return f"rgb({r}, {g}, {b})"
+
+    rgb_match = _RGB_COLOR_RE.match(stripped)
+    if rgb_match:
+        channels = [
+            max(0, min(255, int(rgb_match.group(name))))
+            for name in ("r", "g", "b")
+        ]
+        return f"rgb({channels[0]}, {channels[1]}, {channels[2]})"
+
+    return None
+
+
+def _typst_dimension_expr(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped if _TYPST_DIMENSION_RE.match(stripped) else None
+
+
+def _workbench_color_settings(theme_settings: RenderThemeSettings) -> dict[str, str]:
+    style = _resume_workbench_style(theme_settings)
+    colors = _nested_style_dict(style, "colors")
+    output: dict[str, str] = {}
+    for key in ("company", "stack", "date_location"):
+        color = _typst_color_expr(colors.get(key))
+        if color:
+            output[key] = color
+    return output
+
+
+def _workbench_letter_spacing_settings(
+    theme_settings: RenderThemeSettings,
+) -> dict[str, str]:
+    style = _resume_workbench_style(theme_settings)
+    letter_spacing = _nested_style_dict(style, "typography", "letter_spacing")
+    output: dict[str, str] = {}
+    for key in ("name", "headline", "connections", "section_titles"):
+        dimension = _typst_dimension_expr(letter_spacing.get(key))
+        if dimension:
+            output[key] = dimension
+    return output
+
+
 class RenderCVRenderError(RuntimeError):
     pass
 
@@ -207,6 +290,31 @@ def _generate_pdf_with_ats_profile(
         return generate_pdf(model, typst_path)
 
 
+def _ensure_vendor_rendercv_import(typst_path: Path, text: str) -> str | None:
+    if _RENDERCV_VENDOR_IMPORT_LINE in text:
+        return text
+    if not _VENDOR_RENDERCV_LIB.is_file():
+        logger.warning("RenderCV vendor lib missing at %s", _VENDOR_RENDERCV_LIB)
+        return None
+    if not _PREVIEW_RENDERCV_IMPORT_RE.search(text):
+        logger.warning(
+            "RenderCV vendor import patch skipped: expected @preview/rendercv:… import in %s",
+            typst_path,
+        )
+        return None
+    dest = typst_path.parent / _FREEFLOW_TYST_LIB_NAME
+    try:
+        shutil.copy2(_VENDOR_RENDERCV_LIB, dest)
+    except OSError:
+        logger.warning("RenderCV vendor import patch could not copy vendor lib to %s", dest)
+        return None
+    return _PREVIEW_RENDERCV_IMPORT_RE.sub(
+        _RENDERCV_VENDOR_IMPORT_LINE,
+        text,
+        count=1,
+    )
+
+
 def _apply_freeflow_typst_patch(
     typst_path: Path, theme_settings: RenderThemeSettings
 ) -> None:
@@ -220,23 +328,9 @@ def _apply_freeflow_typst_patch(
         text = typst_path.read_text(encoding="utf-8")
     except OSError:
         return
-    if not _PREVIEW_RENDERCV_IMPORT_RE.search(text):
-        logger.warning(
-            "Freeflow Typst patch skipped: expected @preview/rendercv:… import in %s",
-            typst_path,
-        )
+    text = _ensure_vendor_rendercv_import(typst_path, text)
+    if text is None:
         return
-    dest = typst_path.parent / _FREEFLOW_TYST_LIB_NAME
-    try:
-        shutil.copy2(_VENDOR_RENDERCV_LIB, dest)
-    except OSError:
-        logger.warning("Freeflow Typst patch could not copy vendor lib to %s", dest)
-        return
-    text = _PREVIEW_RENDERCV_IMPORT_RE.sub(
-        f'#import "{_FREEFLOW_TYST_LIB_NAME}": *',
-        text,
-        count=1,
-    )
     match = _PAGE_SIZE_LINE_RE.search(text)
     if not match:
         logger.warning("Freeflow Typst patch: page-size line not found in %s", typst_path)
@@ -245,6 +339,164 @@ def _apply_freeflow_typst_patch(
     insert = f"{indent}{page_line}\n{indent}continuous-page: true,"
     text = _PAGE_SIZE_LINE_RE.sub(insert, text, count=1)
     typst_path.write_text(text, encoding="utf-8")
+
+
+def _wrap_typst_block_content(block: str, *, fill: str) -> str:
+    open_bracket = block.find("[")
+    if open_bracket == -1:
+        return block
+    close_bracket = _matching_typst_delimiter(block, open_bracket)
+    if close_bracket is None:
+        return block
+    return (
+        block[: open_bracket + 1]
+        + f"#text(fill: {fill})["
+        + block[open_bracket + 1:close_bracket]
+        + "]"
+        + block[close_bracket:]
+    )
+
+
+def _wrap_first_strong_text(block: str, *, fill: str) -> str:
+    strong_start = block.find("#strong[")
+    if strong_start == -1:
+        return block
+    strong_open = strong_start + len("#strong")
+    strong_close = _matching_typst_delimiter(block, strong_open)
+    if strong_close is None:
+        return block
+    return (
+        block[:strong_start]
+        + f"#text(fill: {fill})["
+        + block[strong_start:strong_close + 1]
+        + "]"
+        + block[strong_close + 1:]
+    )
+
+
+def _wrap_summary_text_blocks(block: str, *, fill: str) -> str:
+    output: list[str] = []
+    cursor = 0
+    while True:
+        start = block.find("#summary[", cursor)
+        if start == -1:
+            output.append(block[cursor:])
+            break
+        summary_open = start + len("#summary")
+        summary_close = _matching_typst_delimiter(block, summary_open)
+        if summary_close is None:
+            output.append(block[cursor:])
+            break
+        output.append(block[cursor:start])
+        output.append(f"#text(fill: {fill})[")
+        output.append(block[start:summary_close + 1])
+        output.append("]")
+        cursor = summary_close + 1
+    return "".join(output)
+
+
+def _style_entry_call_body(call_body: str, colors: dict[str, str]) -> str:
+    commas = _top_level_typst_commas(call_body)
+    if not commas:
+        return call_body
+
+    first_arg_end = commas[0]
+    second_arg_start = commas[0] + 1
+    second_arg_end = commas[1] if len(commas) > 1 else len(call_body)
+
+    first_arg = call_body[:first_arg_end]
+    second_arg = call_body[second_arg_start:second_arg_end]
+
+    company_color = colors.get("company")
+    if company_color:
+        first_arg = _wrap_first_strong_text(first_arg, fill=company_color)
+
+    stack_color = colors.get("stack")
+    if stack_color:
+        first_arg = _wrap_summary_text_blocks(first_arg, fill=stack_color)
+        second_arg = _wrap_summary_text_blocks(second_arg, fill=stack_color)
+
+    date_color = colors.get("date_location")
+    if date_color:
+        second_arg = _wrap_typst_block_content(second_arg, fill=date_color)
+
+    return (
+        first_arg
+        + call_body[first_arg_end:second_arg_start]
+        + second_arg
+        + call_body[second_arg_end:]
+    )
+
+
+def _style_entry_calls_in_typst(typst: str, colors: dict[str, str]) -> str:
+    if not colors:
+        return typst
+    output: list[str] = []
+    cursor = 0
+    call_prefixes = (_PROJECT_ENTRY_CALL, _REGULAR_ENTRY_CALL)
+    while True:
+        matches = [
+            (index, prefix)
+            for prefix in call_prefixes
+            if (index := typst.find(prefix, cursor)) != -1
+        ]
+        if not matches:
+            output.append(typst[cursor:])
+            break
+        start, prefix = min(matches, key=lambda item: item[0])
+        open_paren = start + len(prefix) - 1
+        close_paren = _matching_typst_delimiter(typst, open_paren)
+        if close_paren is None:
+            output.append(typst[cursor:])
+            break
+        call_body = typst[open_paren + 1:close_paren]
+        output.append(typst[cursor:start])
+        output.append(prefix)
+        output.append(_style_entry_call_body(call_body, colors))
+        output.append(")")
+        cursor = close_paren + 1
+    return "".join(output)
+
+
+def _apply_workbench_field_styles_to_typst(
+    typst_path: Path, theme_settings: RenderThemeSettings
+) -> None:
+    colors = _workbench_color_settings(theme_settings)
+    if not colors:
+        return
+    try:
+        original = typst_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    updated = _style_entry_calls_in_typst(original, colors)
+    if updated != original:
+        typst_path.write_text(updated, encoding="utf-8")
+
+
+def _apply_workbench_letter_spacing_to_typst(
+    typst_path: Path, theme_settings: RenderThemeSettings
+) -> None:
+    spacing = _workbench_letter_spacing_settings(theme_settings)
+    if not spacing:
+        return
+    try:
+        text = typst_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    text = _ensure_vendor_rendercv_import(typst_path, text)
+    if text is None:
+        return
+
+    args = "".join(
+        f"  typography-letter-spacing-{key.replace('_', '-')}: {value},\n"
+        for key, value in spacing.items()
+    )
+    match = _RENDERCV_WITH_DATE_LINE_RE.search(text)
+    if not match:
+        return
+    updated = text[:match.start()] + args + text[match.start():]
+    if updated != text:
+        typst_path.write_text(updated, encoding="utf-8")
 
 
 def _coerce_bool(value: Any, default: bool) -> bool:
@@ -612,6 +864,10 @@ def render_resume_bundle(
             )
         if generated_typst is not None:
             _apply_project_tech_stack_layout_to_typst(generated_typst)
+        if generated_typst is not None:
+            _apply_workbench_field_styles_to_typst(generated_typst, theme_settings)
+        if generated_typst is not None:
+            _apply_workbench_letter_spacing_to_typst(generated_typst, theme_settings)
         if generated_typst is not None:
             _apply_freeflow_typst_patch(generated_typst, theme_settings)
         generated_pdf = _generate_pdf_with_ats_profile(

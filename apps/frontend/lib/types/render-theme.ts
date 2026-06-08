@@ -56,6 +56,7 @@ export type RenderLanguage =
   | 'vietnamese';
 export type RenderDimensionUnit = 'cm' | 'mm' | 'in' | 'pt' | 'em' | 'ex';
 export type RenderBullet = '●' | '•' | '◦' | '-' | '◆' | '★' | '■' | '—' | '○';
+export type RenderTechStackSeparator = ',' | '•' | '·' | '|' | '/';
 
 export interface RenderCvDesign {
   theme?: RenderThemeId;
@@ -213,6 +214,26 @@ export interface RenderCvRuntimeSettings {
   pdf_title?: string;
   show_summary_heading?: boolean;
   render_command?: Record<string, unknown>;
+  resume_workbench_style?: {
+    colors?: {
+      company?: string;
+      stack?: string;
+      date_location?: string;
+    };
+    typography?: {
+      letter_spacing?: {
+        name?: string;
+        headline?: string;
+        connections?: string;
+        section_titles?: string;
+      };
+    };
+    tech_stack?: {
+      separator?: RenderTechStackSeparator;
+      label?: 'Stack';
+      label_bold?: true;
+    };
+  };
 }
 
 export interface RenderThemeProfileSettings {
@@ -450,6 +471,7 @@ export const RENDER_SECTION_TITLE_TYPE_OPTIONS: Array<{
 ];
 
 export const RENDER_FONT_FAMILY_OPTIONS = [
+  'Calibri',
   'DejaVu Sans Mono',
   'EB Garamond',
   'Fontin',
@@ -1011,8 +1033,7 @@ function resolveThemeProfileState(
     design = applyAccentToDesign(design, activeProfile.accent_color);
   }
 
-  const physical =
-    design.page?.size === 'us-letter' ? 'us-letter' : ('a4' as const);
+  const physical = design.page?.size === 'us-letter' ? 'us-letter' : ('a4' as const);
   const pageSize: RenderPageSize =
     activeProfile.page_size === 'FREEFLOW'
       ? 'FREEFLOW'

@@ -384,6 +384,71 @@ def test_rendercv_engine_expands_project_stack_header_without_changing_experienc
     assert "#regular-entry(" in typst
     assert "let project-header-gap = 0.25cm" in typst
     assert "minimum-stack-width" in typst
+    assert "#strong[Stack:] Python • FastAPI" in typst
+
+
+def test_rendercv_engine_applies_workbench_field_styles(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    resume = {
+        "personalInfo": {"name": "Jane Doe", "email": "jane@example.com"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Engineer",
+                "company": "Acme Labs",
+                "location": "Remote",
+                "date": "2024 - Present",
+                "techStack": "Python, FastAPI",
+                "description": ["Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {},
+            "settings": {
+                "resume_workbench_style": {
+                    "colors": {
+                        "company": "#123456",
+                        "stack": "rgb(10, 20, 30)",
+                        "date_location": "#abcdef",
+                    },
+                    "typography": {
+                        "letter_spacing": {
+                            "name": "0.4pt",
+                            "section_titles": "0.2pt",
+                        }
+                    },
+                    "tech_stack": {"separator": "•"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    bundle = render_resume_bundle(
+        resume,
+        theme_settings,
+        identifier="workbench_styles",
+    )
+
+    typst = bundle.typst_path.read_text(encoding="utf-8")
+    assert bundle.pdf_path is not None and bundle.pdf_path.exists()
+    assert "rendercv_lib_resume_matcher.typ" in typst
+    assert "typography-letter-spacing-name: 0.4pt" in typst
+    assert "typography-letter-spacing-section-titles: 0.2pt" in typst
+    assert "#text(fill: rgb(18, 52, 86))[#strong[Acme Labs]]" in typst
+    assert "#text(fill: rgb(10, 20, 30))[#summary[#strong[Stack:] Python • FastAPI]]" in typst
+    assert "#text(fill: rgb(171, 205, 239))[" in typst
 
 
 def test_rendercv_engine_is_deterministic_for_same_input(

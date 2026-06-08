@@ -21,6 +21,7 @@
     let config = rendercv-config.get()
     let typography-font-size-headline = config.at("typography-font-size-headline")
     let typography-font-family-headline = config.at("typography-font-family-headline")
+    let typography-letter-spacing-headline = config.at("typography-letter-spacing-headline")
     let typography-bold-headline = config.at("typography-bold-headline")
     let colors-headline = config.at("colors-headline")
     let typography-small-caps-headline = config.at("typography-small-caps-headline")
@@ -30,6 +31,7 @@
       fill: colors-headline,
       font: typography-font-family-headline,
       size: typography-font-size-headline,
+      tracking: typography-letter-spacing-headline,
       weight: if typography-bold-headline { 700 } else { 400 },
     )
     set align(header-alignment)
@@ -57,6 +59,7 @@
     let colors-connections = config.at("colors-connections")
     let typography-font-family-connections = config.at("typography-font-family-connections")
     let typography-font-size-connections = config.at("typography-font-size-connections")
+    let typography-letter-spacing-connections = config.at("typography-letter-spacing-connections")
     let typography-small-caps-connections = config.at("typography-small-caps-connections")
     let typography-bold-connections = config.at("typography-bold-connections")
     let header-alignment = config.at("header-alignment")
@@ -66,6 +69,7 @@
       fill: colors-connections,
       font: typography-font-family-connections,
       size: typography-font-size-connections,
+      tracking: typography-letter-spacing-connections,
       weight: if typography-bold-connections { 700 } else { 400 },
     )
 
@@ -407,6 +411,10 @@
   typography-font-size-headline: 10pt,
   typography-font-size-connections: 10pt,
   typography-font-size-section-titles: 1.4em,
+  typography-letter-spacing-name: 0pt,
+  typography-letter-spacing-headline: 0pt,
+  typography-letter-spacing-connections: 0pt,
+  typography-letter-spacing-section-titles: 0pt,
   typography-small-caps-name: false,
   typography-small-caps-headline: false,
   typography-small-caps-connections: false,
@@ -498,6 +506,10 @@
     typography-font-size-headline: typography-font-size-headline,
     typography-font-size-connections: typography-font-size-connections,
     typography-font-size-section-titles: typography-font-size-section-titles,
+    typography-letter-spacing-name: typography-letter-spacing-name,
+    typography-letter-spacing-headline: typography-letter-spacing-headline,
+    typography-letter-spacing-connections: typography-letter-spacing-connections,
+    typography-letter-spacing-section-titles: typography-letter-spacing-section-titles,
     typography-small-caps-name: typography-small-caps-name,
     typography-small-caps-headline: typography-small-caps-headline,
     typography-small-caps-connections: typography-small-caps-connections,
@@ -614,6 +626,7 @@
       font: typography-font-family-name,
       size: typography-font-size-name,
       fill: colors-name,
+      tracking: typography-letter-spacing-name,
       weight: if typography-bold-name { 700 } else { 400 },
     )
     #let body
@@ -635,6 +648,7 @@
     #set text(
       font: typography-font-family-section-titles,
       size: (typography-font-size-section-titles),
+      tracking: typography-letter-spacing-section-titles,
       weight: if typography-bold-section-titles { 700 } else { 400 },
       fill: colors-section-titles,
     )

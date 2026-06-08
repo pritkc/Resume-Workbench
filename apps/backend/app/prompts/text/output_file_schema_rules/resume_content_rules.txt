@@ -62,4 +62,4 @@ CLAIM CALIBRATION:
 STYLE FILTER:
 - Avoid inflated openers as primary verbs: spearheaded, leveraged, orchestrated, utilized, facilitated, pioneered, revolutionized, masterminded, improved, enhanced, streamlined.
 - Avoid empty business jargon and stock resume phrases such as synergy, robust, scalable, holistic, proactive, cutting-edge, proven track record, results-driven, team player, responsible for, in order to, and deeply committed to.
-- Never use em dashes, dangling participial endings, adjective pileups, repeated outcome patterns within a role, or impossible wins unsupported by source evidence.
+- Never use em dashes, dangling participial endings, adjective pileups, repeated outcome patterns within a role.
