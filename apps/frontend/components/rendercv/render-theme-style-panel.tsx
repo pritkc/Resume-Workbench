@@ -41,13 +41,22 @@ const STYLE_ANCHORS = [
   { id: 'design-entries', label: 'Entries' },
 ];
 
-const TYPOGRAPHY_ROLES = [
+type TypographyRoleKey = 'body' | 'name' | 'headline' | 'connections' | 'section_titles';
+
+type TypographyRole = {
+  key: TypographyRoleKey;
+  label: string;
+  showBold?: boolean;
+  showSmallCaps?: boolean;
+};
+
+const TYPOGRAPHY_ROLES: readonly TypographyRole[] = [
   { key: 'body', label: 'Body', showBold: false, showSmallCaps: false },
   { key: 'name', label: 'Name' },
   { key: 'headline', label: 'Headline' },
   { key: 'connections', label: 'Connections' },
   { key: 'section_titles', label: 'Section Titles' },
-] as const;
+];
 
 interface RenderThemeStylePanelProps {
   settings: RenderThemeSettings;
@@ -91,6 +100,12 @@ export function RenderThemeStylePanel({ settings, onChange }: RenderThemeStylePa
       label: 'Company',
       value: workbenchStyle?.colors?.company,
       onChange: (value: string) => updateWorkbenchStyle(['colors', 'company'], value),
+    },
+    {
+      key: 'role',
+      label: 'Role Title',
+      value: workbenchStyle?.colors?.role,
+      onChange: (value: string) => updateWorkbenchStyle(['colors', 'role'], value),
     },
     {
       key: 'stack',

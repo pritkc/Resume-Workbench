@@ -217,6 +217,7 @@ export interface RenderCvRuntimeSettings {
   resume_workbench_style?: {
     colors?: {
       company?: string;
+      role?: string;
       stack?: string;
       date_location?: string;
     };

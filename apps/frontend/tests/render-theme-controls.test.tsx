@@ -23,6 +23,7 @@ describe('RenderThemeControls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Style' }));
     expect(screen.getByRole('button', { name: 'Typography' })).toBeInTheDocument();
     expect(screen.getByText('Entry Accents')).toBeInTheDocument();
+    expect(screen.getByText('Role Title')).toBeInTheDocument();
 
     const entryAccents = screen.getByText('Entry Accents').closest('section');
     expect(entryAccents).not.toBeNull();
@@ -36,6 +37,19 @@ describe('RenderThemeControls', () => {
         settings: expect.objectContaining({
           resume_workbench_style: expect.objectContaining({
             colors: expect.objectContaining({ company: '#123456' }),
+          }),
+        }),
+      })
+    );
+
+    fireEvent.change(scoped.getAllByPlaceholderText('Hex, rgb(...), hsl(...), or named color')[1], {
+      target: { value: '#654321' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          resume_workbench_style: expect.objectContaining({
+            colors: expect.objectContaining({ role: '#654321' }),
           }),
         }),
       })

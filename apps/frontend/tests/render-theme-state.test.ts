@@ -155,6 +155,7 @@ describe('render theme state helpers', () => {
         resume_workbench_style: {
           colors: {
             company: '#123456',
+            role: '#654321',
             stack: '#abcdef',
             date_location: 'rgb(10, 20, 30)',
           },
@@ -179,6 +180,7 @@ describe('render theme state helpers', () => {
       resume_workbench_style: {
         colors: {
           company: '#123456',
+          role: '#654321',
           stack: '#abcdef',
           date_location: 'rgb(10, 20, 30)',
         },

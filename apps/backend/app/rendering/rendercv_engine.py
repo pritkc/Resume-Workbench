@@ -52,6 +52,7 @@ _RGB_COLOR_RE = re.compile(
     r"^rgb\s*\(\s*(?P<r>\d{1,3})\s*,\s*(?P<g>\d{1,3})\s*,\s*(?P<b>\d{1,3})\s*\)$",
     re.IGNORECASE,
 )
+_TYPST_SECTION_HEADING_RE = re.compile(r"(?m)^=+\s+(?P<title>.+?)\s*$")
 _REGULAR_ENTRY_CALL = "#regular-entry("
 _PROJECT_ENTRY_CALL = "#resume-matcher-project-entry("
 _RENDERCV_VENDOR_IMPORT_LINE = f'#import "{_FREEFLOW_TYST_LIB_NAME}": *'
@@ -214,7 +215,7 @@ def _workbench_color_settings(theme_settings: RenderThemeSettings) -> dict[str, 
     style = _resume_workbench_style(theme_settings)
     colors = _nested_style_dict(style, "colors")
     output: dict[str, str] = {}
-    for key in ("company", "stack", "date_location"):
+    for key in ("company", "role", "stack", "date_location"):
         color = _typst_color_expr(colors.get(key))
         if color:
             output[key] = color
@@ -374,6 +375,84 @@ def _wrap_first_strong_text(block: str, *, fill: str) -> str:
     )
 
 
+def _wrap_first_entry_label(block: str, *, fill: str) -> str:
+    strong_wrapped = _wrap_first_strong_text(block, fill=fill)
+    if strong_wrapped != block:
+        return strong_wrapped
+
+    open_bracket = block.find("[")
+    if open_bracket == -1:
+        return block
+    close_bracket = _matching_typst_delimiter(block, open_bracket)
+    if close_bracket is None:
+        return block
+    body_start = open_bracket + 1
+    body = block[body_start:close_bracket]
+    first_content = re.search(r"\S.*", body)
+    if first_content is None:
+        return block
+    line_start = body_start + first_content.start()
+    line_end = block.find("\n", line_start, close_bracket)
+    if line_end == -1:
+        line_end = close_bracket
+    line = block[line_start:line_end].rstrip()
+    if not line:
+        return block
+    return (
+        block[:line_start]
+        + f"#text(fill: {fill})["
+        + line
+        + "]"
+        + block[line_start + len(line):]
+    )
+
+
+def _wrap_inline_role_after_company(block: str, *, fill: str) -> str:
+    strong_start = block.find("#strong[")
+    if strong_start == -1:
+        return block
+    strong_open = strong_start + len("#strong")
+    strong_close = _matching_typst_delimiter(block, strong_open)
+    if strong_close is None:
+        return block
+    comma = block.find(",", strong_close + 1)
+    if comma == -1:
+        return block
+    role_start = comma + 1
+    while role_start < len(block) and block[role_start] in {" ", "\t"}:
+        role_start += 1
+    role_end = block.find("\n", role_start)
+    if role_end == -1:
+        role_end = len(block)
+    role = block[role_start:role_end].rstrip()
+    if not role or role.startswith(("#summary[", "#text(")):
+        return block
+    return (
+        block[:role_start]
+        + f"#text(fill: {fill})["
+        + role
+        + "]"
+        + block[role_start + len(role):]
+    )
+
+
+def _wrap_first_strong_after(text: str, start: int, *, fill: str) -> str:
+    strong_start = text.find("#strong[", start)
+    if strong_start == -1:
+        return text
+    strong_open = strong_start + len("#strong")
+    strong_close = _matching_typst_delimiter(text, strong_open)
+    if strong_close is None:
+        return text
+    return (
+        text[:strong_start]
+        + f"#text(fill: {fill})["
+        + text[strong_start:strong_close + 1]
+        + "]"
+        + text[strong_close + 1:]
+    )
+
+
 def _wrap_summary_text_blocks(block: str, *, fill: str) -> str:
     output: list[str] = []
     cursor = 0
@@ -395,7 +474,37 @@ def _wrap_summary_text_blocks(block: str, *, fill: str) -> str:
     return "".join(output)
 
 
-def _style_entry_call_body(call_body: str, colors: dict[str, str]) -> str:
+def _wrap_typst_calls(text: str, *, call_prefix: str, fill_prefix: str) -> str:
+    output: list[str] = []
+    cursor = 0
+    while True:
+        start = text.find(call_prefix, cursor)
+        if start == -1:
+            output.append(text[cursor:])
+            break
+        if start >= len(fill_prefix) and text[start - len(fill_prefix):start] == fill_prefix:
+            output.append(text[cursor:start + len(call_prefix)])
+            cursor = start + len(call_prefix)
+            continue
+        open_paren = start + len(call_prefix) - 1
+        close_paren = _matching_typst_delimiter(text, open_paren)
+        if close_paren is None:
+            output.append(text[cursor:])
+            break
+        output.append(text[cursor:start])
+        output.append(fill_prefix)
+        output.append(text[start:close_paren + 1])
+        output.append("]")
+        cursor = close_paren + 1
+    return "".join(output)
+
+
+def _style_entry_call_body(
+    call_body: str,
+    colors: dict[str, str],
+    *,
+    is_company_entry: bool,
+) -> str:
     commas = _top_level_typst_commas(call_body)
     if not commas:
         return call_body
@@ -407,25 +516,34 @@ def _style_entry_call_body(call_body: str, colors: dict[str, str]) -> str:
     first_arg = call_body[:first_arg_end]
     second_arg = call_body[second_arg_start:second_arg_end]
 
-    company_color = colors.get("company")
-    if company_color:
-        first_arg = _wrap_first_strong_text(first_arg, fill=company_color)
+    role_color = colors.get("role")
+    if role_color and is_company_entry:
+        first_arg = _wrap_inline_role_after_company(first_arg, fill=role_color)
 
-    stack_color = colors.get("stack")
-    if stack_color:
-        first_arg = _wrap_summary_text_blocks(first_arg, fill=stack_color)
-        second_arg = _wrap_summary_text_blocks(second_arg, fill=stack_color)
+    company_color = colors.get("company")
+    if company_color and is_company_entry:
+        first_arg = _wrap_first_entry_label(first_arg, fill=company_color)
 
     date_color = colors.get("date_location")
     if date_color:
         second_arg = _wrap_typst_block_content(second_arg, fill=date_color)
 
-    return (
+    styled_call_body = (
         first_arg
         + call_body[first_arg_end:second_arg_start]
         + second_arg
         + call_body[second_arg_end:]
     )
+    if role_color and is_company_entry:
+        styled_call_body = _wrap_first_strong_after(
+            styled_call_body,
+            second_arg_end,
+            fill=role_color,
+        )
+    stack_color = colors.get("stack")
+    if stack_color:
+        styled_call_body = _wrap_summary_text_blocks(styled_call_body, fill=stack_color)
+    return styled_call_body
 
 
 def _style_entry_calls_in_typst(typst: str, colors: dict[str, str]) -> str:
@@ -450,9 +568,23 @@ def _style_entry_calls_in_typst(typst: str, colors: dict[str, str]) -> str:
             output.append(typst[cursor:])
             break
         call_body = typst[open_paren + 1:close_paren]
+        section_matches = list(_TYPST_SECTION_HEADING_RE.finditer(typst[:start]))
+        section_title = (
+            section_matches[-1].group("title").strip().casefold()
+            if section_matches
+            else ""
+        )
+        is_project_entry = prefix == _PROJECT_ENTRY_CALL or section_title == "projects"
+        is_company_entry = "experience" in section_title and not is_project_entry
         output.append(typst[cursor:start])
         output.append(prefix)
-        output.append(_style_entry_call_body(call_body, colors))
+        output.append(
+            _style_entry_call_body(
+                call_body,
+                colors,
+                is_company_entry=is_company_entry,
+            )
+        )
         output.append(")")
         cursor = close_paren + 1
     return "".join(output)
@@ -483,18 +615,32 @@ def _apply_workbench_letter_spacing_to_typst(
         text = typst_path.read_text(encoding="utf-8")
     except OSError:
         return
-    text = _ensure_vendor_rendercv_import(typst_path, text)
-    if text is None:
-        return
-
-    args = "".join(
-        f"  typography-letter-spacing-{key.replace('_', '-')}: {value},\n"
-        for key, value in spacing.items()
-    )
-    match = _RENDERCV_WITH_DATE_LINE_RE.search(text)
-    if not match:
-        return
-    updated = text[:match.start()] + args + text[match.start():]
+    updated = text
+    if name_spacing := spacing.get("name"):
+        updated = re.sub(
+            r"(?m)^(= )(?!#text\(tracking: )(.+?)\s*$",
+            rf"\1#text(tracking: {name_spacing})[\2]",
+            updated,
+            count=1,
+        )
+    if headline_spacing := spacing.get("headline"):
+        updated = _wrap_typst_calls(
+            updated,
+            call_prefix="#headline(",
+            fill_prefix=f"#text(tracking: {headline_spacing})[",
+        )
+    if connections_spacing := spacing.get("connections"):
+        updated = _wrap_typst_calls(
+            updated,
+            call_prefix="#connections(",
+            fill_prefix=f"#text(tracking: {connections_spacing})[",
+        )
+    if section_spacing := spacing.get("section_titles"):
+        updated = re.sub(
+            r"(?m)^(==+ )(?!#text\(tracking: )(.+?)\s*$",
+            rf"\1#text(tracking: {section_spacing})[\2]",
+            updated,
+        )
     if updated != text:
         typst_path.write_text(updated, encoding="utf-8")
 

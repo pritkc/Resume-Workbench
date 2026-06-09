@@ -102,7 +102,7 @@ def test_rendercv_experience_bullets_omit_stack_when_description_prefixed() -> N
     assert payload["cv"]["sections"]["experience"][0]["highlights"] == ["Built APIs"]
 
 
-def test_rendercv_formats_work_and_project_stack_with_configured_separator() -> None:
+def test_rendercv_formats_work_stack_label_and_project_stack_separator() -> None:
     resume = {
         "personalInfo": {"name": "Jane"},
         "summary": "",
@@ -142,7 +142,7 @@ def test_rendercv_formats_work_and_project_stack_with_configured_separator() -> 
     payload = resume_to_rendercv_payload(resume, theme_settings)
 
     assert payload["cv"]["sections"]["experience"][0]["summary"] == "**Stack:** Go | gRPC"
-    assert payload["cv"]["sections"]["projects"][0]["summary"] == "**Stack:** Rust | WASM"
+    assert payload["cv"]["sections"]["projects"][0]["summary"] == "Rust | WASM"
 
 
 def test_rendercv_payload_strips_app_only_workbench_settings() -> None:

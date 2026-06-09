@@ -338,7 +338,7 @@ def test_rendercv_engine_applies_summary_alignment_to_typst(
     assert "data-summary-align" not in typst
 
 
-def test_rendercv_engine_expands_project_stack_header_without_changing_experience(
+def test_rendercv_engine_expands_project_stack_header_without_stack_label(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -385,6 +385,8 @@ def test_rendercv_engine_expands_project_stack_header_without_changing_experienc
     assert "let project-header-gap = 0.25cm" in typst
     assert "minimum-stack-width" in typst
     assert "#strong[Stack:] Python • FastAPI" in typst
+    assert "#summary[Python • FastAPI • PostgreSQL • React • Docker • Kubernetes • Terraform]" in typst
+    assert "#strong[Stack:] Python • FastAPI • PostgreSQL" not in typst
 
 
 def test_rendercv_engine_applies_workbench_field_styles(
@@ -408,7 +410,15 @@ def test_rendercv_engine_applies_workbench_field_styles(
             }
         ],
         "education": [],
-        "personalProjects": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Project Alpha",
+                "date": "2024",
+                "techStack": "React, TypeScript",
+                "description": ["Built UI"],
+            }
+        ],
         "skills": {"groups": []},
     }
     theme_settings = RenderThemeSettings.from_payload(
@@ -419,6 +429,7 @@ def test_rendercv_engine_applies_workbench_field_styles(
                 "resume_workbench_style": {
                     "colors": {
                         "company": "#123456",
+                        "role": "#654321",
                         "stack": "rgb(10, 20, 30)",
                         "date_location": "#abcdef",
                     },
@@ -443,12 +454,97 @@ def test_rendercv_engine_applies_workbench_field_styles(
 
     typst = bundle.typst_path.read_text(encoding="utf-8")
     assert bundle.pdf_path is not None and bundle.pdf_path.exists()
-    assert "rendercv_lib_resume_matcher.typ" in typst
-    assert "typography-letter-spacing-name: 0.4pt" in typst
-    assert "typography-letter-spacing-section-titles: 0.2pt" in typst
+    assert "rendercv_lib_resume_matcher.typ" not in typst
+    assert "= #text(tracking: 0.4pt)[Jane Doe]" in typst
+    assert "== #text(tracking: 0.2pt)[Experience]" in typst
     assert "#text(fill: rgb(18, 52, 86))[#strong[Acme Labs]]" in typst
+    assert "#text(fill: rgb(101, 67, 33))[Engineer]" in typst
+    assert "#text(fill: rgb(18, 52, 86))[#strong[Project Alpha]]" not in typst
     assert "#text(fill: rgb(10, 20, 30))[#summary[#strong[Stack:] Python • FastAPI]]" in typst
+    assert "#text(fill: rgb(10, 20, 30))[#summary[React • TypeScript]]" in typst
+    assert "#strong[Stack:] React • TypeScript" not in typst
     assert "#text(fill: rgb(171, 205, 239))[" in typst
+
+
+def test_rendercv_engine_colors_plain_company_line_in_experience_template(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    resume = {
+        "personalInfo": {"name": "Jane Doe", "email": "jane@example.com"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Engineer",
+                "company": "Humana (Contract)",
+                "location": "Remote",
+                "date": "2025 - Present",
+                "techStack": "Python, FastAPI",
+                "description": ["Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Resume Workbench",
+                "date": "2025",
+                "techStack": "React, TypeScript",
+                "description": ["Built UI"],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "harvard",
+            "theme_profiles": {
+                "harvard": {
+                    "design": {
+                        "templates": {
+                            "experience_entry": {
+                                "main_column": "COMPANY\n**POSITION**\nSUMMARY\nHIGHLIGHTS",
+                                "date_and_location_column": "LOCATION | DATE",
+                            },
+                            "normal_entry": {
+                                "main_column": "**NAME**\nSUMMARY\nHIGHLIGHTS",
+                                "date_and_location_column": "DATE",
+                            },
+                        }
+                    }
+                }
+            },
+            "settings": {
+                "resume_workbench_style": {
+                    "colors": {
+                        "company": "#ff0000",
+                        "role": "#00aa00",
+                        "stack": "#0066cc",
+                    },
+                    "tech_stack": {"separator": "·"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    bundle = render_resume_bundle(
+        resume,
+        theme_settings,
+        identifier="plain_company_line",
+    )
+
+    typst = bundle.typst_path.read_text(encoding="utf-8")
+    assert bundle.pdf_path is not None and bundle.pdf_path.exists()
+    assert "#text(fill: rgb(255, 0, 0))[Humana (Contract)]" in typst
+    assert "#text(fill: rgb(0, 170, 0))[#strong[Engineer]]" in typst
+    assert "#text(fill: rgb(255, 0, 0))[#strong[Resume Workbench]]" not in typst
+    assert "#text(fill: rgb(0, 102, 204))[#summary[#strong[Stack:] Python · FastAPI]]" in typst
+    assert "#summary[React · TypeScript]" in typst
+    assert "#strong[Stack:] React · TypeScript" not in typst
 
 
 def test_rendercv_engine_is_deterministic_for_same_input(

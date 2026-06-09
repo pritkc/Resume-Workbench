@@ -471,7 +471,12 @@ def _looks_like_tech_stack(value: str, parts: list[str]) -> bool:
     return len(value.split()) <= 4
 
 
-def _format_tech_stack_summary(stack: str, theme_settings: RenderThemeSettings) -> str:
+def _format_tech_stack_summary(
+    stack: str,
+    theme_settings: RenderThemeSettings,
+    *,
+    include_label: bool,
+) -> str:
     cleaned = _clean_text(stack)
     if not cleaned:
         return ""
@@ -484,7 +489,9 @@ def _format_tech_stack_summary(stack: str, theme_settings: RenderThemeSettings) 
         joiner = ", " if separator == "," else f" {separator} "
         cleaned = joiner.join(parts)
 
-    return f"**Stack:** {cleaned}"
+    if include_label:
+        return f"**Stack:** {cleaned}"
+    return cleaned
 
 
 def _bold_keyword_in_text(text: str, keyword: str) -> str:
@@ -550,7 +557,11 @@ def _experience_entries(
         stack = _clean_text(
             item.get("techStack") or item.get("tech_stacks") or item.get("summary")
         )
-        formatted_stack = _format_tech_stack_summary(stack, theme_settings)
+        formatted_stack = _format_tech_stack_summary(
+            stack,
+            theme_settings,
+            include_label=True,
+        )
         bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
         while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
             bullets = bullets[1:]
@@ -625,7 +636,11 @@ def _project_entries(
             or item.get("summary")
             or item.get("role")
         )
-        formatted_stack = _format_tech_stack_summary(stack, theme_settings)
+        formatted_stack = _format_tech_stack_summary(
+            stack,
+            theme_settings,
+            include_label=False,
+        )
         bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
         while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
             bullets = bullets[1:]
