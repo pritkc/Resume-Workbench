@@ -8,6 +8,7 @@ import {
 } from '@/lib/types/render-theme';
 import {
   RenderCvInput,
+  RenderCvPanelHeader,
   RenderCvRow,
   RenderCvSection,
   RenderCvSelect,
@@ -43,47 +44,47 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
 
   return (
     <div className="space-y-2">
-      <div className="flex h-7 items-center justify-between gap-2 border border-border bg-card px-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Locale</span>
-        <button
-          type="button"
-          onClick={() =>
-            onChange(
-              normalizeRenderThemeSettings({
-                ...settings,
-                locale: clone(DEFAULT_RENDER_THEME_SETTINGS.locale),
-              })
-            )
-          }
-          className="font-mono text-[11px] uppercase tracking-wider text-red-600 hover:underline"
-        >
-          Reset
-        </button>
-      </div>
+      <RenderCvPanelHeader
+        label="Locale"
+        onReset={() =>
+          onChange(
+            normalizeRenderThemeSettings({
+              ...settings,
+              locale: clone(DEFAULT_RENDER_THEME_SETTINGS.locale),
+            })
+          )
+        }
+      />
 
-      <RenderCvSection title="Basics">
-        <RenderCvRow label="Language">
+      <RenderCvSection title="Language">
+        <RenderCvRow label="Language" density="compact">
           <RenderCvSelect
             value={settings.locale.language}
             options={RENDER_LANGUAGE_OPTIONS}
             onChange={(value) => updateLocale(['language'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Last Updated">
-          <RenderCvInput
-            value={settings.locale.last_updated}
-            onChange={(value) => updateLocale(['last_updated'], value)}
-          />
-        </RenderCvRow>
-        <RenderCvRow label="Present">
-          <RenderCvInput
-            value={settings.locale.present}
-            onChange={(value) => updateLocale(['present'], value)}
-          />
-        </RenderCvRow>
-        <div className="grid border-b border-border md:grid-cols-2">
+      </RenderCvSection>
+
+      <RenderCvSection title="Labels">
+        <div className="grid md:grid-cols-2">
+          <RenderCvRow label="Last Updated" density="compact">
+            <RenderCvInput
+              value={settings.locale.last_updated}
+              onChange={(value) => updateLocale(['last_updated'], value)}
+            />
+          </RenderCvRow>
+          <RenderCvRow label="Present" density="compact">
+            <RenderCvInput
+              value={settings.locale.present}
+              onChange={(value) => updateLocale(['present'], value)}
+            />
+          </RenderCvRow>
           <RenderCvRow label="Month" density="compact">
-            <RenderCvInput value={settings.locale.month} onChange={(value) => updateLocale(['month'], value)} />
+            <RenderCvInput
+              value={settings.locale.month}
+              onChange={(value) => updateLocale(['month'], value)}
+            />
           </RenderCvRow>
           <RenderCvRow label="Months" density="compact">
             <RenderCvInput
@@ -91,10 +92,11 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
               onChange={(value) => updateLocale(['months'], value)}
             />
           </RenderCvRow>
-        </div>
-        <div className="grid border-b border-border md:grid-cols-2">
           <RenderCvRow label="Year" density="compact">
-            <RenderCvInput value={settings.locale.year} onChange={(value) => updateLocale(['year'], value)} />
+            <RenderCvInput
+              value={settings.locale.year}
+              onChange={(value) => updateLocale(['year'], value)}
+            />
           </RenderCvRow>
           <RenderCvRow label="Years" density="compact">
             <RenderCvInput
@@ -103,10 +105,7 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
             />
           </RenderCvRow>
         </div>
-      </RenderCvSection>
-
-      <RenderCvSection title="Phrases">
-        <RenderCvRow label="Degree with Area">
+        <RenderCvRow label="Degree w/ Area" density="compact">
           <RenderCvInput
             value={settings.locale.phrases?.degree_with_area}
             onChange={(value) => updateLocale(['phrases', 'degree_with_area'], value)}
@@ -114,19 +113,23 @@ export function RenderLocaleControls({ settings, onChange }: RenderLocaleControl
         </RenderCvRow>
       </RenderCvSection>
 
-      <RenderCvSection title="Date names">
-        <div className="grid border-b border-border md:grid-cols-2">
+      <RenderCvSection title="Date Names">
+        <div className="grid md:grid-cols-2">
           <RenderCvRow
             label="Abbreviations"
-            description="Comma-separated month abbreviations."
             density="compact"
+            description="Comma-separated month abbreviations"
           >
             <RenderCvInput
               value={arrayToText(settings.locale.month_abbreviations)}
               onChange={(value) => updateLocale(['month_abbreviations'], textToArray(value))}
             />
           </RenderCvRow>
-          <RenderCvRow label="Full names" description="Comma-separated full month names." density="compact">
+          <RenderCvRow
+            label="Full Names"
+            density="compact"
+            description="Comma-separated full month names"
+          >
             <RenderCvInput
               value={arrayToText(settings.locale.month_names)}
               onChange={(value) => updateLocale(['month_names'], textToArray(value))}

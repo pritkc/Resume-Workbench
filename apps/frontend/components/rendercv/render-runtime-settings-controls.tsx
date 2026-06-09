@@ -1,19 +1,17 @@
 'use client';
 
-import { RotateCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   DEFAULT_RENDER_THEME_SETTINGS,
   normalizeRenderThemeSettings,
   type RenderThemeSettings,
 } from '@/lib/types/render-theme';
 import {
+  RenderCvBoldKeywordChips,
   RenderCvInput,
+  RenderCvPanelHeader,
   RenderCvRow,
   RenderCvSection,
   RenderCvToggle,
-  arrayToText,
-  textToArray,
 } from './rendercv-controls-shared';
 
 interface RenderRuntimeSettingsControlsProps {
@@ -45,64 +43,60 @@ export function RenderRuntimeSettingsControls({
     onChange(normalizeRenderThemeSettings({ ...settings, settings: nextRuntimeSettings }));
   };
 
+  const boldKeywords = Array.isArray(settings.settings.bold_keywords)
+    ? settings.settings.bold_keywords
+    : [];
+
   return (
     <div className="space-y-2">
-      <div
-        className="flex flex-col gap-1 border border-border bg-card px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between"
-        title="PDF title, date format, and defaults for the RenderCV output."
-      >
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Runtime
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() =>
-            onChange(
-              normalizeRenderThemeSettings({
-                ...settings,
-                settings: clone(DEFAULT_RENDER_THEME_SETTINGS.settings),
-              })
-            )
-          }
-          className="h-7 gap-1 px-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground underline decoration-black/25 underline-offset-2 hover:bg-transparent hover:text-foreground"
-          title="Restore all runtime settings to defaults."
-        >
-          <RotateCcw className="h-3 w-3" />
-          Reset
-        </Button>
-      </div>
+      <RenderCvPanelHeader
+        label="Runtime"
+        onReset={() =>
+          onChange(
+            normalizeRenderThemeSettings({
+              ...settings,
+              settings: clone(DEFAULT_RENDER_THEME_SETTINGS.settings),
+            })
+          )
+        }
+      />
 
-      <RenderCvSection title="General">
+      <RenderCvSection title="Output">
         <RenderCvRow
-          label="Show Summary Heading"
-          description="When section is enabled, hide the heading to save space."
+          label="Summary Heading"
           density="compact"
+          description="When section is enabled, hide the heading to save space"
         >
           <RenderCvToggle
+            compact
             checked={Boolean(settings.settings.show_summary_heading)}
             onChange={(value) => updateRuntimeSetting(['show_summary_heading'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Current Date" description="Use `today` or an ISO date." density="compact">
+        <RenderCvRow label="Current Date" density="compact" description="Use today or an ISO date">
           <RenderCvInput
             value={settings.settings.current_date}
             onChange={(value) => updateRuntimeSetting(['current_date'], value)}
           />
         </RenderCvRow>
-        <RenderCvRow label="Bold Keywords" description="Comma-separated list." density="compact">
-          <RenderCvInput
-            value={arrayToText(settings.settings.bold_keywords)}
-            onChange={(value) => updateRuntimeSetting(['bold_keywords'], textToArray(value))}
-          />
-        </RenderCvRow>
-        <RenderCvRow label="PDF Title" description="Supports RenderCV placeholders." density="compact">
+        <RenderCvRow
+          label="PDF Title"
+          density="compact"
+          description="Supports RenderCV placeholders"
+        >
           <RenderCvInput
             value={settings.settings.pdf_title}
             onChange={(value) => updateRuntimeSetting(['pdf_title'], value)}
           />
         </RenderCvRow>
+      </RenderCvSection>
+
+      <RenderCvSection title="Bold Keywords">
+        <RenderCvBoldKeywordChips
+          keywords={boldKeywords}
+          onChange={(keywords) => updateRuntimeSetting(['bold_keywords'], keywords)}
+          placeholder="Add keyword to bold in PDF"
+        />
       </RenderCvSection>
     </div>
   );

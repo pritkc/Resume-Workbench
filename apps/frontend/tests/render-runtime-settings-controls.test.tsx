@@ -19,4 +19,21 @@ describe('RenderRuntimeSettingsControls', () => {
     const afterHeadingToggle = onChange.mock.calls.at(-1)?.[0];
     expect(afterHeadingToggle?.settings?.show_summary_heading).toBe(true);
   });
+
+  it('adds bold keyword chips', () => {
+    const onChange = vi.fn();
+
+    render(
+      <RenderRuntimeSettingsControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={onChange} />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Add keyword to bold in PDF'), {
+      target: { value: 'FastAPI' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(onChange).toHaveBeenCalled();
+    const next = onChange.mock.calls.at(-1)?.[0];
+    expect(next?.settings?.bold_keywords).toContain('FastAPI');
+  });
 });

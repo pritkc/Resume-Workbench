@@ -12,29 +12,23 @@ describe('RenderThemeControls', () => {
     expect(screen.getByRole('button', { name: 'Advanced' })).toBeInTheDocument();
     expect(screen.queryByText('Theme Profile')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Style' }));
-    expect(screen.getAllByText('XCharter').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Calibri').length).toBeGreaterThan(0);
-    expect(screen.getByText('Field Styling')).toBeInTheDocument();
-    expect(
-      screen.getAllByTitle('Supports hex, rgb(...), hsl(...), and named colors.').length
-    ).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: '•' }).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
-    expect(screen.getByText(TEMPLATE_HINTS.footer)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Page' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Margins' })).toBeInTheDocument();
   }, 15_000);
 
-  it('updates workbench field styling settings', () => {
+  it('updates workbench entry accent colors from style bucket', () => {
     const onChange = vi.fn();
     render(<RenderThemeControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Style' }));
-    const fieldStyling = screen.getByText('Field Styling').closest('section');
-    expect(fieldStyling).not.toBeNull();
-    const scoped = within(fieldStyling!);
+    expect(screen.getByRole('button', { name: 'Typography' })).toBeInTheDocument();
+    expect(screen.getByText('Entry Accents')).toBeInTheDocument();
 
-    fireEvent.change(scoped.getAllByPlaceholderText('Hex, rgb(...), hsl(...), or named color')[2], {
+    const entryAccents = screen.getByText('Entry Accents').closest('section');
+    expect(entryAccents).not.toBeNull();
+    const scoped = within(entryAccents!);
+
+    fireEvent.change(scoped.getAllByPlaceholderText('Hex, rgb(...), hsl(...), or named color')[0], {
       target: { value: '#123456' },
     });
     expect(onChange).toHaveBeenLastCalledWith(
@@ -57,5 +51,13 @@ describe('RenderThemeControls', () => {
         }),
       })
     );
+  });
+
+  it('renders advanced templates inside collapsible sections', () => {
+    render(<RenderThemeControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    fireEvent.click(screen.getByRole('button', { name: /Education Entry/i }));
+    expect(screen.getAllByText(TEMPLATE_HINTS.education_entry).length).toBeGreaterThan(0);
   });
 });

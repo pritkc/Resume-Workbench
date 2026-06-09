@@ -110,6 +110,7 @@ import {
   tryParseLlmClipboardBundle,
   parseCvMetadataYaml,
 } from '@/lib/cv-metadata';
+import { mergeBoldKeywordsIntoMetadataYaml } from '@/lib/metadata-theme-sync';
 
 type TabId =
   | 'resume'
@@ -1308,13 +1309,25 @@ const ResumeBuilderContent = () => {
 
   const handleSettingsChange = useCallback(
     (newSettings: RenderThemeSettings) => {
+      const nextMetadataYaml = mergeBoldKeywordsIntoMetadataYaml(
+        rawYamlSectionsRef.current.metadata,
+        newSettings.settings.bold_keywords
+      );
+      const nextSections = {
+        ...rawYamlSectionsRef.current,
+        metadata: nextMetadataYaml,
+      };
+
       setThemeSettings(newSettings);
+      setRawYamlSections(nextSections);
       setRawYamlIssue(null);
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
       markDraftDirty('visual');
       queueHistoryCommit(
         buildDraftSnapshot({
           themeSettings: newSettings,
+          rawYamlSections: nextSections,
           yamlNeedsSync: true,
           editorMode: 'visual',
         })
