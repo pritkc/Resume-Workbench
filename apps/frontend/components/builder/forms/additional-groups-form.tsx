@@ -61,7 +61,6 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
   hideFooterAdd = false,
 }) => {
   const { t } = useTranslations();
-  const listDndId = React.useId();
   const groups = React.useMemo(() => normalizeAdditionalGroups(data), [data]);
   const [draftByGroupId, setDraftByGroupId] = React.useState<Record<string, string>>({});
 
@@ -172,7 +171,7 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
   return (
     <div className="space-y-2">
       <DndContext
-        id={listDndId}
+        id="additional-groups-list"
         sensors={sensors}
         collisionDetection={resumeSortableCollision}
         onDragEnd={handleDragEnd}
@@ -244,7 +243,9 @@ export const AdditionalGroupsForm: React.FC<AdditionalGroupsFormProps> = ({
       </DndContext>
 
       {groups.length === 0 && (
-        <p className="py-1 text-[11px] text-muted-foreground">{t('builder.additionalForm.emptyState')}</p>
+        <p className="py-1 text-[11px] text-muted-foreground">
+          {t('builder.additionalForm.emptyState')}
+        </p>
       )}
 
       {!hideFooterAdd ? (

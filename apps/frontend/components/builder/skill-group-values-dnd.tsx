@@ -99,7 +99,6 @@ export const SkillGroupValuesDnd: React.FC<SkillGroupValuesDndProps> = ({
   removeAriaLabel,
   gripTitle,
 }) => {
-  const instanceId = React.useId();
   const [rowIds, reorderRowIds] = useHighlightRowIds(values.length);
 
   const sensors = useSensors(
@@ -125,7 +124,7 @@ export const SkillGroupValuesDnd: React.FC<SkillGroupValuesDndProps> = ({
 
   return (
     <DndContext
-      id={`skill-values-${scopeId}-${instanceId}`}
+      id={`skill-values-${scopeId}`}
       sensors={sensors}
       collisionDetection={resumeSortableCollision}
       onDragEnd={handleDragEnd}

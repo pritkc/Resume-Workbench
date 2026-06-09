@@ -29,12 +29,11 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
   const [activeBucket, setActiveBucket] = useState<DesignBucketId>('layout');
 
   return (
-    <div className="space-y-2">
-      <div className="flex h-7 items-center gap-3 border border-border bg-card px-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          Theme
-        </span>
-        <div className="min-w-[140px] flex-1">
+    <div className="space-y-0">
+      {/* Theme selector — compact inline row */}
+      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-card px-2 py-1.5">
+        <span className="shrink-0 font-sans text-[11px] text-muted-foreground">Theme</span>
+        <div className="min-w-0 flex-1">
           <RenderCvSelect
             value={settings.theme_id}
             options={RENDER_THEME_OPTIONS}
@@ -45,12 +44,14 @@ export function RenderThemeControls({ settings, onChange }: RenderThemeControlsP
         </div>
       </div>
 
+      {/* Section pills — Layout | Style | Advanced */}
       <RenderCvQuickNav
         items={DESIGN_BUCKETS}
         activeId={activeBucket}
         onChange={(id) => setActiveBucket(id as DesignBucketId)}
       />
 
+      {/* Panel content */}
       {activeBucket === 'layout' ? (
         <RenderThemeLayoutPanel settings={settings} onChange={onChange} />
       ) : null}

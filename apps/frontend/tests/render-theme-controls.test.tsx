@@ -12,8 +12,8 @@ describe('RenderThemeControls', () => {
     expect(screen.getByRole('button', { name: 'Advanced' })).toBeInTheDocument();
     expect(screen.queryByText('Theme Profile')).not.toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'Page' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Margins' })).toBeInTheDocument();
+    expect(screen.getByText('Page')).toBeInTheDocument();
+    expect(screen.getByText('Margins')).toBeInTheDocument();
   }, 15_000);
 
   it('updates workbench entry accent colors from style bucket', () => {
@@ -21,15 +21,15 @@ describe('RenderThemeControls', () => {
     render(<RenderThemeControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Style' }));
-    expect(screen.getByRole('button', { name: 'Typography' })).toBeInTheDocument();
-    expect(screen.getByText('Entry Accents')).toBeInTheDocument();
+    expect(screen.getByText('Typography')).toBeInTheDocument();
+    expect(screen.getByText(/Entry Accents/)).toBeInTheDocument();
     expect(screen.getByText('Role Title')).toBeInTheDocument();
 
-    const entryAccents = screen.getByText('Entry Accents').closest('section');
+    const entryAccents = screen.getByText(/Entry Accents/).closest('section');
     expect(entryAccents).not.toBeNull();
     const scoped = within(entryAccents!);
 
-    fireEvent.change(scoped.getAllByPlaceholderText('Hex, rgb(...), hsl(...), or named color')[0], {
+    fireEvent.change(scoped.getAllByPlaceholderText('#rrggbb')[0], {
       target: { value: '#123456' },
     });
     expect(onChange).toHaveBeenLastCalledWith(
@@ -42,7 +42,7 @@ describe('RenderThemeControls', () => {
       })
     );
 
-    fireEvent.change(scoped.getAllByPlaceholderText('Hex, rgb(...), hsl(...), or named color')[1], {
+    fireEvent.change(scoped.getAllByPlaceholderText('#rrggbb')[1], {
       target: { value: '#654321' },
     });
     expect(onChange).toHaveBeenLastCalledWith(
@@ -67,11 +67,19 @@ describe('RenderThemeControls', () => {
     );
   });
 
-  it('renders advanced templates inside collapsible sections', () => {
+  it('opens advanced template sections by default', () => {
     render(<RenderThemeControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
-    fireEvent.click(screen.getByRole('button', { name: /Education Entry/i }));
+    expect(screen.getByRole('button', { name: /Education Entry/i })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(screen.getByRole('button', { name: /Experience Entry/i })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
     expect(screen.getAllByText(TEMPLATE_HINTS.education_entry).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(TEMPLATE_HINTS.experience_entry).length).toBeGreaterThan(0);
   });
 });

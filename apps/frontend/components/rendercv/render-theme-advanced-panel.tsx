@@ -22,7 +22,7 @@ export function RenderThemeAdvancedPanel({ settings, onChange }: RenderThemeAdva
   const { updateDesign } = createDesignUpdaters({ settings, onChange });
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 pb-4">
       <RenderCvCollapsibleSection
         title="Date & Time Strings"
         defaultOpen
@@ -60,14 +60,19 @@ export function RenderThemeAdvancedPanel({ settings, onChange }: RenderThemeAdva
         </RenderCvRow>
       </RenderCvCollapsibleSection>
 
-      <RenderCvCollapsibleSection title="One-Line Entry" hint={TEMPLATE_HINTS.one_line_entry}>
+      <RenderCvCollapsibleSection
+        title="One-Line Entry"
+        defaultOpen
+        hint={TEMPLATE_HINTS.one_line_entry}
+      >
         <RenderCvRow
           label="Main Column"
           density="compact"
           fieldHint={TEMPLATE_HINTS.one_line_entry}
         >
           <RenderCvTextarea
-            rows={2}
+            className="min-h-24"
+            rows={4}
             value={settings.design.templates?.one_line_entry?.main_column}
             onChange={(value) =>
               updateDesign(['templates', 'one_line_entry', 'main_column'], value)
@@ -76,14 +81,19 @@ export function RenderThemeAdvancedPanel({ settings, onChange }: RenderThemeAdva
         </RenderCvRow>
       </RenderCvCollapsibleSection>
 
-      <RenderCvCollapsibleSection title="Education Entry" hint={TEMPLATE_HINTS.education_entry}>
+      <RenderCvCollapsibleSection
+        title="Education Entry"
+        defaultOpen
+        hint={TEMPLATE_HINTS.education_entry}
+      >
         <RenderCvRow
           label="Main Column"
           density="compact"
           fieldHint={TEMPLATE_HINTS.education_entry}
         >
           <RenderCvTextarea
-            rows={2}
+            className="min-h-24"
+            rows={4}
             value={settings.design.templates?.education_entry?.main_column}
             onChange={(value) =>
               updateDesign(['templates', 'education_entry', 'main_column'], value)
@@ -116,10 +126,15 @@ export function RenderThemeAdvancedPanel({ settings, onChange }: RenderThemeAdva
         </RenderCvRow>
       </RenderCvCollapsibleSection>
 
-      <RenderCvCollapsibleSection title="Project / Normal Entry" hint={TEMPLATE_HINTS.normal_entry}>
+      <RenderCvCollapsibleSection
+        title="Project / Normal Entry"
+        defaultOpen
+        hint={TEMPLATE_HINTS.normal_entry}
+      >
         <RenderCvRow label="Main Column" density="compact" fieldHint={TEMPLATE_HINTS.normal_entry}>
           <RenderCvTextarea
-            rows={2}
+            className="min-h-24"
+            rows={4}
             value={settings.design.templates?.normal_entry?.main_column}
             onChange={(value) => updateDesign(['templates', 'normal_entry', 'main_column'], value)}
           />
@@ -134,14 +149,19 @@ export function RenderThemeAdvancedPanel({ settings, onChange }: RenderThemeAdva
         </RenderCvRow>
       </RenderCvCollapsibleSection>
 
-      <RenderCvCollapsibleSection title="Experience Entry" hint={TEMPLATE_HINTS.experience_entry}>
+      <RenderCvCollapsibleSection
+        title="Experience Entry"
+        defaultOpen
+        hint={TEMPLATE_HINTS.experience_entry}
+      >
         <RenderCvRow
           label="Main Column"
           density="compact"
           fieldHint={TEMPLATE_HINTS.experience_entry}
         >
           <RenderCvTextarea
-            rows={2}
+            className="min-h-24"
+            rows={4}
             value={settings.design.templates?.experience_entry?.main_column}
             onChange={(value) =>
               updateDesign(['templates', 'experience_entry', 'main_column'], value)
@@ -162,14 +182,19 @@ export function RenderThemeAdvancedPanel({ settings, onChange }: RenderThemeAdva
         </RenderCvRow>
       </RenderCvCollapsibleSection>
 
-      <RenderCvCollapsibleSection title="Publication Entry" hint={TEMPLATE_HINTS.publication_entry}>
+      <RenderCvCollapsibleSection
+        title="Publication Entry"
+        defaultOpen
+        hint={TEMPLATE_HINTS.publication_entry}
+      >
         <RenderCvRow
           label="Main Column"
           density="compact"
           fieldHint={TEMPLATE_HINTS.publication_entry}
         >
           <RenderCvTextarea
-            rows={2}
+            className="min-h-24"
+            rows={4}
             value={settings.design.templates?.publication_entry?.main_column}
             onChange={(value) =>
               updateDesign(['templates', 'publication_entry', 'main_column'], value)
@@ -194,7 +219,7 @@ export function RenderThemeAdvancedPanel({ settings, onChange }: RenderThemeAdva
         <button
           type="button"
           onClick={() => onChange(resetActiveRenderThemeProfile(settings))}
-          className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-red-600 hover:underline"
+          className="font-sans text-[11px] text-muted-foreground hover:text-red-600 hover:underline"
         >
           Reset theme defaults
         </button>
