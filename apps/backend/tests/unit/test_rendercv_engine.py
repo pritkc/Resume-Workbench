@@ -547,6 +547,96 @@ def test_rendercv_engine_colors_plain_company_line_in_experience_template(
     assert "#strong[Stack:] React · TypeScript" not in typst
 
 
+@pytest.mark.parametrize(
+    ("main_column", "expected_company", "expected_role"),
+    [
+        (
+            "POSITION, COMPANY\nSUMMARY\nHIGHLIGHTS",
+            "#text(fill: rgb(255, 0, 0))[Humana (Contract)]",
+            "#text(fill: rgb(0, 170, 0))[Engineer]",
+        ),
+        (
+            "**POSITION**, COMPANY\nSUMMARY\nHIGHLIGHTS",
+            "#text(fill: rgb(255, 0, 0))[Humana (Contract)]",
+            "#text(fill: rgb(0, 170, 0))[#strong[Engineer]]",
+        ),
+        (
+            "POSITION, **COMPANY**\nSUMMARY\nHIGHLIGHTS",
+            "#text(fill: rgb(255, 0, 0))[#strong[Humana (Contract)]]",
+            "#text(fill: rgb(0, 170, 0))[Engineer]",
+        ),
+    ],
+)
+def test_rendercv_engine_field_colors_follow_values_not_template_positions(
+    main_column: str,
+    expected_company: str,
+    expected_role: str,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+
+    resume = {
+        "personalInfo": {"name": "Jane Doe", "email": "jane@example.com"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Engineer",
+                "company": "Humana (Contract)",
+                "location": "Remote",
+                "date": "2025 - Present",
+                "techStack": "Python, FastAPI",
+                "description": ["Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "harvard",
+            "theme_profiles": {
+                "harvard": {
+                    "design": {
+                        "templates": {
+                            "experience_entry": {
+                                "main_column": main_column,
+                                "date_and_location_column": "LOCATION | DATE",
+                            }
+                        }
+                    }
+                }
+            },
+            "settings": {
+                "resume_workbench_style": {
+                    "colors": {
+                        "company": "#ff0000",
+                        "role": "#00aa00",
+                        "stack": "#0066cc",
+                    },
+                    "tech_stack": {"separator": "·"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    bundle = render_resume_bundle(
+        resume,
+        theme_settings,
+        identifier=f"value_anchored_colors_{abs(hash(main_column))}",
+    )
+
+    typst = bundle.typst_path.read_text(encoding="utf-8")
+    assert bundle.pdf_path is not None and bundle.pdf_path.exists()
+    assert expected_company in typst
+    assert expected_role in typst
+    assert "#text(fill: rgb(255, 0, 0))[Engineer]" not in typst
+    assert "#text(fill: rgb(0, 170, 0))[Humana (Contract)]" not in typst
+
+
 def test_rendercv_engine_is_deterministic_for_same_input(
     sample_resume: dict,
     tmp_path: Path,

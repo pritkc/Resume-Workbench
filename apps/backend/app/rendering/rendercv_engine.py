@@ -252,6 +252,12 @@ class RenderCVBundle:
     payload: dict[str, object]
 
 
+@dataclass(frozen=True)
+class _WorkbenchEntryStyleTarget:
+    company: str | None = None
+    role: str | None = None
+
+
 def _default_identifier(seed: str | None = None) -> str:
     if seed:
         candidate = "".join(char if char.isalnum() else "_" for char in seed)
@@ -358,99 +364,72 @@ def _wrap_typst_block_content(block: str, *, fill: str) -> str:
     )
 
 
-def _wrap_first_strong_text(block: str, *, fill: str) -> str:
-    strong_start = block.find("#strong[")
-    if strong_start == -1:
-        return block
-    strong_open = strong_start + len("#strong")
-    strong_close = _matching_typst_delimiter(block, strong_open)
-    if strong_close is None:
-        return block
-    return (
-        block[:strong_start]
-        + f"#text(fill: {fill})["
-        + block[strong_start:strong_close + 1]
-        + "]"
-        + block[strong_close + 1:]
-    )
+def _text_fill_ranges(text: str) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    cursor = 0
+    while True:
+        start = text.find("#text(fill:", cursor)
+        if start == -1:
+            break
+        open_bracket = text.find("[", start)
+        if open_bracket == -1:
+            break
+        close_bracket = _matching_typst_delimiter(text, open_bracket)
+        if close_bracket is None:
+            break
+        ranges.append((start, close_bracket + 1))
+        cursor = close_bracket + 1
+    return ranges
 
 
-def _wrap_first_entry_label(block: str, *, fill: str) -> str:
-    strong_wrapped = _wrap_first_strong_text(block, fill=fill)
-    if strong_wrapped != block:
-        return strong_wrapped
-
-    open_bracket = block.find("[")
-    if open_bracket == -1:
-        return block
-    close_bracket = _matching_typst_delimiter(block, open_bracket)
-    if close_bracket is None:
-        return block
-    body_start = open_bracket + 1
-    body = block[body_start:close_bracket]
-    first_content = re.search(r"\S.*", body)
-    if first_content is None:
-        return block
-    line_start = body_start + first_content.start()
-    line_end = block.find("\n", line_start, close_bracket)
-    if line_end == -1:
-        line_end = close_bracket
-    line = block[line_start:line_end].rstrip()
-    if not line:
-        return block
-    return (
-        block[:line_start]
-        + f"#text(fill: {fill})["
-        + line
-        + "]"
-        + block[line_start + len(line):]
-    )
+def _inside_ranges(index: int, ranges: list[tuple[int, int]]) -> bool:
+    return any(start <= index < end for start, end in ranges)
 
 
-def _wrap_inline_role_after_company(block: str, *, fill: str) -> str:
-    strong_start = block.find("#strong[")
-    if strong_start == -1:
+def _wrap_typst_field_value(block: str, value: str | None, *, fill: str) -> str:
+    if not value:
         return block
-    strong_open = strong_start + len("#strong")
-    strong_close = _matching_typst_delimiter(block, strong_open)
-    if strong_close is None:
+    needle = value.strip()
+    if not needle:
         return block
-    comma = block.find(",", strong_close + 1)
-    if comma == -1:
-        return block
-    role_start = comma + 1
-    while role_start < len(block) and block[role_start] in {" ", "\t"}:
-        role_start += 1
-    role_end = block.find("\n", role_start)
-    if role_end == -1:
-        role_end = len(block)
-    role = block[role_start:role_end].rstrip()
-    if not role or role.startswith(("#summary[", "#text(")):
-        return block
-    return (
-        block[:role_start]
-        + f"#text(fill: {fill})["
-        + role
-        + "]"
-        + block[role_start + len(role):]
-    )
 
+    protected_ranges = _text_fill_ranges(block)
+    cursor = 0
+    while True:
+        strong_start = block.find("#strong[", cursor)
+        if strong_start == -1:
+            break
+        strong_open = strong_start + len("#strong")
+        strong_close = _matching_typst_delimiter(block, strong_open)
+        if strong_close is None:
+            break
+        if not _inside_ranges(strong_start, protected_ranges):
+            strong_body = block[strong_open + 1:strong_close]
+            if strong_body.strip() == needle:
+                return (
+                    block[:strong_start]
+                    + f"#text(fill: {fill})["
+                    + block[strong_start:strong_close + 1]
+                    + "]"
+                    + block[strong_close + 1:]
+                )
+        cursor = strong_close + 1
 
-def _wrap_first_strong_after(text: str, start: int, *, fill: str) -> str:
-    strong_start = text.find("#strong[", start)
-    if strong_start == -1:
-        return text
-    strong_open = strong_start + len("#strong")
-    strong_close = _matching_typst_delimiter(text, strong_open)
-    if strong_close is None:
-        return text
-    return (
-        text[:strong_start]
-        + f"#text(fill: {fill})["
-        + text[strong_start:strong_close + 1]
-        + "]"
-        + text[strong_close + 1:]
-    )
+    cursor = 0
+    while True:
+        match_start = block.find(needle, cursor)
+        if match_start == -1:
+            return block
+        match_end = match_start + len(needle)
+        if not _inside_ranges(match_start, protected_ranges):
+            return (
+                block[:match_start]
+                + f"#text(fill: {fill})["
+                + block[match_start:match_end]
+                + "]"
+                + block[match_end:]
+            )
+        cursor = match_end
 
 
 def _wrap_summary_text_blocks(block: str, *, fill: str) -> str:
@@ -504,6 +483,7 @@ def _style_entry_call_body(
     colors: dict[str, str],
     *,
     is_company_entry: bool,
+    target: _WorkbenchEntryStyleTarget | None,
 ) -> str:
     commas = _top_level_typst_commas(call_body)
     if not commas:
@@ -516,13 +496,9 @@ def _style_entry_call_body(
     first_arg = call_body[:first_arg_end]
     second_arg = call_body[second_arg_start:second_arg_end]
 
-    role_color = colors.get("role")
-    if role_color and is_company_entry:
-        first_arg = _wrap_inline_role_after_company(first_arg, fill=role_color)
-
     company_color = colors.get("company")
-    if company_color and is_company_entry:
-        first_arg = _wrap_first_entry_label(first_arg, fill=company_color)
+    if company_color and is_company_entry and target is not None:
+        first_arg = _wrap_typst_field_value(first_arg, target.company, fill=company_color)
 
     date_color = colors.get("date_location")
     if date_color:
@@ -534,10 +510,11 @@ def _style_entry_call_body(
         + second_arg
         + call_body[second_arg_end:]
     )
-    if role_color and is_company_entry:
-        styled_call_body = _wrap_first_strong_after(
+    role_color = colors.get("role")
+    if role_color and is_company_entry and target is not None:
+        styled_call_body = _wrap_typst_field_value(
             styled_call_body,
-            second_arg_end,
+            target.role,
             fill=role_color,
         )
     stack_color = colors.get("stack")
@@ -546,12 +523,40 @@ def _style_entry_call_body(
     return styled_call_body
 
 
-def _style_entry_calls_in_typst(typst: str, colors: dict[str, str]) -> str:
+def _workbench_entry_style_targets(
+    resume_data: dict[str, Any],
+) -> list[_WorkbenchEntryStyleTarget]:
+    raw_entries = resume_data.get("workExperience")
+    if not isinstance(raw_entries, list):
+        return []
+    targets: list[_WorkbenchEntryStyleTarget] = []
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            continue
+        company = entry.get("company")
+        role = entry.get("position") or entry.get("title") or entry.get("role")
+        targets.append(
+            _WorkbenchEntryStyleTarget(
+                company=company.strip() if isinstance(company, str) else None,
+                role=role.strip() if isinstance(role, str) else None,
+            )
+        )
+    return targets
+
+
+def _style_entry_calls_in_typst(
+    typst: str,
+    colors: dict[str, str],
+    *,
+    work_targets: list[_WorkbenchEntryStyleTarget] | None = None,
+) -> str:
     if not colors:
         return typst
     output: list[str] = []
     cursor = 0
     call_prefixes = (_PROJECT_ENTRY_CALL, _REGULAR_ENTRY_CALL)
+    work_target_index = 0
+    work_targets = work_targets or []
     while True:
         matches = [
             (index, prefix)
@@ -576,6 +581,11 @@ def _style_entry_calls_in_typst(typst: str, colors: dict[str, str]) -> str:
         )
         is_project_entry = prefix == _PROJECT_ENTRY_CALL or section_title == "projects"
         is_company_entry = "experience" in section_title and not is_project_entry
+        target = None
+        if is_company_entry:
+            if work_target_index < len(work_targets):
+                target = work_targets[work_target_index]
+            work_target_index += 1
         output.append(typst[cursor:start])
         output.append(prefix)
         output.append(
@@ -583,6 +593,7 @@ def _style_entry_calls_in_typst(typst: str, colors: dict[str, str]) -> str:
                 call_body,
                 colors,
                 is_company_entry=is_company_entry,
+                target=target,
             )
         )
         output.append(")")
@@ -591,7 +602,10 @@ def _style_entry_calls_in_typst(typst: str, colors: dict[str, str]) -> str:
 
 
 def _apply_workbench_field_styles_to_typst(
-    typst_path: Path, theme_settings: RenderThemeSettings
+    typst_path: Path,
+    theme_settings: RenderThemeSettings,
+    *,
+    resume_data: dict[str, Any] | None = None,
 ) -> None:
     colors = _workbench_color_settings(theme_settings)
     if not colors:
@@ -600,7 +614,11 @@ def _apply_workbench_field_styles_to_typst(
         original = typst_path.read_text(encoding="utf-8")
     except OSError:
         return
-    updated = _style_entry_calls_in_typst(original, colors)
+    updated = _style_entry_calls_in_typst(
+        original,
+        colors,
+        work_targets=_workbench_entry_style_targets(resume_data or {}),
+    )
     if updated != original:
         typst_path.write_text(updated, encoding="utf-8")
 
@@ -1011,7 +1029,11 @@ def render_resume_bundle(
         if generated_typst is not None:
             _apply_project_tech_stack_layout_to_typst(generated_typst)
         if generated_typst is not None:
-            _apply_workbench_field_styles_to_typst(generated_typst, theme_settings)
+            _apply_workbench_field_styles_to_typst(
+                generated_typst,
+                theme_settings,
+                resume_data=resume_data,
+            )
         if generated_typst is not None:
             _apply_workbench_letter_spacing_to_typst(generated_typst, theme_settings)
         if generated_typst is not None:
