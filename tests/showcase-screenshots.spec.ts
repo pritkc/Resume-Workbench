@@ -114,7 +114,7 @@ test.describe("public showcase screenshots", () => {
     await page.goto(frontendBaseUrl);
     await expect(
       page.getByRole("heading", {
-        name: "Build better applications without losing control.",
+        name: "Turn one trusted resume into a complete, reviewable application.",
       }),
     ).toBeVisible();
     await page.screenshot({
