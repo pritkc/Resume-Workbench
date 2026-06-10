@@ -3,6 +3,12 @@ name: Deploy showcase to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - "website/**"
+      - "scripts/build-pages-site.mjs"
+      - "apps/frontend/public/logo.svg"
+      - "apps/frontend/public/showcase/builder.png"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -19,33 +25,23 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build static showcase page
-        run: |
-          mkdir -p public
-          cp docs/images/showcase/landing.png public/landing.png
-          cat > public/index.html <<'EOF'
-          <!doctype html>
-          <html lang="en">
-            <head>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1" />
-              <title>Resume Workbench</title>
-              <style>
-                body { margin: 0; background: #0b0f19; }
-                img { display: block; width: 100%; max-width: 1440px; margin: 0 auto; }
-              </style>
-            </head>
-            <body>
-              <img src="./landing.png" alt="Resume Workbench showcase" />
-            </body>
-          </html>
-          EOF
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build and validate static website
+        run: node scripts/build-pages-site.mjs
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: dist/pages
 
-      - uses: actions/deploy-pages@v4
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -107,6 +107,7 @@ For Docker, provider options, troubleshooting, and production notes, use [SETUP.
 apps/
   backend/       FastAPI, SQLAlchemy, Alembic, RenderCV, LiteLLM
   frontend/      Next.js application and product showcase
+website/         Static, responsive GitHub Pages showcase
 docs/
   agent/         Detailed implementation handbook
   images/        Supporting documentation images
@@ -128,6 +129,9 @@ tests/           Root Playwright end-to-end coverage
 ## Development checks
 
 ```bash
+# Static GitHub Pages showcase
+npm run build:pages
+
 # Frontend lint, unit tests, and production build
 cd apps/frontend && npm run verify
 
