@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export LLM trace rows and generated artifacts into docs/plans/test_runs.
+"""Export LLM trace rows and generated artifacts into artifacts/test-runs.
 
 This is a temporary QA helper for capturing local runs without manually copying
 prompt and response text out of the observability UI.
@@ -30,7 +30,7 @@ except ImportError as exc:  # pragma: no cover - depends on local environment
 SCRIPT_PATH = Path(__file__).resolve()
 REPO_ROOT = SCRIPT_PATH.parents[1]
 BACKEND_DIR = REPO_ROOT / "apps" / "backend"
-DEFAULT_OUT_DIR = REPO_ROOT / "docs" / "plans" / "test_runs"
+DEFAULT_OUT_DIR = REPO_ROOT / "artifacts" / "test-runs"
 DEFAULT_ARTIFACT_DIR = BACKEND_DIR / "data" / "artifacts"
 ALLOWED_ARTIFACT_SUFFIXES = {
     ".html",
@@ -710,7 +710,7 @@ def export_trace(args: argparse.Namespace) -> Path:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Export a local LLM trace into docs/plans/test_runs/<generation_run_id>. "
+            "Export a local LLM trace into artifacts/test-runs/<generation_run_id>. "
             "--trace-id may be either an LLM trace id or a generation_run_id."
         )
     )
@@ -723,14 +723,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--out",
         default=str(DEFAULT_OUT_DIR),
-        help="Output root directory. Defaults to docs/plans/test_runs.",
+        help="Output root directory. Defaults to artifacts/test-runs.",
     )
     parser.add_argument("--database-url", help="Override DATABASE_URL.")
     parser.add_argument("--artifact-dir", help="Override artifact root directory.")
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite an existing docs/plans/test_runs/<generation_run_id> directory.",
+        help="Overwrite an existing artifacts/test-runs/<generation_run_id> directory.",
     )
     return parser
 

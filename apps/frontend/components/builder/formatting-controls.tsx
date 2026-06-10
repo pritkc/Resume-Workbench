@@ -193,7 +193,9 @@ export const FormattingControls: React.FC<FormattingControlsProps> = ({ settings
                   </div>
                   <span
                     className={`font-mono text-[9px] font-bold uppercase tracking-wider ${
-                      settings.template === template.id ? 'text-foreground' : 'text-muted-foreground'
+                      settings.template === template.id
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
                     }`}
                   >
                     {templateLabels[template.id].name}
@@ -399,9 +401,7 @@ export const FormattingControls: React.FC<FormattingControlsProps> = ({ settings
                 <button
                   onClick={handleCompactModeToggle}
                   className={`relative w-10 h-5 border-2 transition-all ${
-                    settings.compactMode
-                      ? 'bg-primary border-primary'
-                      : 'bg-card border-gray-400'
+                    settings.compactMode ? 'bg-primary border-primary' : 'bg-card border-gray-400'
                   }`}
                 >
                   <span

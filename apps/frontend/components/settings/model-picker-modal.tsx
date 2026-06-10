@@ -102,11 +102,15 @@ export function ModelPickerModal({
           {t('settings.promptCatalog.modelPickerTitle', { step: stepLabel })}
         </h2>
         <p className="mt-1 font-mono text-[10px] leading-tight text-gray-600">
-          <span className="text-muted-foreground">{t('settings.promptCatalog.modelPickerResolved')}:</span>{' '}
+          <span className="text-muted-foreground">
+            {t('settings.promptCatalog.modelPickerResolved')}:
+          </span>{' '}
           {resolvedModel}
         </p>
         <p className="mt-0.5 truncate font-mono text-[9px] text-gray-500" title={appDefaultModel}>
-          <span className="text-muted-foreground">{t('settings.promptCatalog.modelPickerAppDefault')}:</span>{' '}
+          <span className="text-muted-foreground">
+            {t('settings.promptCatalog.modelPickerAppDefault')}:
+          </span>{' '}
           {appDefaultModel}
         </p>
         {cliproxyActive ? (
@@ -176,7 +180,10 @@ export function ModelPickerModal({
         ) : null}
 
         <div className="mt-2 space-y-1">
-          <Label htmlFor="model-override" className="font-mono text-[9px] uppercase text-muted-foreground">
+          <Label
+            htmlFor="model-override"
+            className="font-mono text-[9px] uppercase text-muted-foreground"
+          >
             {t('settings.promptCatalog.modelOverrideLabel')}
           </Label>
           <Input
@@ -188,7 +195,13 @@ export function ModelPickerModal({
           />
         </div>
         <div className="mt-2 flex flex-wrap justify-end gap-1">
-          <Button type="button" variant="builderOutline" size="xs" className="h-6 px-2" onClick={onClose}>
+          <Button
+            type="button"
+            variant="builderOutline"
+            size="xs"
+            className="h-6 px-2"
+            onClick={onClose}
+          >
             {t('settings.promptCatalog.cancel')}
           </Button>
           <Button

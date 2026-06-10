@@ -50,4 +50,4 @@ LAYOUT:
 
 ## Usage
 
-Use this prompt when generating UI components or layouts for Resume Matcher.
+Use this prompt when generating UI components or layouts for Resume Workbench.

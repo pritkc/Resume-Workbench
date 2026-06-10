@@ -65,12 +65,7 @@ export function InlineResumeField({
       {...(value !== undefined ? { value } : {})}
       onChange={onChange}
       onPaste={handlePaste}
-      className={cn(
-        'resume-canvas-field',
-        sizeClass[fieldSize],
-        alignClass[align],
-        className
-      )}
+      className={cn('resume-canvas-field', sizeClass[fieldSize], alignClass[align], className)}
     />
   );
 }

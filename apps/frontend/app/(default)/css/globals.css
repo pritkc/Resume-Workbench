@@ -52,11 +52,10 @@
 
   /* Fonts */
   --font-sans:
-    "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui,
+    'Avenir Next', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, ui-sans-serif, system-ui,
     sans-serif;
   --font-mono:
-    "SF Mono", "Monaco", "Cascadia Code", "Roboto Mono", ui-monospace, "Courier New",
-    monospace;
+    'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', ui-monospace, 'Courier New', monospace;
 
   /* Animations */
   --animate-gradient: gradient 8s linear infinite;
@@ -70,11 +69,10 @@
 
 :root {
   --font-sans:
-    "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui,
+    'Avenir Next', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, ui-sans-serif, system-ui,
     sans-serif;
   --font-mono:
-    "SF Mono", "Monaco", "Cascadia Code", "Roboto Mono", ui-monospace, "Courier New",
-    monospace;
+    'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', ui-monospace, 'Courier New', monospace;
   --radius: 0.625rem;
 
   /* Orange · Navy — light */
@@ -374,7 +372,8 @@
     @apply -mt-0.5 mb-0.5 w-full max-w-[30rem] text-center text-[12px] leading-tight;
   }
 
-  .resume-canvas-header .resume-canvas-field:not(.resume-canvas-field-hero):not(.resume-canvas-field-headline) {
+  .resume-canvas-header
+    .resume-canvas-field:not(.resume-canvas-field-hero):not(.resume-canvas-field-headline) {
     @apply inline-block w-auto max-w-full truncate;
   }
 

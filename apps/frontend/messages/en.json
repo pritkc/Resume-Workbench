@@ -34,9 +34,9 @@
   },
   "home": {
     "brandLine1": "Resume",
-    "brandLine2": "Matcher",
+    "brandLine2": "Workbench",
     "docs": "Docs",
-    "launchApp": "Launch App"
+    "launchApp": "Open Workbench"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -477,7 +477,7 @@
           "website": "Website"
         },
         "placeholders": {
-          "projectName": "Resume Matcher",
+          "projectName": "Resume Workbench",
           "role": "Creator",
           "years": "Mar 2023",
           "date": "Mar 2023",

@@ -1,6 +1,6 @@
 # Design System
 
-> Extended design system for Resume Matcher Swiss International Style.
+> Extended design system for the Resume Workbench interface.
 
 ## Spacing Scale
 

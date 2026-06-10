@@ -16,7 +16,7 @@ This folder is the working map for agents operating in the current `resume-workk
 - LLM calls are persisted to the **`llm_calls`** table and surfaced at **`/llm-traces`**.
 - **`additional.groups`** and raw RenderCV YAML editing are live features.
 - **Prompts:** shipped copy under `apps/backend/app/prompts/text/` (`.txt`); loaders and `build_messages` in `apps/backend/app/prompts/*.py`. See [llm-prompt-inventory.md](llm-prompt-inventory.md) and `apps/backend/app/prompts/text/README.md`.
-- **End-to-end backend flow:** [architecture/backend-orchestration-flow.md](architecture/backend-orchestration-flow.md) (repo root `orchastration.md` is a stub that points here).
+- **End-to-end backend flow:** [architecture/backend-orchestration-flow.md](architecture/backend-orchestration-flow.md).
 
 ## Start here
 
@@ -43,11 +43,6 @@ Swiss layout, typography, and PDF/visual specs for templates. **Not** the live R
 - [features/jd-match.md](features/jd-match.md)
 - [features/resume-templates.md](features/resume-templates.md)
 - [features/i18n.md](features/i18n.md)
-
-## Skills locations (keep in sync)
-
-- **Cursor:** `.claude/skills/` in this repo (often symlinked from user-level Cursor skills).
-- **GitHub Copilot agents:** `.github/skills/` — **mirror** backend/stack wording with `.claude/skills/` when you change one.
 
 ## Historical or partial docs
 

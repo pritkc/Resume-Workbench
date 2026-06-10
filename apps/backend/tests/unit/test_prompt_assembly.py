@@ -95,12 +95,17 @@ def test_build_prompt_context_validates_current_prompt_canaries() -> None:
     ctx = build_prompt_context(
         prompt_id="full",
         jd_intel_blob={},
-        response_contract=build_response_contract(TailoringResumePayload(), prompt_id="full"),
+        response_contract=build_response_contract(
+            TailoringResumePayload(), prompt_id="full"
+        ),
         resume_payload=TailoringResumePayload(),
         original_resume_markdown="",
     )
     validate_prompt_canaries(ctx.user_prompt, ("HOOKS/THEMES",))
-    assert "translation candidates, not resume copy or mandatory insertions" in ctx.user_prompt
+    assert (
+        "translation candidates, not resume copy or mandatory insertions"
+        in ctx.user_prompt
+    )
 
 
 def test_tailoring_resume_to_llm_prompt_education_and_skills_without_group_ids(
@@ -136,7 +141,9 @@ def test_tailoring_resume_to_llm_prompt_education_and_skills_without_group_ids(
     assert "project_period" not in proj0
 
 
-def test_tailoring_resume_prompt_compacts_duplicate_project_role_and_split_skills() -> None:
+def test_tailoring_resume_prompt_compacts_duplicate_project_role_and_split_skills() -> (
+    None
+):
     payload = TailoringResumePayload.from_resume_data(
         {
             "summary": "Data platform engineer.",
@@ -267,6 +274,7 @@ def test_section_output_template_in_user_prompt() -> None:
 def test_resume_diff_rules_no_years_format() -> None:
     """Summary schema must NOT force '[N]+ years in [domain]' — conflicts with SUMMARY section."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+
     assert "[N]+ years" not in RESUME_DIFF_RULES, (
         "resume_diff_output.txt summary rule forces a years-count format that "
         "the SUMMARY section in the same file explicitly forbids (years-count format). "
@@ -277,6 +285,7 @@ def test_resume_diff_rules_no_years_format() -> None:
 def test_resume_diff_rules_has_bullet_policy() -> None:
     """Diff rules must mention bullet handling (prompt-led; not hard-coded replace-only)."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+
     lower = RESUME_DIFF_RULES.lower()
     assert "bullet" in lower
 
@@ -284,6 +293,7 @@ def test_resume_diff_rules_has_bullet_policy() -> None:
 def test_resume_diff_rules_limit_summary_without_bullet_length_cap() -> None:
     """Summary should stay render-fit, but bullets should not be forced thin."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+
     lower = RESUME_DIFF_RULES.lower()
     assert "105-135 characters" in lower
     assert "105-145 characters" not in lower
@@ -325,7 +335,9 @@ def test_section_output_template_is_compact_and_omits_resume_facts() -> None:
     assert "WHY:" in template
     assert "=== BOLD KEYWORDS ===" in template
     assert "Editable addresses:" in template
-    assert "EXPERIENCE: 0=B0-B2 budget 2/3 keep>=1; 1=B0-B1 budget 1/2 keep>=1" in template
+    assert (
+        "EXPERIENCE: 0=B0-B2 budget 2/3 keep>=1; 1=B0-B1 budget 1/2 keep>=1" in template
+    )
     assert "PROJECT: 0=B0" in template
     assert "SKILLS: G0=4 values; G1=6 values" in template
     assert "Acme Corp" not in template
@@ -428,7 +440,9 @@ def test_resume_diff_rules_forbid_markdown_fences() -> None:
     assert "no json" in lower
 
 
-def test_section_tailoring_restores_original_content_rules_without_json_contract() -> None:
+def test_section_tailoring_restores_original_content_rules_without_json_contract() -> (
+    None
+):
     """Primary tailoring should carry old writing policy while keeping section-header syntax."""
     full = render_tailoring_user_prompt(
         mode_id="full",
@@ -453,7 +467,7 @@ def test_section_tailoring_restores_original_content_rules_without_json_contract
         assert "claim calibration:" in lower
         assert "do not claim org-wide architecture" in lower
         assert "inflated openers as primary verbs" in lower
-        assert "impossible wins unsupported by source evidence" in lower
+        assert "impossible wins unless explicitly supported" in lower
         assert "return valid json only" not in lower
         assert "tailored cell:" not in lower
         assert "full envelope:" not in lower
@@ -588,6 +602,7 @@ def test_resume_diff_rules_remove_keyword_weave_and_vendor_substitution_paths() 
 def test_resume_diff_rules_has_locked_fields() -> None:
     """Diff rules must document which fields are locked."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+
     assert "LOCKED" in RESUME_DIFF_RULES or "locked" in RESUME_DIFF_RULES.lower(), (
         "resume_diff_output.txt must list locked (immutable) fields"
     )
@@ -596,6 +611,7 @@ def test_resume_diff_rules_has_locked_fields() -> None:
 def test_resume_diff_rules_has_index_mapping_note() -> None:
     """Diff rules must explain that string keys are 0-based indexes matching contract order."""
     from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
+
     assert "0-based" in RESUME_DIFF_RULES or "response_contract" in RESUME_DIFF_RULES, (
         "resume_diff_output.txt must state that experience/projects keys are 0-based "
         "integer strings matching response_contract entry order"

@@ -1,5 +1,0 @@
-# New Graduate — Full-Stack Engineer
-
-Build customer-facing features in React and TypeScript with Node.js or Python backends. Work with designers in Figma, ship to Vercel or AWS, and participate in on-call rotation after ramp (month 4+).
-
-Requirements: internship or project experience with React; familiarity with REST APIs and relational databases.

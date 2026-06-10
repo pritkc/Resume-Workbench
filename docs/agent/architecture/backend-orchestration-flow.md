@@ -1,6 +1,6 @@
 # Backend Orchestration Flow
 
-> **Location:** This document was moved from the repo-root typo file `orchastration.md` so agent onboarding stays under `docs/agent/architecture/`.
+> Canonical map of the backend orchestration flow.
 
 This file is the quickest way to understand the backend user journey from the first resume upload to the final application package.
 

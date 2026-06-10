@@ -17,13 +17,13 @@ export const themeSettings = {
 
 export const resumePreview = {
   personalInfo: {
-    name: "Jane Doe",
+    name: "Avery Chen",
     title: "Platform Engineer",
-    email: "jane@example.com",
-    phone: "555-0100",
-    location: "San Francisco, CA",
-    linkedin: "linkedin.com/in/janedoe",
-    github: "github.com/janedoe",
+    email: "avery.chen@example.com",
+    phone: "(555) 014-8820",
+    location: "Chicago, IL",
+    linkedin: "linkedin.com/in/averychen-demo",
+    github: "github.com/averychen-demo",
   },
   summary:
     "Platform engineer focused on APIs, reliability, and analytics workflows.",
@@ -217,23 +217,41 @@ export async function fulfillJson(route: Route, data: unknown, status = 200) {
 export async function installArtifactMocks(page: Page) {
   const previewSvg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="600" height="840" viewBox="0 0 600 840">
-      <rect width="600" height="840" fill="#f8f7f1" />
-      <rect x="28" y="28" width="544" height="784" fill="#ffffff" stroke="#111111" stroke-width="4" />
-      <text x="56" y="92" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#111111">
-        Resume Preview
-      </text>
-      <text x="56" y="130" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#4b5563">
-        Mocked artifact for Playwright coverage
-      </text>
-      <rect x="56" y="170" width="488" height="18" fill="#d1d5db" />
-      <rect x="56" y="206" width="420" height="12" fill="#e5e7eb" />
-      <rect x="56" y="234" width="472" height="12" fill="#e5e7eb" />
-      <rect x="56" y="290" width="164" height="18" fill="#d1d5db" />
-      <rect x="56" y="326" width="488" height="12" fill="#e5e7eb" />
-      <rect x="56" y="354" width="460" height="12" fill="#e5e7eb" />
-      <rect x="56" y="410" width="152" height="18" fill="#d1d5db" />
-      <rect x="56" y="446" width="488" height="12" fill="#e5e7eb" />
-      <rect x="56" y="474" width="444" height="12" fill="#e5e7eb" />
+      <rect width="600" height="840" fill="#f4f3ed" />
+      <rect x="28" y="20" width="544" height="800" fill="#ffffff" stroke="#d4d4d0" />
+      <text x="56" y="68" font-family="Georgia, serif" font-size="28" font-weight="700" fill="#111827">Avery Chen</text>
+      <text x="56" y="94" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ea580c">PLATFORM ENGINEER</text>
+      <text x="56" y="117" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#4b5563">Chicago, IL  •  avery.chen@example.com  •  (555) 014-8820</text>
+      <line x1="56" y1="137" x2="544" y2="137" stroke="#111827" stroke-width="2" />
+
+      <text x="56" y="169" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#111827">SUMMARY</text>
+      <text x="56" y="191" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">Platform engineer building reliable APIs, internal developer tooling, and observable data systems.</text>
+
+      <text x="56" y="231" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#111827">EXPERIENCE</text>
+      <line x1="56" y1="239" x2="544" y2="239" stroke="#d1d5db" />
+      <text x="56" y="264" font-family="Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#111827">Senior Backend Engineer</text>
+      <text x="544" y="264" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#4b5563">2023 – Present</text>
+      <text x="56" y="282" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#ea580c">Example Cloud  •  Remote</text>
+      <text x="65" y="306" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">• Built FastAPI services for internal platform automation and safer releases.</text>
+      <text x="65" y="326" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">• Improved data pipeline observability and shortened incident response time.</text>
+      <text x="65" y="346" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">• Added typed contracts and focused test coverage across critical workflows.</text>
+
+      <text x="56" y="390" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#111827">PROJECTS</text>
+      <line x1="56" y1="398" x2="544" y2="398" stroke="#d1d5db" />
+      <text x="56" y="423" font-family="Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#111827">Resume Forge</text>
+      <text x="544" y="423" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#4b5563">2025</text>
+      <text x="65" y="447" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">• Built a typed resume workflow with reviewable AI changes and PDF previews.</text>
+      <text x="65" y="467" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">• Added prompt controls, trace inspection, and reusable application packs.</text>
+
+      <text x="56" y="511" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#111827">EDUCATION</text>
+      <line x1="56" y1="519" x2="544" y2="519" stroke="#d1d5db" />
+      <text x="56" y="544" font-family="Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#111827">B.S. Computer Science</text>
+      <text x="544" y="544" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#4b5563">2018 – 2022</text>
+      <text x="56" y="564" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">State University  •  GPA 3.9</text>
+
+      <text x="56" y="608" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#111827">TECHNICAL SKILLS</text>
+      <line x1="56" y1="616" x2="544" y2="616" stroke="#d1d5db" />
+      <text x="56" y="641" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#374151">Python  •  FastAPI  •  PostgreSQL  •  TypeScript  •  React  •  Playwright  •  Docker</text>
     </svg>
   `.trim();
   const pdfBody = Buffer.from(

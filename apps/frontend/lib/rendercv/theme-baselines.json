@@ -83,9 +83,7 @@
       "allow_page_break": true,
       "space_between_regular_entries": "1.2em",
       "space_between_text_based_entries": "0.3em",
-      "show_time_spans_in": [
-        "experience"
-      ]
+      "show_time_spans_in": ["experience"]
     },
     "entries": {
       "date_and_location_width": "8cm",

@@ -332,9 +332,7 @@ export function GenerationObservabilityPanel({
               type="button"
               onClick={() => setActiveTab(id)}
               className={`border border-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
-                activeTab === id
-                  ? 'bg-black text-white'
-                  : 'bg-card text-foreground hover:bg-accent'
+                activeTab === id ? 'bg-black text-white' : 'bg-card text-foreground hover:bg-accent'
               }`}
             >
               {label}

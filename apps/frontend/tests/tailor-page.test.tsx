@@ -19,13 +19,12 @@ const incrementImprovements = vi.fn();
 const incrementResumes = vi.fn();
 const fetchResumeList = vi.fn();
 const getActiveResume = vi.fn();
+const router = { push, back };
+const searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push,
-    back,
-  }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => router,
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/components/common/resume_previewer_context', () => ({
@@ -219,17 +218,15 @@ describe('TailorPage', () => {
     });
     fetchLivePreviewResult.mockResolvedValue(previewResult);
     subscribeLivePreviewEvents.mockImplementation((_liveRunId, handlers) => {
-      queueMicrotask(() => {
-        handlers.onEvent?.({
-          event_id: 'event-1',
-          sequence: 1,
-          live_run_id: 'live-123',
-          generation_run_id: 'run-123',
-          trace_id: 'trace-123',
-          type: 'run.completed',
-          at: new Date().toISOString(),
-          data: { status: 'completed' },
-        });
+      handlers.onEvent?.({
+        event_id: 'event-1',
+        sequence: 1,
+        live_run_id: 'live-123',
+        generation_run_id: 'run-123',
+        trace_id: 'trace-123',
+        type: 'run.completed',
+        at: new Date().toISOString(),
+        data: { status: 'completed' },
       });
       return { close: vi.fn() };
     });
@@ -275,8 +272,17 @@ describe('TailorPage', () => {
       expect(screen.getByRole('button', { name: 'tailor.generateTailored' })).toBeEnabled()
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'tailor.generateTailored' }));
+    screen.getByRole('button', { name: 'tailor.generateTailored' }).click();
 
+    await waitFor(() =>
+      expect(uploadJobDescriptions).toHaveBeenCalledWith(
+        [
+          'Senior backend role focused on FastAPI, architecture, APIs, testing, metrics, and ATS alignment for one-page resume tailoring.',
+        ],
+        'master-123',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      )
+    );
     await waitFor(() => expect(startLivePreview).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(fetchLivePreviewResult).toHaveBeenCalledWith('live-123'));
     expect(await screen.findByText('tailor.diffModal.title')).toBeInTheDocument();

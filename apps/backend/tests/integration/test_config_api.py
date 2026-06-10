@@ -40,10 +40,13 @@ class TestLlmConfig:
     async def test_put_llm_config(self, mock_load, mock_save, client):
         mock_load.return_value = {}
         async with client:
-            resp = await client.put("/api/v1/config/llm-api-key", json={
-                "provider": "anthropic",
-                "model": "claude-3-sonnet",
-            })
+            resp = await client.put(
+                "/api/v1/config/llm-api-key",
+                json={
+                    "provider": "anthropic",
+                    "model": "claude-3-sonnet",
+                },
+            )
         assert resp.status_code == 200
         data = resp.json()
         assert data["provider"] == "anthropic"
@@ -107,7 +110,11 @@ class TestLlmTest:
     @patch("app.routers.config.check_llm_health", new_callable=AsyncMock)
     @patch("app.routers.config._load_config")
     async def test_connection_test_success(self, mock_load, mock_health, client):
-        mock_load.return_value = {"provider": "openai", "model": "gpt-4", "api_key": "sk-test"}
+        mock_load.return_value = {
+            "provider": "openai",
+            "model": "gpt-4",
+            "api_key": "sk-test",
+        }
         mock_health.return_value = {
             "healthy": True,
             "provider": "openai",
@@ -251,9 +258,12 @@ class TestFeatureConfig:
     async def test_put_features(self, mock_load, mock_save, client):
         mock_load.return_value = {}
         async with client:
-            resp = await client.put("/api/v1/config/features", json={
-                "enable_cover_letter": True,
-            })
+            resp = await client.put(
+                "/api/v1/config/features",
+                json={
+                    "enable_cover_letter": True,
+                },
+            )
         assert resp.status_code == 200
         assert resp.json()["enable_cover_letter"] is True
 
@@ -319,9 +329,12 @@ class TestLanguageConfig:
     async def test_put_invalid_language_returns_400(self, mock_load, mock_save, client):
         mock_load.return_value = {}
         async with client:
-            resp = await client.put("/api/v1/config/language", json={
-                "ui_language": "invalid_lang",
-            })
+            resp = await client.put(
+                "/api/v1/config/language",
+                json={
+                    "ui_language": "invalid_lang",
+                },
+            )
         assert resp.status_code == 400
 
 
@@ -396,13 +409,16 @@ class TestPromptCatalog:
             "enrichment_regenerate_group",
         }.issubset(ids)
 
-        tailoring = next(row for row in data["prompts"] if row["id"] == "resume_generate_full")
+        tailoring = next(
+            row for row in data["prompts"] if row["id"] == "resume_generate_full"
+        )
         assert tailoring.get("sections")
-        assert len(tailoring["sections"]) == 4
+        assert len(tailoring["sections"]) == 5
         assert {s["id"] for s in tailoring["sections"]} == {
             "tailoring_contract_block",
             "tailoring_craft_block",
             "tailoring_mode_strategies",
+            "tailoring_content_rules_block",
             "tailoring_user_message",
         }
 
@@ -413,7 +429,10 @@ class TestPromptCatalog:
         assert entry.get("system_prompt_files") == [
             "apps/backend/app/prompts/text/extract_jd_intel/system.txt",
         ]
-        assert entry.get("user_prompt_file") == "apps/backend/app/prompts/text/extract_jd_intel/user.txt"
+        assert (
+            entry.get("user_prompt_file")
+            == "apps/backend/app/prompts/text/extract_jd_intel/user.txt"
+        )
 
         shared = next(r for r in data["shared_rules"] if r["name"] == "resume_diff")
         assert shared.get("rules_source_file") == (
@@ -424,7 +443,9 @@ class TestPromptCatalog:
     async def test_get_master_resume_preview(self, mock_preview, client):
         mock_preview.return_value = ('{"k":1}', False)
         async with client:
-            resp = await client.get("/api/v1/config/prompts/catalog/master-resume-preview")
+            resp = await client.get(
+                "/api/v1/config/prompts/catalog/master-resume-preview"
+            )
         assert resp.status_code == 200
         data = resp.json()
         assert data["serialized_original_resume"] == '{"k":1}'
@@ -434,7 +455,9 @@ class TestPromptCatalog:
     async def test_get_response_contract_preview(self, mock_rc, client):
         mock_rc.return_value = (('{"mode":"full"}', False), ('{"mode":"lite"}', True))
         async with client:
-            resp = await client.get("/api/v1/config/prompts/catalog/response-contract-preview")
+            resp = await client.get(
+                "/api/v1/config/prompts/catalog/response-contract-preview"
+            )
         assert resp.status_code == 200
         data = resp.json()
         assert data["full"]["serialized"] == '{"mode":"full"}'
@@ -446,12 +469,16 @@ class TestPromptCatalog:
 class TestPromptComposer:
     """GET/PUT/DELETE /api/v1/config/prompts/{step}/composer"""
 
-    async def test_composer_put_get_delete_roundtrip(self, client, tmp_path, monkeypatch):
+    async def test_composer_put_get_delete_roundtrip(
+        self, client, tmp_path, monkeypatch
+    ):
         monkeypatch.setattr("app.prompts._prompt_loader._OVERRIDE_DIR", tmp_path)
         step = "extract_jd_intel"
         body = {"system": "custom system line", "user": "$job_description"}
         async with client:
-            put_resp = await client.put(f"/api/v1/config/prompts/{step}/composer", json=body)
+            put_resp = await client.put(
+                f"/api/v1/config/prompts/{step}/composer", json=body
+            )
             assert put_resp.status_code == 200
             put_data = put_resp.json()
             assert put_data["composer_override_active"] is True
@@ -466,7 +493,9 @@ class TestPromptComposer:
             assert del_resp.status_code == 200
             assert del_resp.json()["composer_override_active"] is False
 
-    async def test_composer_put_unknown_placeholder_returns_400(self, client, tmp_path, monkeypatch):
+    async def test_composer_put_unknown_placeholder_returns_400(
+        self, client, tmp_path, monkeypatch
+    ):
         monkeypatch.setattr("app.prompts._prompt_loader._OVERRIDE_DIR", tmp_path)
         async with client:
             resp = await client.put(
@@ -482,17 +511,23 @@ class TestResetDatabase:
     @patch("app.routers.config.db")
     async def test_reset_with_correct_token(self, mock_db, client):
         async with client:
-            resp = await client.post("/api/v1/config/reset", json={
-                "confirm": "RESET_ALL_DATA",
-            })
+            resp = await client.post(
+                "/api/v1/config/reset",
+                json={
+                    "confirm": "RESET_ALL_DATA",
+                },
+            )
         assert resp.status_code == 200
         mock_db.reset_database.assert_called_once()
 
     async def test_reset_without_token_returns_400(self, client):
         async with client:
-            resp = await client.post("/api/v1/config/reset", json={
-                "confirm": "wrong_token",
-            })
+            resp = await client.post(
+                "/api/v1/config/reset",
+                json={
+                    "confirm": "wrong_token",
+                },
+            )
         assert resp.status_code == 400
 
     async def test_reset_missing_body_returns_422(self, client):

@@ -12,12 +12,13 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useHighlightRowIds } from '@/hooks/use-highlight-row-ids';
 import {
-  DRAG_ACTIVATION_NESTED_PX,
-  resumeSortableCollision,
-} from '@/lib/builder/drag-settings';
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useHighlightRowIds } from '@/hooks/use-highlight-row-ids';
+import { DRAG_ACTIVATION_NESTED_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 import { SortableHighlightRow } from './sortable-highlight-row';
 
 interface HighlightBulletsRichTextDndProps {

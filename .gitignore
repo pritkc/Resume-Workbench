@@ -4,9 +4,13 @@
 # Local tooling and session history
 .specstory/
 .vscode/
+.idea/
+.cursor/
 .claude/
 .kilocode/
 temp/
+screenshots/
+artifacts/
 
 # Environment and local secrets
 .env
@@ -42,7 +46,11 @@ share/python-wheels/
 *.egg
 MANIFEST
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.uv-cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 
@@ -85,6 +93,8 @@ yarn-error.log*
 .pnpm-debug.log*
 .vercel/
 *.pem
+*.key
+*.log
 
 # Local reference clones remain available in the workspace, but are not
 # part of the root repository history.

@@ -52,11 +52,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     void loadLanguages();
   }, []);
 
-  const setContentLanguage = useCallback(async (_lang: SupportedLanguage) => {
+  const setContentLanguage = useCallback(async () => {
     /* English only — no-op for API compatibility */
   }, []);
 
-  const setUiLanguage = useCallback((_lang: Locale) => {
+  const setUiLanguage = useCallback(() => {
     /* English only — no-op for API compatibility */
   }, []);
 

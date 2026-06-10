@@ -1,50 +1,21 @@
-# Pull Request Title
-<!-- Provide a concise and descriptive title for the pull request -->
+## What changed
 
-## Related Issue
-<!-- If this pull request is related to an issue, please link it here using the "#" symbol followed by the issue number (e.g., #123) -->
+<!-- Explain the user-facing problem and the solution. -->
 
-## Description
-<!-- Describe the changes made in this pull request. What problem does it solve or what feature does it add/modify? -->
-copilot:summary
+## How it was tested
 
-## Type
-<!-- Check the relevant options by putting an "x" in the brackets -->
+- [ ] Frontend lint, tests, and build
+- [ ] Backend tests and lint
+- [ ] Relevant Playwright flow
+- [ ] Manual browser check for visible changes
 
-- [ ] Bug Fix
-- [ ] Feature Enhancement
-- [ ] Documentation Update
-- [ ] Code Refactoring
-- [ ] Other (please specify):
+## Public-release check
 
-## Proposed Changes
-<!-- List the specific changes made in this pull request -->
+- [ ] No real resume, contact, job, credential, trace, or provider data is included
+- [ ] Screenshots use fictional data
+- [ ] Documentation is updated where needed
+- [ ] Database changes include an Alembic migration
 
--
--
--
+## Screenshots
 
-## Screenshots / Code Snippets (if applicable)
-<!-- Include any relevant screenshots or code snippets that help visualize the changes made -->
-
-## How to Test
-<!-- Provide step-by-step instructions or a checklist for testing the changes in this pull request -->
-
-1.
-2.
-3.
-
-## Checklist
-<!-- Put an "x" in the brackets for the items that apply to this pull request -->
-
-- [ ] The code compiles successfully without any errors or warnings
-- [ ] The changes have been tested and verified
-- [ ] The documentation has been updated (if applicable)
-- [ ] The changes follow the project's coding guidelines and best practices
-- [ ] The commit messages are descriptive and follow the project's guidelines
-- [ ] All tests (if applicable) pass successfully
-- [ ] This pull request has been linked to the related issue (if applicable)
-
-## Additional Information
-<!-- Add any other information about the pull request that you think might be helpful -->
-copilot:walkthrough
+<!-- Required for visible UI changes. -->

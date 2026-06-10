@@ -61,7 +61,8 @@ export const SummaryForm: React.FC<SummaryFormProps> = ({ value, onChange }) => 
                   aria-label={tool.label}
                   className={cn(
                     'h-6 w-6',
-                    alignment === tool.id && 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    alignment === tool.id &&
+                      'bg-primary text-primary-foreground hover:bg-primary/90'
                   )}
                 >
                   <tool.icon className="h-3 w-3" />

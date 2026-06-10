@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { GenerationObservabilityPanel } from '@/components/builder/generation-observability-panel';
+import { LanguageProvider } from '@/lib/context/language-context';
 
 const fetchLlmCallSummary = vi.fn();
 const fetchLlmCalls = vi.fn();
 const fetchGenerationRunTimingDetails = vi.fn();
+const fetchLanguageConfig = vi.fn();
+const updateLanguageConfig = vi.fn();
+
+function renderPanel(props: React.ComponentProps<typeof GenerationObservabilityPanel>) {
+  return render(
+    <LanguageProvider>
+      <GenerationObservabilityPanel {...props} />
+    </LanguageProvider>
+  );
+}
 
 vi.mock('@/lib/api/llm', () => ({
   fetchLlmCallSummary: (...args: unknown[]) => fetchLlmCallSummary(...args),
@@ -15,6 +26,8 @@ vi.mock('@/lib/api/config', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/config')>();
   return {
     ...actual,
+    fetchLanguageConfig: (...args: unknown[]) => fetchLanguageConfig(...args),
+    updateLanguageConfig: (...args: unknown[]) => updateLanguageConfig(...args),
     fetchGenerationRunTimingDetails: (...args: unknown[]) =>
       fetchGenerationRunTimingDetails(...args),
   };
@@ -25,6 +38,19 @@ describe('GenerationObservabilityPanel', () => {
     fetchLlmCallSummary.mockReset();
     fetchLlmCalls.mockReset();
     fetchGenerationRunTimingDetails.mockReset();
+    fetchLanguageConfig.mockReset();
+    updateLanguageConfig.mockReset();
+
+    fetchLanguageConfig.mockResolvedValue({
+      ui_language: 'en',
+      content_language: 'en',
+      supported_languages: ['en'],
+    });
+    updateLanguageConfig.mockResolvedValue({
+      ui_language: 'en',
+      content_language: 'en',
+      supported_languages: ['en'],
+    });
 
     fetchLlmCallSummary.mockResolvedValue({
       trace_id: 'trace-123',
@@ -101,7 +127,7 @@ describe('GenerationObservabilityPanel', () => {
   });
 
   it('loads only the linked trace and generation run', async () => {
-    render(<GenerationObservabilityPanel traceId="trace-123" generationRunId="run-123" />);
+    renderPanel({ traceId: 'trace-123', generationRunId: 'run-123' });
 
     await waitFor(() =>
       expect(fetchLlmCalls).toHaveBeenCalledWith({ traceId: 'trace-123', limit: 500 })
@@ -123,7 +149,7 @@ describe('GenerationObservabilityPanel', () => {
   });
 
   it('shows a clear empty state when no generation unit is linked', () => {
-    render(<GenerationObservabilityPanel traceId={null} generationRunId={null} />);
+    renderPanel({ traceId: null, generationRunId: null });
 
     expect(screen.getByText(/No generation trace is linked/)).toBeInTheDocument();
     expect(fetchLlmCalls).not.toHaveBeenCalled();
@@ -200,14 +226,12 @@ describe('GenerationObservabilityPanel', () => {
       ]);
     });
 
-    render(
-      <GenerationObservabilityPanel
-        traceId="trace-123"
-        generationRunId="run-123"
-        resumeId="res-123"
-        resumeCode="ABC123"
-      />
-    );
+    renderPanel({
+      traceId: 'trace-123',
+      generationRunId: 'run-123',
+      resumeId: 'res-123',
+      resumeCode: 'ABC123',
+    });
 
     await waitFor(() =>
       expect(fetchLlmCalls).toHaveBeenCalledWith({ traceId: 'trace-123', limit: 500 })

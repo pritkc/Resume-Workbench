@@ -159,12 +159,12 @@ class TestGetResume:
                     **mock_resume_record["processed_data"]["personalInfo"],
                     "profileLinks": [
                         {
-                            "label": "LinkedIn / pritkc",
-                            "url": "https://linkedin.com/in/pritkc",
+                            "label": "LinkedIn / alexmorgan",
+                            "url": "https://linkedin.com/in/alexmorgan",
                         },
                         {
-                            "label": "GitHub / pritkc",
-                            "url": "https://github.com/pritkc",
+                            "label": "GitHub / alexmorgan",
+                            "url": "https://github.com/alexmorgan",
                         },
                     ],
                 },
@@ -178,26 +178,26 @@ class TestGetResume:
         personal_info = resp.json()["data"]["processed_resume"]["personalInfo"]
         assert personal_info["profileLinks"] == [
             {
-                "label": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "label": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
             },
             {
-                "label": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "label": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
             },
         ]
         assert personal_info["linkedin"] == ""
         assert personal_info["github"] == ""
         assert personal_info["customConnections"] == [
             {
-                "placeholder": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "placeholder": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
             {
-                "placeholder": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "placeholder": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
@@ -272,7 +272,7 @@ class TestUploadResume:
         sample_resume,
     ):
         sample_filename = "sample-resume.pdf"
-        sample_markdown = "# PRIT CHAKALASIYA\nSenior Backend Engineer"
+        sample_markdown = "# ALEX MORGAN\nSenior Backend Engineer"
         state: dict[str, object] = {}
 
         async def create_resume_atomic_active(**kwargs):
@@ -336,7 +336,7 @@ class TestUploadResume:
 
         assert fetch.status_code == 200
         data = fetch.json()["data"]
-        assert "PRIT CHAKALASIYA" in data["raw_resume"]["content"]
+        assert "ALEX MORGAN" in data["raw_resume"]["content"]
         assert data["processed_resume"]["summary"] == sample_resume["summary"]
         assert state["original_markdown"] == state["content"]
 
@@ -490,12 +490,12 @@ class TestDraftResumeFlows:
                 ],
                 "profileLinks": [
                     {
-                        "label": "LinkedIn / pritkc",
-                        "url": "https://linkedin.com/in/pritkc",
+                        "label": "LinkedIn / alexmorgan",
+                        "url": "https://linkedin.com/in/alexmorgan",
                     },
                     {
-                        "label": "GitHub / pritkc",
-                        "url": "https://github.com/pritkc",
+                        "label": "GitHub / alexmorgan",
+                        "url": "https://github.com/alexmorgan",
                     },
                 ],
             },
@@ -517,31 +517,31 @@ class TestDraftResumeFlows:
         assert personal_info["github"] == ""
         assert personal_info["profileLinks"] == [
             {
-                "label": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "label": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
             },
             {
-                "label": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "label": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
             },
         ]
         assert personal_info["customConnections"] == [
             {
-                "placeholder": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "placeholder": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
             {
-                "placeholder": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "placeholder": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
         ]
         cv_yaml = payload["yaml_sections"]["cv"]
-        assert "placeholder: LinkedIn / pritkc" in cv_yaml
-        assert "placeholder: GitHub / pritkc" in cv_yaml
+        assert "placeholder: LinkedIn / alexmorgan" in cv_yaml
+        assert "placeholder: GitHub / alexmorgan" in cv_yaml
         assert "username: stale-linkedin" not in cv_yaml
         assert "username: stale-github" not in cv_yaml
 

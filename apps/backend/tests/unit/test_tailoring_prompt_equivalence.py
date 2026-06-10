@@ -2,7 +2,11 @@
 
 from app.prompts import get_prompt
 from app.prompts._prompt_loader import render_user_template
-from app.prompts.tailoring_blocks import TAILORING_USER_SHELL_FULL, TAILORING_USER_SHELL_LITE
+from app.prompts.tailoring_blocks import (
+    TAILORING_CONTENT_RULES_BLOCK,
+    TAILORING_USER_SHELL_FULL,
+    TAILORING_USER_SHELL_LITE,
+)
 from app.services.tailoring.prompting import (
     assemble_tailoring_system_prompt,
 )
@@ -38,6 +42,7 @@ def test_full_user_message_matches_module() -> None:
         original_resume="{}",
         response_contract="{}",
         jd_intel="{}",
+        content_rules=TAILORING_CONTENT_RULES_BLOCK.strip(),
         output_template="{}",
     )
     mod = get_prompt("tailor_resume_full")
@@ -57,6 +62,7 @@ def test_lite_user_message_matches_module() -> None:
         original_resume="{}",
         response_contract="{}",
         jd_intel="{}",
+        content_rules=TAILORING_CONTENT_RULES_BLOCK.strip(),
         output_template="{}",
     )
     mod = get_prompt("tailor_resume_lite")

@@ -43,13 +43,7 @@ export function CoverLetterPreview({
   const paragraphs = content.split('\n\n').filter((p) => p.trim().length > 0);
 
   return (
-    <div
-      className={cn(
-        'border border-border bg-card shadow-sm',
-        'overflow-hidden',
-        className
-      )}
-    >
+    <div className={cn('border border-border bg-card shadow-sm', 'overflow-hidden', className)}>
       {/* Letter Content */}
       <div
         className={cn(

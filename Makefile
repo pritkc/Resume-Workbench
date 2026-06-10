@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-# CLIProxy helpers — full flow: docs/plans/phase-3.6.2-CLIProxyAPI-technical-flow.md
+# Optional CLIProxy helpers. See SETUP.md.
 
 CLIPROXY_DIR ?= infra/cliproxyapi
 CLIPROXY_CONFIG ?= $(CLIPROXY_DIR)/config.yaml

@@ -1,6 +1,6 @@
 # Swiss International Style Guide
 
-> **REQUIRED** for all frontend changes in Resume Matcher.
+> **REQUIRED** for all frontend changes in Resume Workbench.
 
 ## Design Principles
 

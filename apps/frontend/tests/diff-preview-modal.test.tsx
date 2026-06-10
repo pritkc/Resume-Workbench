@@ -67,7 +67,7 @@ const changeManifest: ResumeChange[] = [
 
 const resumePreview: ResumePreview = {
   personalInfo: {
-    name: 'Prit Chakalasiya',
+    name: 'Alex Morgan',
     email: 'prit@example.com',
     phone: '555-0100',
     location: 'Nashville, TN',
