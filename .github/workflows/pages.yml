@@ -1,0 +1,51 @@
+name: Deploy showcase to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build static showcase page
+        run: |
+          mkdir -p public
+          cp docs/images/showcase/landing.png public/landing.png
+          cat > public/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>Resume Workbench</title>
+              <style>
+                body { margin: 0; background: #0b0f19; }
+                img { display: block; width: 100%; max-width: 1440px; margin: 0 auto; }
+              </style>
+            </head>
+            <body>
+              <img src="./landing.png" alt="Resume Workbench showcase" />
+            </body>
+          </html>
+          EOF
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - uses: actions/deploy-pages@v4
