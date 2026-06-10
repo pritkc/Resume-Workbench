@@ -13,6 +13,15 @@ from app.services.additional_groups import extract_additional_groups
 logger = logging.getLogger(__name__)
 
 
+def _bold_keywords_joined(data: dict[str, Any]) -> str:
+    raw = data.get("bold_keywords")
+    if not isinstance(raw, list):
+        return ""
+    parts = [_clean_text(item) for item in raw if _clean_text(item)]
+    parts.sort(key=str.casefold)
+    return ", ".join(parts)
+
+
 @dataclass(frozen=True)
 class DiffConfidence:
     added: str
@@ -88,7 +97,7 @@ def _format_project_entry(entry: dict[str, Any], index: int) -> str:
     return _format_entry_label(
         [
             _clean_text(entry.get("name")),
-            _first_text(entry, "summary", "role"),
+            _first_text(entry, "techStack", "summary", "role"),
             _entry_date(entry),
         ],
         f"Project #{index + 1}",
@@ -214,9 +223,31 @@ def _extract_description_list(entry: Any) -> list[str]:
     if not isinstance(entry, dict):
         return []
     description = _normalize_string_list(entry.get("description", []), "entry.description")
-    if description:
-        return description
-    return _normalize_string_list(entry.get("highlights", []), "entry.highlights")
+    if not description:
+        description = _normalize_string_list(entry.get("highlights", []), "entry.highlights")
+    stack = _clean_text(entry.get("techStack") or entry.get("summary") or entry.get("tech_stacks"))
+    while stack and description and _clean_text(description[0]) == stack:
+        description = description[1:]
+    return description
+
+
+def _extract_education_detail_lines(entry: Any) -> list[str]:
+    if not isinstance(entry, dict):
+        return []
+    raw = (
+        entry.get("description") if isinstance(entry.get("description"), (str, list)) else None
+    )
+    if raw is None:
+        raw = entry.get("highlights")
+    if isinstance(raw, str) and raw.strip():
+        return [
+            line.strip()
+            for line in raw.replace("\r\n", "\n").split("\n")
+            if line.strip()
+        ]
+    if isinstance(raw, list):
+        return _normalize_string_list(raw, "education.description")
+    return []
 
 
 def _find_original_entry_for_improved_index(
@@ -343,7 +374,7 @@ def count_description_words(data: dict[str, Any]) -> int:
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            summary = _clean_text(entry.get("summary"))
+            summary = _clean_text(entry.get("techStack") or entry.get("summary") or entry.get("tech_stacks"))
             if summary:
                 total += len(summary.split())
 
@@ -379,6 +410,55 @@ def calculate_resume_diff(
                 confidence="medium",
             )
         )
+
+    orig_kw = _bold_keywords_joined(original)
+    improved_kw = _bold_keywords_joined(improved)
+    if orig_kw != improved_kw:
+        if orig_kw and not improved_kw:
+            kw_type = "removed"
+        elif improved_kw and not orig_kw:
+            kw_type = "added"
+        else:
+            kw_type = "modified"
+        changes.append(
+            ResumeFieldDiff(
+                field_path="bold_keywords",
+                field_type="bold_keywords",
+                change_type=kw_type,
+                original_value=orig_kw or None,
+                new_value=improved_kw or None,
+                confidence="medium",
+            )
+        )
+
+    o_pi = original.get("personalInfo")
+    i_pi = improved.get("personalInfo")
+    if isinstance(o_pi, dict) or isinstance(i_pi, dict):
+        o_map: dict[str, Any] = o_pi if isinstance(o_pi, dict) else {}
+        i_map: dict[str, Any] = i_pi if isinstance(i_pi, dict) else {}
+        for key in ("name", "title", "email", "phone", "location", "website", "linkedin", "github"):
+            ov = _clean_text(o_map.get(key))
+            nv = _clean_text(i_map.get(key))
+            if ov == nv:
+                continue
+            if ov and not nv:
+                change_type = "removed"
+            elif nv and not ov:
+                change_type = "added"
+            else:
+                change_type = "modified"
+            changes.append(
+                ResumeFieldDiff(
+                    field_path=f"personalInfo.{key}",
+                    field_type="personal_info",
+                    change_type=change_type,
+                    original_value=ov or None,
+                    new_value=nv or None,
+                    confidence="high"
+                    if key in {"email", "phone", "linkedin", "github"}
+                    else "medium",
+                )
+            )
 
     orig_additional_items = _build_additional_item_index(original.get("skills") or original.get("additional"))
     new_additional_items = _build_additional_item_index(improved.get("skills") or improved.get("additional"))
@@ -485,8 +565,8 @@ def calculate_resume_diff(
         )
         if not isinstance(orig, dict) or not isinstance(impr, dict):
             continue
-        orig_s = _clean_text(orig.get("summary"))
-        improved_s = _clean_text(impr.get("summary"))
+        orig_s = _clean_text(orig.get("techStack") or orig.get("summary") or orig.get("tech_stacks"))
+        improved_s = _clean_text(impr.get("techStack") or impr.get("summary") or impr.get("tech_stacks"))
         if orig_s == improved_s:
             continue
         if orig_s and not improved_s:
@@ -497,7 +577,7 @@ def calculate_resume_diff(
             change_type = "modified"
         changes.append(
             ResumeFieldDiff(
-                field_path=f"workExperience[{j}].summary",
+                field_path=f"workExperience[{j}].techStack",
                 field_type="experience",
                 change_type=change_type,
                 original_value=orig_s or None,
@@ -514,8 +594,8 @@ def calculate_resume_diff(
         )
         if not isinstance(orig, dict) or not isinstance(impr, dict):
             continue
-        orig_s = _clean_text(orig.get("summary") or orig.get("tech_stacks"))
-        improved_s = _clean_text(impr.get("summary") or impr.get("tech_stacks"))
+        orig_s = _clean_text(orig.get("techStack") or orig.get("summary") or orig.get("tech_stacks"))
+        improved_s = _clean_text(impr.get("techStack") or impr.get("summary") or impr.get("tech_stacks"))
         if orig_s == improved_s:
             continue
         if orig_s and not improved_s:
@@ -526,7 +606,7 @@ def calculate_resume_diff(
             change_type = "modified"
         changes.append(
             ResumeFieldDiff(
-                field_path=f"personalProjects[{j}].summary",
+                field_path=f"personalProjects[{j}].techStack",
                 field_type="project",
                 change_type=change_type,
                 original_value=orig_s or None,
@@ -584,6 +664,30 @@ def calculate_resume_diff(
             confidences=confidences,
         )
 
+    original_edu = original.get("education") or []
+    improved_edu = improved.get("education") or []
+    if not isinstance(original_edu, list):
+        original_edu = []
+    if not isinstance(improved_edu, list):
+        improved_edu = []
+    max_edu_len = max(len(original_edu), len(improved_edu))
+    for idx in range(max_edu_len):
+        improved_edu_row = improved_edu[idx] if idx < len(improved_edu) else None
+        if improved_edu_row is not None:
+            original_edu_row = _find_original_entry_for_improved_index(original_edu, improved_edu, idx)
+        else:
+            original_edu_row = original_edu[idx] if idx < len(original_edu) else None
+        if not original_edu_row and not improved_edu_row:
+            continue
+        _append_list_changes(
+            changes,
+            field_path=f"education[{idx}].description",
+            field_type="description",
+            original_items=_extract_education_detail_lines(original_edu_row),
+            improved_items=_extract_education_detail_lines(improved_edu_row),
+            confidences=confidences,
+        )
+
     _append_entry_changes(
         changes,
         "workExperience",
@@ -591,7 +695,7 @@ def calculate_resume_diff(
         original.get("workExperience", []),
         improved.get("workExperience", []),
         _format_experience_entry,
-        {"description", "highlights", "summary", "position", "title"},
+        {"description", "highlights", "techStack", "position", "title"},
     )
     _append_entry_changes(
         changes,
@@ -609,7 +713,7 @@ def calculate_resume_diff(
         original.get("personalProjects", []),
         improved.get("personalProjects", []),
         _format_project_entry,
-        {"description", "highlights", "summary", "name"},
+        {"description", "highlights", "techStack", "name"},
     )
 
     summary = ResumeDiffSummary(

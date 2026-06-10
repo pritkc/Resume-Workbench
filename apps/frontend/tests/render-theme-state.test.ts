@@ -146,4 +146,56 @@ describe('render theme state helpers', () => {
       show_summary_heading: true,
     });
   });
+
+  it('serializes resume workbench style runtime settings', () => {
+    const settings = normalizeRenderThemeSettings({
+      theme_id: 'classic',
+      theme_profiles: {},
+      settings: {
+        resume_workbench_style: {
+          colors: {
+            company: '#123456',
+            role: '#654321',
+            stack: '#abcdef',
+            date_location: 'rgb(10, 20, 30)',
+          },
+          typography: {
+            letter_spacing: {
+              name: '0.4pt',
+              section_titles: '0.2pt',
+            },
+          },
+          tech_stack: {
+            separator: '|',
+            label: 'Stack',
+            label_bold: true,
+          },
+        },
+      },
+    });
+
+    const serialized = serializeRenderThemeSettings(settings);
+
+    expect(serialized.settings).toMatchObject({
+      resume_workbench_style: {
+        colors: {
+          company: '#123456',
+          role: '#654321',
+          stack: '#abcdef',
+          date_location: 'rgb(10, 20, 30)',
+        },
+        typography: {
+          letter_spacing: {
+            name: '0.4pt',
+            section_titles: '0.2pt',
+          },
+        },
+        tech_stack: {
+          separator: '|',
+          label: 'Stack',
+          label_bold: true,
+        },
+      },
+    });
+  });
 });

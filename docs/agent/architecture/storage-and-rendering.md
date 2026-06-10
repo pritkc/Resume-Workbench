@@ -27,6 +27,8 @@ Source of truth:
 - provider/model/api-base settings
 - prompt defaults
 - generation defaults
+- critique toggle
+- per-step model overrides
 - language settings
 - API key maps
 

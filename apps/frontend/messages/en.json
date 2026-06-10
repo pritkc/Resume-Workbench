@@ -34,15 +34,16 @@
   },
   "home": {
     "brandLine1": "Resume",
-    "brandLine2": "Matcher",
+    "brandLine2": "Workbench",
     "docs": "Docs",
-    "launchApp": "Launch App"
+    "launchApp": "Open Workbench"
   },
   "nav": {
     "dashboard": "Dashboard",
     "builder": "Resume Builder",
     "tailor": "Tailor Resume",
     "settings": "Settings",
+    "home": "Home",
     "backToDashboard": "Back to Dashboard",
     "goToSettings": "Go to Settings"
   },
@@ -62,6 +63,8 @@
     "deleteResume": "Delete Resume",
     "downloadPdf": "Download PDF",
     "tailorResume": "Tailor for Job",
+    "llmTraceMenu": "AI generation trace",
+    "llmTraceMenuUnavailable": "No AI generation trace for this copy (duplicates and uploads have no linked trace).",
     "selectModule": "Select Module",
     "masterResume": "Active resume",
     "tailoredResume": "Tailored Resume",
@@ -115,6 +118,7 @@
     "renameTitleError": "Could not rename resume. Try again.",
     "unsavedDraft": "Unsaved Draft",
     "metadata": {
+      "panelTitle": "Application metadata",
       "hint": "Role, company, location, and bold keywords for the dashboard and PDF. Included with “Copy for LLM” together with the CV block — nothing else is sent externally.",
       "role": "Role",
       "company": "Company",
@@ -150,7 +154,8 @@
       "wordsChars": "{wordCount} words / {charCount} chars"
     },
     "additionalForm": {
-      "instructions": "One skill group per card: edit the label, add tags (press Enter), remove with ×. Drag the grip beside a value to change the order shown on your resume.",
+      "instructions": "One skill group per card: edit the label, add tags (press Enter, or paste comma- / newline-separated lists), remove with ×. Drag the grip beside a value to change the order shown on your resume.",
+      "addValuePlaceholder": "Add tag — comma, semicolon, or Enter for several",
       "valuesReorderHint": "Drag grip to reorder",
       "reorderGripTitle": "Drag to reorder",
       "groupLabel": "Label",
@@ -208,14 +213,36 @@
       "deleteDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone."
     },
     "previewTabs": {
-      "resume": "RESUME",
-      "utilities": "UTILITIES",
-      "utilitiesShort": "UTIL",
-      "coverLetter": "COVER LETTER",
-      "outreach": "OUTREACH MAIL",
-      "jdMatch": "JD MATCH",
-      "additionalQuestions": "ADDITIONAL QUESTIONS",
-      "additionalQuestionsShort": "+QUESTIONS"
+      "resume": "Resume",
+      "utilities": "Letters",
+      "utilitiesShort": "Letters",
+      "coverLetter": "Cover Letter",
+      "outreach": "Outreach",
+      "jdMatch": "JD Match",
+      "jdTailorDiff": "Tailor Diff",
+      "jdTailorDiffShort": "Diff",
+      "additionalQuestions": "Questions",
+      "additionalQuestionsShort": "Questions",
+      "generationTrace": "Generation Trace",
+      "generationTraceShort": "Trace"
+    },
+    "overflowMenu": "More navigation",
+    "helpCallout": {
+      "showTips": "Show tips",
+      "collapse": "Collapse tips",
+      "expand": "Expand tips",
+      "dismiss": "Dismiss tips"
+    },
+    "sectionNav": {
+      "jumpLabel": "Jump to section",
+      "previous": "Previous section",
+      "next": "Next section"
+    },
+    "summary": {
+      "alignmentMenu": "Text alignment"
+    },
+    "generationTrace": {
+      "openFullTrace": "Open full trace"
     },
     "utilities": {
       "subTabLetters": "Cover letter & outreach",
@@ -240,7 +267,7 @@
       "outreachEmpty": "No outreach message yet — paste text or use Generate above."
     },
     "generateClMessage": {
-      "toolbarLabel": "Generate CL + Message",
+      "toolbarLabel": "Generate both",
       "buttonAria": "Generate cover letter and outreach message"
     },
     "footer": {
@@ -249,7 +276,8 @@
       "twoColumn": "Two Column"
     },
     "pageSize": {
-      "usLetter": "US Letter"
+      "usLetter": "US Letter",
+      "freeflow": "Continuous page"
     },
     "generatePrompt": {
       "notAvailableTitle": "{title} Not Available",
@@ -346,8 +374,18 @@
       "stats": {
         "keywordsExtracted": "{count} keywords extracted",
         "matchesFound": "{count} matches found",
-        "matchRateLabel": "Match Rate:"
+        "matchRateLabel": "Match rate",
+        "missingKeywordsTitle": "Top missing keywords"
       }
+    },
+    "jdTailorDiff": {
+      "aboutTitle": "About this view",
+      "aboutBody": "This is the same line-level diff you reviewed when you confirmed tailoring. It stays here for reference while you edit.",
+      "artifactTitle": "Confirm snapshot",
+      "loadError": "Could not load tailoring diff.",
+      "sourceStoredDetailed": "Stored from your confirmation (line-level diff).",
+      "sourceRecomputedConfirmation": "Rebuilt from your confirmed snapshot.",
+      "sourceLiveVsMaster": "Compared to your master resume using the CV saved here — edits after tailoring show up."
     },
     "genericItemForm": {
       "itemLabel": "Item",
@@ -379,10 +417,14 @@
       "experience": {
         "addJob": "Add Job",
         "addFirstJob": "Add First Job",
+        "bulletsHelpTitle": "Bullet formatting tips",
+        "bulletsHelpBody": "Rich text: ⌘B / ⌘I / ⌘U — link ⌘K (Ctrl on Windows). Hover the grip on the left of each bullet to reorder.",
+        "dateFieldHint": "If blank, the preview uses start and end dates.",
         "fields": {
           "jobTitle": "Job Title",
           "position": "Position",
-          "company": "Company"
+          "company": "Company",
+          "techStackOptional": "Tech stack (optional)"
         },
         "placeholders": {
           "jobTitle": "Senior Developer",
@@ -392,6 +434,7 @@
           "years": "Jan 2020 - Present",
           "date": "Jan 2020 - Present",
           "summary": "Short overview of the role...",
+          "techStack": "e.g. Python, FastAPI, PostgreSQL, AWS — comma or line separated",
           "highlight": "Describe your achievement...",
           "description": "Describe your achievement..."
         }
@@ -399,6 +442,7 @@
       "education": {
         "addSchool": "Add School",
         "addFirstSchool": "Add First School",
+        "dateFieldHint": "If blank, the preview uses start and end dates.",
         "fields": {
           "institution": "Institution",
           "degree": "Degree",
@@ -421,17 +465,23 @@
       "projects": {
         "addProject": "Add Project",
         "addFirstProject": "Add First Project",
+        "actions": {
+          "showOnResume": "Show on resume",
+          "hideFromResume": "Hide from resume"
+        },
         "fields": {
           "projectName": "Project Name",
           "role": "Role",
+          "techStackOptional": "Tech stack (optional)",
           "summary": "Summary",
           "website": "Website"
         },
         "placeholders": {
-          "projectName": "Resume Matcher",
+          "projectName": "Resume Workbench",
           "role": "Creator",
           "years": "Mar 2023",
           "date": "Mar 2023",
+          "techStack": "e.g. Python, FastAPI, PostgreSQL — comma or line separated",
           "summary": "One-line project overview...",
           "highlight": "Project detail...",
           "github": "github.com/username/project",
@@ -506,6 +556,8 @@
       "resetDefaults": "Reset to Defaults"
     },
     "personalInfoForm": {
+      "advancedLinkOptions": "Advanced",
+      "iconPlaceholder": "Icon (optional)",
       "placeholders": {
         "name": "John Doe",
         "title": "Software Engineer",
@@ -586,13 +638,16 @@
   "tailor": {
     "title": "Tailor Resume",
     "subtitle": "Optimize your resume for a specific job",
-    "heroTitle": "Tailor Your Resume",
-    "selectResume": "Select Resume",
-    "pasteJobDescription": "Paste Job Description",
-    "pasteJobDescriptionBelow": "Paste Job Description Below",
+    "heroTitle": "Tailor resume",
+    "selectResume": "Resume",
+    "pasteJobDescription": "Job description",
+    "pasteJobDescriptionBelow": "Job description",
     "jobDescriptionPlaceholder": "Paste the job description here...",
-    "promptLabel": "Tailoring intensity",
-    "promptDescription": "Choose how strongly to align your resume to the job description.",
+    "promptLabel": "Prompt",
+    "promptDescription": "",
+    "customInstructionsLabel": "JD override",
+    "customInstructionsPlaceholder": "Optional: add instructions for this job only, such as claims to avoid, sections to emphasize, or tone requirements.",
+    "customInstructionsDescription": "",
     "promptOptions": {
       "full": {
         "label": "Full tailor",
@@ -777,9 +832,12 @@
       "toggle": "Enable critique + rewrite"
     },
     "promptCatalog": {
-      "pageTitle": "LLM Prompt Catalog",
-      "metaDescription": "Pipeline steps, shared resume-diff rules, per-step prompts (composer), and legacy templates. Enable or disable critique on the main Settings page. Override per-step models here.",
-      "backToSettings": "Back to settings",
+      "pageTitle": "Prompts",
+      "metaDescription": "Pipeline prompts, shared rules, composer overrides, per-step models.",
+      "catalogShippedHint": "Shipped: apps/backend/app/prompts/text/ · Overrides: prompt_overrides/ · Composer: {step}.composer.json",
+      "catalogAboutSummary": "Paths & overrides",
+      "catalogAboutBody": "Shipped text lives under apps/backend/app/prompts/text/. Runtime overrides: apps/backend/app/prompt_overrides/. Per-step composer JSON uses the step id as filename. Critique toggle is on main Settings.",
+      "backToSettings": "Back",
       "settingsCardTitle": "LLM Prompt Catalog",
       "settingsCardBody": "Inspect all system and user prompts in one place. When AI Route is CLIProxy, use the model list in LLM settings to copy IDs into per-step overrides here.",
       "openCatalog": "Open prompt catalog",
@@ -787,7 +845,9 @@
       "loadError": "Could not load the prompt catalog.",
       "empty": "No prompts returned.",
       "promptCount": "{count} prompts",
-      "catalogIndexTitle": "On this page",
+      "catalogIndexTitle": "Jump",
+      "catalogNavHint": "Sidebar or Jump to navigate. Composer: System / User tabs.",
+      "composerTablist": "Composer field",
       "jumpToPlaceholder": "Jump to…",
       "catalogIndexPipeline": "Pipeline",
       "catalogIndexSharedDiff": "Shared resume-diff",
@@ -800,9 +860,16 @@
       "critiqueToggle": "Enable critique + rewrite",
       "critiqueHint": "Full mode only. Skips extra LLM calls when off.",
       "overrideActive": "Override",
+      "overrideShort": "Override",
+      "modelOverrideShort": "override",
+      "sourcesSummary": "Sources",
+      "modelShort": "Model",
       "resetSharedRules": "Reset to default",
       "resetSharedRulesError": "Could not reset shared rules. Try again.",
       "usedBy": "Used by",
+      "editSystemPromptIn": "Edit system prompt in",
+      "editUserPromptIn": "Edit user prompt in",
+      "rulesSourceFile": "Shipped rules file",
       "changeModel": "Change model",
       "resolvedModel": "Resolved model",
       "instructionsRules": "Instructions, rules & data template",
@@ -813,6 +880,16 @@
       "composerOverrideActive": "Composer override active",
       "composerUsesShippedOrLegacy": "Using shipped defaults or legacy text overrides",
       "variables": "Variables",
+      "masterResumePreviewTitle": "$original_resume preview",
+      "masterResumePreviewTruncated": "Preview truncated for size.",
+      "masterResumePreviewEmpty": "No master resume resolved (set an active resume or add a top-level resume).",
+      "masterResumePreviewUnavailable": "Could not load master resume preview.",
+      "responseContractPreviewTitle": "$response_contract preview",
+      "responseContractPreviewIntro": "Runtime JSON built from your master resume: allowed output keys, mode, and addressing (entry labels, bullet counts). This is not the resume-diff JSON the model returns—that shape is defined in the system rules.",
+      "responseContractPreviewFullMode": "Full tailoring",
+      "responseContractPreviewLiteMode": "Lite tailoring",
+      "responseContractPreviewUnavailable": "Could not load response contract preview.",
+      "copyAdvisorBundleTitle": "Copy system + user for an external LLM. Reply uses ---- revised system ---- / ---- revised user ---- blocks.",
       "composerSystem": "System",
       "composerUser": "User template",
       "saveComposer": "Save",
@@ -907,6 +984,9 @@
       "website": "Website",
       "linkedin": "LinkedIn",
       "github": "GitHub"
+    },
+    "experience": {
+      "techStackLabel": "Tech stack:"
     },
     "sections": {
       "personalInfo": "Personal Info",

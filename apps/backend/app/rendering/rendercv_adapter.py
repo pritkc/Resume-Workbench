@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import copy
 import re
-from typing import Any
+from html.parser import HTMLParser
+from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
 import yaml
 
+from app.prompts.prompt_policy import low_signal_bold_keywords
 from app.services.additional_groups import (
     DEFAULT_SKILL_GROUP_LABELS_BY_ID,
     coerce_string_list,
@@ -25,6 +27,7 @@ from app.rendering.theme_profiles import (
     build_settings,
     theme_settings_from_rendercv_sections,
 )
+from app.services.tailoring.jd_intel_blob import is_basic_resume_term
 
 _LINK_PREFIX_RE = re.compile(r"^(https?://)?(www\.)?", re.IGNORECASE)
 _NON_DIGIT_RE = re.compile(r"\D+")
@@ -33,7 +36,12 @@ _MARKDOWN_LINK_INLINE_RE = re.compile(r"(?<!\\)\[(?P<label>(?:\\.|[^\]])+)\]\((?
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _FA_CLASS_TOKEN_RE = re.compile(r"\s+")
 _BOLD_BOUNDARY_CLASS = r"A-Za-z0-9"
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+SummaryAlignment = Literal["left", "center", "justify"]
 
+_SUMMARY_ALIGN_WRAPPER_RE = re.compile(
+    r'^<div data-summary-align="(?P<alignment>left|center|justify)">(?P<body>[\s\S]*)</div>$'
+)
 _KNOWN_SECTION_KEYS = {
     "summary",
     "experience",
@@ -61,6 +69,13 @@ _DEFAULT_RENDERCV_SECTION_KEYS: tuple[str, ...] = (
     "projects",
     "skills",
 )
+_TECH_STACK_SEPARATOR_LABELS = {
+    ",": ",",
+    "•": "•",
+    "·": "·",
+    "|": "|",
+    "/": "/",
+}
 
 
 def _section_meta_order_key(meta: dict[str, Any]) -> int:
@@ -113,6 +128,111 @@ def _clean_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+class _RichTextMarkdownParser(HTMLParser):
+    """Convert the builder's limited rich-text HTML into RenderCV markdown."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.open_tags: list[tuple[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in {"strong", "b"}:
+            self.parts.append("**")
+            self.open_tags.append(("strong", None))
+            return
+        if tag in {"em", "i"}:
+            self.parts.append("*")
+            self.open_tags.append(("em", None))
+            return
+        if tag == "a":
+            href = _safe_markdown_href(dict(attrs).get("href"))
+            if href:
+                self.parts.append("[")
+            self.open_tags.append(("a", href))
+            return
+        if tag in {"br", "div", "p"} and self.parts and not self.parts[-1].endswith((" ", "\n")):
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        target = "strong" if tag in {"strong", "b"} else "em" if tag in {"em", "i"} else tag
+        for index in range(len(self.open_tags) - 1, -1, -1):
+            open_tag, href = self.open_tags[index]
+            if open_tag != target:
+                continue
+            del self.open_tags[index]
+            if target == "strong":
+                self.parts.append("**")
+            elif target == "em":
+                self.parts.append("*")
+            elif target == "a" and href:
+                self.parts.append(f"]({href})")
+            return
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def finish(self) -> str:
+        for tag, href in reversed(self.open_tags):
+            if tag == "strong":
+                self.parts.append("**")
+            elif tag == "em":
+                self.parts.append("*")
+            elif tag == "a" and href:
+                self.parts.append(f"]({href})")
+        return "".join(self.parts)
+
+
+def _safe_markdown_href(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    if cleaned.startswith(("http://", "https://", "mailto:", "tel:")):
+        return cleaned
+    return None
+
+
+def _rich_text_to_rendercv_markdown(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    if not _HTML_TAG_RE.search(cleaned):
+        return cleaned
+
+    parser = _RichTextMarkdownParser()
+    parser.feed(cleaned)
+    parser.close()
+    converted = parser.finish()
+    converted = re.sub(r"\s+", " ", converted).strip()
+    return converted or None
+
+
+def _clean_summary_text(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    wrapper = _SUMMARY_ALIGN_WRAPPER_RE.match(cleaned)
+    if wrapper:
+        cleaned = wrapper.group("body").strip()
+    return _rich_text_to_rendercv_markdown(cleaned)
+
+
+def _clean_rich_text(value: str | None) -> str | None:
+    return _rich_text_to_rendercv_markdown(value)
+
+
+def summary_alignment_for_rendering(value: str | None) -> SummaryAlignment | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    wrapper = _SUMMARY_ALIGN_WRAPPER_RE.match(cleaned)
+    if not wrapper:
+        return None
+    return cast(SummaryAlignment, wrapper.group("alignment"))
 
 
 def _extract_social_username(value: str | None) -> str | None:
@@ -354,7 +474,7 @@ def _normalize_phone_number(value: str | None) -> str | None:
 
 
 def _summary_section(summary: str | None) -> list[str] | None:
-    cleaned = _clean_text(summary)
+    cleaned = _clean_summary_text(summary)
     return [cleaned] if cleaned else None
 
 
@@ -403,6 +523,8 @@ def _resolve_bold_keywords(theme_settings: RenderThemeSettings) -> list[str]:
         keyword = " ".join(item.split()).strip()
         if len(keyword) < 2:
             continue
+        if is_basic_resume_term(keyword) or keyword.casefold() in low_signal_bold_keywords():
+            continue
         key = keyword.casefold()
         if key in seen:
             continue
@@ -411,6 +533,50 @@ def _resolve_bold_keywords(theme_settings: RenderThemeSettings) -> list[str]:
 
     keywords.sort(key=len, reverse=True)
     return keywords
+
+
+def _resume_workbench_style(theme_settings: RenderThemeSettings) -> dict[str, Any]:
+    settings = theme_settings.settings if isinstance(theme_settings.settings, dict) else {}
+    value = settings.get("resume_workbench_style")
+    return value if isinstance(value, dict) else {}
+
+
+def _tech_stack_separator(theme_settings: RenderThemeSettings) -> str:
+    style = _resume_workbench_style(theme_settings)
+    tech_stack = style.get("tech_stack")
+    raw = tech_stack.get("separator") if isinstance(tech_stack, dict) else None
+    return raw if raw in _TECH_STACK_SEPARATOR_LABELS else "•"
+
+
+def _looks_like_tech_stack(value: str, parts: list[str]) -> bool:
+    if len(parts) > 1:
+        return True
+    if "." in value or ":" in value or ";" in value:
+        return False
+    return len(value.split()) <= 4
+
+
+def _format_tech_stack_summary(
+    stack: str,
+    theme_settings: RenderThemeSettings,
+    *,
+    include_label: bool,
+) -> str:
+    cleaned = _clean_rich_text(stack)
+    if not cleaned:
+        return ""
+
+    separator = _tech_stack_separator(theme_settings)
+    parts = [part.strip() for part in cleaned.split(",") if part.strip()]
+    if not _looks_like_tech_stack(cleaned, parts):
+        return cleaned
+    if len(parts) > 1:
+        joiner = ", " if separator == "," else f" {separator} "
+        cleaned = joiner.join(parts)
+
+    if include_label:
+        return f"**Stack:** {cleaned}"
+    return cleaned
 
 
 def _bold_keyword_in_text(text: str, keyword: str) -> str:
@@ -469,22 +635,36 @@ def _experience_entries(
     entries: list[dict[str, Any]],
     *,
     bold_keywords: list[str],
+    theme_settings: RenderThemeSettings,
 ) -> list[dict[str, Any]]:
-    return [
-        {
-            "company": item.get("company") or "Company",
-            "position": item.get("position") or item.get("title") or "Role",
-            **_entry_date_fields(item),
-            "location": _clean_text(item.get("location")),
-            "summary": _clean_text(item.get("summary")),
-            "highlights": [
-                _bold_keywords_in_bullet(point, bold_keywords)
-                for point in (item.get("description") or item.get("highlights") or [])
-                if point
-            ],
-        }
-        for item in entries
-    ]
+    rows: list[dict[str, Any]] = []
+    for item in entries:
+        stack = _clean_rich_text(
+            item.get("techStack") or item.get("tech_stacks") or item.get("summary")
+        )
+        formatted_stack = _format_tech_stack_summary(
+            stack,
+            theme_settings,
+            include_label=True,
+        )
+        bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
+        while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
+            bullets = bullets[1:]
+        rows.append(
+            {
+                "company": item.get("company") or "Company",
+                "position": item.get("position") or item.get("title") or "Role",
+                **_entry_date_fields(item),
+                "location": _clean_text(item.get("location")),
+                "summary": formatted_stack,
+                "highlights": [
+                    _bold_keywords_in_bullet(_clean_rich_text(point) or "", bold_keywords)
+                    for point in bullets
+                    if point
+                ],
+            }
+        )
+    return rows
 
 
 def _education_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -495,24 +675,36 @@ def _education_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "degree": _clean_text(item.get("degree")),
             **_entry_date_fields(item),
             "location": _clean_text(item.get("location")),
-            "summary": _clean_text(item.get("summary") or item.get("description")),
+            "summary": _clean_rich_text(item.get("summary") or item.get("description")),
             "highlights": [
-                point
+                cleaned_point
                 for point in (item.get("highlights") or [])
-                if point
+                if (cleaned_point := _clean_rich_text(point))
             ],
         }
         for item in entries
     ]
 
 
+def _project_included_in_resume(item: dict[str, Any]) -> bool:
+    """Omit projects explicitly marked hidden from RenderCV output."""
+    if "includeInResume" in item:
+        return bool(item.get("includeInResume"))
+    if "include_in_resume" in item:
+        return bool(item.get("include_in_resume"))
+    return True
+
+
 def _project_entries(
     entries: list[dict[str, Any]],
     *,
     bold_keywords: list[str],
+    theme_settings: RenderThemeSettings,
 ) -> list[dict[str, Any]]:
     project_rows: list[dict[str, Any]] = []
     for item in entries:
+        if not _project_included_in_resume(item):
+            continue
         name = _clean_text(item.get("name")) or "Project"
         github = _ensure_absolute_url(_clean_text(item.get("github")))
         website = _ensure_absolute_url(_clean_text(item.get("website")))
@@ -523,14 +715,29 @@ def _project_entries(
             link_tokens.append(f"\\[[live]({website})\\]")
         if link_tokens:
             name = f"{name} | {' '.join(link_tokens)}"
+        stack = _clean_rich_text(
+            item.get("tech_stacks")
+            or item.get("techStack")
+            or item.get("summary")
+            or item.get("role")
+        )
+        formatted_stack = _format_tech_stack_summary(
+            stack,
+            theme_settings,
+            include_label=False,
+        )
+        bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
+        while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
+            bullets = bullets[1:]
         project_rows.append(
             {
                 "name": name,
                 "date": _clean_text(item.get("date") or item.get("years")),
-                "summary": _clean_text(item.get("summary") or item.get("role")),
+                "tech_stacks": formatted_stack,
+                "summary": formatted_stack,
                 "highlights": [
-                    _bold_keywords_in_bullet(point, bold_keywords)
-                    for point in (item.get("description") or item.get("highlights") or [])
+                    _bold_keywords_in_bullet(_clean_rich_text(point) or "", bold_keywords)
+                    for point in bullets
                     if point
                 ],
             }
@@ -574,7 +781,7 @@ def _custom_sections(
         raw_section_type = raw_section.get("sectionType")
         section_type = _clean_text(getattr(raw_section_type, "value", raw_section_type))
         if section_type == "text":
-            text_value = _clean_text(raw_section.get("text"))
+            text_value = _clean_rich_text(raw_section.get("text"))
             if text_value:
                 sections[title] = [text_value]
             continue
@@ -592,7 +799,7 @@ def _custom_sections(
                 pieces = [
                     _clean_text(item.get("title")),
                     _clean_text(item.get("subtitle")),
-                    _clean_text(item.get("description")),
+                    _clean_rich_text(item.get("description")),
                     _clean_text(item.get("years")),
                 ]
                 line = " — ".join(piece for piece in pieces if piece)
@@ -616,11 +823,13 @@ def resume_to_rendercv_payload(
     experience = _experience_entries(
         resume_data.get("workExperience") or [],
         bold_keywords=bold_keywords,
+        theme_settings=theme_settings,
     )
     education = _education_entries(resume_data.get("education") or [])
     projects = _project_entries(
         resume_data.get("personalProjects") or [],
         bold_keywords=bold_keywords,
+        theme_settings=theme_settings,
     )
     skills = _skills_sections(skills_section)
 
@@ -720,6 +929,7 @@ def resume_to_rendercv_payload(
         settings.pop("bold_keywords", None)
         settings.pop("show_summary_section", None)
         settings.pop("show_summary_heading", None)
+        settings.pop("resume_workbench_style", None)
     if locale:
         payload["locale"] = locale
     if settings:
@@ -752,20 +962,20 @@ def _text_list(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, str):
-        cleaned = _clean_text(value)
+        cleaned = _clean_rich_text(value)
         return [cleaned] if cleaned else []
     if isinstance(value, list):
         items: list[str] = []
         for entry in value:
             if isinstance(entry, str):
-                cleaned = _clean_text(entry)
+                cleaned = _clean_rich_text(entry)
                 if cleaned:
                     items.append(cleaned)
             elif isinstance(entry, dict):
-                bullet = _clean_text(entry.get("bullet"))
-                summary = _clean_text(entry.get("summary"))
-                details = _clean_text(entry.get("details"))
-                title = _clean_text(entry.get("title"))
+                bullet = _clean_rich_text(entry.get("bullet"))
+                summary = _clean_rich_text(entry.get("summary"))
+                details = _clean_rich_text(entry.get("details"))
+                title = _clean_rich_text(entry.get("title"))
                 line = bullet or summary or details or title
                 if line:
                     items.append(line)
@@ -1084,9 +1294,9 @@ def rendercv_cv_to_resume_data(
         if not isinstance(item, dict):
             continue
         description = _text_list(item.get("highlights"))
-        summary = _clean_text(item.get("summary"))
-        if summary:
-            description = [summary, *description]
+        stack_line = _clean_text(item.get("summary"))
+        if stack_line:
+            description = [stack_line, *description]
         work_experience.append(
             {
                 "id": index,
@@ -1098,7 +1308,7 @@ def rendercv_cv_to_resume_data(
                 "end_date": _clean_text(item.get("end_date")),
                 "date": _resume_date_label(item),
                 "years": _resume_date_label(item),
-                "summary": summary,
+                "techStack": stack_line,
                 "highlights": _text_list(item.get("highlights")),
                 "description": description,
             }
@@ -1139,12 +1349,13 @@ def rendercv_cv_to_resume_data(
                 name = legacy_name
             if legacy_website:
                 website = _ensure_absolute_url(legacy_website)
+        stack = _clean_text(item.get("tech_stacks") or item.get("summary"))
         projects.append(
             {
                 "id": index,
                 "name": name or "",
-                "summary": _clean_text(item.get("summary")),
-                "role": _clean_text(item.get("summary")) or "",
+                "techStack": stack,
+                "role": _clean_text(item.get("role")) or stack or "",
                 "date": _clean_text(item.get("date")) or "",
                 "years": _clean_text(item.get("date")) or "",
                 "github": github,
@@ -1153,6 +1364,13 @@ def rendercv_cv_to_resume_data(
                 "description": _text_list(item.get("highlights")),
             }
         )
+
+    base_projects = (base_resume_data or {}).get("personalProjects") or []
+    for idx, proj in enumerate(projects):
+        if idx < len(base_projects) and isinstance(base_projects[idx], dict):
+            base_flag = base_projects[idx].get("includeInResume")
+            if base_flag is not None:
+                proj["includeInResume"] = bool(base_flag)
 
     custom_sections_payload = {
         title: values

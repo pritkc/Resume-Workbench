@@ -1,71 +1,91 @@
 """Prompt: tailor_resume_lite — conservative resume tailoring."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from app.prompts._constants import PROMPT_VERSIONS
-from app.prompts._rules.resume_diff import RESUME_DIFF_RULES, RULES_NAME
-from app.prompts.tailoring_blocks import (
-    TAILORING_CRAFT_BLOCK,
-    TAILORING_MODE_STRATEGY,
-    TAILORING_USER_SHELL,
-)
+from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "tailor_resume_lite"
 STEP_LABEL = "Tailor resume (lite)"
 STEP_VERSION = PROMPT_VERSIONS["tailoring_user"]
 FILE_PATH = "prompts/tailor_resume_lite.py"
+SYSTEM_PROMPT_FILES = (
+    "apps/backend/app/prompts/text/tailor_resume_lite/system.txt",
+    "apps/backend/app/prompts/text/output_file_schema_rules/resume_content_rules.txt",
+)
+USER_PROMPT_FILE = "apps/backend/app/prompts/text/tailor_resume_lite/user.txt"
 PIPELINE = "lite"
 PIPELINE_ORDER = 2
 RECEIVES_FROM = ["extract_jd_intel"]
 FEEDS_INTO: list[str] = []
 
-INSTRUCTIONS = TAILORING_CRAFT_BLOCK + "\n\n" + TAILORING_MODE_STRATEGY["lite"]
-RULES = RESUME_DIFF_RULES
-RULES_SOURCE = RULES_NAME
-USER_TEMPLATE = TAILORING_USER_SHELL
+INSTRUCTIONS = read_shipped_txt("tailor_resume_lite/system.txt")
+RULES = read_shipped_txt("output_file_schema_rules/resume_content_rules.txt")
+RULES_SOURCE = "resume_content"
+USER_TEMPLATE = read_shipped_txt("tailor_resume_lite/user.txt")
 DATA_TEMPLATE = USER_TEMPLATE
-SYSTEM_DEFAULT = INSTRUCTIONS.strip() + "\n\n" + RULES.strip()
+SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
-    "mode_id": "full | lite",
-    "job_intelligence": "JD intelligence JSON",
+    "custom_prompt_instructions": "Optional high-priority per-run instructions from the tailor page",
     "original_resume": "Structured resume JSON or markdown",
-    "response_contract": "Allowed response shape for this resume",
-    "output_language": "Human-readable output language",
+    "output_template": "Section-header output template for this resume",
+    "jd_intel": "Section-header JD intelligence text or legacy compact JSON",
+    "content_rules": "Section-header compatible resume content/writing policy",
+    "response_contract": "Legacy compact JSON response shape for compatibility",
+    "jd_intel_blob": "Cached JD wrapper/JSON used to derive jd_intel",
 }
 
 
 def build_messages(
     *,
     original_resume: str,
-    job_intelligence: str,
+    jd_intel_blob: dict[str, Any],
     response_contract: str,
-    output_language: str,
+    output_template: str | None = None,
+    jd_intel: str | None = None,
+    custom_prompt_instructions: str | None = None,
 ) -> tuple[str, str]:
     from app.prompts import load_override, load_shared_rules_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
+    from app.services.tailoring.prompting import render_custom_prompt_instructions
+    from app.services.tailoring.section_format import jd_intel_text_from_blob
 
+    jd_text = jd_intel if jd_intel is not None else jd_intel_text_from_blob(jd_intel_blob)
+    template = output_template or response_contract
+    content_rules = (
+        load_override(STEP_NAME, "rules")
+        or load_shared_rules_override(RULES_SOURCE)
+        or RULES
+    ).strip()
     comp = load_composer_override(STEP_NAME)
     if comp:
         return comp["system"], render_user_template(
             comp["user"],
-            mode_id="lite",
-            job_intelligence=job_intelligence,
+            jd_intel_blob=jd_intel_blob,
+            custom_prompt_instructions=render_custom_prompt_instructions(
+                custom_prompt_instructions
+            ),
             original_resume=original_resume,
             response_contract=response_contract,
-            output_language=output_language,
+            output_template=template,
+            jd_intel=jd_text,
+            content_rules=content_rules,
         )
 
-    instructions = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
-    rules = (
-        load_override(STEP_NAME, "rules")
-        or load_shared_rules_override(RULES_SOURCE)
-        or RULES
-    )
-    system = instructions.strip() + "\n\n" + rules.strip()
+    prose = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
+    system = prose.strip()
     user = render_user_template(
         USER_TEMPLATE,
-        mode_id="lite",
-        job_intelligence=job_intelligence,
+        jd_intel_blob=jd_intel_blob,
+        custom_prompt_instructions=render_custom_prompt_instructions(
+            custom_prompt_instructions
+        ),
         original_resume=original_resume,
         response_contract=response_contract,
-        output_language=output_language,
+        output_template=template,
+        jd_intel=jd_text,
+        content_rules=content_rules,
     )
     return system, user

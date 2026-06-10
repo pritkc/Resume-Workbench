@@ -13,7 +13,7 @@ describe('RenderCV shared controls', () => {
 
     expect(screen.getByDisplayValue('0.2')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'cm' }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'cm' } });
 
     expect(onChange).toHaveBeenCalledWith('0.2cm');
   });
@@ -30,7 +30,7 @@ describe('RenderCV shared controls', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Roboto' }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Roboto' } });
 
     expect(onChange).toHaveBeenCalledWith('Roboto');
   });

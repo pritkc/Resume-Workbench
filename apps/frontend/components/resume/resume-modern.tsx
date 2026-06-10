@@ -8,18 +8,21 @@ import {
   getEducationDate,
   getEducationHighlights,
   getEducationSummary,
+  RESUME_TECH_STACK_LABEL,
   getExperienceDate,
   getExperienceHighlights,
   getExperiencePosition,
-  getExperienceSummary,
+  getExperienceTechStack,
   getExtraContactEntries,
   getPersonalHeadline,
   getProjectDate,
   getProjectHighlights,
-  getProjectSummary,
+  getProjectTechStack,
+  personalProjectsVisibleInResume,
 } from '@/lib/utils/rendercv-fields';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
+import { SummaryHtml } from './summary-html';
 import baseStyles from './styles/_base.module.css';
 import styles from './styles/modern.module.css';
 
@@ -122,7 +125,7 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
             {showSummaryHeading ? (
               <h3 className={styles['section-title-accent']}>{section.displayName}</h3>
             ) : null}
-            <p className={`text-justify ${baseStyles['resume-text']}`}>{summary}</p>
+            <SummaryHtml summary={summary} className={baseStyles['resume-text']} />
           </div>
         );
 
@@ -152,9 +155,10 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
                     <span>{exp.company}</span>
                     {exp.location && <span>{exp.location}</span>}
                   </div>
-                  {getExperienceSummary(exp) && (
+                  {getExperienceTechStack(exp) && (
                     <p className={baseStyles['resume-text-sm']}>
-                      <SafeHtml html={getExperienceSummary(exp)} />
+                      <span className="font-semibold">{RESUME_TECH_STACK_LABEL} </span>
+                      <SafeHtml html={getExperienceTechStack(exp)} />
                     </p>
                   )}
                   {getExperienceHighlights(exp).length > 0 && (
@@ -177,13 +181,14 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
           </div>
         );
 
-      case 'personalProjects':
-        if (!personalProjects || personalProjects.length === 0) return null;
+      case 'personalProjects': {
+        const visibleProjects = personalProjectsVisibleInResume(personalProjects);
+        if (visibleProjects.length === 0) return null;
         return (
           <div key={section.id} className={baseStyles['resume-section']}>
             <h3 className={styles['section-title-accent']}>{section.displayName}</h3>
             <div className={baseStyles['resume-items']}>
-              {personalProjects.map((project) => (
+              {visibleProjects.map((project) => (
                 <div key={project.id} className={baseStyles['resume-item']}>
                   <div
                     className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}
@@ -237,12 +242,11 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
                       </span>
                     )}
                   </div>
-                  {getProjectSummary(project) && (
-                    <div
-                      className={`${baseStyles['resume-row']} ${baseStyles['resume-item-subtitle']}`}
-                    >
-                      <span>{getProjectSummary(project)}</span>
-                    </div>
+                  {getProjectTechStack(project) && (
+                    <p className={baseStyles['resume-text-sm']}>
+                      <span className="font-semibold">{RESUME_TECH_STACK_LABEL} </span>
+                      <span>{getProjectTechStack(project)}</span>
+                    </p>
                   )}
                   {getProjectHighlights(project).length > 0 && (
                     <ul
@@ -263,6 +267,7 @@ export const ResumeModern: React.FC<ResumeModernProps> = ({
             </div>
           </div>
         );
+      }
 
       case 'education':
         if (!education || education.length === 0) return null;

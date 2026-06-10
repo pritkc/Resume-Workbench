@@ -5,12 +5,15 @@ import type { SharedRuleEntry } from '@/lib/api/config';
 import { putSharedRulesOverride } from '@/lib/api/config';
 import { Button } from '@/components/ui/button';
 import { CopyCharBar } from '@/components/settings/prompt-field-chrome';
+import { AutosizePromptTextarea } from '@/components/settings/autosize-prompt-textarea';
 
-const cardClass =
-  'entry-card-editor border-amber-600/25 bg-amber-50/40 p-1.5';
+const cardClass = 'scroll-mt-6 rounded-lg border border-slate-200/70 bg-card px-3 py-3 sm:px-4';
 
 const textareaClass =
-  'mt-0.5 min-h-[min(280px,40vh)] w-full resize-y whitespace-pre-wrap border border-black/15 bg-white px-1.5 py-1 font-mono text-[11px] leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25';
+  'w-full resize-y whitespace-pre-wrap rounded-md border border-slate-200/80 bg-slate-50/50 px-2 py-2 font-mono text-[12px] leading-relaxed text-slate-800 focus-visible:border-slate-300 focus-visible:bg-card focus-visible:outline-none';
+
+const shippedPreClass =
+  'whitespace-pre-wrap break-words rounded-md border border-slate-100 bg-slate-50/80 p-2.5 font-mono text-[11px] leading-relaxed text-slate-700';
 
 export function SharedRulesCard({
   rule,
@@ -48,50 +51,56 @@ export function SharedRulesCard({
 
   return (
     <article id={`catalog-shared-${rule.name}`} className={cardClass}>
-      <div className="flex flex-wrap items-baseline justify-between gap-1 border-b border-black/10 pb-1">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
         <div className="min-w-0">
-          <span className="font-mono text-[12px] font-bold text-gray-900">{rule.label}</span>
-          <span className="ml-1.5 font-mono text-[8px] uppercase text-gray-500">{rule.name}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
+          <h3 className="text-sm font-medium text-slate-900">{rule.label}</h3>
+          <code className="font-mono text-[11px] text-slate-500">{rule.name}</code>
           {rule.rules_is_override ? (
-            <span className="font-mono text-[8px] font-bold uppercase text-amber-900">
-              {t('settings.promptCatalog.overrideActive')}
+            <span className="ml-2 text-[10px] font-medium text-amber-800/90">
+              {t('settings.promptCatalog.overrideShort')}
             </span>
           ) : null}
         </div>
       </div>
-      <p
-        className="mt-1 truncate font-mono text-[8px] text-gray-600"
-        title={`${t('settings.promptCatalog.usedBy')}: ${rule.used_by.join(', ')}`}
-      >
-        {t('settings.promptCatalog.usedBy')}: {rule.used_by.join(', ')}
-      </p>
 
-      {error ? <p className="mt-0.5 font-mono text-[9px] text-red-700">{error}</p> : null}
+      <details className="mt-1.5">
+        <summary className="cursor-pointer list-none text-[11px] text-slate-400 marker:hidden hover:text-slate-600 [&::-webkit-details-marker]:hidden">
+          <span className="border-b border-dotted border-slate-300">
+            {t('settings.promptCatalog.sourcesSummary')}
+          </span>
+        </summary>
+        <ul className="mt-1.5 space-y-0.5 border-l border-slate-200 pl-2 text-[10px] leading-snug text-slate-500">
+          <li>
+            {t('settings.promptCatalog.usedBy')}: {rule.used_by.join(', ')}
+          </li>
+          {rule.rules_source_file ? <li className="font-mono">{rule.rules_source_file}</li> : null}
+        </ul>
+      </details>
 
-      <div className="mt-1.5">
-        <div className="flex items-end justify-between gap-1">
-          <p className="font-mono text-[8px] font-bold uppercase text-gray-600">
+      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+
+      <div className="mt-2">
+        <div className="mb-1 flex items-end justify-between gap-2">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
             {t('settings.promptCatalog.sharedRulesEditorLabel')}
-          </p>
+          </span>
           <CopyCharBar text={draft} t={t} />
         </div>
-        <textarea
+        <AutosizePromptTextarea
           className={textareaClass}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={setDraft}
           spellCheck={false}
           aria-label={rule.label}
         />
       </div>
 
-      <div className="mt-1.5 flex flex-wrap gap-1">
+      <div className="mt-2 flex flex-wrap gap-2">
         <Button
           type="button"
-          size="xs"
-          variant="builderCta"
-          className="h-6 px-2 text-[10px]"
+          size="sm"
+          variant="ghost"
+          className="h-8 px-3 text-xs font-medium text-slate-800 hover:bg-slate-100"
           disabled={busy || resetting}
           onClick={() => void handleSave()}
         >
@@ -100,9 +109,9 @@ export function SharedRulesCard({
         {rule.rules_is_override && onReset ? (
           <Button
             type="button"
-            variant="builderOutline"
-            size="xs"
-            className="h-6 px-2 text-[10px]"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-3 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             disabled={busy || resetting}
             onClick={() => onReset(rule.name)}
           >
@@ -111,20 +120,18 @@ export function SharedRulesCard({
         ) : null}
       </div>
 
-      <details className="mt-1.5 border border-black/10 bg-white/50 p-1">
-        <summary className="cursor-pointer font-mono text-[9px] uppercase text-gray-600">
+      <details className="mt-2 rounded-md border border-slate-100 bg-slate-50/30 px-2 py-2">
+        <summary className="cursor-pointer text-[10px] font-medium uppercase tracking-wide text-slate-400">
           {t('settings.promptCatalog.composerShippedDefaults')}
         </summary>
-        <div className="mt-1.5">
-          <div className="flex items-end justify-between gap-1">
-            <span className="font-mono text-[8px] uppercase text-gray-500">
+        <div className="mt-2">
+          <div className="mb-1 flex items-end justify-between gap-2">
+            <span className="text-[10px] font-medium uppercase text-slate-400">
               {t('settings.promptCatalog.sharedRulesShippedHint')}
             </span>
             <CopyCharBar text={rule.rules_default} t={t} />
           </div>
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap border border-black/10 bg-white p-1.5 text-[9px] leading-snug">
-            {rule.rules_default}
-          </pre>
+          <pre className={shippedPreClass}>{rule.rules_default}</pre>
         </div>
       </details>
     </article>

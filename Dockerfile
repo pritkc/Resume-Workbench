@@ -1,4 +1,4 @@
-# Resume Matcher Docker Image
+# Resume Workbench Docker Image
 # Multi-stage build for optimized image size
 
 # ============================================

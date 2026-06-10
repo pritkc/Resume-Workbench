@@ -7,8 +7,169 @@ from app.rendering.rendercv_adapter import (
     parse_rendercv_yaml_sections,
     rendercv_payload_to_yaml_sections,
     resume_to_rendercv_payload,
+    summary_alignment_for_rendering,
 )
 from app.rendering.theme_profiles import RenderThemeSettings
+from app.schemas import ResumeData, normalize_resume_data
+
+
+def test_experience_highlights_drop_duplicate_tech_stack_row() -> None:
+    data = normalize_resume_data(
+        {
+            "workExperience": [
+                {
+                    "id": 1,
+                    "position": "Engineer",
+                    "company": "Co",
+                    "techStack": "Python, AWS",
+                    "highlights": ["Python, AWS", "Shipped APIs"],
+                }
+            ]
+        }
+    )
+    exp = ResumeData.model_validate(data).workExperience[0]
+    assert exp.techStack == "Python, AWS"
+    assert exp.highlights == ["Shipped APIs"]
+
+
+def test_rendercv_omits_projects_with_include_in_resume_false() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Visible Project",
+                "years": "2024",
+                "description": ["Shipped feature A"],
+                "includeInResume": True,
+            },
+            {
+                "id": 2,
+                "name": "Hidden Project",
+                "years": "2023",
+                "description": ["Should not appear"],
+                "includeInResume": False,
+            },
+        ],
+        "skills": {"groups": []},
+    }
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    projects = payload["cv"]["sections"]["projects"]
+    assert len(projects) == 1
+    assert projects[0]["name"] == "Visible Project"
+
+
+def test_project_highlights_drop_duplicate_tech_stack_row() -> None:
+    data = normalize_resume_data(
+        {
+            "personalProjects": [
+                {
+                    "id": 1,
+                    "name": "Demo",
+                    "techStack": "Rust, WASM",
+                    "highlights": ["Rust, WASM", "Shipped CLI"],
+                }
+            ]
+        }
+    )
+    proj = ResumeData.model_validate(data).personalProjects[0]
+    assert proj.techStack == "Rust, WASM"
+    assert proj.highlights == ["Shipped CLI"]
+
+
+def test_rendercv_experience_bullets_omit_stack_when_description_prefixed() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Eng",
+                "company": "Acme",
+                "techStack": "Go, gRPC",
+                "description": ["Go, gRPC", "Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    assert payload["cv"]["sections"]["experience"][0]["summary"] == "**Stack:** Go • gRPC"
+    assert payload["cv"]["sections"]["experience"][0]["highlights"] == ["Built APIs"]
+
+
+def test_rendercv_formats_work_stack_label_and_project_stack_separator() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Eng",
+                "company": "Acme",
+                "techStack": "Go, gRPC",
+                "description": ["Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Demo",
+                "techStack": "Rust, WASM",
+                "description": ["Shipped CLI"],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {},
+            "settings": {
+                "resume_workbench_style": {
+                    "tech_stack": {"separator": "|"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    payload = resume_to_rendercv_payload(resume, theme_settings)
+
+    assert payload["cv"]["sections"]["experience"][0]["summary"] == "**Stack:** Go | gRPC"
+    assert payload["cv"]["sections"]["projects"][0]["summary"] == "Rust | WASM"
+
+
+def test_rendercv_payload_strips_app_only_workbench_settings() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {},
+            "settings": {
+                "resume_workbench_style": {
+                    "colors": {"company": "#123456"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    payload = resume_to_rendercv_payload(resume, theme_settings)
+
+    assert "resume_workbench_style" not in payload.get("settings", {})
 
 
 def test_rendercv_adapter_supports_classic_and_moderncv(sample_resume: dict) -> None:
@@ -124,6 +285,27 @@ def test_rendercv_adapter_limits_auto_bold_keywords_to_experience_and_project_bu
     assert "bold_keywords" not in payload.get("settings", {})
 
 
+def test_rendercv_adapter_filters_low_signal_bold_keywords(sample_resume_copy: dict) -> None:
+    themed_resume = copy.deepcopy(sample_resume_copy)
+    themed_resume["workExperience"][0]["description"] = [
+        "Built FastAPI services and reviewed Excel handoff data.",
+    ]
+
+    payload = resume_to_rendercv_payload(
+        themed_resume,
+        RenderThemeSettings(
+            theme_id="classic",
+            bold_keywords=True,
+            settings={"bold_keywords": ["FastAPI", "Excel", "Miro", "Data Analysis"]},
+        ),
+    )
+
+    bullet = payload["cv"]["sections"]["experience"][0]["highlights"][0]
+    assert "**FastAPI**" in bullet
+    assert "**Excel**" not in bullet
+    assert "**Miro**" not in bullet
+
+
 def test_rendercv_adapter_keeps_summary_content_and_strips_summary_heading_runtime_flags(
     sample_resume_copy: dict,
 ) -> None:
@@ -141,6 +323,68 @@ def test_rendercv_adapter_keeps_summary_content_and_strips_summary_heading_runti
 
     assert payload["cv"]["sections"]["summary"] == ["Platform engineer focused on reliability."]
     assert "show_summary_heading" not in payload.get("settings", {})
+
+
+def test_rendercv_adapter_converts_summary_rich_text_to_rendercv_markdown(
+    sample_resume_copy: dict,
+) -> None:
+    sample_resume_copy["summary"] = (
+        '<div data-summary-align="center"><strong>Platform engineer</strong> focused on reliability.</div>'
+    )
+
+    payload = resume_to_rendercv_payload(
+        sample_resume_copy,
+        RenderThemeSettings(theme_id="classic"),
+    )
+
+    assert payload["cv"]["sections"]["summary"] == [
+        "**Platform engineer** focused on reliability."
+    ]
+    assert summary_alignment_for_rendering(sample_resume_copy["summary"]) == "center"
+
+
+def test_rendercv_adapter_converts_builder_rich_text_without_leaking_tags() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Eng",
+                "company": "Acme",
+                "techStack": "<strong>Python</strong>, AWS",
+                "description": [
+                    "Built <strong>FastAPI</strong> services without exposing </strong> tags"
+                ],
+            }
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Demo",
+                "techStack": "React, <strong>TypeScript</strong>",
+                "description": ["Shipped <strong>typed UI</strong> preview"],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    experience = payload["cv"]["sections"]["experience"][0]
+    project = payload["cv"]["sections"]["projects"][0]
+
+    rendered_values = [
+        experience["summary"],
+        *experience["highlights"],
+        project["summary"],
+        *project["highlights"],
+    ]
+    assert "**Python**" in experience["summary"]
+    assert "**FastAPI**" in experience["highlights"][0]
+    assert "**TypeScript**" in project["summary"]
+    assert "**typed UI**" in project["highlights"][0]
+    assert not any("<strong>" in value or "</strong>" in value for value in rendered_values)
 
 
 def test_rendercv_adapter_honors_summary_section_visibility_from_section_meta(
@@ -369,7 +613,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
         {
             "position": "Software Engineer, Data Infra & MLOps",
             "date": "Jan 2021 - Present",
-            "summary": "Owned platform reliability and delivery for ML systems.",
+            "techStack": "Owned platform reliability and delivery for ML systems.",
             "description": [
                 "Built a CDC-powered ETL pipeline for production embeddings.",
                 "Improved retrieval latency by 35% with semantic caching.",
@@ -392,7 +636,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
     )
     sample_resume_copy["personalProjects"][0].update(
         {
-            "summary": "Open-source API tooling project.",
+            "techStack": "Open-source API tooling project.",
             "date": "Mar 2021 - Present",
             "description": [
                 "500+ GitHub stars",
@@ -442,6 +686,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
     assert payload["cv"]["sections"]["projects"][0] == {
         "name": "OpenAPI Generator",
         "date": "Mar 2021 - Present",
+        "tech_stacks": "Open-source API tooling project.",
         "summary": "Open-source API tooling project.",
         "highlights": ["500+ GitHub stars", "Used by 30+ engineering teams"],
     }
@@ -481,7 +726,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
         },
     ]
     assert parsed_resume["workExperience"][0]["position"] == "Software Engineer, Data Infra & MLOps"
-    assert parsed_resume["workExperience"][0]["summary"] == "Owned platform reliability and delivery for ML systems."
+    assert parsed_resume["workExperience"][0]["techStack"] == "Owned platform reliability and delivery for ML systems."
     assert parsed_resume["workExperience"][0]["highlights"] == [
         "Built a CDC-powered ETL pipeline for production embeddings.",
         "Improved retrieval latency by 35% with semantic caching.",
@@ -492,7 +737,7 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
         "Dean's List",
         "Distributed systems capstone",
     ]
-    assert parsed_resume["personalProjects"][0]["summary"] == "Open-source API tooling project."
+    assert parsed_resume["personalProjects"][0]["techStack"] == "Open-source API tooling project."
     assert parsed_resume["personalProjects"][0]["highlights"] == [
         "500+ GitHub stars",
         "Used by 30+ engineering teams",

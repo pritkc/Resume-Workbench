@@ -1,65 +1,69 @@
 """Prompt: critique_resume — hiring-manager review of tailored diff."""
 
-from app.prompts._rules.critique import CRITIQUE_RULES
+from __future__ import annotations
+
+from typing import Any
+
+from app.prompts._constants import PROMPT_VERSIONS
+from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "critique_resume"
 STEP_LABEL = "Critique Resume"
-STEP_VERSION = "v1.0"
+STEP_VERSION = PROMPT_VERSIONS["critique_resume"]
 FILE_PATH = "prompts/critique_resume.py"
+SYSTEM_PROMPT_FILES = ("apps/backend/app/prompts/text/critique_resume/system.txt",)
+USER_PROMPT_FILE = "apps/backend/app/prompts/text/critique_resume/user.txt"
 PIPELINE = "full"
 PIPELINE_ORDER = 3
 RECEIVES_FROM = ["tailor_resume_full"]
 FEEDS_INTO = ["rewrite_resume"]
 
-INSTRUCTIONS = """
-You are a senior hiring manager at a top tech company. You've reviewed thousands of resumes
-and can spot red flags, exaggerations, and missed opportunities.
+INSTRUCTIONS = read_shipped_txt("critique_resume/system.txt")
+RULES = ""
 
-YOUR TASK:
-Review this draft resume diff with a critical eye.
-
-LOOK FOR:
-1. RED FLAGS — scope claims that seem inflated, vague achievements, buzzword stuffing, inconsistencies
-2. MISSED KEYWORDS — JD requirements not reflected in the diff
-3. WEAK BULLETS — generic lines without impact
-
-Be specific with locations (e.g., experience.0.bullets.2). Be honest and constructive.
-"""
-
-RULES = CRITIQUE_RULES
-
-USER_TEMPLATE = """
-DRAFT RESUME (to critique):
-$draft_resume
-
-JOB DESCRIPTION INTELLIGENCE:
-$jd_intelligence
-"""
+USER_TEMPLATE = read_shipped_txt("critique_resume/user.txt")
 
 DATA_TEMPLATE = USER_TEMPLATE
-SYSTEM_DEFAULT = INSTRUCTIONS.strip() + "\n\n" + RULES.strip()
+SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
-    "draft_resume": "Tailored diff JSON from the prior step",
-    "jd_intelligence": "JD intelligence JSON",
+    "original_resume": "Original master resume JSON — used to validate scope claims in the diff",
+    "tailor_resume_full_output": "Tailored resume output from tailor_resume_full",
+    "extract_jd_intel_output": (
+        "JD blob placeholder — expanded from jd_intel_blob before render_user_template substitution"
+    ),
+    "jd_intel_blob": "Cached JD dict for $extract_jd_intel_output expansion",
 }
 
 
-def build_messages(draft_resume: str, jd_intelligence: str) -> tuple[str, str]:
-    from app.prompts import load_override, load_shared_rules_override
+def build_messages(
+    *,
+    tailor_resume_full_output: str,
+    jd_intel_blob: dict[str, Any],
+    original_resume: str = "",
+) -> tuple[str, str]:
+    from app.prompts import load_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
 
     comp = load_composer_override(STEP_NAME)
     if comp:
         return comp["system"], render_user_template(
-            comp["user"], draft_resume=draft_resume, jd_intelligence=jd_intelligence
+            comp["user"],
+            jd_intel_blob=jd_intel_blob,
+            original_resume=original_resume,
+            tailor_resume_full_output=tailor_resume_full_output,
         )
 
-    instructions = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
-    rules = (
-        load_override(STEP_NAME, "rules")
-        or load_shared_rules_override("critique")
-        or RULES
+    system = (load_override(STEP_NAME, "instructions") or INSTRUCTIONS).strip()
+    user = render_user_template(
+        USER_TEMPLATE,
+        jd_intel_blob=jd_intel_blob,
+        original_resume=original_resume,
+        tailor_resume_full_output=tailor_resume_full_output,
     )
-    system = instructions.strip() + "\n\n" + rules.strip()
-    user = render_user_template(USER_TEMPLATE, draft_resume=draft_resume, jd_intelligence=jd_intelligence)
     return system, user
+
+
+def parse_response(raw_text: str) -> dict[str, Any]:
+    from app.services.tailoring.section_format import parse_critique_section_output
+
+    return parse_critique_section_output(raw_text)

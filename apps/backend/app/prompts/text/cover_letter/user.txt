@@ -1,0 +1,48 @@
+Generate both outputs in one pass:
+1) a cover letter
+2) a short outreach message
+
+Return plain text only using these exact section headers:
+=== COVER LETTER ===
+[cover letter body]
+=== OUTREACH MESSAGE ===
+[outreach message body]
+
+JOB TARGET (JSON):
+$job_target
+
+JD INTELLIGENCE:
+$jd_extract_slice
+
+RESUME (JSON — full career evidence):
+$tailored_resume
+
+COVER LETTER:
+- 150 words max, exactly 3 paragraphs
+- Arc: P1 - their world; P2 - fit evidence; P3 - forward motion
+- P1: anchor in one specific JD detail: product area, technical challenge, team mission, or company context. Specificity test: this sentence must be uncopiable to a letter for any other company. If it could appear in any other application, rewrite it.
+- P2: connect 1-2 real facts from the tailored resume to the P1 anchor: actual tools, outcomes, or scope. Do not lift sentences verbatim from resume bullets; restate at a narrative level. Frame the connection around their challenge, not your credential: "at X I did Y, which means I understand Z [their problem]" not "I have experience with Z."
+- P3: 1-2 sentences. State what you want to happen next. Confident, neutral, no eagerness.
+- The cover letter adds something not in the resume: narrative context, motivation for this company specifically, or the connective thread between your work and their challenge. It does not summarize the resume.
+- No salutation line if recipient name is unknown — begin P1 directly.
+
+OUTREACH MESSAGE:
+- 60 words max, 2-3 sentences — reads like a text, not a letter
+- S1: name the specific role plus one detail specific to this company or team that couldn't be auto-generated from just the job title alone. Specificity test: would this sentence make sense if sent to a different company? If yes, rewrite it.
+- S2: the candidate's single strongest relevant credential as a plain fact from the tailored resume — not a self-assessment ("Built X at Y, cutting Z" not "I have strong X skills")
+- S3: one time-bounded, low-friction ask ("got 15 min this week?" not "I'd love to connect whenever works for you")
+- Contractions and sentence fragments are fine
+- Tone: peer colleague reaching out, not applicant applying
+
+BANNED (applies to both outputs):
+- Openers: I am writing to express, I am excited/thrilled/passionate about, I would love to, I have always been interested in, I have a strong background in
+- Self-assessments: I believe I would be an excellent/great/perfect fit, I am confident that, I am highly motivated, proven track record, fast learner, I am detail-oriented, extensive experience, I think I would be a valuable addition
+- Closings: I look forward to hearing from you, Please find my resume attached, I hope to hear from you soon, I eagerly await, I would love the opportunity to
+- Vague asks: pick your brain, happy to share more if useful, I'd love to be considered, let me know if you're interested
+- Filler: results-driven, team player, passionate professional, dedicated, dynamic, self-starter
+
+FACTS:
+- Use only information from the provided JSON and JD intelligence
+- Do not invent names, metrics, employers, dates, or credentials
+- If a job_target field is an empty string, omit it rather than inventing a substitute
+- If the JD/company anchor is weak or generic, keep the claim narrower instead of pretending deep company knowledge.

@@ -7,10 +7,9 @@ import logging
 import re
 from fastapi import APIRouter, HTTPException
 
-from app.config_cache import get_content_language
 from app.database import db
 from app.llm import complete_json
-from app.prompts._constants import PROMPT_VERSIONS, get_language_name
+from app.prompts._constants import PROMPT_VERSIONS
 from app.prompts.enrichment import (
     ANALYZE_RESUME_PROMPT,
     ENHANCE_DESCRIPTION_PROMPT,
@@ -106,14 +105,8 @@ async def analyze_resume(resume_id: str) -> AnalysisResponse:
             detail="Resume has no processed data. Please re-upload the resume.",
         )
 
-    # Build prompt with content language
     resume_json = json.dumps(processed_data)
-    language = get_content_language()
-    output_language = get_language_name(language)
-    prompt = ANALYZE_RESUME_PROMPT.format(
-        resume_json=resume_json,
-        output_language=output_language
-    )
+    prompt = ANALYZE_RESUME_PROMPT.format(resume_json=resume_json)
 
     try:
         # Call LLM with increased max_tokens for non-English languages
@@ -208,12 +201,7 @@ async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
     else:
         # Legacy path — re-analyze to get question-to-item mapping
         resume_json = json.dumps(processed_data)
-        language = get_content_language()
-        output_language = get_language_name(language)
-        analysis_prompt = ANALYZE_RESUME_PROMPT.format(
-            resume_json=resume_json,
-            output_language=output_language,
-        )
+        analysis_prompt = ANALYZE_RESUME_PROMPT.format(resume_json=resume_json)
 
         try:
             analysis_result = await complete_json(
@@ -275,16 +263,12 @@ async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
         current_desc = item.get("current_description", [])
         current_desc_text = "\n".join(f"- {d}" for d in current_desc) if current_desc else "(No description)"
         
-        language = get_content_language()
-        output_language = get_language_name(language)
-
         prompt = ENHANCE_DESCRIPTION_PROMPT.format(
             item_type=item.get("item_type", "experience"),
             title=item.get("title", ""),
             subtitle=item.get("subtitle", ""),
             current_description=current_desc_text,
             answers=answers_text.strip(),
-            output_language=output_language,
         )
 
         try:
@@ -415,7 +399,6 @@ async def apply_enhancements(
 async def _regenerate_experience_or_project(
     item: RegenerateItemInput,
     instruction: str,
-    output_language: str,
 ) -> RegeneratedItem:
     """Regenerate a single experience or project item."""
     current_desc_text = (
@@ -425,7 +408,6 @@ async def _regenerate_experience_or_project(
     )
 
     prompt = REGENERATE_ITEM_PROMPT.format(
-        output_language=output_language,
         item_type=item.item_type,
         title=item.title,
         subtitle=item.subtitle or "",
@@ -464,13 +446,11 @@ async def _regenerate_experience_or_project(
 async def _regenerate_additional_group(
     item: RegenerateItemInput,
     instruction: str,
-    output_language: str,
 ) -> RegeneratedItem:
     """Regenerate a flexible skills label/value group."""
     current_values_text = ", ".join(item.current_content) if item.current_content else "(No values)"
 
     prompt = REGENERATE_ADDITIONAL_GROUP_PROMPT.format(
-        output_language=output_language,
         group_label=item.title or "Additional",
         current_values=current_values_text,
         user_instruction=instruction,
@@ -521,18 +501,14 @@ async def regenerate_items(request: RegenerateRequest) -> RegenerateResponse:
     if not request.items:
         raise HTTPException(status_code=400, detail="No items selected for regeneration")
 
-    # Get language name for LLM
-    output_language = get_language_name(request.output_language)
-
-    # Process all items in parallel for better performance
     tasks = []
     for item in request.items:
         if item.item_type == "additionalGroup":
             tasks.append(
-                _regenerate_additional_group(item, request.instruction, output_language)
+                _regenerate_additional_group(item, request.instruction)
             )
         else:
-            tasks.append(_regenerate_experience_or_project(item, request.instruction, output_language))
+            tasks.append(_regenerate_experience_or_project(item, request.instruction))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 

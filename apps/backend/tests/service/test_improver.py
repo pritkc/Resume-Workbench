@@ -55,9 +55,9 @@ class TestExtractJobKeywords:
 
         assert "Python" in result["required_skills"]
         assert result["experience_years"] == 5
-        assert result["core_title"] == "Backend Engineer"
-        assert result["company_name"] == "TechCorp"
-        assert result["location"] == ""
+        assert result["role"]["title"] == "Backend Engineer"
+        assert result["company"]["name"] == "TechCorp"
+        assert result["location"] == "Remote"
         mock_llm.assert_called_once()
 
     @patch("app.services.tailoring.analysis.complete_json", new_callable=AsyncMock)
@@ -82,8 +82,36 @@ class TestExtractJobKeywords:
             "As an Agile Business Analyst at West Shore Home, you will work across teams."
         )
 
-        assert result["core_title"] == "Agile Business Analyst"
-        assert result["company_name"] == "West Shore Home"
+        assert result["role"]["title"] == "Agile Business Analyst"
+        assert result["company"]["name"] == "West Shore Home"
+
+    @patch("app.services.tailoring.analysis.complete_stream", new_callable=AsyncMock)
+    async def test_streams_jd_intel_when_live_sink_is_available(self, mock_llm):
+        mock_llm.return_value = (
+            "=== JD METADATA ===\n"
+            "Role: Backend Engineer\n"
+            "Company: ExampleCo\n"
+            "Location: Remote\n\n"
+            "=== JD INTEL ===\n"
+            "- Needs FastAPI and metrics experience."
+        )
+        events: list[tuple[str, dict]] = []
+
+        async def event_sink(event_type: str, data: dict) -> None:
+            events.append((event_type, data))
+
+        result = await extract_job_keywords(
+            "Backend Engineer at ExampleCo. Needs FastAPI and metrics.",
+            event_sink=event_sink,
+            live_metadata={"live_run_id": "live-1"},
+        )
+
+        assert result["format"] == "section_header_v1"
+        assert result["metadata"]["role"] == "Backend Engineer"
+        assert "FastAPI" in result["intel"]
+        assert mock_llm.call_args.kwargs["event_sink"] is event_sink
+        assert mock_llm.call_args.kwargs["include_delta_text"] is True
+        assert mock_llm.call_args.kwargs["stream_kind"] == "jd_intel"
 
 
 class TestImproveResume:
@@ -100,7 +128,6 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )
@@ -121,7 +148,6 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )
@@ -133,6 +159,7 @@ class TestImproveResume:
         assert "jane@example.com" not in prompt
         assert "linkedin.com/in/janedoe" not in prompt
         assert '"sectionMeta"' not in prompt
+        assert '"education"' in prompt
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -145,19 +172,20 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "RESPONSE CONTRACT:" in prompt
-        assert '"mode":"full"' in prompt
-        assert '"output_keys"' in prompt
-        assert '"bullet_counts"' in prompt
-        assert '"entries"' in prompt
-        assert "JOB INTELLIGENCE:" in prompt
-        assert "bold_keywords" in prompt
+        assert "OUTPUT TEMPLATE" in prompt
+        assert "=== SUMMARY ===" in prompt
+        assert "Editable addresses:" in prompt
+        assert "EXPERIENCE: 0=B0-B2 budget 2/3 keep>=1; 1=B0-B1 budget 1/2 keep>=1" in prompt
+        assert "tech_stacks" in prompt
+        assert "JD INTELLIGENCE:" in prompt
+        assert "BOLD KEYWORDS" in prompt
+        assert "OUTPUT RULES:" in prompt
+        assert "MIT" in prompt
         # FastAPI appears in the MASTER RESUME skills section
         assert "FastAPI" in prompt
         assert "Experienced software engineer with 5+ years" not in prompt
@@ -179,17 +207,12 @@ class TestImproveResume:
             original_resume="# Resume markdown",
             job_description=sample_job_description,
             job_keywords=sample_job_keywords,
-            language="en",
             prompt_id="full",
             original_resume_data=sample_resume,
         )
 
         assert mock_llm.call_args.kwargs["retries"] == 1
-        retry_hint = mock_llm.call_args.kwargs["retry_hint"]
-        assert "summary" in retry_hint
-        assert "experience" in retry_hint
-        assert "bullet_counts" in retry_hint or "bullets" in retry_hint
-        assert "Do not include personalInfo" in retry_hint or "personalInfo" in retry_hint
+        assert "section-header text" in mock_llm.call_args.kwargs.get("retry_hint", "")
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -226,7 +249,7 @@ class TestImproveResume:
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
         assert "# Markdown with Jan 2020" not in prompt
-        assert '"years":"2020 - 2023"' in prompt
+        assert "2020 - 2023" in prompt
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -244,7 +267,7 @@ class TestImproveResume:
         )
 
         prompt = mock_llm.call_args.kwargs.get("prompt", "")
-        assert "MODE: full" in prompt
+        assert "JD INTELLIGENCE:" in prompt
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -372,7 +395,9 @@ class TestImproveResume:
         assert result.resume_data["personalInfo"]["location"] == sample_resume["personalInfo"]["location"]
         assert result.stage_breakdown.llm_applied_changes >= 1
         assert result.stage_breakdown.location_source == "master"
-        assert any(change.path == "summary" for change in result.change_manifest)
+        assert any(
+            change.path.startswith("workExperience[0].description") for change in result.change_manifest
+        )
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
@@ -436,6 +461,54 @@ class TestImproveResume:
             original_resume_data=sample_resume,
         )
         assert result.bold_keywords == ["Kubernetes", "microservices", "CI/CD", "REST APIs"]
+
+    @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=True)
+    @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)
+    async def test_critique_setting_runs_critique_and_rewrite(
+        self, mock_llm, _critique_on, sample_resume, sample_job_keywords, sample_job_description
+    ):
+        mock_llm.side_effect = [
+            _llm_compact_output(summary="First-pass summary."),
+            (
+                "=== OVERALL ASSESSMENT ===\n"
+                "Good draft, but the summary can be sharper.\n\n"
+                "=== RED FLAGS ===\n\n"
+                "=== MISSED KEYWORDS ===\n\n"
+                "=== WEAK BULLETS ===\n"
+                "W0-LOCATION: SUMMARY\n"
+                "W0-CURRENT: First-pass summary.\n"
+                "W0-ISSUE: Too generic.\n"
+                "W0-SUGGESTION: Add stronger platform wording.\n\n"
+                "=== SUGGESTIONS ===\n"
+                "S0-LOCATION: SUMMARY\n"
+                "S0-ACTION: Make the summary more role-specific."
+            ),
+            (
+                "=== SUMMARY ===\n"
+                "SUMMARY: Rewritten platform engineering summary.\n"
+                "WHY: Addresses the critique.\n\n"
+                "=== BOLD KEYWORDS ===\n"
+                "BOLD: Kubernetes\n"
+                "WHY: Relevant target keyword."
+            ),
+        ]
+
+        result = await generate_tailored_resume(
+            original_resume="# Resume markdown",
+            job_description=sample_job_description,
+            job_keywords=sample_job_keywords,
+            prompt_id="full",
+            original_resume_data=sample_resume,
+            cleanup_source_data=sample_resume,
+        )
+
+        operations = [call.kwargs["operation"] for call in mock_llm.call_args_list]
+        assert operations == ["resume_generate_full", "critique_resume", "rewrite_resume"]
+        assert result.resume_data["summary"] == "Rewritten platform engineering summary."
+        assert result.critique_analysis
+        assert result.critique_analysis["overall_assessment"] == (
+            "Good draft, but the summary can be sharper."
+        )
 
     @patch("app.services.tailoring.orchestration.get_enable_critique", return_value=False)
     @patch("app.services.tailoring.llm_calls.complete_json", new_callable=AsyncMock)

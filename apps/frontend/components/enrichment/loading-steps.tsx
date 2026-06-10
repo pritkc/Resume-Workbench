@@ -13,7 +13,7 @@ function LoadingStep({ message, submessage }: LoadingStepProps) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-6">
       <div className="relative">
-        <Loader2 className="w-12 h-12 animate-spin text-black" />
+        <Loader2 className="w-12 h-12 animate-spin text-foreground" />
       </div>
       <div className="text-center">
         <p className="text-xl font-mono font-bold">{message}</p>

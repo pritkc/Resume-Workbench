@@ -94,7 +94,7 @@ export function ModelPickerModal({
       aria-modal="true"
       aria-labelledby="model-picker-title"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto border border-black/20 bg-[#F0F0E8] p-2 shadow-[0_4px_24px_rgba(0,0,0,0.12)]">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto border border-border bg-background p-2 shadow-[0_4px_24px_rgba(0,0,0,0.12)]">
         <h2
           id="model-picker-title"
           className="font-mono text-xs font-bold uppercase tracking-wide text-gray-900"
@@ -102,11 +102,15 @@ export function ModelPickerModal({
           {t('settings.promptCatalog.modelPickerTitle', { step: stepLabel })}
         </h2>
         <p className="mt-1 font-mono text-[10px] leading-tight text-gray-600">
-          <span className="text-black/45">{t('settings.promptCatalog.modelPickerResolved')}:</span>{' '}
+          <span className="text-muted-foreground">
+            {t('settings.promptCatalog.modelPickerResolved')}:
+          </span>{' '}
           {resolvedModel}
         </p>
         <p className="mt-0.5 truncate font-mono text-[9px] text-gray-500" title={appDefaultModel}>
-          <span className="text-black/40">{t('settings.promptCatalog.modelPickerAppDefault')}:</span>{' '}
+          <span className="text-muted-foreground">
+            {t('settings.promptCatalog.modelPickerAppDefault')}:
+          </span>{' '}
           {appDefaultModel}
         </p>
         {cliproxyActive ? (
@@ -119,7 +123,7 @@ export function ModelPickerModal({
         ) : null}
 
         {cliproxyActive ? (
-          <div className="mt-2 space-y-1 border border-black/10 bg-white/60 p-1.5">
+          <div className="mt-2 space-y-1 border border-border bg-card/60 p-1.5">
             <div>
               <p className="font-mono text-[8px] font-bold uppercase text-gray-600">
                 {t('settings.promptCatalog.modelPickerCliproxyModels')}
@@ -143,7 +147,7 @@ export function ModelPickerModal({
                   </Label>
                   <select
                     id="cliproxy-model-pick"
-                    className="mt-0.5 w-full rounded border border-black/15 bg-white px-2 py-1.5 font-mono text-[10px]"
+                    className="mt-0.5 w-full rounded border border-border bg-card px-2 py-1.5 font-mono text-[10px]"
                     value={pickId}
                     onChange={(e) => setPickId(e.target.value)}
                   >
@@ -176,7 +180,10 @@ export function ModelPickerModal({
         ) : null}
 
         <div className="mt-2 space-y-1">
-          <Label htmlFor="model-override" className="font-mono text-[9px] uppercase text-black/55">
+          <Label
+            htmlFor="model-override"
+            className="font-mono text-[9px] uppercase text-muted-foreground"
+          >
             {t('settings.promptCatalog.modelOverrideLabel')}
           </Label>
           <Input
@@ -184,11 +191,17 @@ export function ModelPickerModal({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="openai/gpt-4o or empty for default"
-            className="h-7 rounded-none border-black/30 font-mono text-[11px]"
+            className="h-7 rounded-none border-border font-mono text-[11px]"
           />
         </div>
         <div className="mt-2 flex flex-wrap justify-end gap-1">
-          <Button type="button" variant="builderOutline" size="xs" className="h-6 px-2" onClick={onClose}>
+          <Button
+            type="button"
+            variant="builderOutline"
+            size="xs"
+            className="h-6 px-2"
+            onClick={onClose}
+          >
             {t('settings.promptCatalog.cancel')}
           </Button>
           <Button

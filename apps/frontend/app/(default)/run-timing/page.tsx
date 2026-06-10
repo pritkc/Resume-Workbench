@@ -135,12 +135,12 @@ export default function RunTimingPage() {
       }}
     >
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="border border-black bg-white p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="border border-border bg-card p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.08)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                <p className="font-mono text-xs font-bold uppercase tracking-[0.25em] text-blue-700">
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.25em] text-primary">
                   Performance Analyzer
                 </p>
               </div>
@@ -172,7 +172,7 @@ export default function RunTimingPage() {
           </div>
         </div>
 
-        <div className="border border-black bg-white p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="border border-border bg-card p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
           <div className="flex flex-wrap gap-2">
             <Stat label="Resume Rows" value={summary.totalRows.toString()} />
             <Stat label="Rows With Runtime" value={summary.withRuntime.toString()} />
@@ -187,7 +187,7 @@ export default function RunTimingPage() {
         )}
 
         {!loading && groups.length === 0 && (
-          <div className="border border-black bg-white px-4 py-8 text-center font-mono text-sm text-gray-500">
+          <div className="border border-border bg-card px-4 py-8 text-center font-mono text-sm text-gray-500">
             No resumes found in dashboard list.
           </div>
         )}
@@ -203,9 +203,9 @@ export default function RunTimingPage() {
               <details
                 key={resume.resume_id}
                 open={index < 8}
-                className="border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.06)]"
+                className="border border-border bg-card shadow-[4px_4px_0px_0px_rgba(0,0,0,0.06)]"
               >
-                <summary className="cursor-pointer list-none px-4 py-3 hover:bg-[#F8F7F1]">
+                <summary className="cursor-pointer list-none px-4 py-3 hover:bg-secondary">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex min-w-0 flex-col">
                       <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">
@@ -228,7 +228,7 @@ export default function RunTimingPage() {
                   </div>
                 </summary>
 
-                <div className="border-t border-black/20 px-4 py-3">
+                <div className="border-t border-border px-4 py-3">
                   <div className="mb-3 flex flex-wrap gap-4 font-mono text-[11px] text-gray-600">
                     <span>Resume ID: {resume.resume_id}</span>
                     <span>Title: {normalizeValue(resume.title)}</span>
@@ -236,7 +236,7 @@ export default function RunTimingPage() {
                   </div>
 
                   {runs.length === 0 ? (
-                    <div className="border border-black/20 bg-[#FAFAF7] px-3 py-2 font-mono text-[11px] text-gray-600">
+                    <div className="border border-border bg-[#FAFAF7] px-3 py-2 font-mono text-[11px] text-gray-600">
                       Runtime data: N/A (likely historical run before timing capture).
                     </div>
                   ) : (
@@ -246,7 +246,7 @@ export default function RunTimingPage() {
                         return (
                           <div
                             key={`${resume.resume_id}-${run.generation_run_id}`}
-                            className="border border-black/20 bg-[#FAFAF7] p-3"
+                            className="border border-border bg-[#FAFAF7] p-3"
                           >
                             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                               <div className="font-mono text-[11px] text-gray-700">
@@ -275,9 +275,9 @@ export default function RunTimingPage() {
                               {run.application_pack_id || 'N/A'} • Job: {run.job_id || 'N/A'}
                             </div>
 
-                            <div className="overflow-x-auto border border-black/20 bg-white">
+                            <div className="overflow-x-auto border border-border bg-card">
                               <table className="min-w-[760px] w-full border-collapse">
-                                <thead className="bg-[#F8F7F1] border-b border-black/20">
+                                <thead className="bg-secondary border-b border-border">
                                   <tr>
                                     <th className="px-2 py-1.5 text-left font-mono text-[10px] uppercase tracking-wider text-gray-600">
                                       Process
@@ -304,7 +304,7 @@ export default function RunTimingPage() {
                                     run.process_timings.map((process) => (
                                       <tr
                                         key={`${run.generation_run_id}-${process.process_key}`}
-                                        className="border-b border-black/10 last:border-b-0"
+                                        className="border-b border-border last:border-b-0"
                                       >
                                         <td className="px-2 py-1.5 font-mono text-[11px] text-gray-800">
                                           {process.process_key}
@@ -334,7 +334,7 @@ export default function RunTimingPage() {
           })}
         </div>
 
-        <div className="border border-black bg-white p-3">
+        <div className="border border-border bg-card p-3">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Activity className="h-4 w-4" />
             Row count here tracks dashboard resume count. Missing historical timing is explicitly

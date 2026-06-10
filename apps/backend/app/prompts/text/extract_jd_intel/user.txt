@@ -1,0 +1,32 @@
+Return the job description analysis in this exact plain-text format.
+
+=== JD METADATA ===
+ROLE: [normalized title only; remove employer, location, and employment type]
+COMPANY: [company name exactly as stated, or blank if not stated]
+LOCATION: [City, ST for US cities only; blank for remote-only or unstated]
+
+=== JD INTEL ===
+HOOKS: [exactly 6 short neutral competency hooks, comma-separated; coverage checklist, not prose to reuse]
+MUST-MATCH: [exact-match terms worth including when credible - tools, systems, languages, platforms]
+KEYWORDS: [high-signal ATS technical terms; no responsibility phrases or basic tools]
+THEMES: [responsibility ideas to translate naturally without mirroring JD wording; not mandatory mirror phrases]
+AVOID: [generic responsibility phrases, weak umbrella terms, and tools too basic to signal]
+BOLD-CANDS: [6-10 short source terms for bold_keywords; tools, languages, platforms, data methods only]
+DOMAIN: [industry/product/domain context useful for tailoring]
+CONTEXT: [company/product/customer/team context useful for customization; not resume keywords]
+TARGETING: [2-3 short customization angles connecting the role to company/product context]
+LEVEL: [one sentence on ownership footprint and decision scope]
+
+Rules:
+- Use the JD as the primary source. For DOMAIN, CONTEXT, and TARGETING, include high-confidence company, product, customer, or industry context when useful for customization.
+- Do not invent technologies, requirements, responsibilities, seniority, metrics, locations, or team facts. Keep technical terms and level calibration tied to the JD.
+- All values are comma-separated on one line except LEVEL, which is one prose sentence.
+- HOOKS: distinct major duties, deduped, 6 items, not full responsibility sentences.
+- MUST-MATCH: exact systems/products/languages worth matching when the resume supports them.
+- AVOID: include generic soft skills, broad umbrella terms, and tools too basic to signal seniority.
+- BOLD-CANDS: 1-3 word non-basic technical terms only; exclude responsibility phrases and soft skills.
+- LEVEL: do not guess title ladder beyond what the JD states.
+- If a value is empty, write the label with a blank value on its own line. Do not output null, [], markdown, or extra labels.
+
+Job description:
+$job_description

@@ -7,7 +7,7 @@
 
 export type TemplateType = 'swiss-single' | 'swiss-two-column' | 'modern' | 'modern-two-column';
 
-export type PageSize = 'A4' | 'LETTER';
+export type PageSize = 'A4' | 'LETTER' | 'FREEFLOW';
 
 export type AccentColor = 'blue' | 'green' | 'orange' | 'red';
 
@@ -67,6 +67,7 @@ export const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings = {
 export const PAGE_SIZE_INFO: Record<PageSize, { name: string; dimensions: string }> = {
   A4: { name: 'A4', dimensions: '210 × 297 mm' },
   LETTER: { name: 'US Letter', dimensions: '8.5 × 11 in' },
+  FREEFLOW: { name: 'Continuous', dimensions: 'PDF height grows with content' },
 };
 
 /**

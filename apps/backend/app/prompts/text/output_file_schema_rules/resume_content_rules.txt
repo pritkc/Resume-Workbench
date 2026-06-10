@@ -1,0 +1,65 @@
+LOCKS:
+- Never emit locked fields: id, company, location, start_date, end_date, date, years, github, website, customSections.
+- Do not alter company names, dates, locations, schools, GPA, base factual claims, or source-owned identifiers.
+- Experience editable fields: position, tech_stacks, bullets.
+- Project editable fields: name, tech_stacks, bullets.
+- Position may append only a truthful comma-separated scope/platform/domain qualifier after the original title. Do not rename, insert words into, or replace the base title.
+- Project names may receive only minor clarification; never add JD-flavored parentheticals like "(Process Automation)", "(Compliance Workflow)", or "(Data Analysis)".
+
+--- SIGNAL STRATEGY ---
+
+SIGNAL RULES:
+- The source resume is the candidate superset; the JD is a prioritization lens.
+- Show a broad tech-role profile first, then selected JD-aligned evidence. Do not rebuild every section around the posting.
+- Use exact JD/ATS terms only when high-signal, source-supported, and natural in the edited cell.
+- Do not add JD-only tools, vendors, platforms, methods, OSes, languages, or architectures to stacks, skills, bullets, projects, or bold_keywords.
+- One strong keyword in the right evidence beats repetition across summary, stacks, bullets, skills, and bold_keywords.
+- Map JD themes through candidate mechanisms, systems, tools, and outcomes. Avoid 1:1 paraphrases of JD responsibilities.
+- Never keyword-stuff, write hollow ATS bait, or add basic office/chat/project tools to summary, bullets, tech_stacks, skills, or bold_keywords.
+
+FIELD RULES:
+- BOLD_KEYWORDS: 6-10 high-signal 1-3 word terms plus short WHY; prefer tools, languages, platforms, frameworks, data methods, and product systems; avoid sentences, soft skills, generic role/domain labels, responsibility phrases, weak umbrella terms, and basic tools.
+- tech_stacks values contain only named tools, languages, platforms, frameworks, or products; include source-evidenced tools or tools required by the rewritten action; exclude table-stakes productivity/project/collaboration tools.
+- Do not promote tools from tech_stacks into bullet text unless the source bullet names the tool or the action logically requires it.
+- Skills: target 4-5 dense groups; preserve the source backbone; remove original skills only when remotely useless to the role; values must be specific tools, products, methods, or technologies, not responsibility phrases.
+- Do not invent skill group ids; alignment is OUTPUT TEMPLATE ordering only. Explain retain/edit/remove decisions in each G#-WHY line.
+
+--- WRITING POLICY ---
+
+SUMMARY:
+- One sentence, target 105-135 characters, with a compact role thesis: identity + strongest transferable capability + outcome area.
+- Start from the candidate's real technical identity, not the JD title.
+- Mention at most one JD-specific domain/tool. No "X years of experience" framing; avoid the years-count format.
+- Good: "Data engineer building ETL/ELT pipelines, semantic layers, and cloud warehouse models for analytics teams."
+- Bad: "Data engineer with many years of experience in data engineering."
+
+BULLETS:
+- One idea per bullet, usually 1-2 lines: strong verb -> mechanism/scope -> observable outcome.
+- Keep technical density. Remove filler business nouns before removing technical detail.
+- Lead each role with the strongest concrete story, not a stack dump.
+- Each role should show different dimensions of impact, such as latency, reliability, automation, data quality, product behavior, compliance, migration, or cost.
+- Vary verbs and sentence shapes. Avoid repeated opener/metric/outcome patterns.
+- Use compact metrics where credible: h/wk, min, ms, sec, ranges, or before/after state.
+- Tie metrics to candidate action and system context. No naked percentages without mechanism.
+- If exact mechanism is unknown, describe the before/after state honestly.
+- Lightly preserve original interview stories; rewrite only the cells needed for fit.
+
+PORTFOLIO PROJECTS:
+- Edit at most the most relevant projects unless the response contract or run rules say otherwise.
+- Keep names stable, preserve source bullet count, and avoid converting projects into generic JD examples.
+- If a stack names a frontend framework, include a real UI outcome in at least one bullet.
+- If a stack names MLOps or tracking tooling, describe what was tracked, why reproducibility mattered, and what artifact resulted.
+
+CLAIM CALIBRATION:
+- Prefer strong, plausible claims that fit the source trajectory and would survive a phone screen.
+- Use real figures or honest approximations with ~, ranges, or before/after language. Do not invent precision.
+- Tools and technologies must fit the candidate timeline and normal production use for that period.
+- Calibrate scope to level and tenure: use "contributed to", "helped", "with the team", "partnered with", or owned-slice language when sole ownership is not evidenced.
+- Do not claim org-wide architecture, sole product ownership, or impossible wins unless explicitly supported.
+
+--- BANNED PATTERNS ---
+
+STYLE FILTER:
+- Avoid inflated openers as primary verbs: spearheaded, leveraged, orchestrated, utilized, facilitated, pioneered, revolutionized, masterminded, improved, enhanced, streamlined.
+- Avoid empty business jargon and stock resume phrases such as synergy, robust, scalable, holistic, proactive, cutting-edge, proven track record, results-driven, team player, responsible for, in order to, and deeply committed to.
+- Never use em dashes, dangling participial endings, adjective pileups, repeated outcome patterns within a role.

@@ -44,15 +44,15 @@ export function ArtifactGallery({
     <>
       <div className="bg-transparent">
         {showHeader ? (
-          <div className="border-b border-black/10 px-2.5 py-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">
+          <div className="border-b border-border px-2.5 py-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/80">
               {title}
             </p>
           </div>
         ) : null}
         <div className="space-y-2 p-0">
           {previewArtifacts.length === 0 ? (
-            <p className="font-mono text-xs text-gray-600">{emptyMessage}</p>
+            <p className="font-mono text-xs text-muted-foreground">{emptyMessage}</p>
           ) : (
             <>
               {previewArtifacts.length > 0 && (
@@ -63,15 +63,15 @@ export function ArtifactGallery({
                       type="button"
                       onClick={() => setSelectedPreviewId(artifact.artifact_id)}
                       className="block w-full bg-transparent p-0 text-left"
-                      aria-label="Open large preview"
+                      aria-label={`Open large preview for ${artifact.file_name}`}
                     >
                       <Image
                         src={artifact.url ?? ''}
-                        alt=""
+                        alt={artifact.file_name}
                         width={1200}
                         height={1600}
                         unoptimized
-                        className="h-auto w-full bg-white"
+                        className="h-auto w-full bg-card"
                       />
                     </button>
                   ))}
@@ -91,7 +91,7 @@ export function ArtifactGallery({
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <div
-              className="relative flex max-h-[96vh] w-[96vw] max-w-6xl flex-col overflow-hidden bg-[#F0F0E8] p-3 shadow-lg"
+              className="relative flex max-h-[96vh] w-[96vw] max-w-6xl flex-col overflow-hidden bg-background p-3 shadow-lg"
               role="dialog"
               aria-modal="true"
               aria-label="Large Preview"
@@ -99,7 +99,7 @@ export function ArtifactGallery({
               <button
                 type="button"
                 onClick={() => setSelectedPreviewId(null)}
-                className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-none bg-white/95 text-black shadow-sm hover:bg-white"
+                className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-none bg-card/95 text-foreground shadow-sm hover:bg-card"
                 aria-label="Close large preview"
               >
                 <X className="h-4 w-4" />
@@ -107,11 +107,11 @@ export function ArtifactGallery({
               <div className="max-h-[88vh] overflow-auto pr-9 pt-1">
                 <Image
                   src={selectedPreview.url ?? ''}
-                  alt=""
+                  alt={`${selectedPreview.file_name} large preview`}
                   width={1800}
                   height={2400}
                   unoptimized
-                  className="mx-auto h-auto w-full max-w-[1100px] bg-white"
+                  className="mx-auto h-auto w-full max-w-[1100px] bg-card"
                 />
               </div>
             </div>

@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from typing import Any
 
 from app.config import get_step_llm_config
-from app.llm import complete_json
+from app.llm import complete
 from app.prompts import PROMPT_VERSIONS
 from app.prompts.answer_questions import build_messages as build_application_questions_messages
 from app.schemas import (
     ApplicationQuestionAnswer,
     ApplicationQuestionInput,
-    ResumeData,
     normalize_resume_data,
 )
 from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
+from app.services.tailoring.section_format import (
+    is_section_jd_wrapper,
+    jd_keywords_from_section_blob,
+)
 from app.services.message_profiles import CandidatePromptProfile
 from app.services.prompt_utils import sanitize_user_input, trim_job_description_for_prompt
 
@@ -68,72 +72,6 @@ def _truncate_text(value: str | None, limit: int) -> str:
     return text[: limit - 3].rstrip(" ,;:-") + "..."
 
 
-def _resume_context_payload(resume_data: dict[str, Any]) -> dict[str, Any]:
-    normalized = ResumeData.model_validate(
-        normalize_resume_data(copy.deepcopy(resume_data))
-    )
-
-    experience = []
-    for entry in normalized.workExperience[:4]:
-        bullets = [item for item in (entry.highlights or entry.description) if item][:3]
-        experience.append(
-            {
-                "title": _truncate_text(entry.position or entry.title, 80),
-                "company": _truncate_text(entry.company, 80),
-                "location": _truncate_text(entry.location, 60),
-                "date": _truncate_text(entry.date or entry.years, 40),
-                "bullets": [_truncate_text(bullet, 180) for bullet in bullets if bullet],
-            }
-        )
-
-    projects = []
-    for entry in normalized.personalProjects[:3]:
-        bullets = [item for item in (entry.highlights or entry.description) if item][:2]
-        projects.append(
-            {
-                "name": _truncate_text(entry.name, 80),
-                "role": _truncate_text(entry.role or entry.summary, 80),
-                "date": _truncate_text(entry.date or entry.years, 40),
-                "bullets": [_truncate_text(bullet, 180) for bullet in bullets if bullet],
-            }
-        )
-
-    skills: list[dict[str, Any]] = []
-    for group in normalized.skills.groups[:5]:
-        values = [_truncate_text(value, 40) for value in group.values[:10] if value]
-        if not values:
-            continue
-        skills.append(
-            {
-                "label": _truncate_text(group.label, 50),
-                "values": values,
-            }
-        )
-
-    education = []
-    for entry in normalized.education[:2]:
-        education.append(
-            {
-                "institution": _truncate_text(entry.institution, 80),
-                "degree": _truncate_text(entry.degree, 80),
-                "area": _truncate_text(entry.area, 80),
-                "date": _truncate_text(entry.date or entry.years, 40),
-            }
-        )
-
-    return {
-        "headline": _truncate_text(
-            normalized.personalInfo.headline or normalized.personalInfo.title, 80
-        ),
-        "summary": _truncate_text(normalized.summary, 240),
-        "location": _truncate_text(normalized.personalInfo.location, 60),
-        "experience": experience,
-        "projects": projects,
-        "education": education,
-        "skills": skills,
-    }
-
-
 def _sanitize_warning_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -158,6 +96,88 @@ def _fallback_answer(question: str) -> str:
         "Based on my resume and the role requirements shared, my experience aligns well with "
         f"\"{_truncate_text(question, 120)}\" and I can provide more specific detail as needed."
     )
+
+
+def parse_application_question_section_response(raw: Any) -> dict[str, Any]:
+    """Parse section-header answer text into the legacy {"answers": [...]} payload."""
+
+    if isinstance(raw, dict):
+        return raw
+    text = str(raw or "").strip()
+    if not text:
+        return {"answers": []}
+
+    start_idx = text.find("{")
+    end_idx = text.rfind("}")
+    if start_idx != -1 and end_idx > start_idx:
+        try:
+            parsed = json.loads(text[start_idx : end_idx + 1])
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
+
+    answers: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    current_field: str | None = None
+    header_re = re.compile(r"^===\s*ANSWER\s+([^=]+?)\s*===$", re.IGNORECASE)
+
+    def flush_current() -> None:
+        nonlocal current
+        if current is None:
+            return
+        answer = str(current.get("answer") or "").strip()
+        current["answer"] = " ".join(answer.split())
+        current["warnings"] = _sanitize_warning_list(current.get("warnings"))
+        answers.append(current)
+        current = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        header = header_re.match(line.strip())
+        if header:
+            flush_current()
+            current = {
+                "question_id": header.group(1).strip(),
+                "answer": "",
+                "confidence": "medium",
+                "warnings": [],
+            }
+            current_field = None
+            continue
+        if current is None:
+            continue
+
+        if ":" in line:
+            label_raw, _, value_raw = line.partition(":")
+            label = label_raw.strip().casefold()
+            value = value_raw.strip()
+            if label == "confidence":
+                current["confidence"] = value
+                current_field = None
+                continue
+            if label in {"warning", "warnings"}:
+                if value:
+                    current.setdefault("warnings", []).append(value)
+                current_field = "warnings"
+                continue
+            if label == "answer":
+                current["answer"] = value
+                current_field = "answer"
+                continue
+
+        stripped = line.strip()
+        if not stripped:
+            if current_field == "answer" and current.get("answer"):
+                current["answer"] = f"{current.get('answer')} "
+            continue
+        if current_field == "answer":
+            current["answer"] = f"{current.get('answer') or ''} {stripped}".strip()
+        elif current_field == "warnings":
+            current.setdefault("warnings", []).append(stripped)
+
+    flush_current()
+    return {"answers": answers}
 
 
 def normalize_generated_answers(
@@ -311,7 +331,9 @@ def _build_job_target_payload(
     location = sanitize_job_location(location_input)
 
     highlights: list[str] = []
-    if isinstance(job_keywords, dict):
+    if is_section_jd_wrapper(job_keywords):
+        highlights.extend(jd_keywords_from_section_blob(job_keywords)[:10])
+    elif isinstance(job_keywords, dict):
         for key in ("responsibility_themes", "must_have", "keywords", "ats_keywords"):
             value = job_keywords.get(key)
             if isinstance(value, list):
@@ -346,7 +368,11 @@ async def generate_application_question_answers(
     validate_question_batch_constraints(questions)
 
     profile = CandidatePromptProfile.from_resume_data(resume_data)
-    tailored_resume_context = _resume_context_payload(resume_data)
+    tailored_resume = json.dumps(
+        normalize_resume_data(copy.deepcopy(resume_data)),
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
     sanitized_job_description = trim_job_description_for_prompt(
         sanitize_user_input(job_description),
         max_chars=3200,
@@ -364,13 +390,11 @@ async def generate_application_question_answers(
         job_target=json.dumps(job_target_payload, separators=(",", ":"), ensure_ascii=True),
         job_description=sanitized_job_description,
         resume_profile=profile.to_prompt_json(),
-        tailored_resume_context=json.dumps(
-            tailored_resume_context, separators=(",", ":"), ensure_ascii=True
-        ),
+        tailored_resume=tailored_resume,
         questions=json.dumps(question_payload, separators=(",", ":"), ensure_ascii=True),
     )
 
-    raw_result = await complete_json(
+    raw_content = await complete(
         prompt=prompt,
         system_prompt=system_prompt,
         config=get_step_llm_config("answer_questions"),
@@ -384,10 +408,10 @@ async def generate_application_question_answers(
             "prompt_version": PROMPT_VERSIONS.get("application_questions_generate", "unknown"),
         },
         retry_hint=(
-            "Return complete JSON with one answer object for every question_id. "
-            "Do not omit any question_id."
+            "Return complete section-header text with one === ANSWER question_id === "
+            "section for every question_id. Do not omit any question_id."
         ),
     )
 
+    raw_result = parse_application_question_section_response(raw_content)
     return normalize_generated_answers(raw_result, questions)
-

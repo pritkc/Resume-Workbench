@@ -10,11 +10,13 @@ from typing import Any
 from app.schemas import ResumeData, normalize_resume_data
 from app.services.additional_groups import (
     coerce_string_list,
+    generate_skill_group_id,
     normalize_additional_groups,
     normalize_skill_groups,
     restore_missing_additional_items,
 )
 from app.services.cover_letter import sanitize_job_location
+from app.services.tailoring.section_format import jd_metadata_from_blob
 from app.services.parser import restore_dates_from_markdown
 from app.services.refiner import (
     fix_alignment_violations,
@@ -22,7 +24,15 @@ from app.services.refiner import (
     validate_master_alignment,
 )
 from app.services.section_metadata import rehydrate_section_meta
-from app.services.tailoring.models import TailoringResumePayload
+from app.services.tailoring.models import (
+    TailoringProject,
+    TailoringResumePayload,
+    split_experience_bullets_for_llm_indexing,
+)
+from app.services.tailoring.jd_intel_blob import (
+    contains_basic_resume_term,
+    filter_basic_resume_terms,
+)
 from app.services.tailoring.verification import verify_generated_resume_result
 
 logger = logging.getLogger(__name__)
@@ -31,7 +41,7 @@ MONTH_PATTERN = re.compile(
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b",
     re.IGNORECASE,
 )
-_MAX_SKILL_GROUPS = 6
+_MAX_SKILL_GROUPS = 5
 _MAX_SKILLS_PER_GROUP = 14
 
 
@@ -79,6 +89,8 @@ def preserve_personal_info(
 
 def _resolved_target_location(job_keywords: dict[str, Any]) -> str | None:
     location = job_keywords.get("location")
+    if not isinstance(location, str):
+        location = jd_metadata_from_blob(job_keywords).get("location")
     if not isinstance(location, str):
         return None
     return sanitize_job_location(location)
@@ -172,6 +184,27 @@ def preserve_original_skills(
     return result
 
 
+def normalize_metric_units(value: str) -> str:
+    """Compact common time-unit phrases so bullets keep room for technical detail."""
+    text = value
+    replacements = [
+        (r"(?i)\bhours\s*/\s*week\b", "h/wk"),
+        (r"(?i)\bhour\s*/\s*week\b", "h/wk"),
+        (r"(?i)\bhours\s+per\s+week\b", "h/wk"),
+        (r"(?i)\bhour\s+per\s+week\b", "h/wk"),
+        (r"(?i)\bminutes\b", "min"),
+        (r"(?i)\bminute\b", "min"),
+        (r"(?i)\bmilliseconds\b", "ms"),
+        (r"(?i)\bmillisecond\b", "ms"),
+        (r"(?i)\bseconds\b", "sec"),
+        (r"(?i)\bsecond\b", "sec"),
+    ]
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text)
+    text = re.sub(r"(?<=\d)\s+h/wk\b", "h/wk", text)
+    return text
+
+
 def _simplify_skills_groups(value: Any) -> dict[str, Any]:
     """Normalize skills into a compact label+values structure for UI/rendering.
 
@@ -197,8 +230,9 @@ def _simplify_skills_groups(value: Any) -> dict[str, Any]:
             continue
 
         label = str(raw_group.get("label", "")).strip() or "Skills"
+        gid_store = str(raw_group.get("id") or "").strip()
         values: list[str] = []
-        for item in coerce_string_list(raw_group.get("values")):
+        for item in filter_basic_resume_terms(coerce_string_list(raw_group.get("values"))):
             key = item.casefold()
             if key in seen_values:
                 continue
@@ -209,9 +243,296 @@ def _simplify_skills_groups(value: Any) -> dict[str, Any]:
 
         if not values:
             continue
-        simplified.append({"label": label, "values": values})
+        row: dict[str, Any] = {"label": label, "values": values}
+        if gid_store:
+            row["id"] = gid_store
+        simplified.append(row)
 
     return {"groups": simplified}
+
+
+def _strip_basic_terms_from_stack_line(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return value
+    kept = filter_basic_resume_terms([part.strip() for part in value.split(",")])
+    return ", ".join(kept) or None
+
+
+def _scalar_from_tailored_cell(raw: Any) -> str | None:
+    """Interpret compact diff leaf: explicit ``null`` / omit means retain; string applies."""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        if raw.get("value") is None:
+            return None
+        val = raw.get("value")
+        if isinstance(val, str):
+            s = val.strip()
+            return s if s else None
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            return str(val).strip() or None
+        return None
+    if isinstance(raw, str):
+        s = raw.strip()
+        return s if s else None
+    return None
+
+
+def _skills_list_is_tailored(groups: list[Any]) -> bool:
+    if not groups:
+        return False
+    sample = groups[0]
+    if not isinstance(sample, dict):
+        return False
+    label = sample.get("label")
+    if isinstance(label, dict) and ("value" in label or "why" in label):
+        return True
+    values = sample.get("values")
+    if isinstance(values, dict):
+        return True
+    if isinstance(values, list):
+        return any(isinstance(item, dict) for item in values)
+    return False
+
+
+def _apply_tailored_skills_groups(
+    original_resume_data: dict[str, Any],
+    groups: list[dict[str, Any]],
+) -> dict[str, Any]:
+    orig_block = original_resume_data.get("skills") or original_resume_data.get("additional") or {}
+    orig_groups = orig_block.get("groups") if isinstance(orig_block, dict) else []
+    if not isinstance(orig_groups, list):
+        orig_groups = []
+
+    orig_by_id: dict[str, dict[str, Any]] = {}
+    for g in orig_groups:
+        if not isinstance(g, dict):
+            continue
+        gid = str(g.get("id") or "").strip()
+        if gid:
+            orig_by_id[gid] = g
+
+    plain_groups: list[dict[str, Any]] = []
+    assigned_ids: set[str] = set()
+
+    for gi, raw_group in enumerate(groups):
+        if not isinstance(raw_group, dict):
+            continue
+        ref_gid = str(raw_group.get("group_id") or raw_group.get("id") or "").strip()
+
+        orig_g: dict[str, Any] = {}
+        if ref_gid and ref_gid in orig_by_id:
+            orig_g = orig_by_id[ref_gid]
+        elif gi < len(orig_groups) and isinstance(orig_groups[gi], dict):
+            orig_g = orig_groups[gi]
+
+        orig_label = str(orig_g.get("label", "")).strip()
+        orig_vals = [
+            v for v in coerce_string_list(orig_g.get("values")) if str(v).strip()
+        ]
+
+        label_raw = raw_group.get("label")
+        if isinstance(label_raw, dict):
+            lv = label_raw.get("value")
+            label = orig_label if lv is None else str(lv).strip() or orig_label
+        elif isinstance(label_raw, str):
+            label = label_raw.strip() or orig_label
+        else:
+            label = orig_label
+
+        merged = list(orig_vals)
+        raw_vals = raw_group.get("values")
+        if isinstance(raw_vals, dict):
+            for key, cell in sorted(
+                raw_vals.items(),
+                key=lambda kv: int(kv[0]) if str(kv[0]).isdigit() else 0,
+            ):
+                try:
+                    idx = int(key)
+                except (ValueError, TypeError):
+                    continue
+                if idx < 0:
+                    continue
+                new_text = _scalar_from_tailored_cell(cell)
+                if new_text is None:
+                    continue
+                if idx < len(merged):
+                    merged[idx] = new_text
+                else:
+                    merged.extend([""] * (idx - len(merged)))
+                    merged.append(new_text)
+        elif isinstance(raw_vals, list):
+            for idx, cell in enumerate(raw_vals):
+                new_text = _scalar_from_tailored_cell(cell)
+                if new_text is None:
+                    continue
+                if idx < len(merged):
+                    merged[idx] = new_text
+                else:
+                    merged.extend([""] * (idx - len(merged)))
+                    merged.append(new_text)
+
+        id_out = str(orig_g.get("id") or "").strip() or ref_gid
+        if not id_out:
+            id_out = generate_skill_group_id(assigned_ids, label or "Skills")
+        assigned_ids.add(id_out)
+
+        plain_groups.append({"id": id_out, "label": label or "Skills", "values": merged})
+
+    return _simplify_skills_groups({"groups": plain_groups})
+
+
+def _description_count(entry: dict[str, Any], *, is_experience: bool) -> int:
+    if is_experience:
+        _prefix, desc = split_experience_bullets_for_llm_indexing(entry)
+        return len(desc)
+    return len(TailoringProject.from_resume_entry(entry).description)
+
+
+def _set_description_items(
+    entry: dict[str, Any],
+    items: list[str],
+    *,
+    is_experience: bool,
+) -> None:
+    if is_experience:
+        stack = str(entry.get("techStack") or entry.get("summary") or "").strip()
+        entry["highlights"] = list(items)
+        entry["description"] = [stack, *items] if stack else list(items)
+        return
+    entry["description"] = list(items)
+    if "highlights" in entry and isinstance(entry.get("highlights"), list):
+        entry["highlights"] = list(items)
+
+
+def _current_description_items(entry: dict[str, Any], *, is_experience: bool) -> list[str]:
+    if is_experience:
+        _prefix, desc = split_experience_bullets_for_llm_indexing(entry)
+        return list(desc)
+    return list(TailoringProject.from_resume_entry(entry).description)
+
+
+def _sync_experience_stack_prefix(
+    entry: dict[str, Any],
+    source_entry: dict[str, Any],
+) -> None:
+    prefix, desc = split_experience_bullets_for_llm_indexing(source_entry)
+    if not prefix:
+        return
+    updated_stack = str(entry.get("techStack") or "").strip()
+    merged = ([updated_stack] if updated_stack else []) + desc
+    entry["description"] = merged
+    if "highlights" in entry and isinstance(entry.get("highlights"), list):
+        entry["highlights"] = list(merged)
+
+
+def _enforce_description_counts(
+    original_data: dict[str, Any] | None,
+    result_data: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    if not original_data:
+        return result_data, []
+
+    result = copy.deepcopy(result_data)
+    warnings: list[str] = []
+    for section_key, is_experience in (
+        ("workExperience", True),
+        ("personalProjects", False),
+    ):
+        original_entries = original_data.get(section_key, [])
+        result_entries = result.get(section_key, [])
+        if not isinstance(original_entries, list) or not isinstance(result_entries, list):
+            continue
+        for index, original_entry in enumerate(original_entries):
+            if index >= len(result_entries):
+                break
+            result_entry = result_entries[index]
+            if not isinstance(original_entry, dict) or not isinstance(result_entry, dict):
+                continue
+            expected_count = _description_count(original_entry, is_experience=is_experience)
+            current_items = _current_description_items(result_entry, is_experience=is_experience)
+            if len(current_items) == expected_count:
+                continue
+            original_items = _current_description_items(original_entry, is_experience=is_experience)
+            fixed_items = list(current_items[:expected_count])
+            if len(fixed_items) < expected_count:
+                fixed_items.extend(original_items[len(fixed_items):expected_count])
+            _set_description_items(result_entry, fixed_items, is_experience=is_experience)
+            warnings.append(
+                f"Restored {section_key}[{index}] description count to {expected_count}"
+            )
+    return result, warnings
+
+
+def _sanitize_low_signal_resume_terms(
+    original_data: dict[str, Any] | None,
+    result_data: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    result = copy.deepcopy(result_data)
+    warnings: list[str] = []
+
+    if contains_basic_resume_term(str(result.get("summary") or "")):
+        original_summary = ""
+        if isinstance(original_data, dict):
+            original_summary = str(original_data.get("summary") or "").strip()
+        result["summary"] = original_summary
+        warnings.append("Removed blocked low-signal term from summary")
+
+    for section_key, is_experience in (
+        ("workExperience", True),
+        ("personalProjects", False),
+    ):
+        entries = result.get(section_key, [])
+        original_entries = original_data.get(section_key, []) if isinstance(original_data, dict) else []
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            entry_before_stack_cleanup = copy.deepcopy(entry)
+            stack = entry.get("techStack") or entry.get("tech_stacks") or entry.get("summary")
+            if isinstance(stack, str):
+                stripped_stack = _strip_basic_terms_from_stack_line(stack)
+                if stripped_stack != stack:
+                    entry["techStack"] = stripped_stack
+                    warnings.append(
+                        f"Removed blocked low-signal term from {section_key}[{index}].techStack"
+                    )
+
+            original_entry = (
+                original_entries[index]
+                if isinstance(original_entries, list)
+                and index < len(original_entries)
+                and isinstance(original_entries[index], dict)
+                else {}
+            )
+            original_items = _current_description_items(original_entry, is_experience=is_experience)
+            current_items = _current_description_items(
+                entry_before_stack_cleanup,
+                is_experience=is_experience,
+            )
+            fixed_items: list[str] = []
+            changed = False
+            for bullet_index, item in enumerate(current_items):
+                normalized = normalize_metric_units(item)
+                if contains_basic_resume_term(normalized):
+                    replacement = (
+                        original_items[bullet_index]
+                        if bullet_index < len(original_items)
+                        else ""
+                    )
+                    fixed_items.append(replacement)
+                    changed = True
+                    continue
+                fixed_items.append(normalized)
+                changed = changed or normalized != item
+            if changed:
+                _set_description_items(entry, fixed_items, is_experience=is_experience)
+                warnings.append(
+                    f"Removed blocked low-signal term from {section_key}[{index}] bullets"
+                )
+
+    return result, warnings
 
 
 def protect_custom_sections(
@@ -306,8 +627,15 @@ def apply_compact_diff(
     """
     result = copy.deepcopy(original_resume_data)
 
-    if "summary" in diff and isinstance(diff["summary"], str) and diff["summary"].strip():
-        result["summary"] = diff["summary"].strip()
+    summary_raw = diff.get("summary")
+    if summary_raw is not None:
+        summary_text = _scalar_from_tailored_cell(summary_raw)
+        if (
+            isinstance(summary_text, str)
+            and summary_text
+            and not contains_basic_resume_term(summary_text)
+        ):
+            result["summary"] = normalize_metric_units(summary_text)
 
     for diff_key, resume_key in [("experience", "workExperience"), ("projects", "personalProjects")]:
         section_diff_raw = diff.get(diff_key)
@@ -339,22 +667,28 @@ def apply_compact_diff(
                 continue
 
             entry = entries[entry_idx]
+            entry_before_mutation = copy.deepcopy(entry)
 
             if diff_key == "experience" and "position" in entry_diff:
-                pos = entry_diff["position"]
-                if isinstance(pos, str) and pos.strip():
-                    entry["position"] = pos.strip()
-                    entry["title"] = pos.strip()
+                pos = _scalar_from_tailored_cell(entry_diff["position"])
+                if pos:
+                    entry["position"] = pos
+                    entry["title"] = pos
 
             if diff_key == "projects" and "name" in entry_diff:
-                nm = entry_diff["name"]
-                if isinstance(nm, str) and nm.strip():
-                    entry["name"] = nm.strip()
+                nm = _scalar_from_tailored_cell(entry_diff["name"])
+                if nm and not contains_basic_resume_term(nm):
+                    entry["name"] = normalize_metric_units(nm)
 
             if diff_key == "projects" and "tech_stacks" in entry_diff:
-                ts = entry_diff["tech_stacks"]
+                ts = _scalar_from_tailored_cell(entry_diff["tech_stacks"])
                 if isinstance(ts, str):
-                    entry["summary"] = ts.strip() or None
+                    entry["techStack"] = _strip_basic_terms_from_stack_line(ts)
+
+            if diff_key == "experience" and "tech_stacks" in entry_diff:
+                ts = _scalar_from_tailored_cell(entry_diff["tech_stacks"])
+                if isinstance(ts, str):
+                    entry["techStack"] = _strip_basic_terms_from_stack_line(ts)
 
             bullets_diff_raw = entry_diff.get("bullets")
             if bullets_diff_raw is None:
@@ -372,38 +706,89 @@ def apply_compact_diff(
             else:
                 bullets_diff = None
 
+            if (
+                diff_key == "experience"
+                and "tech_stacks" in entry_diff
+                and not isinstance(bullets_diff, dict)
+            ):
+                _sync_experience_stack_prefix(entry, entry_before_mutation)
+
             if isinstance(bullets_diff, dict):
-                desc = coerce_string_list(entry.get("description"))
-                if not desc:
-                    desc = coerce_string_list(entry.get("highlights"))
-                orig_len = len(desc)
-                for bullet_idx_str, bullet_text in bullets_diff.items():
+                if diff_key == "experience":
+                    prefix, desc = split_experience_bullets_for_llm_indexing(entry_before_mutation)
+                    if prefix:
+                        updated_stack = str(entry.get("techStack") or "").strip()
+                        prefix = [updated_stack] if updated_stack else []
+                else:
+                    prefix = []
+                    desc = list(TailoringProject.from_resume_entry(entry_before_mutation).description)
+                for bullet_idx_str, bullet_raw in bullets_diff.items():
                     try:
                         bullet_idx = int(bullet_idx_str)
                     except (ValueError, TypeError):
                         logger.warning("compact_diff: non-integer bullet key %r — skipped", bullet_idx_str)
                         continue
-                    if bullet_idx < 0 or bullet_idx >= orig_len:
+                    if bullet_idx < 0:
                         logger.warning(
-                            "compact_diff: bullet index %d out of range (orig_len=%d) in %s[%d] — skipped",
-                            bullet_idx, orig_len, diff_key, entry_idx,
+                            "compact_diff: negative bullet index %d in %s[%d] — skipped",
+                            bullet_idx,
+                            diff_key,
+                            entry_idx,
                         )
                         continue
-                    if not isinstance(bullet_text, str) or not bullet_text.strip():
+                    if not isinstance(bullet_raw, (str, dict)):
                         logger.warning(
-                            "compact_diff: empty/non-string bullet at %s[%d].bullets[%d] — skipped",
-                            diff_key, entry_idx, bullet_idx,
+                            "compact_diff: unsupported bullet type at %s[%d].bullets[%d] — skipped",
+                            diff_key,
+                            entry_idx,
+                            bullet_idx,
                         )
                         continue
-                    desc[bullet_idx] = bullet_text.strip()
-                entry["description"] = desc
+                    bullet_text = _scalar_from_tailored_cell(bullet_raw)
+                    if bullet_text is None:
+                        if isinstance(bullet_raw, str) and not bullet_raw.strip():
+                            logger.warning(
+                                "compact_diff: empty/non-string bullet at %s[%d].bullets[%d] — skipped",
+                                diff_key,
+                                entry_idx,
+                                bullet_idx,
+                            )
+                        continue
+                    if bullet_idx >= len(desc):
+                        logger.warning(
+                            "compact_diff: out-of-range bullet at %s[%d].bullets[%d] "
+                            "(len=%d) — skipped",
+                            diff_key,
+                            entry_idx,
+                            bullet_idx,
+                            len(desc),
+                        )
+                        continue
+                    if contains_basic_resume_term(bullet_text):
+                        logger.warning(
+                            "compact_diff: bullet at %s[%d].bullets[%d] contains basic tool — skipped",
+                            diff_key,
+                            entry_idx,
+                            bullet_idx,
+                        )
+                        continue
+                    desc[bullet_idx] = normalize_metric_units(bullet_text.strip())
+                merged = prefix + desc
+                entry["description"] = merged
                 if "highlights" in entry and isinstance(entry.get("highlights"), list):
-                    entry["highlights"] = list(desc)
+                    entry["highlights"] = list(merged)
 
     skills_diff = diff.get("skills")
-    if isinstance(skills_diff, (list, dict)):
+    if isinstance(skills_diff, dict):
         simplified_skills = _simplify_skills_groups(skills_diff)
         result.setdefault("skills", {})["groups"] = simplified_skills.get("groups", [])
+    elif isinstance(skills_diff, list):
+        if _skills_list_is_tailored(skills_diff):
+            simplified_skills = _apply_tailored_skills_groups(original_resume_data, skills_diff)
+            result.setdefault("skills", {})["groups"] = simplified_skills.get("groups", [])
+        else:
+            simplified_skills = _simplify_skills_groups(skills_diff)
+            result.setdefault("skills", {})["groups"] = simplified_skills.get("groups", [])
 
     return result
 
@@ -510,6 +895,10 @@ def finalize_tailored_resume(
         job_content,
     )
     warnings.extend(cleanup_warnings)
+    result, low_signal_warnings = _sanitize_low_signal_resume_terms(original_resume_data, result)
+    warnings.extend(low_signal_warnings)
+    result, count_warnings = _enforce_description_counts(original_resume_data, result)
+    warnings.extend(count_warnings)
 
     target_location = _resolved_target_location(job_keywords)
     if target_location:
@@ -536,6 +925,7 @@ def finalize_tailored_resume(
                 result,
                 job_keywords,
                 prompt_id=prompt_id,
+                job_description=job_content,
             )
         )
 

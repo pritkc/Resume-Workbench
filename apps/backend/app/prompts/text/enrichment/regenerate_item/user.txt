@@ -1,0 +1,20 @@
+REWRITE this resume item's description based on user feedback.
+
+Generate ALL output in English.
+
+ITEM: {item_type} — {title} at {subtitle}
+CURRENT DESCRIPTION (user wants this rewritten):
+{current_description}
+
+USER FEEDBACK:
+{user_instruction}
+
+OUTPUT (JSON only):
+{{"new_bullets":["Rewritten bullet 1","Rewritten bullet 2"],"change_summary":"Brief explanation of changes"}}
+
+RULES:
+- 2-5 replacement bullets addressing the user's feedback
+- Action verbs, specific technologies, clear ownership
+- Only use facts from CURRENT DESCRIPTION or USER FEEDBACK — never invent metrics, dates, companies, or titles
+- If user asks for metrics but none exist, emphasize scope/impact qualitatively
+- Concise (1-2 lines each), past tense for past roles, present for current

@@ -1,0 +1,24 @@
+Analyze this resume to find Experience and Projects items with weak or vague descriptions.
+
+Generate ALL output text in English.
+
+RESUME (JSON):
+{resume_json}
+
+WEAKNESS SIGNALS: generic phrasing ("responsible for", "worked on"), missing metrics/impact, unclear scope, no specific tech/tools, passive voice, too brief.
+
+TASK:
+- Review each Experience and Project item's description
+- Identify items that need more detail
+- Generate max 6 questions total (not per item), prioritizing highest-impact improvements
+- Questions should extract: metrics, technologies, scope, impact, ownership
+
+OUTPUT (JSON only):
+{{"items_to_enrich":[{{"item_id":"exp_0","item_type":"experience","title":"...","subtitle":"...","current_description":["..."],"weakness_reason":"..."}}],"questions":[{{"question_id":"q_0","item_id":"exp_0","question":"...","placeholder":"e.g., ..."}}],"analysis_summary":"..."}}
+
+RULES:
+- Hard limit: 6 questions max (q_0 through q_5)
+- IDs: "exp_0","exp_1" for experience, "proj_0","proj_1" for projects (array index)
+- If resume is already strong, return empty arrays with a positive summary
+- Questions: specific to role/project context, conversational, with concrete placeholder examples
+- Quality over quantity

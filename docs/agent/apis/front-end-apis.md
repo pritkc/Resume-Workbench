@@ -29,7 +29,8 @@
 - retry-processing
 - cover-letter and outreach updates
 - title rename
-- cover-letter and outreach generation
+- merged cover-letter/outreach package generation plus single-field generation endpoints
+- JD-tailor diff snapshot fetch
 - job-description fetch for JD Match
 
 Important types exported from this file include:
@@ -52,7 +53,10 @@ Important types exported from this file include:
 - feature flags
 - language config
 - prompt config
+- prompt catalog, prompt composer, and shared-rule overrides
 - generation defaults
+- critique toggle
+- per-step model overrides
 - provider-specific API-key management
 - database reset
 
@@ -69,6 +73,7 @@ Important config types:
 
 - `fetchLlmCalls()`
 - `fetchLlmCallSummary()`
+- generation-run timing fetch helpers
 
 Core record types:
 

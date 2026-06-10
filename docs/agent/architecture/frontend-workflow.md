@@ -10,7 +10,6 @@ Dashboard
   -> Tailor page preview
   -> diff review + application-pack preview
   -> confirm tailored resume
-  -> Resume viewer
   -> Builder for edits, YAML, RenderCV preview, cover letter, outreach, JD match
 ```
 
@@ -22,12 +21,14 @@ Dashboard
 4. Preview via `POST /application-packs/preview`.
 5. Show diff review modal.
 6. Confirm via `POST /application-packs/confirm`.
-7. Navigate to `/resumes/[id]`.
+7. Navigate to `/builder?id=<tailored_resume_id>`.
 
 Important current behavior:
 
 - preview creates an application pack and preview artifacts before a tailored resume exists
 - preview response carries `request_id`, which is also used as the trace id for `/llm-traces`
+- preview carries LLM-produced `bold_keywords`; confirm does not re-run tailoring, so the Tailor page carries those keywords into confirm theme settings
+- cover letter and outreach flags are sent as `false`; generation happens later in the builder
 
 ## Viewer Flow
 
@@ -53,7 +54,7 @@ Other important behavior:
 - supports undo/redo history
 - keeps raw YAML and structured data in sync through normalize/save endpoints
 - refreshes RenderCV preview from the same draft payload shape used for persistence
-- manages cover-letter and outreach edit/generate flows
+- manages cover-letter and outreach edit/generate flows through the merged auxiliary package endpoint
 
 ## Settings Flow
 

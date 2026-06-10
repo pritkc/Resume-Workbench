@@ -68,6 +68,40 @@ class TestGetResume:
         assert data["theme_settings"]["theme_id"] == "classic"
 
     @patch("app.routers.resumes.db")
+    async def test_fetch_tailored_resume_surfaces_preview_observability_ids(
+        self, mock_db, client, mock_resume_record
+    ):
+        mock_db.get_resume.return_value = {
+            **mock_resume_record,
+            "parent_id": "master-123",
+        }
+        mock_db.get_latest_generation_run.return_value = {
+            "generation_run_id": "confirm-run-123",
+            "request_payload": {
+                "preview_generation_run_id": "preview-run-123",
+                "llm_trace_id": "trace-confirm-123",
+            },
+        }
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "preview-run-123",
+            "request_payload": {"llm_trace_id": "trace-preview-123"},
+        }
+
+        async with client:
+            resp = await client.get("/api/v1/resumes", params={"resume_id": "res-123"})
+
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["generation_run_id"] == "preview-run-123"
+        assert data["llm_trace_id"] == "trace-preview-123"
+        mock_db.get_latest_generation_run.assert_called_once_with(
+            run_kind="application_pack_confirm",
+            status="completed",
+            tailored_resume_id="res-123",
+        )
+        mock_db.get_generation_run.assert_called_once_with("preview-run-123")
+
+    @patch("app.routers.resumes.db")
     async def test_fetch_existing_resume_surfaces_rendercv_alias_fields(
         self, mock_db, client, mock_resume_record
     ):
@@ -106,7 +140,7 @@ class TestGetResume:
             "Led migration from monolith to microservices architecture",
             "Mentored 3 junior developers on backend best practices",
         ]
-        assert processed["personalProjects"][0]["summary"] == "Creator & Maintainer"
+        assert processed["personalProjects"][0]["techStack"] == "Creator & Maintainer"
         assert processed["personalProjects"][0]["date"] == "Mar 2021 - Present"
         assert processed["personalProjects"][0]["highlights"] == [
             "CLI tool generating API clients from OpenAPI specs",
@@ -125,12 +159,12 @@ class TestGetResume:
                     **mock_resume_record["processed_data"]["personalInfo"],
                     "profileLinks": [
                         {
-                            "label": "LinkedIn / pritkc",
-                            "url": "https://linkedin.com/in/pritkc",
+                            "label": "LinkedIn / alexmorgan",
+                            "url": "https://linkedin.com/in/alexmorgan",
                         },
                         {
-                            "label": "GitHub / pritkc",
-                            "url": "https://github.com/pritkc",
+                            "label": "GitHub / alexmorgan",
+                            "url": "https://github.com/alexmorgan",
                         },
                     ],
                 },
@@ -144,26 +178,26 @@ class TestGetResume:
         personal_info = resp.json()["data"]["processed_resume"]["personalInfo"]
         assert personal_info["profileLinks"] == [
             {
-                "label": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "label": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
             },
             {
-                "label": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "label": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
             },
         ]
         assert personal_info["linkedin"] == ""
         assert personal_info["github"] == ""
         assert personal_info["customConnections"] == [
             {
-                "placeholder": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "placeholder": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
             {
-                "placeholder": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "placeholder": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
@@ -238,7 +272,7 @@ class TestUploadResume:
         sample_resume,
     ):
         sample_filename = "sample-resume.pdf"
-        sample_markdown = "# PRIT CHAKALASIYA\nSenior Backend Engineer"
+        sample_markdown = "# ALEX MORGAN\nSenior Backend Engineer"
         state: dict[str, object] = {}
 
         async def create_resume_atomic_active(**kwargs):
@@ -302,7 +336,7 @@ class TestUploadResume:
 
         assert fetch.status_code == 200
         data = fetch.json()["data"]
-        assert "PRIT CHAKALASIYA" in data["raw_resume"]["content"]
+        assert "ALEX MORGAN" in data["raw_resume"]["content"]
         assert data["processed_resume"]["summary"] == sample_resume["summary"]
         assert state["original_markdown"] == state["content"]
 
@@ -456,12 +490,12 @@ class TestDraftResumeFlows:
                 ],
                 "profileLinks": [
                     {
-                        "label": "LinkedIn / pritkc",
-                        "url": "https://linkedin.com/in/pritkc",
+                        "label": "LinkedIn / alexmorgan",
+                        "url": "https://linkedin.com/in/alexmorgan",
                     },
                     {
-                        "label": "GitHub / pritkc",
-                        "url": "https://github.com/pritkc",
+                        "label": "GitHub / alexmorgan",
+                        "url": "https://github.com/alexmorgan",
                     },
                 ],
             },
@@ -483,31 +517,31 @@ class TestDraftResumeFlows:
         assert personal_info["github"] == ""
         assert personal_info["profileLinks"] == [
             {
-                "label": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "label": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
             },
             {
-                "label": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "label": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
             },
         ]
         assert personal_info["customConnections"] == [
             {
-                "placeholder": "LinkedIn / pritkc",
-                "url": "https://linkedin.com/in/pritkc",
+                "placeholder": "LinkedIn / alexmorgan",
+                "url": "https://linkedin.com/in/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
             {
-                "placeholder": "GitHub / pritkc",
-                "url": "https://github.com/pritkc",
+                "placeholder": "GitHub / alexmorgan",
+                "url": "https://github.com/alexmorgan",
                 "fontawesome_icon": None,
                 "fontAwesomeIcon": None,
             },
         ]
         cv_yaml = payload["yaml_sections"]["cv"]
-        assert "placeholder: LinkedIn / pritkc" in cv_yaml
-        assert "placeholder: GitHub / pritkc" in cv_yaml
+        assert "placeholder: LinkedIn / alexmorgan" in cv_yaml
+        assert "placeholder: GitHub / alexmorgan" in cv_yaml
         assert "username: stale-linkedin" not in cv_yaml
         assert "username: stale-github" not in cv_yaml
 
@@ -883,6 +917,50 @@ class TestListResumes:
         assert item["target_company"] == "Acme Corp"
         assert item["target_role"] == "Backend Engineer"
         assert item["target_location"] == "Mountain View, CA"
+
+
+class TestJdTailorDiff:
+    """GET /api/v1/resumes/{resume_id}/jd-tailor-diff"""
+
+    @patch("app.routers.resumes.db")
+    async def test_rejects_stale_generation_run_filter(
+        self, mock_db, client, mock_resume_record
+    ):
+        tailored_resume = {
+            **mock_resume_record,
+            "resume_id": "tailored-123",
+            "parent_id": "master-123",
+        }
+        master_resume = {
+            **mock_resume_record,
+            "resume_id": "master-123",
+            "parent_id": None,
+        }
+
+        def get_resume(resume_id):
+            if resume_id == "tailored-123":
+                return tailored_resume
+            if resume_id == "master-123":
+                return master_resume
+            return None
+
+        mock_db.get_resume.side_effect = get_resume
+        mock_db.get_latest_generation_run.return_value = {
+            "generation_run_id": "confirm-current",
+            "request_payload": {"preview_generation_run_id": "preview-current"},
+            "result_payload": {},
+        }
+
+        async with client:
+            response = await client.get(
+                "/api/v1/resumes/tailored-123/jd-tailor-diff",
+                params={"generation_run_id": "preview-old"},
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["data"] is None
+        assert payload["unavailable_reason"] == "generation_run_mismatch"
 
 
 class TestDuplicateResume:

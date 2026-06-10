@@ -6,7 +6,10 @@ const push = vi.fn();
 const back = vi.fn();
 const setImprovedData = vi.fn();
 const uploadJobDescriptions = vi.fn();
-const previewImproveResume = vi.fn();
+const startLivePreview = vi.fn();
+const subscribeLivePreviewEvents = vi.fn();
+const fetchLivePreviewResult = vi.fn();
+const cancelLivePreview = vi.fn();
 const confirmImproveResume = vi.fn();
 const fetchPromptConfig = vi.fn();
 const fetchGenerationDefaults = vi.fn();
@@ -16,13 +19,12 @@ const incrementImprovements = vi.fn();
 const incrementResumes = vi.fn();
 const fetchResumeList = vi.fn();
 const getActiveResume = vi.fn();
+const router = { push, back };
+const searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push,
-    back,
-  }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => router,
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/components/common/resume_previewer_context', () => ({
@@ -37,7 +39,10 @@ vi.mock('@/lib/api/resume', async (importOriginal) => {
   return {
     ...actual,
     uploadJobDescriptions: (...args: unknown[]) => uploadJobDescriptions(...args),
-    previewImproveResume: (...args: unknown[]) => previewImproveResume(...args),
+    startLivePreview: (...args: unknown[]) => startLivePreview(...args),
+    subscribeLivePreviewEvents: (...args: unknown[]) => subscribeLivePreviewEvents(...args),
+    fetchLivePreviewResult: (...args: unknown[]) => fetchLivePreviewResult(...args),
+    cancelLivePreview: (...args: unknown[]) => cancelLivePreview(...args),
     confirmImproveResume: (...args: unknown[]) => confirmImproveResume(...args),
     fetchResumeList: (...args: unknown[]) => fetchResumeList(...args),
     getActiveResume: (...args: unknown[]) => getActiveResume(...args),
@@ -158,7 +163,10 @@ describe('TailorPage', () => {
     back.mockReset();
     setImprovedData.mockReset();
     uploadJobDescriptions.mockReset();
-    previewImproveResume.mockReset();
+    startLivePreview.mockReset();
+    subscribeLivePreviewEvents.mockReset();
+    fetchLivePreviewResult.mockReset();
+    cancelLivePreview.mockReset();
     confirmImproveResume.mockReset();
     fetchPromptConfig.mockReset();
     fetchGenerationDefaults.mockReset();
@@ -202,7 +210,27 @@ describe('TailorPage', () => {
       title: 'Test',
     });
     uploadJobDescriptions.mockResolvedValue('job-123');
-    previewImproveResume.mockResolvedValue(previewResult);
+    startLivePreview.mockResolvedValue({
+      live_run_id: 'live-123',
+      generation_run_id: 'run-123',
+      trace_id: 'trace-123',
+      status: 'running',
+    });
+    fetchLivePreviewResult.mockResolvedValue(previewResult);
+    subscribeLivePreviewEvents.mockImplementation((_liveRunId, handlers) => {
+      handlers.onEvent?.({
+        event_id: 'event-1',
+        sequence: 1,
+        live_run_id: 'live-123',
+        generation_run_id: 'run-123',
+        trace_id: 'trace-123',
+        type: 'run.completed',
+        at: new Date().toISOString(),
+        data: { status: 'completed' },
+      });
+      return { close: vi.fn() };
+    });
+    cancelLivePreview.mockResolvedValue(undefined);
     confirmImproveResume.mockResolvedValue(confirmedResult);
     fetchPromptConfig.mockResolvedValue({
       prompt_options: [{ id: 'full' }],
@@ -231,23 +259,44 @@ describe('TailorPage', () => {
           'Senior backend role focused on FastAPI, architecture, APIs, testing, metrics, and ATS alignment for one-page resume tailoring.',
       },
     });
+    fireEvent.change(screen.getByPlaceholderText('tailor.customInstructionsPlaceholder'), {
+      target: {
+        value: '  Prioritize fintech platform experience and do not add Kubernetes claims.  ',
+      },
+    });
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'tailor.generateTailored' })).not.toBeDisabled()
+      expect(screen.getByDisplayValue('Test (Active)')).toHaveValue('master-123')
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'tailor.generateTailored' })).toBeEnabled()
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'tailor.generateTailored' }));
+    screen.getByRole('button', { name: 'tailor.generateTailored' }).click();
 
+    await waitFor(() =>
+      expect(uploadJobDescriptions).toHaveBeenCalledWith(
+        [
+          'Senior backend role focused on FastAPI, architecture, APIs, testing, metrics, and ATS alignment for one-page resume tailoring.',
+        ],
+        'master-123',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      )
+    );
+    await waitFor(() => expect(startLivePreview).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchLivePreviewResult).toHaveBeenCalledWith('live-123'));
     expect(await screen.findByText('tailor.diffModal.title')).toBeInTheDocument();
-    expect(screen.getAllByAltText('preview.png').length).toBeGreaterThan(0);
+    expect(screen.getByText('Preview Snapshot')).toBeInTheDocument();
     expect(updateGenerationDefaults).toHaveBeenCalledWith({
       prompt_id: 'full',
     });
-    expect(previewImproveResume).toHaveBeenCalledWith(
+    expect(startLivePreview).toHaveBeenCalledWith(
       'master-123',
       'job-123',
       expect.objectContaining({
         promptId: 'full',
+        customPromptInstructions:
+          'Prioritize fintech platform experience and do not add Kubernetes claims.',
         includeCoverLetter: false,
         includeOutreachMessage: false,
       })

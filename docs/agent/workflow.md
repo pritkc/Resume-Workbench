@@ -15,6 +15,8 @@
 
 ## Recommended Verification
 
+Use [testing-playbook.md](testing-playbook.md) first for the current test matrix, reusable QA resume fixture, browser QA flow, and RenderCV/PDF calibration commands.
+
 Frontend:
 
 ```bash

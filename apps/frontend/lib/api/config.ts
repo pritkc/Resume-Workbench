@@ -221,11 +221,13 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
 }
 
 export async function fetchGenerationRunTimingLogs(options?: {
+  generationRunId?: string;
   runKind?: string;
   status?: string;
   limit?: number;
 }): Promise<GenerationRunTimingRow[]> {
   const params = new URLSearchParams();
+  if (options?.generationRunId) params.set('generation_run_id', options.generationRunId);
   if (options?.runKind) params.set('run_kind', options.runKind);
   if (options?.status) params.set('status', options.status);
   params.set('limit', String(options?.limit ?? 100));
@@ -239,11 +241,13 @@ export async function fetchGenerationRunTimingLogs(options?: {
 }
 
 export async function fetchGenerationRunTimingDetails(options?: {
+  generationRunId?: string;
   runKind?: string;
   status?: string;
   limit?: number;
 }): Promise<GenerationRunTimingDetailRow[]> {
   const params = new URLSearchParams();
+  if (options?.generationRunId) params.set('generation_run_id', options.generationRunId);
   if (options?.runKind) params.set('run_kind', options.runKind);
   if (options?.status) params.set('status', options.status);
   params.set('limit', String(options?.limit ?? 50));
@@ -409,6 +413,10 @@ export interface PromptManagerEntry {
   label: string;
   version: string;
   file_path: string;
+  /** Repo paths where shipped system prompt copy is authored (read in order). */
+  system_prompt_files?: string[];
+  /** Repo path where the shipped user / data template lives. */
+  user_prompt_file?: string;
   pipeline: PromptPipeline;
   pipeline_order: number;
   receives_from: string[];
@@ -450,6 +458,8 @@ export interface PromptComposerResponse {
 export interface SharedRuleEntry {
   name: string;
   label: string;
+  /** Shipped rules module in the repo. */
+  rules_source_file?: string;
   rules: string;
   rules_is_override: boolean;
   rules_default: string;
@@ -466,6 +476,21 @@ export interface PromptCatalogResponse {
   prompts: PromptCatalogEntry[];
   entries?: PromptManagerEntry[];
   shared_rules?: SharedRuleEntry[];
+}
+
+export interface MasterResumePreviewResponse {
+  serialized_original_resume: string;
+  truncated: boolean;
+}
+
+export interface ResponseContractModePreview {
+  serialized: string;
+  truncated: boolean;
+}
+
+export interface ResponseContractPreviewResponse {
+  full: ResponseContractModePreview;
+  lite: ResponseContractModePreview;
 }
 
 export interface CritiqueConfig {
@@ -524,6 +549,34 @@ export async function fetchPromptCatalog(): Promise<PromptCatalogResponse> {
     throw new Error(`Failed to load prompt catalog (status ${res.status}).`);
   }
 
+  return res.json();
+}
+
+export async function fetchMasterResumePreview(): Promise<MasterResumePreviewResponse> {
+  const res = await apiFetch('/config/prompts/catalog/master-resume-preview', {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to load master resume preview (status ${res.status}).`
+    );
+  }
+  return res.json();
+}
+
+export async function fetchResponseContractPreview(): Promise<ResponseContractPreviewResponse> {
+  const res = await apiFetch('/config/prompts/catalog/response-contract-preview', {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { detail?: string }).detail ||
+        `Failed to load response contract preview (status ${res.status}).`
+    );
+  }
   return res.json();
 }
 

@@ -4,16 +4,22 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { LinkButton } from '@/components/ui/link-button';
 import { Textarea } from '@/components/ui/textarea';
 import { useResumePreview } from '@/components/common/resume_previewer_context';
 import type { ImprovedResult } from '@/components/common/resume_previewer_context';
 import type { ResumeData } from '@/components/dashboard/resume-component';
 import {
   uploadJobDescriptions,
-  previewImproveResume,
+  startLivePreview,
+  subscribeLivePreviewEvents,
+  fetchLivePreviewResult,
+  cancelLivePreview,
   confirmImproveResume,
+  ImproveApiError,
   fetchResumeList,
   getActiveResume,
+  type LiveGenerationEvent,
   type ResumeListItem,
 } from '@/lib/api/resume';
 import { normalizeRenderThemeSettings, type RenderThemeSettings } from '@/lib/types/render-theme';
@@ -25,7 +31,7 @@ import {
 } from '@/lib/api/config';
 import { Dropdown } from '@/components/ui/dropdown';
 import { useStatusCache } from '@/lib/context/status-cache';
-import { Loader2, ArrowLeft, AlertTriangle, Settings } from 'lucide-react';
+import { Loader2, ArrowLeft, AlertTriangle, Settings, Activity } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { DiffPreviewModal } from '@/components/tailor/diff-preview-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -33,6 +39,11 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 const GENERATION_DEFAULTS_STORAGE_KEY = 'resume_tailor_generation_defaults';
 const ACTIVE_RESUME_STORAGE_KEY = 'active_resume_id';
 const LEGACY_MASTER_RESUME_STORAGE_KEY = 'master_resume_id';
+
+function messageFromImproveFailure(err: unknown, fallback: string): string {
+  if (err instanceof ImproveApiError) return err.message;
+  return fallback;
+}
 
 function migrateLegacyTailorStorage(): void {
   if (typeof window === 'undefined') return;
@@ -92,6 +103,58 @@ function isAbortError(error: unknown): boolean {
 }
 
 type GenerateStage = 'idle' | 'uploading' | 'tailoring';
+
+type LiveSectionDraft = {
+  section_id: string;
+  section: string;
+  index?: number | null;
+  content: string;
+  updated_at: string;
+};
+
+type LiveTimingRow = {
+  key: string;
+  host_event: string;
+  sub_event?: string | null;
+  duration_ms: number;
+  at: string;
+};
+
+type LiveStreamKind = 'jd_intel' | 'resume_output';
+
+type LiveGenerationState = {
+  liveRunId?: string;
+  generationRunId?: string;
+  traceId?: string;
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+  currentStage?: string;
+  currentOperation?: string;
+  currentModel?: string;
+  currentPromptId?: string;
+  currentPromptHash?: string;
+  currentSystemPromptHash?: string | null;
+  currentReasoningEffort?: string | null;
+  promptChars?: number;
+  promptTokensEst?: number;
+  timeToFirstTokenMs?: number | null;
+  responseChars?: number;
+  errorMessage?: string;
+  sections: Record<string, LiveSectionDraft>;
+  timings: LiveTimingRow[];
+  events: LiveGenerationEvent[];
+  streams: Record<LiveStreamKind, string>;
+};
+
+const EMPTY_LIVE_STATE: LiveGenerationState = {
+  status: 'idle',
+  sections: {},
+  timings: [],
+  events: [],
+  streams: {
+    jd_intel: '',
+    resume_output: '',
+  },
+};
 
 type FrontendTimingSnapshot = {
   flowStartedAt: string;
@@ -180,9 +243,169 @@ function appendFrontendPipelineTiming(
   };
 }
 
+function formatLiveDuration(value?: number | null): string {
+  if (value == null || Number.isNaN(value)) return 'N/A';
+  if (value < 1000) return `${value}ms`;
+  return `${(value / 1000).toFixed(2)}s`;
+}
+
+function isLiveStreamKind(value: unknown): value is LiveStreamKind {
+  return value === 'jd_intel' || value === 'resume_output';
+}
+
+function TypingStreamText({ text }: { text: string }) {
+  const [displayText, setDisplayText] = useState('');
+  const targetRef = useRef(text);
+  const displayLengthRef = useRef(0);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    targetRef.current = text;
+    if (displayLengthRef.current > text.length) {
+      displayLengthRef.current = text.length;
+      setDisplayText(text);
+    }
+
+    const tick = () => {
+      const target = targetRef.current;
+      const remaining = target.length - displayLengthRef.current;
+      if (remaining <= 0) {
+        frameRef.current = null;
+        return;
+      }
+      const step = Math.min(48, Math.max(2, Math.ceil(remaining / 12)));
+      displayLengthRef.current = Math.min(target.length, displayLengthRef.current + step);
+      setDisplayText(target.slice(0, displayLengthRef.current));
+      frameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    if (frameRef.current == null) {
+      frameRef.current = window.requestAnimationFrame(tick);
+    }
+
+    return () => {
+      if (frameRef.current != null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+    };
+  }, [text]);
+
+  return (
+    <pre className="min-h-[140px] whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-gray-800">
+      {displayText}
+      {displayText.length < text.length ? <span className="animate-pulse">|</span> : null}
+    </pre>
+  );
+}
+
+function LiveGenerationPanel({
+  state,
+  elapsed,
+  onCancel,
+}: {
+  state: LiveGenerationState;
+  elapsed: number;
+  onCancel: () => void;
+}) {
+  const currentProcess = state.currentStage || state.currentOperation || state.status;
+  const hasJdStream = state.streams.jd_intel.trim().length > 0;
+  const hasResumeStream = state.streams.resume_output.trim().length > 0;
+  const hasAnyStream = hasJdStream || hasResumeStream;
+  const waitingForFirstToken =
+    state.status === 'running' &&
+    Boolean(state.currentOperation) &&
+    state.timeToFirstTokenMs == null &&
+    !hasResumeStream;
+
+  return (
+    <div className="border border-border bg-card shadow-[4px_4px_0px_0px_rgba(0,0,0,0.06)]">
+      <div className="flex flex-col gap-3 border-b border-border bg-secondary px-4 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-primary" />
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-700">
+              Running now
+            </p>
+          </div>
+          <p
+            className="truncate font-mono text-sm font-semibold text-gray-950"
+            title={currentProcess}
+          >
+            {currentProcess}
+          </p>
+          <div className="flex flex-wrap gap-3 font-mono text-[11px] text-gray-600">
+            <span>{elapsed}s elapsed</span>
+            {state.currentOperation ? <span>Operation: {state.currentOperation}</span> : null}
+            {state.currentModel ? <span>Model: {state.currentModel}</span> : null}
+            {waitingForFirstToken ? <span>Waiting for first token...</span> : null}
+            {state.timeToFirstTokenMs != null ? (
+              <span>First token: {formatLiveDuration(state.timeToFirstTokenMs)}</span>
+            ) : null}
+          </div>
+        </div>
+        <Button size="xs" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      <div className="max-h-[68vh] min-h-[360px] overflow-y-auto bg-[#FAFAF7] p-4">
+        <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
+          Live data stream
+        </p>
+        {state.errorMessage && (
+          <div className="mb-3 border border-red-300 bg-red-50 p-3 font-mono text-xs text-red-700">
+            {state.errorMessage}
+          </div>
+        )}
+        {!hasAnyStream ? (
+          <div className="border border-dashed border-border bg-card p-5 font-mono text-sm text-gray-500">
+            Connecting to the live stream...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {hasJdStream ? (
+              <div className="border border-border bg-card p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-primary">
+                    JD Intel
+                  </p>
+                  <span className="font-mono text-[10px] text-gray-400">
+                    {state.streams.jd_intel.length} chars
+                  </span>
+                </div>
+                <TypingStreamText text={state.streams.jd_intel} />
+              </div>
+            ) : null}
+            {hasResumeStream ? (
+              <div className="border border-border bg-card p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-primary">
+                    Resume Output
+                  </p>
+                  <span className="font-mono text-[10px] text-gray-400">
+                    {state.streams.resume_output.length} chars
+                  </span>
+                </div>
+                <TypingStreamText text={state.streams.resume_output} />
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function closeEventSourceRef(ref: React.MutableRefObject<EventSource | null>) {
+  const source = ref.current as EventSource | null;
+  source?.close();
+  ref.current = null;
+}
+
 function TailorPageContent() {
   const { t } = useTranslations();
   const [jobDescription, setJobDescription] = useState('');
+  const [customPromptInstructions, setCustomPromptInstructions] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sourceResumeId, setSourceResumeId] = useState<string | null>(null);
@@ -206,6 +429,12 @@ function TailorPageContent() {
   const [generateStage, setGenerateStage] = useState<GenerateStage>('idle');
   const [isGenerationInFlight, setIsGenerationInFlight] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const [liveState, setLiveState] = useState<LiveGenerationState>(EMPTY_LIVE_STATE);
+  const liveEventSourceRef = useRef<EventSource | null>(null);
+  const liveRunIdRef = useRef<string | null>(null);
+  const jobDescriptionRef = useRef('');
+  const customPromptInstructionsRef = useRef('');
+  const sourceResumeIdRef = useRef<string | null>(null);
 
   // Elapsed timer for long operations
   const [elapsed, setElapsed] = useState(0);
@@ -226,6 +455,7 @@ function TailorPageContent() {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      closeEventSourceRef(liveEventSourceRef);
       generationAbortRef.current?.abort();
     };
   }, []);
@@ -273,6 +503,7 @@ function TailorPageContent() {
           router.push('/dashboard');
           return;
         }
+        sourceResumeIdRef.current = resolved;
         setSourceResumeId(resolved);
         localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, resolved);
       } catch {
@@ -337,7 +568,8 @@ function TailorPageContent() {
   };
 
   const buildConfirmPayload = (result: ImprovedResult) => {
-    if (!sourceResumeId) {
+    const resumeId = sourceResumeIdRef.current || sourceResumeId;
+    if (!resumeId) {
       throw new Error('Source resume ID is missing.');
     }
     const resumePreview = result.data.resume_preview;
@@ -371,7 +603,7 @@ function TailorPageContent() {
     }
 
     return {
-      resume_id: sourceResumeId,
+      resume_id: resumeId,
       job_id: result.data.job_id,
       improved_data: resumePreview as ResumeData,
       improvements:
@@ -417,6 +649,187 @@ function TailorPageContent() {
     return null;
   };
 
+  const applyLiveEvent = useCallback((event: LiveGenerationEvent) => {
+    setLiveState((current) => {
+      const next: LiveGenerationState = {
+        ...current,
+        liveRunId: event.live_run_id,
+        generationRunId: event.generation_run_id,
+        traceId: event.trace_id,
+        events: [...current.events, event].slice(-80),
+      };
+      const data = event.data || {};
+
+      if (event.type === 'run.started') {
+        next.status = 'running';
+        next.currentPromptId =
+          typeof data.prompt_id === 'string' ? data.prompt_id : current.currentPromptId;
+      } else if (event.type === 'stage.started') {
+        next.status = 'running';
+        next.currentStage =
+          typeof data.stage_label === 'string'
+            ? data.stage_label
+            : typeof data.host_event === 'string'
+              ? data.host_event
+              : current.currentStage;
+      } else if (event.type === 'llm.started') {
+        next.status = 'running';
+        next.currentOperation =
+          typeof data.operation === 'string' ? data.operation : current.currentOperation;
+        next.currentModel =
+          typeof data.model_name === 'string'
+            ? data.model_name
+            : typeof data.model === 'string'
+              ? data.model
+              : current.currentModel;
+        next.currentPromptId =
+          typeof data.prompt_id === 'string' ? data.prompt_id : current.currentPromptId;
+        next.currentPromptHash =
+          typeof data.prompt_hash === 'string' ? data.prompt_hash : current.currentPromptHash;
+        next.currentSystemPromptHash =
+          typeof data.system_prompt_hash === 'string'
+            ? data.system_prompt_hash
+            : current.currentSystemPromptHash;
+        next.currentReasoningEffort =
+          typeof data.reasoning_effort === 'string'
+            ? data.reasoning_effort
+            : current.currentReasoningEffort;
+        next.promptChars =
+          typeof data.prompt_chars === 'number' ? data.prompt_chars : current.promptChars;
+        next.promptTokensEst =
+          typeof data.prompt_tokens_est === 'number'
+            ? data.prompt_tokens_est
+            : current.promptTokensEst;
+      } else if (event.type === 'llm.delta') {
+        const textDelta = typeof data.text_delta === 'string' ? data.text_delta : '';
+        const streamKind = isLiveStreamKind(data.stream_kind) ? data.stream_kind : null;
+        if (streamKind && textDelta) {
+          next.streams = {
+            ...current.streams,
+            [streamKind]: `${current.streams[streamKind]}${textDelta}`,
+          };
+        }
+      } else if (event.type === 'llm.completed') {
+        next.timeToFirstTokenMs =
+          typeof data.time_to_first_token_ms === 'number'
+            ? data.time_to_first_token_ms
+            : current.timeToFirstTokenMs;
+        next.responseChars =
+          typeof data.response_chars === 'number' ? data.response_chars : current.responseChars;
+        if (data.success === false) {
+          next.errorMessage =
+            typeof data.error_type === 'string' ? data.error_type : 'LLM step failed.';
+        }
+      } else if (event.type === 'section.updated') {
+        const sectionId = typeof data.section_id === 'string' ? data.section_id : null;
+        const content = typeof data.content === 'string' ? data.content : null;
+        if (sectionId && content) {
+          next.sections = {
+            ...current.sections,
+            [sectionId]: {
+              section_id: sectionId,
+              section: typeof data.section === 'string' ? data.section : sectionId,
+              index: typeof data.index === 'number' ? data.index : null,
+              content,
+              updated_at: event.at,
+            },
+          };
+          if (sectionId === 'jd_intel' && !current.streams.jd_intel) {
+            next.streams = {
+              ...next.streams,
+              jd_intel: content,
+            };
+          }
+        }
+      } else if (event.type === 'timing.entry') {
+        const entry = data.entry;
+        if (entry && typeof entry === 'object') {
+          const row = entry as Record<string, unknown>;
+          const hostEvent = typeof row.host_event === 'string' ? row.host_event : 'unknown';
+          const subEvent = typeof row.sub_event === 'string' ? row.sub_event : null;
+          next.timings = [
+            ...current.timings,
+            {
+              key: `${event.sequence}-${hostEvent}-${subEvent || ''}`,
+              host_event: hostEvent,
+              sub_event: subEvent,
+              duration_ms: typeof row.duration_ms === 'number' ? row.duration_ms : 0,
+              at: event.at,
+            },
+          ].slice(-120);
+        }
+      } else if (event.type === 'run.completed') {
+        next.status = 'completed';
+        next.currentStage = 'Completed';
+      } else if (event.type === 'run.failed') {
+        next.status = 'failed';
+        next.errorMessage =
+          typeof data.message === 'string' ? data.message : 'Live preview failed.';
+      } else if (event.type === 'run.cancelled') {
+        next.status = 'cancelled';
+        next.currentStage = 'Cancelled';
+      }
+
+      return next;
+    });
+  }, []);
+
+  const waitForLivePreview = useCallback(
+    (liveRunId: string, signal?: AbortSignal): Promise<ImprovedResult> =>
+      new Promise((resolve, reject) => {
+        let settled = false;
+        let retriedResult = false;
+        const settle = (fn: () => void) => {
+          if (settled) return;
+          settled = true;
+          closeEventSourceRef(liveEventSourceRef);
+          signal?.removeEventListener('abort', abortHandler);
+          fn();
+        };
+        const fetchResult = async () => {
+          try {
+            const finalResult = await fetchLivePreviewResult(liveRunId);
+            settle(() => resolve(finalResult));
+          } catch (resultError) {
+            settle(() => reject(resultError));
+          }
+        };
+        const abortHandler = () => {
+          void cancelLivePreview(liveRunId).catch(() => undefined);
+          settle(() => reject(new DOMException('Aborted', 'AbortError')));
+        };
+        signal?.addEventListener('abort', abortHandler, { once: true });
+
+        const source = subscribeLivePreviewEvents(liveRunId, {
+          onEvent: (event) => {
+            applyLiveEvent(event);
+            if (event.type === 'run.completed') {
+              void fetchResult();
+            } else if (event.type === 'run.failed') {
+              settle(() =>
+                reject(
+                  new Error(
+                    typeof event.data.message === 'string'
+                      ? event.data.message
+                      : 'Live preview failed.'
+                  )
+                )
+              );
+            } else if (event.type === 'run.cancelled') {
+              settle(() => reject(new DOMException('Aborted', 'AbortError')));
+            }
+          },
+          onError: () => {
+            if (settled || retriedResult) return;
+            retriedResult = true;
+            window.setTimeout(() => void fetchResult(), 1200);
+          },
+        });
+        liveEventSourceRef.current = source;
+      }),
+    [applyLiveEvent]
+  );
+
   const runGenerate = async (resumeId: string, description: string) => {
     try {
       const flowStartedAt = new Date().toISOString();
@@ -431,6 +844,11 @@ function TailorPageContent() {
       // 1. Upload Job Description
       // The API expects an array of strings
       setGenerateStage('uploading');
+      setLiveState({
+        ...EMPTY_LIVE_STATE,
+        status: 'running',
+        currentStage: 'Uploading job description',
+      });
       const uploadStartMs = performance.now();
       uploadStartedAt = new Date().toISOString();
       const jobId = await uploadJobDescriptions([description], resumeId, {
@@ -442,14 +860,34 @@ function TailorPageContent() {
 
       // 2. Preview Resume
       setGenerateStage('tailoring');
+      setLiveState((current) => ({
+        ...current,
+        status: 'running',
+        currentStage: 'Starting live preview',
+      }));
       const previewStartMs = performance.now();
       previewRequestStartedAt = new Date().toISOString();
-      const result = await previewImproveResume(resumeId, jobId, {
+      const liveStart = await startLivePreview(resumeId, jobId, {
         promptId: selectedPromptId,
+        customPromptInstructions:
+          (customPromptInstructionsRef.current || customPromptInstructions).trim() || null,
         includeCoverLetter: false,
         includeOutreachMessage: false,
         signal: generationAbortRef.current?.signal,
       });
+      liveRunIdRef.current = liveStart.live_run_id;
+      setLiveState((current) => ({
+        ...current,
+        status: 'running',
+        currentStage: 'Connecting live stream',
+        liveRunId: liveStart.live_run_id,
+        generationRunId: liveStart.generation_run_id,
+        traceId: liveStart.trace_id,
+      }));
+      const result = await waitForLivePreview(
+        liveStart.live_run_id,
+        generationAbortRef.current?.signal
+      );
       previewRequestEndedAt = new Date().toISOString();
       previewRequestDurationMs = Math.round(performance.now() - previewStartMs);
       const flowEndedAt = new Date().toISOString();
@@ -488,7 +926,24 @@ function TailorPageContent() {
         return;
       }
       console.error(err);
-      // Check for common error patterns
+      if (err instanceof ImproveApiError) {
+        const msgLower = err.message.toLowerCase();
+        if (
+          msgLower.includes('api key') ||
+          msgLower.includes('authentication') ||
+          msgLower.includes('unauthorized') ||
+          err.status === 401
+        ) {
+          setError(t('tailor.errors.apiKeyError'));
+          return;
+        }
+        if (err.status === 429 || msgLower.includes('rate limit')) {
+          setError(t('tailor.errors.rateLimit'));
+          return;
+        }
+        setError(err.message);
+        return;
+      }
       const errorMessage = err instanceof Error ? err.message : '';
       if (
         errorMessage.toLowerCase().includes('api key') ||
@@ -509,14 +964,14 @@ function TailorPageContent() {
   };
 
   const handleGenerate = async () => {
-    const trimmedDescription = jobDescription.trim();
-    if (!trimmedDescription || !sourceResumeId) return;
+    const trimmedDescription = (jobDescriptionRef.current || jobDescription).trim();
+    const resumeId = sourceResumeIdRef.current || sourceResumeId;
+    if (!trimmedDescription || !resumeId) return;
     const validationError = getGenerateValidationError(trimmedDescription);
     if (validationError) {
       setError(validationError);
       return;
     }
-    const resumeId = sourceResumeId;
     const nextDefaults: StoredGenerationDefaults = {
       prompt_id: selectedPromptId,
     };
@@ -556,7 +1011,7 @@ function TailorPageContent() {
       setPendingResult(null);
     } catch (err) {
       console.error(err);
-      const errorMessage = t('tailor.errors.failedToConfirm');
+      const errorMessage = messageFromImproveFailure(err, t('tailor.errors.failedToConfirm'));
       setError(errorMessage);
       setDiffConfirmError(errorMessage);
     } finally {
@@ -596,7 +1051,7 @@ function TailorPageContent() {
       handleCloseMissingDiffDialog();
     } catch (err) {
       console.error(err);
-      const errorMessage = t('tailor.errors.failedToConfirm');
+      const errorMessage = messageFromImproveFailure(err, t('tailor.errors.failedToConfirm'));
       setError(errorMessage);
       setMissingDiffError(errorMessage);
     } finally {
@@ -607,23 +1062,28 @@ function TailorPageContent() {
 
   const handleRegenerateConfirm = async () => {
     setShowRegenerateDialog(false);
-    const trimmedDescription = jobDescription.trim();
-    if (!trimmedDescription || !sourceResumeId) return;
+    const trimmedDescription = (jobDescriptionRef.current || jobDescription).trim();
+    const resumeId = sourceResumeIdRef.current || sourceResumeId;
+    if (!trimmedDescription || !resumeId) return;
     const validationError = getGenerateValidationError(trimmedDescription);
     if (validationError) {
       setError(validationError);
       return;
     }
-    const resumeId = sourceResumeId;
     setIsLoading(true);
     setIsGenerationInFlight(true);
     setError(null);
     setGenerateStage('uploading');
+    setLiveState(EMPTY_LIVE_STATE);
+    closeEventSourceRef(liveEventSourceRef);
+    liveRunIdRef.current = null;
     startTimer();
     generationAbortRef.current = new AbortController();
     try {
       await runGenerate(resumeId, trimmedDescription);
     } finally {
+      closeEventSourceRef(liveEventSourceRef);
+      liveRunIdRef.current = null;
       setIsLoading(false);
       setIsGenerationInFlight(false);
       setGenerateStage('idle');
@@ -634,11 +1094,18 @@ function TailorPageContent() {
 
   const handleCancelGeneration = () => {
     if (!isGenerationInFlight) return;
+    const liveRunId = liveRunIdRef.current;
+    if (liveRunId) {
+      void cancelLivePreview(liveRunId).catch(() => undefined);
+    }
+    closeEventSourceRef(liveEventSourceRef);
+    liveRunIdRef.current = null;
     generationAbortRef.current?.abort();
     generationAbortRef.current = null;
     setIsGenerationInFlight(false);
     setIsLoading(false);
     setGenerateStage('idle');
+    setLiveState((current) => ({ ...current, status: 'cancelled', currentStage: 'Cancelled' }));
     stopTimer();
     setError(t('tailor.errors.cancelled'));
   };
@@ -659,21 +1126,18 @@ function TailorPageContent() {
         backgroundSize: '40px 40px',
       }}
     >
-      <div className="mx-auto w-full max-w-6xl border border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black bg-[#F8F7F1] px-4 py-3">
+      <div className="mx-auto w-full max-w-6xl border border-border bg-card shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-secondary px-4 py-3">
           <div className="space-y-1">
-            <Button variant="ghost" size="xs" className="px-0" onClick={() => router.back()}>
+            <LinkButton href="/dashboard" variant="ghost" size="xs" className="px-0">
               <ArrowLeft className="w-4 h-4" />
               {t('common.back')}
-            </Button>
+            </LinkButton>
             <h1 className="font-serif text-2xl font-bold uppercase tracking-tight">
               {t('tailor.heroTitle')}
             </h1>
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">
-              {t('tailor.pasteJobDescriptionBelow')}
-            </p>
           </div>
-          <div className="rounded-none border border-black bg-white px-2.5 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
+          <div className="rounded-none border border-border bg-card px-2.5 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
             {promptLoading ? t('common.loading') : selectedPromptId}
           </div>
         </div>
@@ -704,16 +1168,17 @@ function TailorPageContent() {
         )}
 
         <div className="space-y-4 p-4">
-          <div className="border border-black bg-[#F8F7F1] p-3">
+          <div className="border border-border bg-secondary p-3">
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
-              Source resume
+              {t('tailor.selectResume')}
             </p>
             <select
-              className="mt-2 h-10 w-full border border-black bg-white px-3 font-mono text-sm"
+              className="mt-2 h-10 w-full border border-border bg-card px-3 font-mono text-sm"
               value={sourceResumeId ?? ''}
               disabled={resumeListLoading || resumeOptions.length === 0}
               onChange={(e) => {
                 const id = e.target.value;
+                sourceResumeIdRef.current = id;
                 setSourceResumeId(id);
                 localStorage.setItem(ACTIVE_RESUME_STORAGE_KEY, id);
               }}
@@ -727,10 +1192,10 @@ function TailorPageContent() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <div className="border border-black bg-[#F0F0E8] p-3">
+            <div className="border border-border bg-background p-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
-                  Job Description
+                  {t('tailor.pasteJobDescription')}
                 </p>
                 <span className="font-mono text-[11px] text-gray-400">
                   {t('tailor.charactersCount', { count: jobDescription.length })}
@@ -738,16 +1203,19 @@ function TailorPageContent() {
               </div>
               <Textarea
                 placeholder={t('tailor.jobDescriptionPlaceholder')}
-                className="min-h-[420px] border border-black bg-white font-mono text-sm focus:ring-0 focus:border-blue-700 resize-none rounded-none"
+                className="min-h-[420px] border border-border bg-card font-mono text-sm focus:ring-0 focus:border-primary resize-none rounded-none"
                 value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
+                onChange={(e) => {
+                  jobDescriptionRef.current = e.target.value;
+                  setJobDescription(e.target.value);
+                }}
                 onKeyDown={handleTextareaKeyDown}
                 disabled={isLoading}
               />
             </div>
 
             <div className="space-y-3">
-              <div className="border border-black bg-[#F8F7F1] p-3">
+              <div className="border border-border bg-secondary p-3">
                 <Dropdown
                   options={
                     promptOptions.length > 0
@@ -775,14 +1243,35 @@ function TailorPageContent() {
                     setSelectedPromptId(value);
                   }}
                   label={t('tailor.promptLabel')}
-                  description={t('tailor.promptDescription')}
                   disabled={isLoading || promptLoading}
                   density="compact"
                 />
               </div>
 
+              <div className="border border-border bg-secondary p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-gray-600">
+                    {t('tailor.customInstructionsLabel')}
+                  </p>
+                  <span className="font-mono text-[11px] text-gray-400">
+                    {t('tailor.charactersCount', { count: customPromptInstructions.length })}
+                  </span>
+                </div>
+                <Textarea
+                  placeholder={t('tailor.customInstructionsPlaceholder')}
+                  className="min-h-[220px] border border-border bg-card font-mono text-xs focus:ring-0 focus:border-primary resize-none rounded-none"
+                  value={customPromptInstructions}
+                  onChange={(e) => {
+                    customPromptInstructionsRef.current = e.target.value;
+                    setCustomPromptInstructions(e.target.value);
+                  }}
+                  onKeyDown={handleTextareaKeyDown}
+                  disabled={isLoading}
+                />
+              </div>
+
               {error && (
-                <div className="border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
+                <div className="whitespace-pre-wrap border border-red-300 bg-red-50 px-3 py-2 text-sm font-mono text-red-700">
                   {error}
                 </div>
               )}
@@ -819,18 +1308,20 @@ function TailorPageContent() {
                   t('tailor.generateTailored')
                 )}
               </Button>
-              {isGenerationInFlight && (
-                <div className="flex items-center justify-between gap-3 border border-black bg-[#F8F7F1] px-3 py-2">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-600">
-                    {progressLabel}
-                  </p>
-                  <Button size="xs" variant="outline" onClick={handleCancelGeneration}>
-                    {t('common.cancel')}
-                  </Button>
-                </div>
-              )}
             </div>
           </div>
+
+          {isGenerationInFlight && (
+            <LiveGenerationPanel
+              state={
+                !liveState.currentStage && !liveState.currentOperation && progressLabel
+                  ? { ...liveState, currentStage: progressLabel || undefined }
+                  : liveState
+              }
+              elapsed={elapsed}
+              onCancel={handleCancelGeneration}
+            />
+          )}
         </div>
       </div>
 
@@ -848,7 +1339,10 @@ function TailorPageContent() {
           changeManifest={pendingResult?.data?.change_manifest}
           pipelineTiming={pendingResult?.data?.pipeline_timing}
           artifacts={pendingResult?.data?.artifacts}
+          skillsObservation={pendingResult?.data?.skills_observability ?? null}
+          warnings={pendingResult?.data?.warnings ?? []}
           errorMessage={diffConfirmError ?? undefined}
+          resumePreview={pendingResult?.data?.resume_preview ?? null}
         />
       )}
 

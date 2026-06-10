@@ -1,0 +1,26 @@
+CRITIQUE:
+$critique_resume_output
+
+JD INTELLIGENCE:
+$extract_jd_intel_output
+
+JD CHECKLIST:
+- Technical terms to consider, not force: $extract_jd_intel_output.resume_technical_keywords
+- Level ceiling for every edit: $extract_jd_intel_output.calibration.level_expectations
+
+ORIGINAL RESUME:
+$original_resume
+
+REHYDRATED DRAFT:
+$tailor_resume_full_output
+
+RESPONSE CONTRACT:
+$response_contract
+
+OUTPUT TEMPLATE:
+$output_template
+
+OUTPUT RULES:
+- Return plain section-header text only. No markdown fences, no JSON, no commentary.
+- Fill only the section-header template addresses needed for critique fixes; use [RETAIN] for unchanged cells.
+- Preserve listed indexes only. Do not add, drop, combine, or renumber bullets or skill positions.

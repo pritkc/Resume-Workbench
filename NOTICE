@@ -1,0 +1,13 @@
+Resume Workbench
+Copyright 2026 Resume Workbench contributors
+
+This project is a derivative of Resume Matcher:
+https://github.com/srbhr/Resume-Matcher
+
+Resume Matcher and its contributors provided the original open-source
+foundation. Resume Workbench includes substantial changes to the product
+workflow, frontend, persistence model, rendering pipeline, AI orchestration,
+and observability tooling.
+
+Third-party libraries remain subject to their respective licenses. Important
+runtime projects are listed in README.md and dependency lockfiles.

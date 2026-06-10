@@ -1,5 +1,6 @@
 """Theme profile normalization tests."""
 
+import app.rendering.theme_profiles as theme_profiles
 from app.rendering.theme_profiles import (
     RenderThemeSettings,
     build_design,
@@ -96,6 +97,53 @@ def test_build_design_keeps_fixed_link_color_for_theme_profile_overrides() -> No
     assert design["colors"]["links"] == "rgb(0, 79, 144)"
 
 
+def test_build_design_resolves_freeflow_with_a4_typst_width() -> None:
+    settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {
+                "classic": {
+                    "page_size": "FREEFLOW",
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    design = build_design(settings)
+
+    assert settings.page_size == "FREEFLOW"
+    # Physical width comes from merged theme baseline (classic defaults to us-letter in baselines).
+    assert design["page"]["size"] in ("a4", "us-letter")
+
+
+def test_build_design_falls_back_from_missing_calibri(monkeypatch) -> None:
+    monkeypatch.setattr(theme_profiles, "_font_family_available", lambda _font: False)
+    settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {
+                "classic": {
+                    "design": {
+                        "typography": {
+                            "font_family": {
+                                "body": "Calibri",
+                                "name": "Calibri",
+                            }
+                        }
+                    }
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    design = build_design(settings)
+
+    assert design["typography"]["font_family"]["body"] == "Arial"
+    assert design["typography"]["font_family"]["name"] == "Arial"
+
+
 def test_theme_settings_from_rendercv_sections_preserves_app_runtime_settings() -> None:
     base = RenderThemeSettings.from_payload(
         {
@@ -104,6 +152,9 @@ def test_theme_settings_from_rendercv_sections_preserves_app_runtime_settings() 
             "settings": {
                 "current_date": "today",
                 "show_summary_heading": False,
+                "resume_workbench_style": {
+                    "colors": {"company": "#123456"},
+                },
             },
         },
         uses_theme_profiles=True,
@@ -118,3 +169,6 @@ def test_theme_settings_from_rendercv_sections_preserves_app_runtime_settings() 
 
     assert parsed.settings["current_date"] == "2026-04-13"
     assert parsed.settings["show_summary_heading"] is False
+    assert parsed.settings["resume_workbench_style"] == {
+        "colors": {"company": "#123456"},
+    }

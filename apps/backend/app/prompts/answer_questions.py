@@ -1,63 +1,22 @@
 """Prompt: answer_questions — job application custom question answers."""
 
 from app.prompts._constants import PROMPT_VERSIONS
+from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "answer_questions"
 STEP_LABEL = "Application questions"
 STEP_VERSION = PROMPT_VERSIONS["application_questions_generate"]
 FILE_PATH = "prompts/answer_questions.py"
+SYSTEM_PROMPT_FILES = ("apps/backend/app/prompts/text/answer_questions/system.txt",)
+USER_PROMPT_FILE = "apps/backend/app/prompts/text/answer_questions/user.txt"
 PIPELINE = "standalone"
 PIPELINE_ORDER = 11
 RECEIVES_FROM: list[str] = []
 FEEDS_INTO: list[str] = []
 
-APPLICATION_QUESTIONS_PROMPT = """Write personalized answers for job-application custom questions using only the provided resume/JD context.
+APPLICATION_QUESTIONS_PROMPT = read_shipped_txt("answer_questions/user.txt")
 
-STYLE:
-- Fixed default style: professional, concise, confident
-- Directly answer each question in plain text
-- Keep each answer compact (typically 2-5 sentences) unless the question requires more detail
-
-GROUNDING RULES:
-- Use only facts supported by candidate profile, tailored resume context, and job context
-- Do not invent employers, dates, certifications, credentials, metrics, or legal claims
-- If context is weak, provide the best truthful answer and include a short warning
-
-FORMAT:
-- Return valid JSON only with this exact shape:
-{
-  "answers": [
-    {
-      "question_id": "q_0",
-      "answer": "string",
-      "confidence": "high|medium|low",
-      "warnings": ["optional warning"]
-    }
-  ]
-}
-- Return one answer object for every input question_id
-- Do not include markdown or extra keys
-
-JOB TARGET (JSON):
-$job_target
-
-JOB DESCRIPTION EXCERPT:
-$job_description
-
-CANDIDATE PROFILE (JSON):
-$resume_profile
-
-TAILORED RESUME CONTEXT (JSON):
-$tailored_resume_context
-
-QUESTIONS (JSON):
-$questions
-"""
-
-APPLICATION_QUESTIONS_SYSTEM_PROMPT = (
-    "You answer job-application custom questions using only supplied context. "
-    "Output JSON only. No markdown."
-)
+APPLICATION_QUESTIONS_SYSTEM_PROMPT = read_shipped_txt("answer_questions/system.txt")
 
 INSTRUCTIONS = APPLICATION_QUESTIONS_SYSTEM_PROMPT
 RULES = ""
@@ -65,10 +24,10 @@ USER_TEMPLATE = APPLICATION_QUESTIONS_PROMPT
 DATA_TEMPLATE = USER_TEMPLATE
 SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
-    "job_target": "Role/company JSON",
+    "job_target": "Role/company/location JSON (from job + JD metadata)",
     "job_description": "JD excerpt",
-    "resume_profile": "Candidate profile JSON",
-    "tailored_resume_context": "Tailored resume JSON",
+    "resume_profile": "Stable compact candidate profile (headline, summary, top roles/projects/education/skills) — same shape as cover letter profile",
+    "tailored_resume": "Full current resume JSON (typically tailored) — use for role-specific facts and impact",
     "questions": "Questions list JSON",
 }
 
@@ -78,7 +37,7 @@ def build_messages(
     job_target: str,
     job_description: str,
     resume_profile: str,
-    tailored_resume_context: str,
+    tailored_resume: str,
     questions: str,
 ) -> tuple[str, str]:
     from app.prompts import load_override
@@ -91,7 +50,7 @@ def build_messages(
             job_target=job_target,
             job_description=job_description,
             resume_profile=resume_profile,
-            tailored_resume_context=tailored_resume_context,
+            tailored_resume=tailored_resume,
             questions=questions,
         )
 
@@ -105,7 +64,7 @@ def build_messages(
         job_target=job_target,
         job_description=job_description,
         resume_profile=resume_profile,
-        tailored_resume_context=tailored_resume_context,
+        tailored_resume=tailored_resume,
         questions=questions,
     )
     return system, user

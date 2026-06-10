@@ -67,7 +67,9 @@ export interface ResumeFieldDiff {
     | 'experience_title'
     | 'education'
     | 'project'
-    | 'project_title';
+    | 'project_title'
+    | 'personal_info'
+    | 'bold_keywords';
   change_type: 'added' | 'removed' | 'modified';
   original_value?: string;
   new_value?: string;
@@ -94,6 +96,27 @@ export interface TailoringStageBreakdown {
   final_render_changes: number;
   location_source: 'jd' | 'master' | 'none';
   location_value?: string | null;
+}
+
+export type SkillsObservationTag = 'unchanged' | 'added' | 'removed' | 'moved';
+
+export interface SkillsObservationValueRow {
+  text: string;
+  change_tag: SkillsObservationTag | string;
+  why?: string | null;
+}
+
+export interface SkillsObservationGroupRow {
+  group_id: string;
+  group_label?: string;
+  group_why?: string | null;
+  values: SkillsObservationValueRow[];
+  removed?: Array<{ text: string; change_tag?: string }>;
+}
+
+export interface SkillsObservationPayload {
+  version: number;
+  groups: SkillsObservationGroupRow[];
 }
 
 export interface PipelineTimingEntry {
@@ -157,6 +180,8 @@ export interface Data {
   change_breakdown?: TailoringStageBreakdown;
   pipeline_timing?: PipelineTimingSummary | null;
   bold_keywords?: string[];
+  /** Server-side QA projection; not rendered on PDF. */
+  skills_observability?: SkillsObservationPayload | null;
 }
 
 export interface ImprovedResult {

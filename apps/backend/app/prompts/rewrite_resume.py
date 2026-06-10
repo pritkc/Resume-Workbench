@@ -1,95 +1,81 @@
 """Prompt: rewrite_resume — second pass using critique feedback."""
 
-from app.prompts._rules.resume_diff import RESUME_DIFF_RULES
-from app.prompts.tailoring_blocks import REWRITE_RULES_BUNDLE, TAILORING_CRAFT_BLOCK, TAILORING_MODE_STRATEGY
+from __future__ import annotations
+
+from typing import Any
+
+from app.prompts._constants import PROMPT_VERSIONS
+from app.prompts._text_prompts import read_shipped_txt
 
 STEP_NAME = "rewrite_resume"
 STEP_LABEL = "Rewrite Resume"
-STEP_VERSION = "v1.0"
+STEP_VERSION = PROMPT_VERSIONS["rewrite_resume"]
 FILE_PATH = "prompts/rewrite_resume.py"
+SYSTEM_PROMPT_FILES = (
+    "apps/backend/app/prompts/text/rewrite_resume/system.txt",
+)
+USER_PROMPT_FILE = "apps/backend/app/prompts/text/rewrite_resume/user.txt"
 PIPELINE = "full"
 PIPELINE_ORDER = 4
 RECEIVES_FROM = ["critique_resume"]
 FEEDS_INTO: list[str] = []
 
-INSTRUCTIONS = """
-You are a senior resume strategist. You received hiring-manager critique and must improve the diff.
+INSTRUCTIONS = read_shipped_txt("rewrite_resume/system.txt")
+RULES = ""
 
-Address every critique item. Scale back exaggerations, add specifics from the original resume,
-weave missed keywords naturally, and strengthen weak bullets. Do not invent facts.
-
-Maintain the same JSON diff shape as the first tailoring pass.
-"""
-
-RULES = REWRITE_RULES_BUNDLE
-RULES_SOURCE = "resume_diff"
-
-USER_TEMPLATE = """
-ORIGINAL RESUME:
-$original_resume
-
-DRAFT RESUME (first pass):
-$draft_resume
-
-CRITIQUE (JSON):
-$critique
-
-JOB DESCRIPTION INTELLIGENCE:
-$jd_intelligence
-
-RESPONSE CONTRACT:
-$response_contract
-"""
+USER_TEMPLATE = read_shipped_txt("rewrite_resume/user.txt")
 
 DATA_TEMPLATE = USER_TEMPLATE
-_SHIPPED_RULES_BUNDLE = "\n\n".join([RESUME_DIFF_RULES, TAILORING_CRAFT_BLOCK, TAILORING_MODE_STRATEGY["full"]])
-SYSTEM_DEFAULT = INSTRUCTIONS.strip() + "\n\n" + _SHIPPED_RULES_BUNDLE.strip()
+SYSTEM_DEFAULT = INSTRUCTIONS.strip()
 VARIABLES = {
     "original_resume": "Base resume JSON or markdown",
-    "draft_resume": "First-pass diff JSON",
-    "critique": "Critique JSON",
-    "jd_intelligence": "JD intelligence JSON",
+    "tailor_resume_full_output": "First-pass tailored resume output from tailor_resume_full",
+    "critique_resume_output": "Section-header critique output from critique_resume",
     "response_contract": "Response contract JSON",
+    "output_template": "Section-header output template for this resume",
+    "extract_jd_intel_output": (
+        "JD blob placeholder — expanded from jd_intel_blob before render_user_template substitution"
+    ),
+    "jd_intel_blob": "Cached JD dict for $extract_jd_intel_output expansion",
 }
 
 
 def build_messages(
     *,
     original_resume: str,
-    draft_resume: str,
-    critique: str,
-    jd_intelligence: str,
+    tailor_resume_full_output: str,
+    critique_resume_output: str,
+    jd_intel_blob: dict[str, Any],
     response_contract: str,
+    output_template: str | None = None,
 ) -> tuple[str, str]:
-    from app.prompts import load_override, load_shared_rules_override
+    from app.prompts import load_override
     from app.prompts._prompt_loader import load_composer_override, render_user_template
+
+    template = output_template or response_contract
 
     comp = load_composer_override(STEP_NAME)
     if comp:
         return comp["system"], render_user_template(
             comp["user"],
+            jd_intel_blob=jd_intel_blob,
             original_resume=original_resume,
-            draft_resume=draft_resume,
-            critique=critique,
-            jd_intelligence=jd_intelligence,
+            tailor_resume_full_output=tailor_resume_full_output,
+            critique_resume_output=critique_resume_output,
             response_contract=response_contract,
+            output_template=template,
+            resume_diff_rules="",
         )
 
-    instructions = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
-    step_rules = load_override(STEP_NAME, "rules")
-    if step_rules:
-        rules = step_rules
-    else:
-        shared_rd = load_shared_rules_override("resume_diff")
-        diff_block = shared_rd or RESUME_DIFF_RULES
-        rules = "\n\n".join([diff_block, TAILORING_CRAFT_BLOCK, TAILORING_MODE_STRATEGY["full"]])
-    system = instructions.strip() + "\n\n" + rules.strip()
+    prose = load_override(STEP_NAME, "instructions") or INSTRUCTIONS
+    system = prose.strip()
     user = render_user_template(
         USER_TEMPLATE,
+        jd_intel_blob=jd_intel_blob,
         original_resume=original_resume,
-        draft_resume=draft_resume,
-        critique=critique,
-        jd_intelligence=jd_intelligence,
+        tailor_resume_full_output=tailor_resume_full_output,
+        critique_resume_output=critique_resume_output,
         response_contract=response_contract,
+        output_template=template,
     )
     return system, user

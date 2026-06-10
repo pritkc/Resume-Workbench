@@ -22,6 +22,7 @@ export {
   improveResume,
   previewImproveResume,
   confirmImproveResume,
+  ImproveApiError,
   fetchResume,
   fetchResumeList,
   updateResume,

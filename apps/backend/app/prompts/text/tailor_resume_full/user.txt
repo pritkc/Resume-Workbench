@@ -1,0 +1,47 @@
+$custom_prompt_instructions
+
+OPERATING ORDER:
+1. Preserve the candidate's career story; use the JD as a lens, not a new identity.
+2. Choose strongest evidence before editing wording.
+3. Rewrite only cells that improve fit, clarity, technical specificity, or render fit.
+4. Calibrate titles, skills, ATS terms, and summary after bullet direction is clear.
+5. Fill the section-header OUTPUT TEMPLATE exactly. Do not return JSON.
+
+EDIT SCOPE:
+- Summary: fit + render length while preserving source identity.
+- Experience: follow each row's budget; for roles with 2 or fewer bullets, touch at most one; keep at least one recognizable original story unless the role has one bullet.
+- Projects: edit at most the closest two; keep names, source bullet count, and project shape stable.
+- Skills: return every skill group in OUTPUT TEMPLATE order; keep source skills unless remotely useless to the role; preserve impressive superset skills and do not narrow the candidate to only JD terms.
+- Titles/stacks: edit only when source evidence supports it; do not copy JD titles or secondary role labels. When in doubt, keep the existing qualifier or omit it.
+
+JD INTELLIGENCE:
+$jd_intel
+
+JD FIELD USE:
+- HOOKS/THEMES: use as competency hooks and translation candidates, not resume copy or mandatory insertions.
+- MUST-MATCH/KEYWORDS/BOLD-CANDS: use for ATS visibility only when source-supported, high-signal, and natural.
+- AVOID: demote generic or low-signal wording.
+- LEVEL: seniority, scope, and ownership ceiling.
+
+CONTENT RULES:
+$content_rules
+
+ORIGINAL RESUME:
+$original_resume
+
+OUTPUT TEMPLATE:
+$output_template
+
+OUTPUT RULES:
+- Return plain section-header text only. No markdown fences, no JSON, no commentary.
+- Headers: === SUMMARY ===, === EXPERIENCE n ===, === PROJECT n ===, === SKILLS ===, === BOLD KEYWORDS ===.
+- Labels: WHY, POSITION, STACK, NAME, B#, B#-WHY, G#, G#-WHY.
+- Write [RETAIN] to keep an unchanged cell. Do not copy original unchanged text.
+- For scalar cells (POSITION, STACK, NAME, B#), [RETAIN] must be the entire value or absent; never mix [RETAIN] with added text.
+- SUMMARY and BOLD KEYWORDS must always be present; each should include one short WHY line for QA.
+- You may omit a whole EXPERIENCE or PROJECT section only when every cell in that section is retained.
+- Preserve listed indexes only. Do not add, drop, combine, or renumber bullets or skill positions.
+- For comma-separated scalar cells like STACK, write the complete final value without [RETAIN] when changing it.
+- For skills, output every G# group in OUTPUT TEMPLATE order. Format G#: final label | final comma-separated values. Keep original skill text when retaining; remove original skills only when remotely useless to the role.
+- Add one short G#-WHY for each skill group explaining retain/edit decisions.
+- BOLD KEYWORDS: 6-10 comma-separated ATS terms; tools, languages, platforms, methods only.

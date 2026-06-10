@@ -8,6 +8,7 @@ import Underline from '@tiptap/extension-underline';
 import { RichTextToolbar } from './rich-text-toolbar';
 import { LinkDialog } from './link-dialog';
 import { cn } from '@/lib/utils';
+import { normalizePastedSingleParagraph } from '@/lib/paste-plain-text';
 
 interface RichTextEditorProps {
   /** HTML content string */
@@ -22,6 +23,13 @@ interface RichTextEditorProps {
   minHeight?: string;
   /** `full` toolbar, `hint` line, or `none` (editor only — use a section-level hint when needed). */
   toolbarMode?: 'full' | 'hint' | 'none';
+  /** `card` = bordered box; `inline` = borderless resume-canvas style */
+  surface?: 'card' | 'inline';
+  /**
+   * When true, paste uses text/plain and merges YAML-style wrapped lines.
+   * Defaults to true when toolbarMode is `none`; set explicitly for full/hint toolbars.
+   */
+  plainTextPaste?: boolean;
 }
 
 /**
@@ -39,7 +47,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   className,
   minHeight = '60px',
   toolbarMode = 'full',
+  surface = 'card',
+  plainTextPaste,
 }) => {
+  const usePlainTextPaste = plainTextPaste ?? toolbarMode === 'none';
+  const plainTextPasteRef = useRef(usePlainTextPaste);
+  const surfaceClass =
+    surface === 'inline'
+      ? 'rich-text-editor-shell w-full border-0 bg-transparent px-0 py-0 text-sm text-foreground rounded-none focus-within:ring-0'
+      : 'w-full border border-border bg-card px-2.5 py-1.5 text-sm text-foreground rounded-none focus-within:ring-1 focus-within:ring-blue-700';
+
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -73,7 +90,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       isInternalUpdateRef.current = true;
       const html = editor.getHTML();
       // Convert <p> tags to plain content since we're in bullet mode
-      const cleanHtml = html.replace(/<p>/g, '').replace(/<\/p>/g, '').trim();
+      const cleanHtml = html.replace(/<p>/g, '').replace(/<\/p>/g, '');
       onChange(cleanHtml);
       // Reset flag after a tick to ensure it stays true through the render cycle
       setTimeout(() => {
@@ -84,7 +101,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       attributes: {
         class: cn(
           'outline-none prose prose-sm max-w-none',
-          'prose-strong:font-bold prose-em:italic prose-a:text-blue-700 prose-a:underline'
+          'prose-strong:font-bold prose-em:italic prose-a:text-primary prose-a:underline'
         ),
         style:
           toolbarMode === 'none'
@@ -98,6 +115,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
         return false;
       },
+      handlePaste: (view, event) => {
+        if (!plainTextPasteRef.current) {
+          return false;
+        }
+        const plain = event.clipboardData?.getData('text/plain');
+        if (plain == null || plain === '') {
+          return false;
+        }
+        event.preventDefault();
+        const text = normalizePastedSingleParagraph(plain);
+        const { state } = view;
+        const { from, to } = state.selection;
+        view.dispatch(state.tr.insertText(text, from, to));
+        return true;
+      },
     },
     // Immediately render without waiting for idle
     immediatelyRender: false,
@@ -108,10 +140,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     setIsMounted(true);
   }, []);
 
+  useEffect(() => {
+    plainTextPasteRef.current = usePlainTextPaste;
+  }, [usePlainTextPaste]);
+
   // Sync external value changes (e.g., from parent reset)
   useEffect(() => {
     if (editor && !isInternalUpdateRef.current) {
-      const currentContent = editor.getHTML().replace(/<p>/g, '').replace(/<\/p>/g, '').trim();
+      const currentContent = editor.getHTML().replace(/<p>/g, '').replace(/<\/p>/g, '');
 
       if (value !== currentContent) {
         editor.commands.setContent(value || '');
@@ -145,17 +181,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     return (
       <div className={cn('space-y-1', className)}>
         {toolbarMode === 'full' ? (
-          <div className="flex h-9 items-center gap-1 border border-black bg-[#E5E5E0] p-1" />
+          <div className="flex h-9 items-center gap-1 border border-border bg-secondary p-1" />
         ) : toolbarMode === 'hint' ? (
-          <p className="font-mono text-[9px] leading-tight text-black/40">
+          <p className="font-mono text-[9px] leading-tight text-muted-foreground">
             Bold / italic / underline: ⌘B · ⌘I · ⌘U · Link: ⌘K (Ctrl on Windows)
           </p>
         ) : null}
         <div
-          className={cn(
-            'w-full border border-black bg-white',
-            'px-2.5 py-1.5 text-sm text-gray-400 rounded-none'
-          )}
+          className={cn(surfaceClass, surface === 'card' && 'text-gray-400')}
           style={{ minHeight }}
         >
           {placeholder}
@@ -173,18 +206,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       {toolbarMode === 'full' ? (
         <RichTextToolbar editor={editor} onLinkClick={handleLinkClick} />
       ) : toolbarMode === 'hint' ? (
-        <p className="font-mono text-[9px] leading-tight text-black/40">
+        <p className="font-mono text-[9px] leading-tight text-muted-foreground">
           Bold / italic / underline: ⌘B · ⌘I · ⌘U · Link: ⌘K (Ctrl on Windows)
         </p>
       ) : null}
       <div
         className={cn(
-          'w-full border border-black bg-white',
-          'px-2.5 py-1.5 text-sm text-black rounded-none',
-          'focus-within:ring-1 focus-within:ring-blue-700',
+          surfaceClass,
           '[&_.ProseMirror]:min-h-[32px] [&_.ProseMirror]:outline-none',
           '[&_.ProseMirror_p]:m-0',
-          '[&_.ProseMirror_a]:text-blue-700 [&_.ProseMirror_a]:underline'
+          '[&_.ProseMirror_a]:text-primary [&_.ProseMirror_a]:underline'
         )}
         style={{ minHeight }}
       >

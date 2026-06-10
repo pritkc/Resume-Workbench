@@ -115,7 +115,7 @@ class CandidateExperienceProfile(BaseModel):
     title: str = ""
     company: str = ""
     years: str = ""
-    summary: str | None = None
+    tech_stacks: str | None = None
     highlights: list[str] = Field(default_factory=list)
 
 
@@ -127,7 +127,7 @@ class CandidateProjectProfile(BaseModel):
     name: str = ""
     role: str = ""
     years: str = ""
-    summary: str | None = None
+    tech_stacks: str | None = None
     highlights: list[str] = Field(default_factory=list)
 
 
@@ -156,9 +156,9 @@ class CandidatePromptProfile(BaseModel):
                 title=_truncate_text(entry.position or entry.title, 80),
                 company=_truncate_text(entry.company, 80),
                 years=_truncate_text(entry.date or entry.years, 40),
-                summary=_truncate_text(entry.summary, 80) or None,
+                tech_stacks=_truncate_text(entry.techStack, 80) or None,
                 highlights=_normalize_lines(
-                    entry.highlights or entry.description,
+                    entry.highlights or [],
                     limit=MAX_PROFILE_HIGHLIGHTS_PER_ENTRY,
                     text_limit=MAX_PROFILE_HIGHLIGHT_CHARS,
                 ),
@@ -168,11 +168,11 @@ class CandidatePromptProfile(BaseModel):
         projects = [
             CandidateProjectProfile(
                 name=_truncate_text(entry.name, 80),
-                role=_truncate_text(entry.role or entry.summary, 80),
+                role=_truncate_text(entry.role, 80),
                 years=_truncate_text(entry.date or entry.years, 40),
-                summary=_truncate_text(entry.summary, 80) or None,
+                tech_stacks=_truncate_text(entry.techStack, 80) or None,
                 highlights=_normalize_lines(
-                    entry.highlights or entry.description,
+                    entry.highlights or [],
                     limit=MAX_PROFILE_HIGHLIGHTS_PER_ENTRY,
                     text_limit=MAX_PROFILE_HIGHLIGHT_CHARS,
                 ),

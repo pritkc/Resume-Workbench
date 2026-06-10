@@ -12,19 +12,22 @@ import {
   getEducationDate,
   getEducationHighlights,
   getEducationSummary,
+  RESUME_TECH_STACK_LABEL,
   getExperienceDate,
   getExperienceHighlights,
   getExperiencePosition,
-  getExperienceSummary,
+  getExperienceTechStack,
   getExtraContactEntries,
   getPersonalHeadline,
   getProjectDate,
   getProjectHighlights,
-  getProjectSummary,
+  getProjectTechStack,
+  personalProjectsVisibleInResume,
 } from '@/lib/utils/rendercv-fields';
 import { DynamicResumeSection } from './dynamic-resume-section';
 import { AdditionalGroupSection } from './additional-group-section';
 import { SafeHtml } from './safe-html';
+import { SummaryHtml } from './summary-html';
 import baseStyles from './styles/_base.module.css';
 import styles from './styles/modern-two-column.module.css';
 
@@ -55,6 +58,7 @@ export const ResumeModernTwoColumn: React.FC<ResumeModernTwoColumnProps> = ({
   showSummaryHeading = false,
 }) => {
   const { personalInfo, summary, workExperience, education, personalProjects, skills } = data;
+  const visiblePersonalProjects = personalProjectsVisibleInResume(personalProjects);
 
   // Get sorted visible sections
   const sortedSections = getSortedSections(data);
@@ -192,7 +196,7 @@ export const ResumeModernTwoColumn: React.FC<ResumeModernTwoColumnProps> = ({
                   {getSectionDisplayName('summary', headingFallbacks.summary)}
                 </h3>
               ) : null}
-              <p className={`text-justify ${baseStyles['resume-text']}`}>{summary}</p>
+              <SummaryHtml summary={summary} className={baseStyles['resume-text']} />
             </div>
           )}
 
@@ -227,9 +231,10 @@ export const ResumeModernTwoColumn: React.FC<ResumeModernTwoColumnProps> = ({
                       </span>
                     </div>
 
-                    {getExperienceSummary(exp) && (
+                    {getExperienceTechStack(exp) && (
                       <p className={baseStyles['resume-text-xs']}>
-                        <SafeHtml html={getExperienceSummary(exp)} />
+                        <span className="font-semibold">{RESUME_TECH_STACK_LABEL} </span>
+                        <SafeHtml html={getExperienceTechStack(exp)} />
                       </p>
                     )}
                     {getExperienceHighlights(exp).length > 0 && (
@@ -253,94 +258,91 @@ export const ResumeModernTwoColumn: React.FC<ResumeModernTwoColumnProps> = ({
           )}
 
           {/* Projects Section */}
-          {isSectionVisible('personalProjects') &&
-            personalProjects &&
-            personalProjects.length > 0 && (
-              <div className={baseStyles['resume-section']}>
-                <h3 className={styles.sectionTitleAccent}>
-                  {getSectionDisplayName('personalProjects', headingFallbacks.projects)}
-                </h3>
-                <div className={baseStyles['resume-items']}>
-                  {personalProjects.map((project) => (
-                    <div key={project.id} className={baseStyles['resume-item']}>
-                      <div
-                        className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}
-                      >
-                        <div className="flex items-baseline gap-1.5">
-                          <h4 className={baseStyles['resume-item-title-sm']}>{project.name}</h4>
-                          {(project.github || project.website) && (
-                            <span className="flex gap-1">
-                              {project.github && (
-                                <a
-                                  href={
-                                    project.github.startsWith('http')
-                                      ? project.github
-                                      : `https://${project.github}`
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={baseStyles['resume-link-pill']}
-                                >
-                                  <Github size={9} />
-                                  {project.github
-                                    .replace(/^https?:\/\//, '')
-                                    .replace(/^www\./, '')
-                                    .replace(/\/$/, '')}
-                                </a>
-                              )}
-                              {project.website && (
-                                <a
-                                  href={
-                                    project.website.startsWith('http')
-                                      ? project.website
-                                      : `https://${project.website}`
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={baseStyles['resume-link-pill']}
-                                >
-                                  <ExternalLink size={9} />
-                                  {project.website
-                                    .replace(/^https?:\/\//, '')
-                                    .replace(/^www\./, '')
-                                    .replace(/\/$/, '')}
-                                </a>
-                              )}
-                            </span>
-                          )}
-                        </div>
-                        {getProjectDate(project) && (
-                          <span className={`${baseStyles['resume-date']} ml-2`}>
-                            {formatDateRange(getProjectDate(project))}
+          {isSectionVisible('personalProjects') && visiblePersonalProjects.length > 0 && (
+            <div className={baseStyles['resume-section']}>
+              <h3 className={styles.sectionTitleAccent}>
+                {getSectionDisplayName('personalProjects', headingFallbacks.projects)}
+              </h3>
+              <div className={baseStyles['resume-items']}>
+                {visiblePersonalProjects.map((project) => (
+                  <div key={project.id} className={baseStyles['resume-item']}>
+                    <div
+                      className={`flex justify-between items-baseline ${baseStyles['resume-row-tight']}`}
+                    >
+                      <div className="flex items-baseline gap-1.5">
+                        <h4 className={baseStyles['resume-item-title-sm']}>{project.name}</h4>
+                        {(project.github || project.website) && (
+                          <span className="flex gap-1">
+                            {project.github && (
+                              <a
+                                href={
+                                  project.github.startsWith('http')
+                                    ? project.github
+                                    : `https://${project.github}`
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={baseStyles['resume-link-pill']}
+                              >
+                                <Github size={9} />
+                                {project.github
+                                  .replace(/^https?:\/\//, '')
+                                  .replace(/^www\./, '')
+                                  .replace(/\/$/, '')}
+                              </a>
+                            )}
+                            {project.website && (
+                              <a
+                                href={
+                                  project.website.startsWith('http')
+                                    ? project.website
+                                    : `https://${project.website}`
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={baseStyles['resume-link-pill']}
+                              >
+                                <ExternalLink size={9} />
+                                {project.website
+                                  .replace(/^https?:\/\//, '')
+                                  .replace(/^www\./, '')
+                                  .replace(/\/$/, '')}
+                              </a>
+                            )}
                           </span>
                         )}
                       </div>
-                      {getProjectSummary(project) && (
-                        <div
-                          className={`${baseStyles['resume-row-tight']} ${baseStyles['resume-item-subtitle-sm']}`}
-                        >
-                          <span>{getProjectSummary(project)}</span>
-                        </div>
-                      )}
-                      {getProjectHighlights(project).length > 0 && (
-                        <ul
-                          className={`ml-4 ${baseStyles['resume-list']} ${baseStyles['resume-text-xs']}`}
-                        >
-                          {getProjectHighlights(project).map((desc, index) => (
-                            <li key={index} className="flex">
-                              <span className="mr-1.5 flex-shrink-0">•&nbsp;</span>
-                              <span>
-                                <SafeHtml html={desc} />
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
+                      {getProjectDate(project) && (
+                        <span className={`${baseStyles['resume-date']} ml-2`}>
+                          {formatDateRange(getProjectDate(project))}
+                        </span>
                       )}
                     </div>
-                  ))}
-                </div>
+                    {getProjectTechStack(project) && (
+                      <p className={baseStyles['resume-text-xs']}>
+                        <span className="font-semibold">{RESUME_TECH_STACK_LABEL} </span>
+                        <span>{getProjectTechStack(project)}</span>
+                      </p>
+                    )}
+                    {getProjectHighlights(project).length > 0 && (
+                      <ul
+                        className={`ml-4 ${baseStyles['resume-list']} ${baseStyles['resume-text-xs']}`}
+                      >
+                        {getProjectHighlights(project).map((desc, index) => (
+                          <li key={index} className="flex">
+                            <span className="mr-1.5 flex-shrink-0">•&nbsp;</span>
+                            <span>
+                              <SafeHtml html={desc} />
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
           {/* Custom Sections - Main column */}
           {customSections.map((section) => (

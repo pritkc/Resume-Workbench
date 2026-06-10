@@ -2,23 +2,32 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from app.config import get_step_llm_config
-from app.llm import complete_json
-from app.prompts import PROMPT_VERSIONS
+from app.llm import complete as complete_json
+from app.llm import complete_stream
+from app.prompts import PROMPT_VERSIONS, LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT
 from app.prompts.extract_jd_intel import build_messages as build_jd_intel_messages
-from app.services.cover_letter import extract_job_target_metadata, sanitize_job_location
 from app.services.prompt_utils import sanitize_user_input
 
-from app.services.tailoring.models import JDIntelligence, TailoringJobAnalysis
+from app.services.tailoring.jd_intel_blob import (
+    collect_keyword_strings_from_blob,
+    enrich_jd_intel_blob,
+    filter_resume_keyword_sources,
+)
+from app.services.tailoring.section_format import (
+    is_section_jd_wrapper,
+    jd_keywords_from_section_blob,
+    section_jd_wrapper,
+)
 
 logger = logging.getLogger(__name__)
 
 MAX_PROMPT_LIST_ITEMS = 12
+LiveEventSink = Callable[[str, dict[str, Any]], Awaitable[None]]
 
 
 def normalize_prompt_list(value: Any, *, limit: int = MAX_PROMPT_LIST_ITEMS) -> list[str]:
@@ -46,21 +55,10 @@ def normalize_prompt_list(value: Any, *, limit: int = MAX_PROMPT_LIST_ITEMS) -> 
 
 
 def collect_job_keywords(job_keywords: dict[str, Any]) -> list[str]:
-    """Return a stable list of JD keywords worth covering if supported."""
-
-    combined: list[str] = []
-    for key in ("required_skills", "preferred_skills", "keywords"):
-        combined.extend(normalize_prompt_list(job_keywords.get(key)))
-
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for keyword in combined:
-        lowered = keyword.casefold()
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        deduped.append(keyword)
-    return deduped
+    """Return deduped strings harvested from list nodes anywhere in the JD blob."""
+    if is_section_jd_wrapper(job_keywords):
+        return jd_keywords_from_section_blob(job_keywords)
+    return collect_keyword_strings_from_blob(job_keywords)
 
 
 def keyword_in_text(keyword: str, text: str) -> bool:
@@ -94,10 +92,7 @@ def extract_resume_text(value: Any) -> str:
 
 
 def find_supported_keywords(job_keywords: dict[str, Any], resume_source: Any) -> list[str]:
-    """Return JD keywords already supported by the source resume.
-
-    Kept for backward compatibility — 2.0 pipeline does not call this.
-    """
+    """Return JD keywords already supported by the source resume."""
 
     resume_text = extract_resume_text(resume_source)
     return [
@@ -107,130 +102,63 @@ def find_supported_keywords(job_keywords: dict[str, Any], resume_source: Any) ->
     ]
 
 
-def build_job_analysis(
-    job_keywords: dict[str, Any],
+async def extract_jd_intelligence(
+    job_description: str,
     *,
-    supported_keywords: list[str],
-) -> TailoringJobAnalysis:
-    """Create a compact job-analysis model for the primary prompt.
-
-    Kept for backward compatibility — 2.0 pipeline uses build_jd_intelligence.
-    """
-
-    analysis = TailoringJobAnalysis(
-        core_title=job_keywords.get("core_title"),
-        company_name=job_keywords.get("company_name"),
-        location=job_keywords.get("location"),
-        experience_years=job_keywords.get("experience_years"),
-        seniority_level=job_keywords.get("seniority_level"),
-        required_skills=normalize_prompt_list(job_keywords.get("required_skills")),
-        preferred_skills=normalize_prompt_list(job_keywords.get("preferred_skills")),
-        keywords=normalize_prompt_list(job_keywords.get("keywords")),
-        key_responsibilities=normalize_prompt_list(job_keywords.get("key_responsibilities")),
-        experience_requirements=normalize_prompt_list(job_keywords.get("experience_requirements")),
-        education_requirements=normalize_prompt_list(job_keywords.get("education_requirements")),
-        supported_keywords_from_resume=supported_keywords,
-    )
-    return analysis
-
-
-def job_analysis_to_prompt_json(analysis: TailoringJobAnalysis) -> str:
-    """Serialize the compact job analysis as stable prompt JSON."""
-
-    return json.dumps(analysis.to_prompt_dict(), separators=(',', ':'), ensure_ascii=True)
-
-
-def build_jd_intelligence(job_keywords: dict[str, Any]) -> JDIntelligence:
-    """Validate a raw job_keywords dict into a JDIntelligence model.
-
-    The raw dict is expected to already come from extract_jd_intelligence.
-    Falls back gracefully when fields are missing.
-    """
-    return JDIntelligence.model_validate(job_keywords)
-
-
-def jd_intelligence_to_prompt_json(intelligence: JDIntelligence) -> str:
-    """Serialize JDIntelligence as compact prompt JSON (empty fields stripped)."""
-    return json.dumps(intelligence.to_prompt_dict(), separators=(',', ':'), ensure_ascii=True)
-
-
-async def extract_jd_intelligence(job_description: str) -> dict[str, Any]:
-    """Extract rich JD intelligence from a job description (2.0 pipeline).
-
-    Returns the raw dict (suitable for caching/storage). Callers that need the
-    typed model should call build_jd_intelligence() on the result.
-
-    Also merges target metadata (role, company, location) for backward
-    compatibility with cover letter, outreach, and application pack consumers.
-    """
+    event_sink: LiveEventSink | None = None,
+    live_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Extract JD intelligence as section-header text wrapped in a JSON-compatible dict."""
 
     sanitized_jd = sanitize_user_input(job_description)
     system_prompt, prompt = build_jd_intel_messages(sanitized_jd)
 
-    result = await complete_json(
+    completion = complete_stream if event_sink is not None else complete_json
+    completion_kwargs: dict[str, Any] = {}
+    if event_sink is not None:
+        completion_kwargs.update(
+            {
+                "event_sink": event_sink,
+                "include_delta_text": True,
+                "stream_kind": "jd_intel",
+            }
+        )
+
+    result = await completion(
         prompt=prompt,
         system_prompt=system_prompt,
         config=get_step_llm_config("extract_jd_intel"),
-        operation="job_extract_keywords",
+        max_tokens=1200,
+        timeout_seconds=90,
+        operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
         metadata={
+            **(live_metadata or {}),
             "job_description_chars": len(job_description),
             "prompt_version": PROMPT_VERSIONS.get(
                 "jd_intelligence_user",
                 PROMPT_VERSIONS.get("extract_keywords", "unknown"),
             ),
         },
+        **completion_kwargs,
     )
-    if not isinstance(result, dict):
-        result = {}
+    if isinstance(result, dict):
+        enrich_jd_intel_blob(result, job_description)
+        filter_resume_keyword_sources(result)
+        return result
+    if not isinstance(result, str):
+        result = ""
+    return section_jd_wrapper(result)
 
-    # Merge legacy target metadata for backward-compatible consumers
-    target_metadata = extract_job_target_metadata(
+
+async def extract_job_keywords(
+    job_description: str,
+    *,
+    event_sink: LiveEventSink | None = None,
+    live_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Alias for :func:`extract_jd_intelligence` (cached ``job_keywords`` JSON blob)."""
+    return await extract_jd_intelligence(
         job_description,
-        job_keywords=result,
+        event_sink=event_sink,
+        live_metadata=live_metadata,
     )
-    # Only set these if not already populated by the extraction
-    if not result.get("core_title"):
-        result["core_title"] = target_metadata.get("role")
-    if not result.get("company_name"):
-        result["company_name"] = target_metadata.get("company")
-    extracted_location = (
-        sanitize_job_location(result.get("location"))
-        if isinstance(result.get("location"), str)
-        else None
-    )
-    if extracted_location:
-        result["location"] = extracted_location
-    else:
-        result["location"] = target_metadata.get("location") or ""
-
-    return result
-
-
-async def extract_job_keywords(job_description: str) -> dict[str, Any]:
-    """Extract keywords and target metadata from a job description.
-
-    Delegates to extract_jd_intelligence and also injects legacy flat keys
-    (core_title, company_name, location, required_skills, etc.) so that all
-    existing consumers continue to work without changes.
-    """
-
-    raw = await extract_jd_intelligence(job_description)
-
-    # Build JDIntelligence to produce the legacy dict
-    intelligence = build_jd_intelligence(raw)
-    legacy = intelligence.to_legacy_keywords()
-
-    # Merge: raw takes precedence; legacy only fills gaps not present in raw
-    merged = {**legacy, **raw}
-
-    # Raw may include nested role/company objects but also empty flat keys that
-    # overwrote legacy strings — re-apply non-empty legacy scalars for consumers
-    # that read core_title / company_name / location directly.
-    intelligence_merged = build_jd_intelligence(merged)
-    reflat = intelligence_merged.to_legacy_keywords()
-    for key in ("core_title", "company_name", "location"):
-        current = merged.get(key)
-        if current in (None, "") and reflat.get(key):
-            merged[key] = reflat[key]
-
-    return merged

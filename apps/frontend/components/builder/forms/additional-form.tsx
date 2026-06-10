@@ -10,10 +10,12 @@ interface AdditionalFormProps {
   hideFooterAdd?: boolean;
 }
 
-export const AdditionalForm: React.FC<AdditionalFormProps> = ({ data, onChange, hideFooterAdd }) => {
-  return (
-    <AdditionalGroupsForm data={data} onChange={onChange} hideFooterAdd={hideFooterAdd} />
-  );
+export const AdditionalForm: React.FC<AdditionalFormProps> = ({
+  data,
+  onChange,
+  hideFooterAdd,
+}) => {
+  return <AdditionalGroupsForm data={data} onChange={onChange} hideFooterAdd={hideFooterAdd} />;
 };
 
 export default AdditionalForm;

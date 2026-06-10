@@ -17,6 +17,7 @@ from app.llm import (
     LLMConfig,
     normalize_ai_route,
     normalize_cliproxy_api_base,
+    resolve_direct_api_base,
     resolve_api_key,
 )
 from app.schemas import (
@@ -37,6 +38,9 @@ from app.schemas import (
     LanguageConfigResponse,
     ModelOverridesRequest,
     ModelOverridesResponse,
+    MasterResumePreviewResponse,
+    ResponseContractModePreview,
+    ResponseContractPreviewResponse,
     PromptConfigRequest,
     PromptConfigResponse,
     PromptCatalogEntry,
@@ -56,7 +60,7 @@ from app.schemas import (
     SharedRulesPutRequest,
 )
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
-from app.prompts._constants import PROMPT_VERSIONS
+from app.prompts._constants import LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT, PROMPT_VERSIONS
 from app.prompts.answer_questions import APPLICATION_QUESTIONS_PROMPT, APPLICATION_QUESTIONS_SYSTEM_PROMPT
 from app.prompts.cover_letter import COMBINED_MESSAGES_SYSTEM_PROMPT, COVER_LETTER_OUTREACH_PROMPT
 from app.prompts.enrichment import (
@@ -71,16 +75,19 @@ from app.prompts.enrichment import (
 from app.prompts.extract_jd_intel import EXTRACT_JD_INTELLIGENCE_PROMPT, EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT
 from app.prompts.parse_resume import PARSE_RESUME_PROMPT, PARSE_SYSTEM_PROMPT
 from app.prompts.tailoring_blocks import (
-    TAILORING_CONTRACT_BLOCK,
     TAILORING_CRAFT_BLOCK,
     TAILORING_MODE_STRATEGY,
-    TAILORING_USER_SHELL,
+    TAILORING_USER_SHELL_FULL,
 )
 from app.prompts.tailoring_catalog import build_resume_tailoring_catalog_sections
 from app.routers.prompt_catalog_builder import (
     build_composer_snapshot,
     build_prompt_manager_entries,
     build_shared_rule_entries,
+)
+from app.services.tailoring.master_resume_preview import (
+    capped_master_resume_preview_text,
+    response_contract_catalog_previews,
 )
 from app.config import (
     get_api_keys_from_config,
@@ -159,7 +166,7 @@ def _build_llm_config_response(stored: dict) -> LLMConfigResponse:
         provider=provider,
         model=stored.get("model", settings.llm_model),
         api_key=_mask_api_key(resolve_api_key(stored, provider)),
-        api_base=stored.get("api_base", settings.llm_api_base),
+        api_base=resolve_direct_api_base(stored, provider),
         ai_route=ai_route,
         cliproxy=CLIProxyConfigResponse(
             base_url=cliproxy["base_url"],
@@ -171,6 +178,16 @@ def _build_llm_config_response(stored: dict) -> LLMConfigResponse:
         ),
         cliproxy_route_enabled=settings.enable_cliproxy_route,
     )
+
+
+def _direct_api_base_from_request_or_stored(
+    request: LLMConfigRequest | None,
+    stored: dict,
+    provider: str,
+) -> str | None:
+    if request and request.api_base is not None:
+        return resolve_direct_api_base({"api_base": request.api_base}, provider)
+    return resolve_direct_api_base(stored, provider)
 
 
 def _cliproxy_model_provider(model_id: str) -> str:
@@ -240,8 +257,8 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             user_prompt=PARSE_RESUME_PROMPT,
         ),
         PromptCatalogEntry(
-            id="job_extract_keywords",
-            operation="job_intelligence_extract",
+            id=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
+            operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
             version=PROMPT_VERSIONS.get("extract_keywords"),
             system_prompt=EXTRACT_JD_INTELLIGENCE_SYSTEM_PROMPT,
             user_prompt=EXTRACT_JD_INTELLIGENCE_PROMPT,
@@ -252,12 +269,11 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("tailoring_user"),
             system_prompt="\n\n".join(
                 [
-                    TAILORING_CONTRACT_BLOCK,
                     TAILORING_CRAFT_BLOCK,
                     TAILORING_MODE_STRATEGY["full"],
                 ]
             ),
-            user_prompt=TAILORING_USER_SHELL,
+            user_prompt=TAILORING_USER_SHELL_FULL,
             sections=build_resume_tailoring_catalog_sections(),
         ),
         PromptCatalogEntry(
@@ -280,6 +296,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_analyze"),
             system_prompt=ENRICHMENT_ANALYZE_SYSTEM_PROMPT,
             user_prompt=ANALYZE_RESUME_PROMPT,
+            notes="Shipped: text/enrichment/analyze/system.txt, text/enrichment/analyze/user.txt (str.format: resume_json).",
         ),
         PromptCatalogEntry(
             id="enrichment_enhance",
@@ -287,6 +304,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_enhance"),
             system_prompt=ENRICHMENT_ENHANCE_SYSTEM_PROMPT,
             user_prompt=ENHANCE_DESCRIPTION_PROMPT,
+            notes="Shipped: text/enrichment/enhance/system.txt, text/enrichment/enhance/user.txt (str.format).",
         ),
         PromptCatalogEntry(
             id="enrichment_regenerate_item",
@@ -294,6 +312,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_regenerate_item"),
             system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
             user_prompt=REGENERATE_ITEM_PROMPT,
+            notes="Shipped: text/enrichment/regenerate_item/system.txt, text/enrichment/regenerate_item/user.txt (str.format).",
         ),
         PromptCatalogEntry(
             id="enrichment_regenerate_group",
@@ -301,6 +320,7 @@ def _legacy_prompt_catalog_rows() -> list[PromptCatalogEntry]:
             version=PROMPT_VERSIONS.get("enrichment_regenerate_group"),
             system_prompt=ENRICHMENT_REGENERATE_SYSTEM_PROMPT,
             user_prompt=REGENERATE_ADDITIONAL_GROUP_PROMPT,
+            notes="Shipped: text/enrichment/regenerate_group/system.txt, text/enrichment/regenerate_group/user.txt (str.format).",
         ),
     ]
 
@@ -409,6 +429,12 @@ async def update_llm_config(
 
         stored["cliproxy"] = cliproxy
 
+    provider = stored.get("provider", settings.llm_provider)
+    if normalize_ai_route(stored.get("ai_route")) == AI_ROUTE_DIRECT and provider != "ollama":
+        resolved_api_base = resolve_direct_api_base(stored, provider)
+        if resolved_api_base is None and str(stored.get("api_base") or "").strip():
+            stored.pop("api_base", None)
+
     # Build normalized config for response
     # Save config regardless of health check outcome (see docstring).
     _save_config(stored)
@@ -490,11 +516,7 @@ async def test_llm_connection(request: LLMConfigRequest | None = None) -> dict:
                 if request and request.api_key
                 else resolve_api_key(stored, test_provider)
             ),
-            api_base=(
-                request.api_base
-                if request and request.api_base is not None
-                else stored.get("api_base", settings.llm_api_base)
-            ),
+            api_base=_direct_api_base_from_request_or_stored(request, stored, test_provider),
             ai_route=AI_ROUTE_DIRECT,
         )
 
@@ -797,6 +819,21 @@ async def get_prompt_catalog() -> PromptCatalogResponse:
     return _get_prompt_catalog_response()
 
 
+@router.get("/prompts/catalog/master-resume-preview", response_model=MasterResumePreviewResponse)
+async def get_master_resume_preview() -> MasterResumePreviewResponse:
+    text, truncated = capped_master_resume_preview_text(db)
+    return MasterResumePreviewResponse(serialized_original_resume=text, truncated=truncated)
+
+
+@router.get("/prompts/catalog/response-contract-preview", response_model=ResponseContractPreviewResponse)
+async def get_response_contract_preview() -> ResponseContractPreviewResponse:
+    (full_text, full_trunc), (lite_text, lite_trunc) = response_contract_catalog_previews(db)
+    return ResponseContractPreviewResponse(
+        full=ResponseContractModePreview(serialized=full_text, truncated=full_trunc),
+        lite=ResponseContractModePreview(serialized=lite_text, truncated=lite_trunc),
+    )
+
+
 @router.get("/critique", response_model=CritiqueConfigResponse)
 async def get_critique_config() -> CritiqueConfigResponse:
     stored = _load_config()
@@ -929,19 +966,11 @@ async def put_shared_rules(
     request: SharedRulesPutRequest,
 ) -> SharedRuleOverrideSuccess:
     from app.prompts import save_shared_rules_override
-    from app.prompts._rules.critique import USED_BY as CRITIQUE_USED_BY
-    from app.prompts._rules.jd_intel import USED_BY as JD_USED_BY
     from app.prompts._rules.resume_diff import USED_BY as RD_USED_BY
 
-    affected: list[str]
-    if rules_name == "resume_diff":
-        affected = list(RD_USED_BY)
-    elif rules_name == "jd_intel":
-        affected = list(JD_USED_BY)
-    elif rules_name == "critique":
-        affected = list(CRITIQUE_USED_BY)
-    else:
+    if rules_name != "resume_diff":
         raise HTTPException(status_code=404, detail="Unknown shared rules name.")
+    affected = list(RD_USED_BY)
     save_shared_rules_override(rules_name, request.rules)
     return SharedRuleOverrideSuccess(success=True, rules_name=rules_name, affected_steps=affected)
 
@@ -949,19 +978,11 @@ async def put_shared_rules(
 @router.delete("/shared-rules/{rules_name}", response_model=SharedRuleOverrideSuccess)
 async def delete_shared_rules(rules_name: str) -> SharedRuleOverrideSuccess:
     from app.prompts import delete_shared_rules_override
-    from app.prompts._rules.critique import USED_BY as CRITIQUE_USED_BY
-    from app.prompts._rules.jd_intel import USED_BY as JD_USED_BY
     from app.prompts._rules.resume_diff import USED_BY as RD_USED_BY
 
-    affected: list[str]
-    if rules_name == "resume_diff":
-        affected = list(RD_USED_BY)
-    elif rules_name == "jd_intel":
-        affected = list(JD_USED_BY)
-    elif rules_name == "critique":
-        affected = list(CRITIQUE_USED_BY)
-    else:
+    if rules_name != "resume_diff":
         raise HTTPException(status_code=404, detail="Unknown shared rules name.")
+    affected = list(RD_USED_BY)
     delete_shared_rules_override(rules_name)
     return SharedRuleOverrideSuccess(success=True, rules_name=rules_name, affected_steps=affected)
 

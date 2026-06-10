@@ -1,8 +1,17 @@
-import { ImprovedResult } from '@/components/common/resume_previewer_context';
+import type {
+  ImprovedResult,
+  PipelineTimingSummary,
+  ResumeChange,
+  ResumeDiffSummary,
+  ResumeFieldDiff,
+  SkillsObservationPayload,
+  TailoringStageBreakdown,
+} from '@/components/common/resume_previewer_context';
 import type { ResumeData, SkillGroup } from '@/components/dashboard/resume-component';
 import {
   type RenderThemeSettings,
   type RenderPreviewResponse,
+  type ArtifactSummary,
   DEFAULT_RENDER_THEME_SETTINGS,
   renderThemeSettingsToQuery,
   serializeRenderThemeSettings,
@@ -10,6 +19,74 @@ import {
 import { type Locale } from '@/i18n/config';
 import { normalizeResumeSkills } from '@/lib/utils/additional-groups';
 import { API_BASE, apiPost, apiPatch, apiPut, apiDelete, apiFetch } from './client';
+
+/** Non-OK response from improve / preview / confirm endpoints, with parsed FastAPI `detail`. */
+export class ImproveApiError extends Error {
+  readonly status: number;
+  readonly detail: unknown;
+  constructor(message: string, status: number, detail?: unknown) {
+    super(message);
+    this.name = 'ImproveApiError';
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+function formatImproveErrorResponse(
+  status: number,
+  bodyText: string
+): { message: string; detail: unknown } {
+  let detail: unknown;
+  try {
+    const parsed = JSON.parse(bodyText) as { detail?: unknown };
+    detail = parsed.detail;
+  } catch {
+    detail = undefined;
+  }
+
+  if (typeof detail === 'string') {
+    const msg = detail.trim();
+    return { message: msg || `Request failed (${status}).`, detail };
+  }
+
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const d = detail as Record<string, unknown>;
+    const lines: string[] = [];
+    if (typeof d.stage_label === 'string' && d.stage_label.trim()) {
+      lines.push(d.stage_label.trim());
+    }
+    if (typeof d.message === 'string' && d.message.trim()) {
+      lines.push(d.message.trim());
+    }
+    if (Array.isArray(d.hints)) {
+      for (const h of d.hints) {
+        if (typeof h === 'string' && h.trim()) {
+          lines.push(`• ${h.trim()}`);
+        }
+      }
+    }
+    if (typeof d.technical_detail === 'string' && d.technical_detail.trim()) {
+      lines.push(`Details: ${d.technical_detail.trim()}`);
+    }
+    if (lines.length) {
+      return { message: lines.join('\n\n'), detail };
+    }
+  }
+
+  if (Array.isArray(detail)) {
+    const first = detail[0] as Record<string, unknown> | undefined;
+    const msg =
+      first && typeof first === 'object' && typeof first.msg === 'string' ? first.msg : null;
+    if (msg) return { message: msg, detail };
+  }
+
+  const trimmed = bodyText.trim();
+  const suffix = trimmed ? trimmed.slice(0, 600) : '';
+  return {
+    message: suffix ? `Request failed (${status}).\n\n${suffix}` : `Request failed (${status}).`,
+    detail,
+  };
+}
 
 // Matches backend schemas/models.py ResumeData
 interface ProcessedResume {
@@ -53,7 +130,7 @@ interface ProcessedResume {
     end_date?: string | null;
     date?: string;
     years?: string;
-    summary?: string | null;
+    techStack?: string | null;
     description?: string[];
     highlights?: string[];
   }>;
@@ -74,7 +151,7 @@ interface ProcessedResume {
   personalProjects?: Array<{
     id: number;
     name?: string;
-    summary?: string | null;
+    techStack?: string | null;
     role?: string;
     date?: string;
     years?: string;
@@ -82,6 +159,7 @@ interface ProcessedResume {
     website?: string | null;
     description?: string[];
     highlights?: string[];
+    includeInResume?: boolean;
   }>;
   skills?: {
     groups?: SkillGroup[];
@@ -110,6 +188,8 @@ interface ResumeResponse {
     parent_id?: string | null; // For determining if resume is tailored
     title?: string | null;
     application_pack_id?: string | null;
+    generation_run_id?: string | null;
+    llm_trace_id?: string | null;
     theme_settings?: RenderThemeSettings | null;
   };
 }
@@ -142,6 +222,50 @@ interface GenerateAuxiliaryPackageResponse {
   cover_letter: string;
   outreach_message: string;
   message: string;
+}
+
+export type LiveGenerationEventType =
+  | 'run.started'
+  | 'stage.started'
+  | 'stage.completed'
+  | 'llm.started'
+  | 'llm.delta'
+  | 'llm.completed'
+  | 'section.updated'
+  | 'timing.entry'
+  | 'artifact.started'
+  | 'artifact.completed'
+  | 'run.completed'
+  | 'run.failed'
+  | 'run.cancelled'
+  | 'heartbeat';
+
+export interface LiveGenerationEvent {
+  event_id: string;
+  sequence: number;
+  live_run_id: string;
+  generation_run_id: string;
+  trace_id: string;
+  type: LiveGenerationEventType;
+  at: string;
+  data: Record<string, unknown>;
+}
+
+export interface LivePreviewStartData {
+  live_run_id: string;
+  generation_run_id: string;
+  trace_id: string;
+  status: 'running';
+}
+
+export interface LivePreviewStartResponse {
+  request_id: string;
+  data: LivePreviewStartData;
+}
+
+export interface LivePreviewEventHandlers {
+  onEvent?: (event: LiveGenerationEvent) => void;
+  onError?: (error: Event) => void;
 }
 
 export interface ApplicationQuestionAnswer {
@@ -282,12 +406,48 @@ function normalizeDraftValidationDetail(value: unknown): DraftValidationDetail |
   };
 }
 
+/** Migrate legacy per-role / per-project `summary` into `techStack` and drop `summary` on those rows. */
+function migrateWorkProjectTechStackKeys<T extends Record<string, unknown>>(resume: T): T {
+  const out: Record<string, unknown> = { ...resume };
+
+  const work = out.workExperience;
+  if (Array.isArray(work)) {
+    out.workExperience = work.map((entry) => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const row = { ...(entry as Record<string, unknown>) };
+      const legacy = row.summary;
+      delete row.summary;
+      if ((row.techStack == null || row.techStack === '') && legacy != null && legacy !== '') {
+        row.techStack = legacy;
+      }
+      return row;
+    });
+  }
+
+  const projects = out.personalProjects;
+  if (Array.isArray(projects)) {
+    out.personalProjects = projects.map((entry) => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const row = { ...(entry as Record<string, unknown>) };
+      const legacy = row.summary;
+      delete row.summary;
+      if ((row.techStack == null || row.techStack === '') && legacy != null && legacy !== '') {
+        row.techStack = legacy;
+      }
+      return row;
+    });
+  }
+
+  return out as T;
+}
+
 function normalizeProcessedResume<T extends ProcessedResume | ResumeData | null>(value: T): T {
   if (!value) {
     return value;
   }
 
-  return normalizeResumeSkills(value) as T;
+  const migrated = migrateWorkProjectTechStackKeys(value as Record<string, unknown>);
+  return normalizeResumeSkills(migrated as ResumeData) as T;
 }
 
 export function isDraftRequestError(error: unknown): error is DraftRequestError {
@@ -358,6 +518,8 @@ export interface ResumeListItem {
   target_company?: string | null;
   target_role?: string | null;
   target_location?: string | null;
+  /** Present when this resume was saved from an application-pack confirm run with LLM tracing. */
+  llm_trace_id?: string | null;
   // Legacy metadata keys from older payloads/backfills.
   company?: string | null;
   role?: string | null;
@@ -380,7 +542,8 @@ async function postImprove(
   const text = await response.text();
   if (!response.ok) {
     console.error('Improve failed response body:', text);
-    throw new Error(`Improve failed with status ${response.status}: ${text}`);
+    const { message, detail } = formatImproveErrorResponse(response.status, text);
+    throw new ImproveApiError(message, response.status, detail);
   }
 
   try {
@@ -416,7 +579,7 @@ export async function improveResume(
   resumeId: string,
   jobId: string,
   promptId?: string,
-  options: { signal?: AbortSignal } = {}
+  options: { customPromptInstructions?: string | null; signal?: AbortSignal } = {}
 ): Promise<ImprovedResult> {
   return postImprove(
     '/resumes/improve',
@@ -424,6 +587,7 @@ export async function improveResume(
       resume_id: resumeId,
       job_id: jobId,
       prompt_id: promptId ?? null,
+      custom_prompt_instructions: options.customPromptInstructions?.trim() || null,
     },
     options.signal
   );
@@ -435,6 +599,7 @@ export async function previewImproveResume(
   jobId: string,
   options: {
     promptId?: string;
+    customPromptInstructions?: string | null;
     includeCoverLetter?: boolean;
     includeOutreachMessage?: boolean;
     themeSettings?: RenderThemeSettings | null;
@@ -447,6 +612,7 @@ export async function previewImproveResume(
       resume_id: resumeId,
       job_id: jobId,
       prompt_id: options.promptId ?? null,
+      custom_prompt_instructions: options.customPromptInstructions?.trim() || null,
       include_cover_letter: options.includeCoverLetter ?? null,
       include_outreach_message: options.includeOutreachMessage ?? null,
       theme_settings: options.themeSettings
@@ -455,6 +621,105 @@ export async function previewImproveResume(
     },
     options.signal
   );
+}
+
+export async function startLivePreview(
+  resumeId: string,
+  jobId: string,
+  options: {
+    promptId?: string;
+    customPromptInstructions?: string | null;
+    includeCoverLetter?: boolean;
+    includeOutreachMessage?: boolean;
+    themeSettings?: RenderThemeSettings | null;
+    signal?: AbortSignal;
+  } = {}
+): Promise<LivePreviewStartData> {
+  const response = await apiPost(
+    '/application-packs/preview/live',
+    {
+      resume_id: resumeId,
+      job_id: jobId,
+      prompt_id: options.promptId ?? null,
+      custom_prompt_instructions: options.customPromptInstructions?.trim() || null,
+      include_cover_letter: options.includeCoverLetter ?? null,
+      include_outreach_message: options.includeOutreachMessage ?? null,
+      theme_settings: options.themeSettings
+        ? serializeRenderThemeSettings(options.themeSettings)
+        : undefined,
+    },
+    30_000,
+    options.signal
+  );
+  const text = await response.text();
+  if (!response.ok) {
+    const { message, detail } = formatImproveErrorResponse(response.status, text);
+    throw new ImproveApiError(message, response.status, detail);
+  }
+  return (JSON.parse(text) as LivePreviewStartResponse).data;
+}
+
+export function subscribeLivePreviewEvents(
+  liveRunId: string,
+  handlers: LivePreviewEventHandlers = {}
+): EventSource {
+  const url = `${API_BASE}/application-packs/preview/live/${encodeURIComponent(liveRunId)}/events`;
+  const source = new EventSource(url);
+  const eventTypes: LiveGenerationEventType[] = [
+    'run.started',
+    'stage.started',
+    'stage.completed',
+    'llm.started',
+    'llm.delta',
+    'llm.completed',
+    'section.updated',
+    'timing.entry',
+    'artifact.started',
+    'artifact.completed',
+    'run.completed',
+    'run.failed',
+    'run.cancelled',
+    'heartbeat',
+  ];
+
+  const parse = (message: MessageEvent<string>) => {
+    try {
+      handlers.onEvent?.(JSON.parse(message.data) as LiveGenerationEvent);
+    } catch (error) {
+      console.error('Failed to parse live preview event:', error, message.data);
+    }
+  };
+
+  for (const eventType of eventTypes) {
+    source.addEventListener(eventType, parse as EventListener);
+  }
+  source.onerror = (event) => handlers.onError?.(event);
+  return source;
+}
+
+export async function fetchLivePreviewResult(liveRunId: string): Promise<ImprovedResult> {
+  const response = await apiFetch(
+    `/application-packs/preview/live/${encodeURIComponent(liveRunId)}/result`,
+    undefined,
+    30_000
+  );
+  const text = await response.text();
+  if (!response.ok) {
+    const { message, detail } = formatImproveErrorResponse(response.status, text);
+    throw new ImproveApiError(message, response.status, detail);
+  }
+  return JSON.parse(text) as ImprovedResult;
+}
+
+export async function cancelLivePreview(liveRunId: string): Promise<void> {
+  const response = await apiPost(
+    `/application-packs/preview/live/${encodeURIComponent(liveRunId)}/cancel`,
+    {},
+    30_000
+  );
+  if (!response.ok) {
+    throw new Error(`Cancel failed with status ${response.status}`);
+  }
 }
 
 /** Confirms and saves a tailored resume */
@@ -634,6 +899,18 @@ export async function renameResume(resumeId: string, title: string): Promise<voi
   }
 }
 
+/** Cover letter PDF endpoint only supports fixed paper sizes. */
+export function physicalPageSizeForCoverLetter(
+  pageSize: 'A4' | 'LETTER' | 'FREEFLOW',
+  designPaper?: 'a4' | 'us-letter'
+): 'A4' | 'LETTER' {
+  if (pageSize === 'LETTER') return 'LETTER';
+  if (pageSize === 'FREEFLOW') {
+    return designPaper === 'us-letter' ? 'LETTER' : 'A4';
+  }
+  return 'A4';
+}
+
 /** Downloads cover letter as PDF */
 export function getCoverLetterPdfUrl(
   resumeId: string,
@@ -719,6 +996,47 @@ export async function fetchJobDescription(
     throw new Error(`Failed to fetch job description (status ${res.status}): ${text}`);
   }
   return res.json();
+}
+
+export type JdTailorDiffSource =
+  | 'stored_detailed_changes'
+  | 'recomputed_confirmation_snapshot'
+  | 'live_vs_master';
+
+export interface JdTailorDiffData {
+  generation_run_id: string;
+  diff_source: JdTailorDiffSource;
+  diff_summary?: ResumeDiffSummary | null;
+  detailed_changes: ResumeFieldDiff[];
+  change_manifest: ResumeChange[];
+  change_breakdown?: TailoringStageBreakdown | null;
+  pipeline_timing?: PipelineTimingSummary | null;
+  artifacts?: ArtifactSummary[];
+  skills_observability?: SkillsObservationPayload | Record<string, unknown> | null;
+}
+
+export interface JdTailorDiffResponse {
+  request_id: string;
+  data: JdTailorDiffData | null;
+  unavailable_reason?: string | null;
+}
+
+/** Line-level JD tailoring diff persisted at confirmation (reference view in builder). */
+export async function fetchJdTailorDiff(
+  resumeId: string,
+  options?: { generationRunId?: string | null }
+): Promise<JdTailorDiffResponse> {
+  const params = new URLSearchParams();
+  if (options?.generationRunId) {
+    params.set('generation_run_id', options.generationRunId);
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/resumes/${encodeURIComponent(resumeId)}/jd-tailor-diff${suffix}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch tailoring diff (status ${res.status}): ${text}`);
+  }
+  return res.json() as Promise<JdTailorDiffResponse>;
 }
 
 export async function fetchResumeRenderPreview(

@@ -1,29 +1,56 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Check, Copy, Cpu } from 'lucide-react';
 import type { PromptComposerPayload, PromptManagerEntry, PromptVariable } from '@/lib/api/config';
 import { deletePromptComposer, fetchPromptComposer, putPromptComposer } from '@/lib/api/config';
 import { Button } from '@/components/ui/button';
 import { CopyCharBar } from '@/components/settings/prompt-field-chrome';
+import { AutosizePromptTextarea } from '@/components/settings/autosize-prompt-textarea';
+import { buildPromptAdvisorClipboardText } from '@/lib/prompt-advisor-copy';
 
-const cardClass =
-  'entry-card-editor border-black/20 bg-white';
+const cardClass = 'scroll-mt-6 rounded-lg border border-slate-200/70 bg-card px-3 py-3 sm:px-4';
 
 const textareaClass =
-  'mt-0.5 min-h-[min(300px,44vh)] w-full resize-y whitespace-pre-wrap border border-black/15 bg-white px-1.5 py-1 font-mono text-[11px] leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25';
+  'w-full resize-y whitespace-pre-wrap rounded-md border border-slate-200/80 bg-slate-50/50 px-2 py-2 font-mono text-[12px] leading-relaxed text-slate-800 focus-visible:border-slate-300 focus-visible:bg-card focus-visible:outline-none';
+
+const shippedPreClass =
+  'whitespace-pre-wrap break-words rounded-md border border-slate-100 bg-slate-50/80 p-2.5 font-mono text-[11px] leading-relaxed text-slate-700';
+
+function formatJsonForCatalogPre(text: string): string {
+  const t = text.trim();
+  if (!t) return text;
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
+}
+
+type ComposerTab = 'system' | 'user';
 
 export function PromptCard({
   entry,
   onChangeModel,
   onComposerSaved,
   anchorId,
+  masterResumePreview,
+  masterResumePreviewError,
+  responseContractPreview,
+  responseContractPreviewError,
   t,
 }: {
   entry: PromptManagerEntry;
   onChangeModel: (stepName: string) => void;
   onComposerSaved?: () => Promise<void>;
-  /** DOM id for in-page navigation (default: catalog-step-{step_name}) */
   anchorId?: string;
+  masterResumePreview?: { text: string; truncated: boolean } | null;
+  masterResumePreviewError?: boolean;
+  responseContractPreview?: {
+    full: { text: string; truncated: boolean };
+    lite: { text: string; truncated: boolean };
+  } | null;
+  responseContractPreviewError?: boolean;
   t: (key: string, params?: Record<string, string | number>) => string;
 }): React.ReactElement {
   const sysResolved = entry.system_resolved ?? '';
@@ -31,10 +58,12 @@ export function PromptCard({
   const composerActive = Boolean(entry.composer_override_active);
 
   const [composerOpen, setComposerOpen] = useState(true);
+  const [composerTab, setComposerTab] = useState<ComposerTab>('system');
   const [systemDraft, setSystemDraft] = useState(sysResolved);
   const [userDraft, setUserDraft] = useState(userResolved);
   const [composerBusy, setComposerBusy] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
+  const [advisorCopied, setAdvisorCopied] = useState(false);
 
   useEffect(() => {
     setSystemDraft(sysResolved);
@@ -65,6 +94,20 @@ export function PromptCard({
       setComposerBusy(false);
     }
   };
+
+  const copyAdvisorBundle = useCallback(async (): Promise<void> => {
+    const payload = buildPromptAdvisorClipboardText({
+      systemText: systemDraft,
+      userText: userDraft,
+    });
+    try {
+      await navigator.clipboard.writeText(payload);
+      setAdvisorCopied(true);
+      window.setTimeout(() => setAdvisorCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }, [systemDraft, userDraft]);
 
   const handleResetComposer = async (): Promise<void> => {
     setComposerBusy(true);
@@ -98,138 +141,276 @@ export function PromptCard({
 
   return (
     <article id={domId} className={cardClass}>
-      <div className="flex flex-wrap items-start justify-between gap-1 border-b border-black/10 pb-1.5">
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
-            <span className="font-mono text-[12px] font-bold leading-tight text-gray-900">
-              {entry.label}
-            </span>
-            <span className="font-mono text-[8px] uppercase text-gray-500">{entry.step_name}</span>
-          </div>
-          <p className="truncate font-mono text-[8px] text-gray-500" title={entry.file_path}>
-            {entry.file_path}
-          </p>
-          <p className="mt-0.5 truncate font-mono text-[9px] leading-tight text-gray-700">
-            <span className="text-gray-500">{t('settings.promptCatalog.resolvedModel')}: </span>
-            {entry.model}
-            {entry.model_is_override ? (
-              <span className="ml-1 text-amber-900">
-                ({t('settings.promptCatalog.overrideActive')})
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <h3 className="text-sm font-medium text-slate-900">{entry.label}</h3>
+            <code className="font-mono text-[11px] text-slate-500">{entry.step_name}</code>
+            {composerActive ? (
+              <span className="text-[10px] font-medium text-amber-800/90">
+                {t('settings.promptCatalog.overrideShort')}
               </span>
             ) : null}
+          </div>
+          <p className="mt-0.5 text-[10px] tabular-nums text-slate-400">
+            {entry.pipeline} · v{entry.version} · {entry.model}
+            {entry.model_is_override ? ` · ${t('settings.promptCatalog.modelOverrideShort')}` : ''}
           </p>
+          <details className="mt-1.5 group">
+            <summary className="cursor-pointer list-none text-[11px] text-slate-400 marker:hidden hover:text-slate-600 [&::-webkit-details-marker]:hidden">
+              <span className="border-b border-dotted border-slate-300 group-open:border-slate-500">
+                {t('settings.promptCatalog.sourcesSummary')}
+              </span>
+            </summary>
+            <ul className="mt-1.5 space-y-0.5 border-l border-slate-200 pl-2 font-mono text-[10px] leading-snug text-slate-500">
+              <li>{entry.file_path}</li>
+              {(entry.system_prompt_files?.length ?? 0) > 0 ? (
+                <li>{entry.system_prompt_files?.join(' → ')}</li>
+              ) : null}
+              {entry.user_prompt_file ? <li>{entry.user_prompt_file}</li> : null}
+            </ul>
+          </details>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-0.5">
-          <p className="font-mono text-[8px] uppercase leading-none text-gray-500">
-            {entry.pipeline} · v{entry.version}
-          </p>
-          <Button
-            type="button"
-            variant="builderOutline"
-            size="xs"
-            className="h-6 px-2 text-[9px]"
-            onClick={() => onChangeModel(entry.step_name)}
-          >
-            {t('settings.promptCatalog.changeModel')}
-          </Button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onChangeModel(entry.step_name)}
+          title={t('settings.promptCatalog.changeModel')}
+          aria-label={t('settings.promptCatalog.changeModel')}
+          className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+        >
+          <Cpu className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+          <span className="hidden sm:inline">{t('settings.promptCatalog.modelShort')}</span>
+        </button>
       </div>
 
       <details
-        className="mt-1.5 group"
+        className="mt-2.5"
         open={composerOpen}
-        onToggle={(e) => setComposerOpen((e.target as HTMLDetailsElement).open)}
+        onToggle={(e) => {
+          if (e.target !== e.currentTarget) return;
+          setComposerOpen((e.currentTarget as HTMLDetailsElement).open);
+        }}
       >
-        <summary className="cursor-pointer font-mono text-[8px] font-bold uppercase tracking-wider text-black/55 hover:text-black">
-          {t('settings.promptCatalog.composerSection')}
+        <summary className="cursor-pointer list-none text-xs font-medium text-slate-600 marker:hidden [&::-webkit-details-marker]:hidden">
+          <span className="border-b border-transparent hover:border-slate-300">
+            {t('settings.promptCatalog.composerSection')}
+          </span>
         </summary>
-        <div className="mt-1.5 space-y-1.5 border-t border-black/10 pt-1.5">
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-[8px] text-gray-600">
-            {composerActive ? (
-              <span className="rounded bg-amber-100 px-1 py-0.5 text-amber-950">
-                {t('settings.promptCatalog.composerOverrideActive')}
-              </span>
-            ) : (
-              <span
-                className="max-w-[min(100%,28rem)] truncate"
-                title={t('settings.promptCatalog.composerUsesShippedOrLegacy')}
-              >
-                {t('settings.promptCatalog.composerUsesShippedOrLegacy')}
-              </span>
-            )}
-          </div>
+        <div className="mt-2.5 space-y-2.5 border-t border-slate-100 pt-2.5">
           {displayVariables.length > 0 ? (
             <div
-              className="border border-amber-700/35 bg-gradient-to-b from-amber-50 to-amber-50/40 px-2 py-2 shadow-[inset_4px_0_0_0_rgba(180,83,9,0.75)]"
+              className="rounded-md border border-slate-100 bg-slate-50/40 px-2.5 py-2"
               role="region"
-              aria-label={t('settings.promptCatalog.variables')}
             >
-              <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-amber-950">
+              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
                 {t('settings.promptCatalog.variables')}
               </p>
-              <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+              <ul className="m-0 flex list-none flex-wrap gap-x-2 gap-y-1 p-0">
                 {displayVariables.map((v) => {
                   const desc = (v.description ?? '').trim();
                   return (
                     <li key={v.name} className="min-w-0 max-w-full">
-                      <div className="flex flex-col gap-1">
-                        <kbd
-                          className="inline-flex w-fit max-w-full items-center border-2 border-black/35 bg-white px-2.5 py-1.5 font-mono text-sm font-bold leading-none tracking-tight text-black shadow-[2px_2px_0_0_rgba(0,0,0,0.12)]"
-                          title={desc || `Template variable $${v.name}`}
-                        >
-                          <span className="text-amber-700">${v.name}</span>
-                        </kbd>
-                        {desc ? (
-                          <span className="max-w-[min(100%,20rem)] text-[10px] leading-snug text-black/65">
-                            {desc}
-                          </span>
-                        ) : null}
-                      </div>
+                      <span
+                        className="font-mono text-[11px] text-violet-700"
+                        title={desc || undefined}
+                      >
+                        ${v.name}
+                      </span>
+                      {desc ? (
+                        <span className="ml-1 text-[10px] text-slate-500">{desc}</span>
+                      ) : null}
                     </li>
                   );
                 })}
               </ul>
+              {displayVariables.some((v) => v.name === 'original_resume') ? (
+                <details className="mt-2 border-t border-slate-100/80 pt-2">
+                  <summary className="cursor-pointer list-none text-[10px] font-medium uppercase tracking-wide text-slate-400 marker:hidden [&::-webkit-details-marker]:hidden">
+                    <span className="hover:text-slate-600">
+                      {t('settings.promptCatalog.masterResumePreviewTitle')}
+                    </span>
+                  </summary>
+                  <div className="mt-1.5 space-y-1">
+                    {masterResumePreviewError === true ? (
+                      <p className="text-[11px] text-amber-800">
+                        {t('settings.promptCatalog.masterResumePreviewUnavailable')}
+                      </p>
+                    ) : masterResumePreview && masterResumePreview.text.length > 0 ? (
+                      <>
+                        {masterResumePreview.truncated ? (
+                          <p className="text-[11px] text-amber-800">
+                            {t('settings.promptCatalog.masterResumePreviewTruncated')}
+                          </p>
+                        ) : null}
+                        <pre className={shippedPreClass}>{masterResumePreview.text}</pre>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-slate-500">
+                        {t('settings.promptCatalog.masterResumePreviewEmpty')}
+                      </p>
+                    )}
+                  </div>
+                </details>
+              ) : null}
+              {displayVariables.some((v) => v.name === 'response_contract') ? (
+                <details className="mt-2 border-t border-slate-100/80 pt-2">
+                  <summary className="cursor-pointer list-none text-[10px] font-medium uppercase tracking-wide text-slate-400 marker:hidden [&::-webkit-details-marker]:hidden">
+                    <span className="hover:text-slate-600">
+                      {t('settings.promptCatalog.responseContractPreviewTitle')}
+                    </span>
+                  </summary>
+                  <div className="mt-1.5 space-y-2">
+                    <p className="m-0 text-[11px] leading-snug text-slate-500">
+                      {t('settings.promptCatalog.responseContractPreviewIntro')}
+                    </p>
+                    {responseContractPreviewError === true ? (
+                      <p className="text-[11px] text-amber-800">
+                        {t('settings.promptCatalog.responseContractPreviewUnavailable')}
+                      </p>
+                    ) : responseContractPreview ? (
+                      <>
+                        <div>
+                          <p className="mb-1 mt-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                            {t('settings.promptCatalog.responseContractPreviewFullMode')}
+                          </p>
+                          {responseContractPreview.full.text.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">
+                              {t('settings.promptCatalog.masterResumePreviewEmpty')}
+                            </p>
+                          ) : (
+                            <>
+                              {responseContractPreview.full.truncated ? (
+                                <p className="mb-1 text-[11px] text-amber-800">
+                                  {t('settings.promptCatalog.masterResumePreviewTruncated')}
+                                </p>
+                              ) : null}
+                              <pre className={shippedPreClass}>
+                                {formatJsonForCatalogPre(responseContractPreview.full.text)}
+                              </pre>
+                            </>
+                          )}
+                        </div>
+                        <div>
+                          <p className="mb-1 mt-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                            {t('settings.promptCatalog.responseContractPreviewLiteMode')}
+                          </p>
+                          {responseContractPreview.lite.text.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">
+                              {t('settings.promptCatalog.masterResumePreviewEmpty')}
+                            </p>
+                          ) : (
+                            <>
+                              {responseContractPreview.lite.truncated ? (
+                                <p className="mb-1 text-[11px] text-amber-800">
+                                  {t('settings.promptCatalog.masterResumePreviewTruncated')}
+                                </p>
+                              ) : null}
+                              <pre className={shippedPreClass}>
+                                {formatJsonForCatalogPre(responseContractPreview.lite.text)}
+                              </pre>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
             </div>
           ) : null}
-          {composerError ? (
-            <p className="font-mono text-[10px] text-red-700">{composerError}</p>
-          ) : null}
-          <div className="grid gap-2 lg:grid-cols-2">
-            <div>
-              <div className="flex items-end justify-between gap-2">
-                <p className="font-mono text-[9px] font-bold uppercase leading-none text-gray-500">
-                  {t('settings.promptCatalog.composerSystem')}
-                </p>
-                <CopyCharBar text={systemDraft} t={t} />
-              </div>
-              <textarea
-                className={textareaClass}
-                value={systemDraft}
-                onChange={(e) => setSystemDraft(e.target.value)}
-                spellCheck={false}
-              />
-            </div>
-            <div>
-              <div className="flex items-end justify-between gap-2">
-                <p className="font-mono text-[9px] font-bold uppercase leading-none text-gray-500">
-                  {t('settings.promptCatalog.composerUser')}
-                </p>
-                <CopyCharBar text={userDraft} t={t} />
-              </div>
-              <textarea
-                className={textareaClass}
-                value={userDraft}
-                onChange={(e) => setUserDraft(e.target.value)}
-                spellCheck={false}
-              />
-            </div>
+          {composerError ? <p className="text-xs text-red-600">{composerError}</p> : null}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void copyAdvisorBundle()}
+              title={t('settings.promptCatalog.copyAdvisorBundleTitle')}
+              aria-label={t('settings.promptCatalog.copyAdvisorBundleTitle')}
+              className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+            >
+              {advisorCopied ? (
+                <Check className="h-4 w-4 text-emerald-600" strokeWidth={1.75} aria-hidden />
+              ) : (
+                <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+              )}
+            </button>
           </div>
-          <div className="flex flex-wrap gap-1">
+
+          <div
+            className="flex gap-3 border-b border-slate-100 text-xs"
+            role="tablist"
+            aria-label={t('settings.promptCatalog.composerTablist')}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={composerTab === 'system'}
+              className={`border-b-2 pb-1.5 font-medium transition focus-visible:outline-none focus-visible:ring-0 ${
+                composerTab === 'system'
+                  ? 'border-slate-800 text-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+              onClick={() => setComposerTab('system')}
+            >
+              {t('settings.promptCatalog.composerSystem')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={composerTab === 'user'}
+              className={`border-b-2 pb-1.5 font-medium transition focus-visible:outline-none focus-visible:ring-0 ${
+                composerTab === 'user'
+                  ? 'border-slate-800 text-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+              onClick={() => setComposerTab('user')}
+            >
+              {t('settings.promptCatalog.composerUser')}
+            </button>
+          </div>
+
+          <div role="tabpanel" className="min-w-0">
+            {composerTab === 'system' ? (
+              <div>
+                <div className="mb-1 flex items-end justify-between gap-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                    {t('settings.promptCatalog.composerSystem')}
+                  </span>
+                  <CopyCharBar text={systemDraft} t={t} />
+                </div>
+                <AutosizePromptTextarea
+                  className={textareaClass}
+                  value={systemDraft}
+                  onChange={setSystemDraft}
+                  spellCheck={false}
+                  aria-label={t('settings.promptCatalog.composerSystem')}
+                />
+              </div>
+            ) : (
+              <div>
+                <div className="mb-1 flex items-end justify-between gap-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                    {t('settings.promptCatalog.composerUser')}
+                  </span>
+                  <CopyCharBar text={userDraft} t={t} />
+                </div>
+                <AutosizePromptTextarea
+                  className={textareaClass}
+                  value={userDraft}
+                  onChange={setUserDraft}
+                  spellCheck={false}
+                  aria-label={t('settings.promptCatalog.composerUser')}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              size="xs"
-              variant="builderCta"
-              className="h-6 px-2 text-[10px]"
+              size="sm"
+              variant="ghost"
+              className="h-8 px-3 text-xs font-medium text-slate-800 hover:bg-slate-100"
               disabled={composerBusy}
               onClick={() => void handleSaveComposer()}
             >
@@ -237,9 +418,9 @@ export function PromptCard({
             </Button>
             <Button
               type="button"
-              size="xs"
-              variant="builderOutline"
-              className="h-6 px-2 text-[10px]"
+              size="sm"
+              variant="ghost"
+              className="h-8 px-3 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               disabled={composerBusy}
               onClick={() => void handleResetComposer()}
             >
@@ -247,32 +428,28 @@ export function PromptCard({
             </Button>
           </div>
           {(shippedSys || shippedUser) && (
-            <details className="rounded border border-black/10 bg-[#FAFAF7] p-1.5">
-              <summary className="cursor-pointer font-mono text-[9px] uppercase text-gray-600">
+            <details className="rounded-md border border-slate-100 bg-slate-50/30 px-2 py-2">
+              <summary className="cursor-pointer text-[10px] font-medium uppercase tracking-wide text-slate-400">
                 {t('settings.promptCatalog.composerShippedDefaults')}
               </summary>
-              <div className="mt-1.5 grid gap-1.5 lg:grid-cols-2">
+              <div className="mt-2 flex flex-col gap-3">
                 <div>
-                  <div className="flex items-end justify-between gap-1">
-                    <span className="font-mono text-[8px] uppercase text-gray-500">
+                  <div className="mb-1 flex items-end justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase text-slate-400">
                       {t('settings.promptCatalog.composerSystem')}
                     </span>
                     <CopyCharBar text={shippedSys} t={t} />
                   </div>
-                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap border border-black/10 bg-white p-1.5 text-[9px] leading-snug">
-                    {shippedSys || '—'}
-                  </pre>
+                  <pre className={shippedPreClass}>{shippedSys || '—'}</pre>
                 </div>
                 <div>
-                  <div className="flex items-end justify-between gap-1">
-                    <span className="font-mono text-[8px] uppercase text-gray-500">
+                  <div className="mb-1 flex items-end justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase text-slate-400">
                       {t('settings.promptCatalog.composerUser')}
                     </span>
                     <CopyCharBar text={shippedUser} t={t} />
                   </div>
-                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap border border-black/10 bg-white p-1.5 text-[9px] leading-snug">
-                    {shippedUser || '—'}
-                  </pre>
+                  <pre className={shippedPreClass}>{shippedUser || '—'}</pre>
                 </div>
               </div>
             </details>

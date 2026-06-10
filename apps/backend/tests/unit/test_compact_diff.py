@@ -1,11 +1,18 @@
 """Unit tests for apply_compact_diff and related helpers in preservation.py."""
 
+import copy
+import json
+
 import pytest
 
 from app.services.tailoring.preservation import (
     _all_skill_values,
     apply_compact_diff,
+    finalize_tailored_resume,
+    normalize_metric_units,
 )
+from app.services.tailoring.models import TailoringResumePayload
+from app.services.tailoring.section_format import section_jd_wrapper
 
 
 @pytest.fixture
@@ -41,7 +48,7 @@ def base_resume():
             {
                 "id": 1,
                 "name": "LogLens",
-                "summary": "Creator",
+                "techStack": "Creator",
                 "role": "Creator",
                 "years": "2023 - Present",
                 "description": [
@@ -62,6 +69,35 @@ def base_resume():
 
 
 class TestApplyCompactDiff:
+    def test_tailored_cell_null_retains_bullet(self, base_resume):
+        diff = {
+            "experience": {
+                "0": {
+                    "bullets": {
+                        "0": {"value": None, "why": "Original bullet already optimal."},
+                    }
+                }
+            }
+        }
+        result = apply_compact_diff(base_resume, diff)
+        assert (
+            result["workExperience"][0]["description"][0]
+            == base_resume["workExperience"][0]["description"][0]
+        )
+
+    def test_tailored_values_apply_and_rationale_not_in_resume_json(self, base_resume):
+        diff = {
+            "summary": {"value": "New summary text.", "why": "Aligned to JD."},
+            "experience": {
+                "0": {"bullets": {"0": {"value": "Rewritten bullet.", "why": "Stronger hook."}}}
+            },
+        }
+        result = apply_compact_diff(base_resume, diff)
+        dumped = json.dumps(result)
+        assert "why" not in dumped
+        assert result["summary"] == "New summary text."
+        assert result["workExperience"][0]["description"][0] == "Rewritten bullet."
+
     def test_summary_rewritten(self, base_resume):
         diff = {"summary": "5+ years in Python backend, specialising in APIs."}
         result = apply_compact_diff(base_resume, diff)
@@ -78,6 +114,87 @@ class TestApplyCompactDiff:
         assert result["workExperience"][0]["description"][0] == "Designed high-throughput Python APIs"
         assert result["workExperience"][0]["description"][1] == "Led migration to microservices"
         assert result["workExperience"][0]["description"][2] == "Mentored junior engineers"
+
+    def test_out_of_range_experience_bullet_index_is_skipped(self, base_resume):
+        diff = {"experience": {"0": {"bullets": {"3": "Fourth net-new bullet"}}}}
+        result = apply_compact_diff(base_resume, diff)
+        assert result["workExperience"][0]["description"] == base_resume["workExperience"][0]["description"]
+
+    def test_experience_bullet_indices_use_llm_prompt_slice_not_raw_storage(self):
+        """Compact diff keys index the same list as tailor_resume_full / rewrite_resume (tech line dropped)."""
+        resume = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Senior Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, AWS, Kubernetes",
+                    "description": [
+                        "Python, AWS, Kubernetes",
+                        "First real bullet",
+                        "Second real bullet",
+                        "Third real bullet",
+                        "Fourth real bullet",
+                    ],
+                }
+            ],
+            "personalProjects": [],
+            "skills": {"groups": []},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        diff = {"experience": {"0": {"bullets": {"3": "Fourth bullet rewritten"}}}}
+        result = apply_compact_diff(resume, diff)
+        desc = result["workExperience"][0]["description"]
+        assert desc[0] == "Python, AWS, Kubernetes"
+        assert desc[1] == "First real bullet"
+        assert desc[2] == "Second real bullet"
+        assert desc[3] == "Third real bullet"
+        assert desc[4] == "Fourth bullet rewritten"
+
+    def test_tech_stack_change_does_not_leave_old_tail_bullet(self):
+        """Changing tech_stacks must not make the old stack line count as a real bullet."""
+        resume = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": [
+                        "Python, SQL",
+                        "Old bullet 0",
+                        "Old bullet 1",
+                        "Old bullet 2",
+                    ],
+                }
+            ],
+            "personalProjects": [],
+            "skills": {"groups": []},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        diff = {
+            "experience": {
+                "0": {
+                    "tech_stacks": "Python, PostgreSQL",
+                    "bullets": {
+                        "0": "New bullet 0",
+                        "1": "New bullet 1",
+                        "2": "New bullet 2",
+                    },
+                }
+            }
+        }
+        result = apply_compact_diff(resume, diff)
+        entry = result["workExperience"][0]
+        assert entry["techStack"] == "Python, PostgreSQL"
+        assert entry["description"] == [
+            "Python, PostgreSQL",
+            "New bullet 0",
+            "New bullet 1",
+            "New bullet 2",
+        ]
 
     def test_multiple_bullets_in_same_entry(self, base_resume):
         diff = {
@@ -118,10 +235,10 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, diff)
         assert result["workExperience"] == base_resume["workExperience"]
 
-    def test_out_of_range_bullet_index_skipped(self, base_resume):
-        diff = {"experience": {"0": {"bullets": {"5": "Appended bullet (forbidden)"}}}}
+    def test_trailing_bullet_index_does_not_extend_description(self, base_resume):
+        diff = {"experience": {"0": {"bullets": {"5": "Appended bullet at new index"}}}}
         result = apply_compact_diff(base_resume, diff)
-        assert len(result["workExperience"][0]["description"]) == 3
+        assert result["workExperience"][0]["description"] == base_resume["workExperience"][0]["description"]
 
     def test_non_integer_entry_key_skipped(self, base_resume):
         diff = {"experience": {"Acme Corp": {"bullets": {"0": "should be skipped"}}}}
@@ -141,13 +258,82 @@ class TestApplyCompactDiff:
     def test_project_tech_stacks_written(self, base_resume):
         diff = {"projects": {"0": {"tech_stacks": "Python, Click, observability"}}}
         result = apply_compact_diff(base_resume, diff)
-        assert result["personalProjects"][0]["summary"] == "Python, Click, observability"
+        assert result["personalProjects"][0]["techStack"] == "Python, Click, observability"
 
-    def test_project_tech_stacks_not_applied_to_experience(self, base_resume):
-        diff = {"experience": {"0": {"tech_stacks": "should be ignored", "bullets": {"0": "Bullet"}}}}
+    def test_experience_tech_stacks_applied_with_bullets(self, base_resume):
+        diff = {"experience": {"0": {"tech_stacks": "Python, FastAPI", "bullets": {"0": "Bullet"}}}}
         result = apply_compact_diff(base_resume, diff)
         assert result["workExperience"][0]["description"][0] == "Bullet"
-        assert result["workExperience"][0].get("summary") is None
+        assert result["workExperience"][0].get("techStack") == "Python, FastAPI"
+
+    def test_experience_tech_stack_only_update_replaces_stored_stack_prefix(self):
+        resume = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": ["Python, SQL", "Built APIs"],
+                }
+            ],
+            "personalProjects": [],
+            "skills": {"groups": []},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        diff = {"experience": {"0": {"tech_stacks": "Python, PostgreSQL"}}}
+        result = apply_compact_diff(resume, diff)
+        assert result["workExperience"][0]["techStack"] == "Python, PostgreSQL"
+        assert result["workExperience"][0]["description"] == ["Python, PostgreSQL", "Built APIs"]
+
+    def test_basic_tools_are_stripped_from_compact_output(self, base_resume):
+        diff = {
+            "summary": "Excel analyst.",
+            "experience": {
+                "0": {
+                    "tech_stacks": "Python, Excel, SAP, Teams, Miro",
+                    "bullets": {"0": "Built Excel reports for stakeholders in Miro"},
+                }
+            },
+            "skills": [
+                {
+                    "label": "Tools",
+                    "values": [
+                        "Python",
+                        "Excel",
+                        "JIRA",
+                        "SAP",
+                        "Confluence",
+                        "Notion",
+                        "Miro",
+                    ],
+                },
+            ],
+        }
+        result = apply_compact_diff(base_resume, diff)
+        assert result["summary"] == base_resume["summary"]
+        assert result["workExperience"][0]["techStack"] == "Python, SAP"
+        assert result["workExperience"][0]["description"][0] == base_resume["workExperience"][0]["description"][0]
+        g0 = result["skills"]["groups"][0]
+        assert g0["label"] == "Tools"
+        assert g0["values"] == ["Python", "SAP"]
+
+    def test_metric_units_are_normalized_in_compact_output(self, base_resume):
+        diff = {
+            "experience": {
+                "0": {
+                    "bullets": {
+                        "0": "Cut prep time from ~6 hours/week to ~45 minutes",
+                        "1": "Reduced batch runtime from 45+ minutes to ~12 minutes",
+                    }
+                }
+            }
+        }
+        result = apply_compact_diff(base_resume, diff)
+        desc = result["workExperience"][0]["description"]
+        assert desc[0] == "Cut prep time from ~6h/wk to ~45 min"
+        assert desc[1] == "Reduced batch runtime from 45+ min to ~12 min"
 
     def test_skills_regroup_applied(self, base_resume):
         new_skills = [
@@ -156,7 +342,10 @@ class TestApplyCompactDiff:
         ]
         diff = {"skills": new_skills}
         result = apply_compact_diff(base_resume, diff)
-        assert result["skills"]["groups"] == new_skills
+        assert len(result["skills"]["groups"]) == len(new_skills)
+        for i, ng in enumerate(new_skills):
+            assert result["skills"]["groups"][i]["label"] == ng["label"]
+            assert result["skills"]["groups"][i]["values"] == ng["values"]
 
     def test_skills_dict_shape_with_groups_is_supported(self, base_resume):
         diff = {
@@ -185,11 +374,12 @@ class TestApplyCompactDiff:
         }
         result = apply_compact_diff(base_resume, diff)
         groups = result["skills"]["groups"]
-        assert len(groups) == 6
+        assert len(groups) == 5
         flattened = [item for group in groups for item in group["values"]]
         assert flattened.count("Python") == 1
         assert flattened.count("SQL") == 1
         assert "ShouldNotAppear" not in flattened
+        assert "AWS SAA" not in flattened
 
     def test_skills_absent_key_unchanged(self, base_resume):
         diff = {"summary": "New summary."}
@@ -234,7 +424,7 @@ class TestApplyCompactDiff:
         }
         result = apply_compact_diff(base_resume, diff)
         assert result["personalProjects"][0]["name"] == "LogLens | Observability Toolkit"
-        assert result["personalProjects"][0]["summary"] == "Python, Click, observability"
+        assert result["personalProjects"][0]["techStack"] == "Python, Click, observability"
         assert result["personalProjects"][0]["description"][0] == "Built a CLI for structured log analysis"
 
     def test_position_not_applied_to_projects(self, base_resume):
@@ -248,7 +438,6 @@ class TestApplyCompactDiff:
         assert result["workExperience"][0].get("name") is None
 
     def test_original_not_mutated(self, base_resume):
-        import copy
         original_copy = copy.deepcopy(base_resume)
         diff = {"summary": "Changed.", "experience": {"0": {"bullets": {"0": "New"}}}}
         apply_compact_diff(base_resume, diff)
@@ -259,6 +448,157 @@ class TestApplyCompactDiff:
         result = apply_compact_diff(base_resume, {})
         assert result["summary"] == base_resume["summary"]
         assert result["workExperience"] == base_resume["workExperience"]
+
+    def test_finalize_enforces_original_description_counts(self):
+        original = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": ["Python, SQL", "Old 0", "Old 1"],
+                }
+            ],
+            "personalProjects": [
+                {
+                    "name": "Project",
+                    "techStack": "Python",
+                    "description": ["Old project"],
+                }
+            ],
+            "skills": {"groups": [{"label": "Data", "values": ["Python"]}]},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        improved = {
+            **original,
+            "workExperience": [
+                {
+                    **original["workExperience"][0],
+                    "description": ["Python, SQL", "New 0", "New 1", "Leaked old tail"],
+                }
+            ],
+            "personalProjects": [
+                {
+                    **original["personalProjects"][0],
+                    "description": ["New project", "Leaked project tail"],
+                }
+            ],
+        }
+        payload = TailoringResumePayload.from_resume_data(improved)
+        assert payload is not None
+
+        result, warnings, _location_source, _location_value = finalize_tailored_resume(
+            payload=payload,
+            original_resume_data=original,
+            original_resume_markdown="",
+            cleanup_source_data=None,
+            job_content="",
+            job_keywords={},
+            prompt_id="full",
+        )
+
+        work_highlights = result["workExperience"][0]["highlights"]
+        project_desc = result["personalProjects"][0]["description"]
+        assert work_highlights == ["New 0", "New 1"]
+        assert project_desc == ["New project"]
+        assert any("description count" in warning for warning in warnings)
+
+    def test_finalize_removes_basic_tool_leakage_from_full_payload(self):
+        original = {
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "techStack": "Python, SQL",
+                    "description": ["Python, SQL", "Built APIs", "Shipped data models"],
+                }
+            ],
+            "personalProjects": [
+                {
+                    "name": "Project",
+                    "techStack": "Python",
+                    "description": ["Built project"],
+                }
+            ],
+            "skills": {"groups": [{"label": "Data", "values": ["Python", "SQL"]}]},
+            "customSections": {},
+            "personalInfo": {},
+        }
+        improved = {
+            **original,
+            "summary": "Engineer using Excel and Miro.",
+            "workExperience": [
+                {
+                    **original["workExperience"][0],
+                    "techStack": "Python, SQL, Excel, Miro",
+                    "description": [
+                        "Python, SQL, Excel, Miro",
+                        "Built Excel workflows in Miro",
+                        "Reduced batch time from 45 minutes to 12 minutes",
+                    ],
+                }
+            ],
+            "skills": {
+                "groups": [
+                    {"label": "Tools", "values": ["Python", "Excel", "Miro", "SQL"]}
+                ]
+            },
+        }
+        payload = TailoringResumePayload.from_resume_data(improved)
+        assert payload is not None
+
+        result, warnings, _location_source, _location_value = finalize_tailored_resume(
+            payload=payload,
+            original_resume_data=original,
+            original_resume_markdown="",
+            cleanup_source_data=None,
+            job_content="",
+            job_keywords={},
+            prompt_id="full",
+        )
+
+        entry = result["workExperience"][0]
+        assert entry["techStack"] == "Python, SQL"
+        assert "Excel" not in result["summary"]
+        assert entry["highlights"] == [
+            "Built APIs",
+            "Reduced batch time from 45 min to 12 min",
+        ]
+        assert result["skills"]["groups"][0]["label"] == "Tools"
+        assert result["skills"]["groups"][0]["values"] == ["Python", "SQL"]
+        assert any("blocked low-signal" in warning.lower() for warning in warnings)
+
+    def test_finalize_reads_target_location_from_section_jd_wrapper(self, base_resume):
+        payload = TailoringResumePayload.from_resume_data(base_resume)
+        assert payload is not None
+        wrapper = section_jd_wrapper(
+            """
+=== JD METADATA ===
+ROLE: Backend Engineer
+COMPANY: Acme
+LOCATION: San Jose, CA
+
+=== JD INTEL ===
+HOOKS: build APIs
+"""
+        )
+
+        result, _warnings, location_source, location_value = finalize_tailored_resume(
+            payload=payload,
+            original_resume_data=base_resume,
+            original_resume_markdown="",
+            cleanup_source_data=None,
+            job_content="",
+            job_keywords=wrapper,
+            prompt_id="full",
+        )
+
+        assert result["personalInfo"]["location"] == "San Jose, CA"
+        assert location_source == "jd"
+        assert location_value == "San Jose, CA"
 
 
 class TestAllSkillValues:
@@ -275,37 +615,8 @@ class TestAllSkillValues:
         assert vals == {"Go", "Rust"}
 
 
-class TestJDIntelligence:
-    def test_to_prompt_dict_strips_empty_fields(self):
-        from app.services.tailoring.models import JDIntelligence
-        intel = JDIntelligence(
-            role={"title": "Backend Engineer", "seniority": "senior"},
-            company={"name": "TechCorp"},
-            ats_keywords=["Python", "FastAPI"],
-        )
-        d = intel.to_prompt_dict()
-        assert d["role"]["title"] == "Backend Engineer"
-        assert "location" not in d
-        assert "bold_keywords" not in d
-        assert d["ats_keywords"] == ["Python", "FastAPI"]
-
-    def test_to_legacy_keywords_backward_compat(self):
-        from app.services.tailoring.models import JDIntelligence
-        intel = JDIntelligence(
-            role={"title": "Backend Engineer", "seniority": "senior"},
-            company={"name": "TechCorp"},
-            location="Remote",
-            technical_requirements={"primary_stack": ["Python", "FastAPI"]},
-            requirements={"years": 5, "education": "BS in CS"},
-            ats_keywords=["microservices"],
-            responsibility_themes=["API design"],
-        )
-        legacy = intel.to_legacy_keywords()
-        assert legacy["core_title"] == "Backend Engineer"
-        assert legacy["company_name"] == "TechCorp"
-        assert legacy["location"] == "Remote"
-        assert legacy["required_skills"] == ["Python", "FastAPI"]
-        assert legacy["experience_years"] == 5
-        assert legacy["seniority_level"] == "senior"
-        assert legacy["keywords"] == ["microservices"]
-        assert legacy["education_requirements"] == ["BS in CS"]
+def test_normalize_metric_units_compacts_time_phrases() -> None:
+    assert (
+        normalize_metric_units("from ~6 hours/week to 45 minutes and 200 milliseconds")
+        == "from ~6h/wk to 45 min and 200 ms"
+    )

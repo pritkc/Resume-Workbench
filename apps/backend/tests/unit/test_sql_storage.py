@@ -191,3 +191,191 @@ def test_duplicate_resume_copies_content_and_clears_lineage(tmp_path: Path) -> N
         assert dup["is_active"] is False
         assert dup["processed_data"] == {"summary": "S"}
         assert dup["title"] == "Engineer (copy)"
+
+
+def test_map_llm_trace_ids_from_generation_run_payload(tmp_path: Path) -> None:
+    with create_test_database(tmp_path) as database:
+        master = database.create_resume(content="# M", is_active=True)
+        tailored = database.create_resume(
+            content="{}",
+            content_type="json",
+            parent_id=master["resume_id"],
+            is_active=False,
+        )
+        job = database.create_job(content="JD", resume_id=master["resume_id"])
+        preview = database.create_generation_run(
+            run_kind="application_pack_preview",
+            status="completed",
+            source_resume_id=master["resume_id"],
+            tailored_resume_id=tailored["resume_id"],
+            job_id=job["job_id"],
+            request_payload={"llm_trace_id": "trace-preview-xyz"},
+        )
+        database.create_generation_run(
+            run_kind="application_pack_confirm",
+            status="completed",
+            source_resume_id=master["resume_id"],
+            tailored_resume_id=tailored["resume_id"],
+            job_id=job["job_id"],
+            request_payload={
+                "preview_generation_run_id": preview["generation_run_id"],
+                "llm_trace_id": "trace-confirm-other",
+            },
+        )
+        assert database.map_llm_trace_ids_for_resume_ids([tailored["resume_id"]]) == {
+            tailored["resume_id"]: "trace-preview-xyz"
+        }
+        assert database.map_llm_trace_ids_for_resume_ids([master["resume_id"]]) == {}
+
+
+def test_map_llm_trace_ids_fallback_when_no_preview_link(tmp_path: Path) -> None:
+    """Confirm-only runs without ``preview_generation_run_id`` still expose their trace."""
+    with create_test_database(tmp_path) as database:
+        master = database.create_resume(content="# M", is_active=True)
+        tailored = database.create_resume(
+            content="{}",
+            content_type="json",
+            parent_id=master["resume_id"],
+            is_active=False,
+        )
+        job = database.create_job(content="JD", resume_id=master["resume_id"])
+        database.create_generation_run(
+            run_kind="application_pack_confirm",
+            status="completed",
+            source_resume_id=master["resume_id"],
+            tailored_resume_id=tailored["resume_id"],
+            job_id=job["job_id"],
+            request_payload={"llm_trace_id": "trace-legacy-only"},
+        )
+        assert database.map_llm_trace_ids_for_resume_ids([tailored["resume_id"]]) == {
+            tailored["resume_id"]: "trace-legacy-only"
+        }
+
+
+def test_compact_diff_validation_merges_into_latest_matching_llm_trace_row(tmp_path: Path) -> None:
+    """``attach_compact_diff_validation_to_latest_llm_call`` updates the newest matching row."""
+
+    from datetime import datetime, timezone
+
+    with create_test_database(tmp_path) as database:
+        ts_early = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        ts_late = datetime(2025, 2, 1, tzinfo=timezone.utc)
+
+        database.create_llm_call(
+            llm_call_id=f"a-{uuid4().hex}",
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-env",
+            request_scope="unit",
+            operation="resume_generate_full",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="json",
+            success=True,
+            json_mode=True,
+            prompt_chars=10,
+            request_context={"note": "older"},
+            completed_at=ts_early,
+        )
+        database.create_llm_call(
+            llm_call_id=f"b-{uuid4().hex}",
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-env",
+            request_scope="unit",
+            operation="resume_generate_full",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="json",
+            success=True,
+            json_mode=True,
+            prompt_chars=11,
+            request_context={"note": "target"},
+            completed_at=ts_late,
+        )
+
+        envelope = {
+            "phase": "primary_tailor",
+            "valid": False,
+            "errors": ["x: why missing"],
+            "warnings": [],
+            "error_count": 1,
+            "warning_count": 0,
+            "origin": "test fixture",
+        }
+        merged = database.attach_compact_diff_validation_to_latest_llm_call(
+            trace_id="trace-env",
+            operation="resume_generate_full",
+            envelope_validation=envelope,
+        )
+        assert merged is True
+
+        refreshed = database.list_llm_calls(
+            trace_id="trace-env", operation="resume_generate_full", limit=10
+        )
+        by_llm_call = {r["llm_call_id"]: r["request_context"] or {} for r in refreshed}
+
+        with_envelope = [
+            ctx for ctx in by_llm_call.values() if isinstance(ctx.get("compact_diff_validation"), dict)
+        ]
+        assert len(with_envelope) == 1
+        assert with_envelope[0]["note"] == "target"
+        assert with_envelope[0]["compact_diff_validation"] == envelope
+
+        without_envelope = [
+            ctx
+            for ctx in by_llm_call.values()
+            if ctx.get("note") == "older" and "compact_diff_validation" not in ctx
+        ]
+        assert len(without_envelope) == 1
+
+
+def test_llm_calls_filter_and_merge_by_resume_code(tmp_path: Path) -> None:
+    with create_test_database(tmp_path) as database:
+        first_id = f"a-{uuid4().hex}"
+        second_id = f"b-{uuid4().hex}"
+        database.create_llm_call(
+            llm_call_id=first_id,
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-preview",
+            request_scope="resumes.improve_preview",
+            operation="resume_generate_full",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="text",
+            success=True,
+            json_mode=False,
+            prompt_chars=10,
+            request_context={"source_resume_code": "SRC123"},
+        )
+        database.create_llm_call(
+            llm_call_id=second_id,
+            call_group_id=f"g-{uuid4().hex}",
+            trace_id="trace-aux",
+            request_scope="resumes.generate_auxiliary_package",
+            operation="cover_letter_outreach_generate",
+            provider="test",
+            model="test/model",
+            model_name="test-model",
+            request_kind="text",
+            success=True,
+            json_mode=False,
+            prompt_chars=11,
+            request_context={"resume_code": "TAIL99"},
+        )
+
+        assert database.merge_llm_call_context_for_trace(
+            "trace-preview",
+            {"resume_code": "TAIL99", "tailored_resume_code": "TAIL99"},
+        ) == 1
+
+        rows = database.list_llm_calls(resume_code="TAIL99", limit=10)
+        assert {row["llm_call_id"] for row in rows} == {first_id, second_id}
+
+        summary = database.summarize_llm_calls(resume_code="TAIL99")
+        assert summary["total_calls"] == 2
+        assert {op["operation"] for op in summary["operations"]} == {
+            "resume_generate_full",
+            "cover_letter_outreach_generate",
+        }

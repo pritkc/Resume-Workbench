@@ -76,7 +76,7 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] p-0 gap-0 rounded-none">
-        <DialogHeader className="p-6 pb-4 border-b border-black">
+        <DialogHeader className="p-6 pb-4 border-b border-border">
           <DialogTitle className="font-serif text-xl font-bold uppercase tracking-tight">
             {t('builder.regenerate.selectDialog.title')}
           </DialogTitle>
@@ -94,12 +94,12 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
 
           {/* Experience Section */}
           {experienceItems.length > 0 && (
-            <div className="border border-black">
+            <div className="border border-border">
               <button
                 type="button"
                 onClick={() => toggleSection('experience')}
                 aria-expanded={expandedSections.has('experience')}
-                className="w-full p-4 flex items-center justify-between bg-[#F0F0E8] hover:bg-[#E5E5E0] transition-colors"
+                className="w-full p-4 flex items-center justify-between bg-background hover:bg-secondary transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Briefcase className="w-5 h-5" />
@@ -117,7 +117,7 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
                 )}
               </button>
               {expandedSections.has('experience') && (
-                <div className="border-t border-black">
+                <div className="border-t border-border">
                   {experienceItems.map((item) => (
                     <ItemRow
                       key={item.item_id}
@@ -133,12 +133,12 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
 
           {/* Projects Section */}
           {projectItems.length > 0 && (
-            <div className="border border-black">
+            <div className="border border-border">
               <button
                 type="button"
                 onClick={() => toggleSection('projects')}
                 aria-expanded={expandedSections.has('projects')}
-                className="w-full p-4 flex items-center justify-between bg-[#F0F0E8] hover:bg-[#E5E5E0] transition-colors"
+                className="w-full p-4 flex items-center justify-between bg-background hover:bg-secondary transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <FolderKanban className="w-5 h-5" />
@@ -154,7 +154,7 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
                 )}
               </button>
               {expandedSections.has('projects') && (
-                <div className="border-t border-black">
+                <div className="border-t border-border">
                   {projectItems.map((item) => (
                     <ItemRow
                       key={item.item_id}
@@ -170,12 +170,12 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
 
           {/* Skills Groups Section */}
           {additionalGroupItems.length > 0 && (
-            <div className="border border-black">
+            <div className="border border-border">
               <button
                 type="button"
                 onClick={() => toggleSection('skills')}
                 aria-expanded={expandedSections.has('skills')}
-                className="w-full p-4 flex items-center justify-between bg-[#F0F0E8] hover:bg-[#E5E5E0] transition-colors"
+                className="w-full p-4 flex items-center justify-between bg-background hover:bg-secondary transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Lightbulb className="w-5 h-5" />
@@ -193,7 +193,7 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
                 )}
               </button>
               {expandedSections.has('skills') && (
-                <div className="border-t border-black">
+                <div className="border-t border-border">
                   {additionalGroupItems.map((item) => (
                     <ItemRow
                       key={item.item_id}
@@ -208,9 +208,9 @@ export const RegenerateDialog: React.FC<RegenerateDialogProps> = ({
           )}
         </div>
 
-        <DialogFooter className="p-4 bg-[#E5E5E0] border-t border-black flex-row justify-end gap-3">
+        <DialogFooter className="p-4 bg-secondary border-t border-border flex-row justify-end gap-3">
           <DialogClose asChild>
-            <Button variant="outline" className="rounded-none border-black">
+            <Button variant="outline" className="rounded-none border-border">
               {t('common.cancel')}
             </Button>
           </DialogClose>
@@ -251,13 +251,13 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, isSelected, onToggle }) => {
       type="button"
       onClick={onToggle}
       className={`w-full p-4 flex items-center gap-4 text-left transition-colors ${
-        isSelected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'
+        isSelected ? 'bg-blue-50' : 'bg-card hover:bg-gray-50'
       }`}
     >
       {/* Checkbox */}
       <div
         className={`w-5 h-5 border-2 flex items-center justify-center transition-colors ${
-          isSelected ? 'border-blue-700 bg-blue-700' : 'border-black bg-white'
+          isSelected ? 'border-primary bg-primary' : 'border-border bg-card'
         }`}
       >
         {isSelected && (

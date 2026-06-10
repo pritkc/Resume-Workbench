@@ -24,6 +24,8 @@ Behavior:
 3. generate additional bullets from the answers
 4. append those bullets to the existing description instead of replacing it
 
+Shipped prompt bodies: `apps/backend/app/prompts/text/enrichment/*.txt` (loaded by `app/prompts/enrichment.py`; user strings use **`str.format`**, not `$` Template).
+
 Prompt/operation mapping:
 
 - `ANALYZE_RESUME_PROMPT` -> `enrichment_analyze_resume`

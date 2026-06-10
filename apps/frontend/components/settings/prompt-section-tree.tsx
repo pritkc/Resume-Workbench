@@ -4,8 +4,8 @@ import React from 'react';
 import type { PromptCatalogPolicy, PromptCatalogSection } from '@/lib/api/config';
 
 const POLICY_BADGE_CLASS: Record<PromptCatalogPolicy, string> = {
-  system: 'border-black/20 bg-gray-100 text-gray-800',
-  user_editable_future: 'border-black/25 bg-black/[0.04] text-black/80',
+  system: 'border-border bg-gray-100 text-gray-800',
+  user_editable_future: 'border-border bg-accent text-foreground/80',
   user_choice: 'border-amber-600/30 bg-amber-50 text-amber-950',
   runtime_injected: 'border-violet-600/30 bg-violet-50 text-violet-950',
 };
@@ -38,11 +38,11 @@ export function PromptSectionTree({
   label: (key: string) => string;
 }): React.ReactElement {
   return (
-    <ul className={depth === 0 ? 'space-y-2' : 'mt-2 space-y-2 border-l border-black/10 pl-3'}>
+    <ul className={depth === 0 ? 'space-y-2' : 'mt-2 space-y-2 border-l border-border pl-3'}>
       {sections.map((node) => (
         <li key={node.id}>
           <div
-            className={`rounded border border-black/15 bg-white ${depth === 0 ? 'p-3' : 'px-2 py-2'}`}
+            className={`rounded border border-border bg-card ${depth === 0 ? 'p-3' : 'px-2 py-2'}`}
           >
             <div className="flex flex-wrap items-start gap-2">
               <div className="min-w-0 flex-1">
@@ -60,7 +60,7 @@ export function PromptSectionTree({
               </div>
             </div>
             {node.content ? (
-              <pre className="mt-2 max-h-[min(420px,70vh)] overflow-auto whitespace-pre-wrap border border-black/10 bg-[#FAFAF7] p-2 font-mono text-[11px] leading-relaxed text-gray-800">
+              <pre className="mt-2 max-h-[min(420px,70vh)] overflow-auto whitespace-pre-wrap border border-border bg-[#FAFAF7] p-2 font-mono text-[11px] leading-relaxed text-gray-800">
                 {node.content}
               </pre>
             ) : null}

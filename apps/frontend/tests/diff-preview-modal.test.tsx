@@ -5,6 +5,8 @@ import type {
   TailoringStageBreakdown,
   ResumeDiffSummary,
   ResumeFieldDiff,
+  ResumeChange,
+  ResumePreview,
 } from '@/components/common/resume_previewer_context';
 
 vi.mock('@/lib/i18n', () => ({
@@ -54,7 +56,7 @@ const changeBreakdown: TailoringStageBreakdown = {
   location_value: 'Remote',
 };
 
-const changeManifest = [
+const changeManifest: ResumeChange[] = [
   {
     path: 'summary',
     action: 'replace',
@@ -62,6 +64,35 @@ const changeManifest = [
     reason: 'Updated summary',
   },
 ];
+
+const resumePreview: ResumePreview = {
+  personalInfo: {
+    name: 'Alex Morgan',
+    email: 'prit@example.com',
+    phone: '555-0100',
+    location: 'Nashville, TN',
+  },
+  summary: 'Resume summary',
+  workExperience: [
+    {
+      id: 1,
+      company: 'Humana',
+      title: 'Software Engineer',
+      location: 'Remote',
+      years: '2025-present',
+      description: ['Built APIs', 'Built dashboard'],
+    },
+  ],
+  education: [],
+  personalProjects: [
+    {
+      id: 1,
+      name: 'ClaimSight',
+      description: ['Built dashboard', 'Migrated search'],
+    },
+  ],
+  skills: { groups: [] },
+};
 
 describe('DiffPreviewModal', () => {
   it('renders fallback dialog when diff data is missing', () => {
@@ -86,8 +117,8 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /Skills/i })).toBeInTheDocument();
-    expect(screen.getByText('+ Added (1): Go')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Jump to Skills' })).toBeInTheDocument();
+    expect(screen.getByText('Go')).toBeInTheDocument();
   });
 
   it('toggles section visibility on header click', () => {
@@ -102,8 +133,8 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.getByText('new')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Summary/i }));
+    expect(screen.getByText('new summary')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Professional summary' }));
     expect(screen.queryByText('new summary')).not.toBeInTheDocument();
   });
 
@@ -125,11 +156,11 @@ describe('DiffPreviewModal', () => {
     expect(
       screen.queryByText('Pipeline: 2 AI-applied, 1 cleanup-only, 0 rejected.')
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show details' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-    expect(screen.getByText('Summary')).toBeInTheDocument();
-    expect(screen.getByText('Needs verification')).toBeInTheDocument();
-    expect(screen.getAllByText('AI').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Breakdown' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Breakdown' }));
+    expect(screen.getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
+    expect(screen.getByText('Skills verify')).toBeInTheDocument();
+    expect(screen.getByText('Model-attributed rows')).toBeInTheDocument();
   });
 
   it('attributes title changes to AI when manifest has same entry paths', () => {
@@ -152,6 +183,7 @@ describe('DiffPreviewModal', () => {
         onConfirm={vi.fn()}
         diffSummary={diffSummary}
         detailedChanges={titleOnlyChanges}
+        resumePreview={resumePreview}
         changeManifest={[
           {
             path: 'workExperience[0].description[0]',
@@ -164,9 +196,128 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    const context = screen.getByText('Experience 1 title').closest('div');
+    const context = screen.getByText('Role').closest('div');
     expect(context).not.toBeNull();
-    expect(within(context as HTMLElement).getByText('AI')).toBeInTheDocument();
+    expect(within(context as HTMLElement).getByText(/Attributed to model/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Humana')).toHaveLength(1);
+    expect(screen.queryByText(/Humana .* role/i)).not.toBeInTheDocument();
+  });
+
+  it('renders changed bullets as old stricken text, new text, and why', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        resumePreview={resumePreview}
+        detailedChanges={[
+          {
+            field_path: 'workExperience[0].description[1]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Built dashboard',
+            new_value: 'Built analytics dashboard',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'workExperience[0].description[1]',
+            action: 'replace',
+            original: 'Built dashboard',
+            value: 'Built analytics dashboard',
+            reason: 'Directly maps to analytics ownership.',
+          },
+        ]}
+      />
+    );
+
+    const oldBullet = screen.getByText('Built dashboard');
+    expect(oldBullet).toHaveClass('line-through');
+    expect(screen.getByText('Built analytics dashboard')).toBeInTheDocument();
+    expect(screen.getByText(/Directly maps to analytics ownership/i)).toHaveClass('bg-yellow-100');
+  });
+
+  it('shows compact bullet indexes and highlighted reasons for changed points', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        resumePreview={resumePreview}
+        detailedChanges={[
+          {
+            field_path: 'summary',
+            field_type: 'summary',
+            change_type: 'modified',
+            original_value: 'old summary',
+            new_value: 'new summary',
+            confidence: 'medium',
+          },
+          {
+            field_path: 'workExperience[0].description[1]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Built dashboard',
+            new_value: 'Built analytics dashboard',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'summary',
+            action: 'replace',
+            original: 'old summary',
+            value: 'new summary',
+            reason: 'Updated summary',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('#2')).toBeInTheDocument();
+    expect(screen.queryByText('Bullet 2')).not.toBeInTheDocument();
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
+  });
+
+  it('renders unchanged rows with a bullet and retained rationale', () => {
+    render(
+      <DiffPreviewModal
+        isOpen
+        onClose={vi.fn()}
+        onReject={vi.fn()}
+        onConfirm={vi.fn()}
+        diffSummary={diffSummary}
+        resumePreview={resumePreview}
+        detailedChanges={[
+          {
+            field_path: 'workExperience[0].description[0]',
+            field_type: 'description',
+            change_type: 'modified',
+            original_value: 'Built APIs',
+            new_value: 'Built APIs',
+            confidence: 'medium',
+          },
+        ]}
+        changeManifest={[
+          {
+            path: 'workExperience[0].description[0]',
+            action: 'replace',
+            original: 'Built APIs',
+            value: 'Built APIs',
+            reason: 'Original story is already targeted.',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByLabelText('Bullet 1')).toBeInTheDocument();
+    expect(screen.getByText('Built APIs')).toBeInTheDocument();
+    expect(screen.getByText(/Original story is already targeted/i)).toBeInTheDocument();
   });
 
   it('shows project diffs when project path uses alias form', () => {
@@ -193,7 +344,7 @@ describe('DiffPreviewModal', () => {
     );
 
     expect(screen.getByRole('button', { name: /Project 1/i })).toBeInTheDocument();
-    expect(screen.getByText('Project 1 bullet 2')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bullet 2')).toBeInTheDocument();
   });
 
   it('fires confirm and reject handlers', () => {
@@ -287,7 +438,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.queryByText('System cleanup on the same item')).not.toBeInTheDocument();
+    expect(screen.queryByText('Post-tailor tweak')).not.toBeInTheDocument();
   });
 
   it('shows system cleanup only when a manifest path exactly matches the diff row', () => {
@@ -329,7 +480,7 @@ describe('DiffPreviewModal', () => {
       />
     );
 
-    expect(screen.queryAllByText('System cleanup on the same item')).toHaveLength(1);
+    expect(screen.queryByText('Post-tailor tweak')).not.toBeInTheDocument();
     expect(
       screen.getByText(new RegExp(ragSnippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     ).toBeInTheDocument();

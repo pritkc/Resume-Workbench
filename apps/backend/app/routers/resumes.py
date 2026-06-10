@@ -11,7 +11,7 @@ import re
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Literal, NoReturn
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -21,6 +21,7 @@ import yaml
 
 from app.config_cache import get_content_language, load_config as _load_config
 from app.database import db
+from app.improve_pipeline_errors import http_exception_for_improve_pipeline_failure
 from app.llm import llm_trace_scope
 from app.pdf import render_resume_pdf, PDFRenderError
 from app.config import settings
@@ -48,18 +49,23 @@ from app.services.tailoring.change_manifest import (
     build_change_manifest,
     build_stage_breakdown,
 )
+from app.services.test_run_exporter import export_test_run_capture
 from app.schemas import (
+    ArtifactSummary,
     GenerateAuxiliaryPackageResponse,
     GenerateContentResponse,
     ImproveResumeConfirmRequest,
     ImproveResumeRequest,
     ImproveResumeResponse,
     ImproveResumeData,
+    JdTailorDiffData,
+    JdTailorDiffResponse,
     RawResume,
     RawYamlSections,
     PipelineTimingSummary,
     RefinementStats,
     RenderResumeRequest,
+    ResumeChange,
     ResumeData,
     ResumeDiffSummary,
     ResumeDraftNormalizedResponse,
@@ -70,6 +76,7 @@ from app.schemas import (
     ResumeListResponse,
     ResumePinRequest,
     ResumeSummary,
+    TailoringStageBreakdown,
     ResumeUpdateRequest,
     ResumeUploadResponse,
     UpdateCoverLetterRequest,
@@ -77,6 +84,7 @@ from app.schemas import (
     UpdateTitleRequest,
     normalize_resume_data,
 )
+from app.services.live_generation import LiveGenerationRun, live_generation_registry
 from app.services.parser import parse_document, parse_resume_to_json
 from app.services.improver import (
     generate_tailored_resume,
@@ -89,6 +97,7 @@ from app.services.cover_letter import (
     generate_cover_letter_and_outreach,
     sanitize_job_location,
 )
+from app.services.tailoring.section_format import jd_intel_text_from_blob, jd_metadata_from_blob
 from app.services.resume_codes import (
     build_resume_pdf_filename,
     derive_resume_code,
@@ -96,6 +105,39 @@ from app.services.resume_codes import (
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
 
 logger = logging.getLogger(__name__)
+
+
+def _export_test_run_best_effort(
+    *,
+    trace_id: str,
+    generation_run_id: str | None = None,
+    label: str | None = None,
+) -> None:
+    try:
+        exported_dir = export_test_run_capture(
+            trace_id=trace_id,
+            generation_run_id=generation_run_id,
+            label=label,
+        )
+        logger.info(
+            "Exported test run trace_id=%s generation_run_id=%s to %s",
+            trace_id,
+            generation_run_id,
+            exported_dir,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to export test run trace_id=%s generation_run_id=%s: %s",
+            trace_id,
+            generation_run_id,
+            exc,
+        )
+
+
+def _test_run_label_from_job(job: dict[str, Any], suffix: str | None = None) -> str | None:
+    parts = [part for part in (job.get("company"), job.get("role"), suffix) if part]
+    return " - ".join(str(part) for part in parts) if parts else None
+
 
 _URL_LIKE_RE = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
 _METADATA_NOISE_RE = re.compile(
@@ -183,6 +225,26 @@ def _resume_code_from_record(resume: dict[str, Any] | None, *, resume_id: str) -
         if isinstance(code, str) and code.strip():
             return code.strip().upper()
     return derive_resume_code(resume_id)
+
+
+def _resume_trace_metadata(
+    resume: dict[str, Any] | None,
+    *,
+    resume_id: str,
+    prefix: str | None = None,
+) -> dict[str, str]:
+    """Stable resume identifiers persisted into LLM call request_context."""
+
+    code = _resume_code_from_record(resume, resume_id=resume_id)
+    if prefix:
+        return {
+            f"{prefix}_resume_id": resume_id,
+            f"{prefix}_resume_code": code,
+        }
+    return {
+        "resume_id": resume_id,
+        "resume_code": code,
+    }
 
 
 def _extract_resume_full_name(resume_data: dict[str, Any] | None) -> str | None:
@@ -297,7 +359,11 @@ def _resolve_render_theme_settings(theme_settings: Any) -> RenderThemeProfile:
 
 
 def _coerce_page_size(value: Any) -> str:
-    return "LETTER" if value == "LETTER" else "A4"
+    if value == "LETTER":
+        return "LETTER"
+    if value == "FREEFLOW":
+        return "FREEFLOW"
+    return "A4"
 
 
 def _coerce_spacing_level(value: Any, default: int) -> int:
@@ -540,6 +606,7 @@ def _resume_to_summary(
     *,
     application_packs: dict[str, dict[str, Any]],
     jobs_by_id: dict[str, dict[str, Any] | None],
+    llm_trace_id: str | None = None,
 ) -> ResumeSummary:
     application_pack = application_packs.get(resume.get("application_pack_id"))
     pack_job_id = (
@@ -592,7 +659,52 @@ def _resume_to_summary(
         target_role=target_role,
         target_company=target_company,
         target_location=target_location,
+        llm_trace_id=llm_trace_id,
     )
+
+
+def _llm_trace_id_for_resume_summary(resume_id: str) -> str | None:
+    mapped = db.map_llm_trace_ids_for_resume_ids([resume_id])
+    if not isinstance(mapped, dict):
+        return None
+    tid = mapped.get(resume_id)
+    return tid if isinstance(tid, str) and tid.strip() else None
+
+
+def _generation_observability_for_resume(resume: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Resolve the prompt/timing generation unit for a persisted tailored resume."""
+
+    resume_id = resume.get("resume_id")
+    if not isinstance(resume_id, str) or not resume_id.strip() or not resume.get("parent_id"):
+        return None, None
+
+    confirm_run = db.get_latest_generation_run(
+        run_kind="application_pack_confirm",
+        status="completed",
+        tailored_resume_id=resume_id,
+    )
+    if not isinstance(confirm_run, dict):
+        return None, None
+
+    request_payload = confirm_run.get("request_payload")
+    preview_generation_run_id = None
+    if isinstance(request_payload, dict):
+        raw_preview_id = request_payload.get("preview_generation_run_id")
+        if isinstance(raw_preview_id, str) and raw_preview_id.strip():
+            preview_generation_run_id = raw_preview_id.strip()
+
+    if preview_generation_run_id:
+        preview_run = db.get_generation_run(preview_generation_run_id)
+        preview_payload = preview_run.get("request_payload") if isinstance(preview_run, dict) else None
+        if isinstance(preview_payload, dict):
+            raw_trace_id = preview_payload.get("llm_trace_id")
+            if isinstance(raw_trace_id, str) and raw_trace_id.strip():
+                return preview_generation_run_id, raw_trace_id.strip()
+        return preview_generation_run_id, None
+
+    raw_trace_id = request_payload.get("llm_trace_id") if isinstance(request_payload, dict) else None
+    trace_id = raw_trace_id.strip() if isinstance(raw_trace_id, str) and raw_trace_id.strip() else None
+    return confirm_run.get("generation_run_id"), trace_id
 
 
 def _build_processed_resume(
@@ -827,7 +939,12 @@ def _raise_improve_error(
     detail: str,
 ) -> NoReturn:
     logger.error("Resume %s failed during %s: %s", action, stage, error)
-    raise HTTPException(status_code=500, detail=detail)
+    raise http_exception_for_improve_pipeline_failure(
+        action=action,
+        stage=stage,
+        error=error,
+        fallback_message=detail,
+    )
 
 
 def _get_original_resume_data(resume: dict[str, Any]) -> dict[str, Any] | None:
@@ -864,10 +981,66 @@ def _set_stage(stage_state: dict[str, str] | None, stage: str) -> None:
 class _PipelineTimer:
     """Collect host/sub-event timing entries for a pipeline execution."""
 
-    def __init__(self) -> None:
+    def __init__(self, live_run: LiveGenerationRun | None = None) -> None:
         self._start_perf = time.perf_counter()
         self._start_at = datetime.now(timezone.utc)
         self._entries: list[dict[str, Any]] = []
+        self._live_run = live_run
+
+    def _emit_nowait(self, event_type: str, data: dict[str, Any]) -> None:
+        if self._live_run is None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(
+            live_generation_registry.emit(
+                self._live_run.live_run_id,
+                event_type,
+                data,
+            )
+        )
+
+    def _persist_partial_timing(self) -> None:
+        if self._live_run is None:
+            return
+        try:
+            existing = db.get_generation_run(self._live_run.generation_run_id)
+            payload = existing.get("result_payload") if isinstance(existing, dict) else None
+            result_payload = dict(payload) if isinstance(payload, dict) else {}
+            result_payload["pipeline_timing"] = self.to_summary().model_dump()
+            db.update_generation_run(
+                self._live_run.generation_run_id,
+                {"result_payload": result_payload},
+            )
+        except Exception:
+            logger.debug("Failed to persist partial live timing", exc_info=True)
+
+    @staticmethod
+    def _stage_label(host_event: str, sub_event: str | None, metadata: dict[str, Any] | None) -> str:
+        if metadata and isinstance(metadata.get("stage_label"), str):
+            return str(metadata["stage_label"])
+        labels = {
+            ("job_keywords", "cache_check"): "Checking saved JD analysis",
+            ("job_keywords", "extract"): "Analyzing job description",
+            ("job_keywords", "persist"): "Saving JD analysis",
+            ("job_keywords", "reuse_cached"): "Using saved JD analysis",
+            ("tailoring", "generate_full_resume"): "Generating tailored resume",
+            ("tailoring_internal", "resume_payload_projection"): "Preparing resume input",
+            ("tailoring_internal", "response_contract_build"): "Building output template",
+            ("tailoring_internal", "prompt_context_assembly"): "Assembling resume prompt",
+            ("tailoring_internal", "adaptive_token_budget"): "Calculating token budget",
+            ("tailoring_internal", "primary_resume_llm_call"): "Streaming tailored resume",
+            ("tailoring_internal", "compact_diff_validation"): "Validating resume changes",
+            ("tailoring_internal", "compact_diff_normalization"): "Normalizing resume changes",
+            ("tailoring_internal", "apply_compact_diff"): "Applying resume changes",
+            ("postprocess", "canonicalize_resume"): "Cleaning generated resume",
+            ("generation_run", "create_preview_run"): "Saving preview run",
+            ("generation_run", "update_preview_run"): "Saving preview run",
+            ("rendercv", "render_and_store_preview_artifacts"): "Rendering final preview",
+        }
+        return labels.get((host_event, sub_event), f"{host_event} / {sub_event}" if sub_event else host_event)
 
     @contextmanager
     def track(
@@ -878,21 +1051,39 @@ class _PipelineTimer:
     ):
         start_perf = time.perf_counter()
         start_at = datetime.now(timezone.utc)
+        self._emit_nowait(
+            "stage.started",
+            {
+                "host_event": host_event,
+                "sub_event": sub_event,
+                "stage_label": self._stage_label(host_event, sub_event, metadata),
+                "metadata": metadata,
+            },
+        )
         try:
             yield
         finally:
             end_at = datetime.now(timezone.utc)
             duration_ms = max(0, int((time.perf_counter() - start_perf) * 1000))
-            self._entries.append(
-                {
-                    "host_event": host_event,
-                    "sub_event": sub_event,
-                    "started_at": start_at.isoformat(),
-                    "ended_at": end_at.isoformat(),
-                    "duration_ms": duration_ms,
-                    "metadata": metadata,
-                }
-            )
+            entry = {
+                "host_event": host_event,
+                "sub_event": sub_event,
+                "started_at": start_at.isoformat(),
+                "ended_at": end_at.isoformat(),
+                "duration_ms": duration_ms,
+                "metadata": metadata,
+            }
+            self._entries.append(entry)
+            event_payload = {
+                "host_event": host_event,
+                "sub_event": sub_event,
+                "stage_label": self._stage_label(host_event, sub_event, metadata),
+                "duration_ms": duration_ms,
+                "entry": entry,
+            }
+            self._emit_nowait("stage.completed", event_payload)
+            self._emit_nowait("timing.entry", event_payload)
+            self._persist_partial_timing()
 
     def add_entry(
         self,
@@ -905,7 +1096,7 @@ class _PipelineTimer:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         self._entries.append(
-            {
+            entry := {
                 "host_event": host_event,
                 "sub_event": sub_event,
                 "started_at": started_at.isoformat(),
@@ -914,6 +1105,17 @@ class _PipelineTimer:
                 "metadata": metadata,
             }
         )
+        self._emit_nowait(
+            "timing.entry",
+            {
+                "host_event": host_event,
+                "sub_event": sub_event,
+                "stage_label": self._stage_label(host_event, sub_event, metadata),
+                "duration_ms": max(0, duration_ms),
+                "entry": entry,
+            },
+        )
+        self._persist_partial_timing()
 
     def to_summary(self) -> PipelineTimingSummary:
         end_at = datetime.now(timezone.utc)
@@ -1028,9 +1230,12 @@ async def _generate_tailored_resume_data(
     resume: dict[str, Any],
     job: dict[str, Any],
     job_keywords: dict[str, Any],
-    language: str,
     prompt_id: str,
+    custom_prompt_instructions: str | None = None,
     stage_state: dict[str, str] | None = None,
+    event_sink: Any | None = None,
+    live_metadata: dict[str, Any] | None = None,
+    timing_recorder: Any | None = None,
 ) -> Any:
     """Generate tailored resume data through the primary full-resume prompt."""
     original_resume_data = _get_original_resume_data(resume)
@@ -1040,10 +1245,13 @@ async def _generate_tailored_resume_data(
         original_resume=resume["content"],
         job_description=job["content"],
         job_keywords=job_keywords,
-        language=language,
         prompt_id=prompt_id,
         original_resume_data=original_resume_data,
         cleanup_source_data=cleanup_source_data,
+        custom_prompt_instructions=custom_prompt_instructions,
+        event_sink=event_sink,
+        live_metadata=live_metadata,
+        timing_recorder=timing_recorder,
     )
     return tailoring_result
 
@@ -1122,7 +1330,6 @@ async def _generate_auxiliary_messages(
     improved_data: dict[str, Any],
     job_content: str,
     job_keywords: dict[str, Any] | None,
-    language: str,
     *,
     include_cover_letter: bool,
     include_outreach_message: bool,
@@ -1144,7 +1351,7 @@ async def _generate_auxiliary_messages(
             await generate_cover_letter_and_outreach(
                 improved_data,
                 job_content,
-                language,
+                job_keywords=job_keywords,
             )
         )
         if include_cover_letter:
@@ -1234,6 +1441,11 @@ def _read_preview_tailoring_payload(
         "cleanup_changes": result_payload.get("cleanup_changes", []),
         "change_breakdown": result_payload.get("change_breakdown"),
         "raw_llm_resume_data": result_payload.get("raw_llm_resume_data"),
+        "skills_observability": (
+            result_payload["skills_observability"]
+            if isinstance(result_payload.get("skills_observability"), dict)
+            else None
+        ),
     }
 
 
@@ -1243,7 +1455,6 @@ async def _resolve_confirm_auxiliary_messages(
     improved_data: dict[str, Any],
     job_content: str,
     job_keywords: dict[str, Any] | None,
-    language: str,
     include_cover_letter: bool,
     include_outreach_message: bool,
 ) -> tuple[str | None, str | None, str | None, list[str]]:
@@ -1272,7 +1483,6 @@ async def _resolve_confirm_auxiliary_messages(
             improved_data,
             job_content,
             job_keywords,
-            language,
             include_cover_letter=missing_cover_letter,
             include_outreach_message=missing_outreach_message,
         )
@@ -1348,7 +1558,10 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     with llm_trace_scope(
         request_id,
         "resumes.upload",
-        {"resume_id": resume["resume_id"], "filename": file.filename},
+        {
+            **_resume_trace_metadata(resume, resume_id=resume["resume_id"]),
+            "filename": file.filename,
+        },
     ):
         try:
             processed_data = await parse_resume_to_json(markdown_content)
@@ -1411,6 +1624,7 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
         resume.get("processed_data"),
         resume_id=resume_id,
     )
+    generation_run_id, llm_trace_id = _generation_observability_for_resume(resume)
 
     return ResumeFetchResponse(
         request_id=str(uuid4()),
@@ -1424,6 +1638,8 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
             parent_id=resume.get("parent_id"),
             title=resume.get("title"),
             application_pack_id=resume.get("application_pack_id"),
+            generation_run_id=generation_run_id,
+            llm_trace_id=llm_trace_id,
             theme_settings=_normalize_stored_theme_settings(
                 resume.get("theme_settings"),
                 resume_id=resume_id,
@@ -1539,13 +1755,22 @@ async def list_resumes(include_active: bool = Query(True)) -> ResumeListResponse
     active = db.get_active_resume()
     active_resume_id = active["resume_id"] if active else None
 
+    resume_ids = [str(r["resume_id"]) for r in resumes if r.get("resume_id")]
+    trace_by_resume = db.map_llm_trace_ids_for_resume_ids(resume_ids)
+    if not isinstance(trace_by_resume, dict):
+        trace_by_resume = {}
+
     summaries: list[ResumeSummary] = []
     for resume in resumes:
+        rid = resume.get("resume_id")
+        tid_raw = trace_by_resume.get(rid) if isinstance(rid, str) else None
+        llm_tid = tid_raw if isinstance(tid_raw, str) and tid_raw.strip() else None
         summaries.append(
             _resume_to_summary(
                 resume,
                 application_packs=application_packs,
                 jobs_by_id=jobs_by_id,
+                llm_trace_id=llm_tid,
             )
         )
 
@@ -1565,10 +1790,12 @@ async def get_active_resume_endpoint() -> ResumeSummary:
         pack["pack_id"]: pack for pack in db.list_application_packs()
     }
     jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    rid = active["resume_id"]
     return _resume_to_summary(
         active,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(rid),
     )
 
 
@@ -1587,6 +1814,7 @@ async def put_active_resume(resume_id: str) -> ResumeSummary:
         updated,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(resume_id),
     )
 
 
@@ -1605,6 +1833,7 @@ async def put_resume_pin(resume_id: str, body: ResumePinRequest) -> ResumeSummar
         updated,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(resume_id),
     )
 
 
@@ -1620,14 +1849,13 @@ async def post_duplicate_resume(resume_id: str) -> ResumeSummary:
         pack["pack_id"]: pack for pack in db.list_application_packs()
     }
     jobs_by_id: dict[str, dict[str, Any] | None] = {}
+    new_id = created["resume_id"]
     return _resume_to_summary(
         updated,
         application_packs=application_packs,
         jobs_by_id=jobs_by_id,
+        llm_trace_id=_llm_trace_id_for_resume_summary(new_id),
     )
-
-
-@router.post("/improve/preview", response_model=ImproveResumeResponse)
 async def improve_resume_preview_endpoint(
     request: ImproveResumeRequest,
 ) -> ImproveResumeResponse:
@@ -1643,7 +1871,6 @@ async def improve_resume_preview_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    language = get_content_language()
     prompt_id = _resolve_prompt_id(request.prompt_id)
     request_id = str(uuid4())
 
@@ -1653,14 +1880,17 @@ async def improve_resume_preview_endpoint(
         with llm_trace_scope(
             request_id,
             "resumes.improve_preview",
-            {"resume_id": request.resume_id, "job_id": request.job_id},
+            {
+                **_resume_trace_metadata(resume, resume_id=request.resume_id),
+                **_resume_trace_metadata(resume, resume_id=request.resume_id, prefix="source"),
+                "job_id": request.job_id,
+            },
         ):
             return await asyncio.wait_for(
                 _improve_preview_flow(
                     request=request,
                     resume=resume,
                     job=job,
-                    language=language,
                     prompt_id=prompt_id,
                     request_id=request_id,
                     theme_settings=_resolve_request_theme_settings(
@@ -1690,21 +1920,58 @@ async def _improve_preview_flow(
     request: ImproveResumeRequest,
     resume: dict[str, Any],
     job: dict[str, Any],
-    language: str,
     prompt_id: str,
     request_id: str,
     theme_settings: RenderThemeProfile,
     stage_state: dict[str, str] | None = None,
+    preview_generation_run_id: str | None = None,
+    live_run: LiveGenerationRun | None = None,
 ) -> ImproveResumeResponse:
     """Inner flow for improve/preview, extracted so it can be wrapped in wait_for."""
-    timer = _PipelineTimer()
+    timer = _PipelineTimer(live_run)
+
+    async def emit_live(event_type: str, data: dict[str, Any]) -> None:
+        if live_run is not None:
+            await live_generation_registry.emit(live_run.live_run_id, event_type, data)
+
+    async def emit_jd_intel_stream(source: str, keywords: Any) -> None:
+        if live_run is None:
+            return
+        content = jd_intel_text_from_blob(keywords)
+        if not content and isinstance(keywords, dict):
+            content = json.dumps(keywords, indent=2, ensure_ascii=True)
+        if not content:
+            return
+        await emit_live(
+            "section.updated",
+            {
+                "section_id": "jd_intel",
+                "section": "JD_INTEL",
+                "index": None,
+                "content": content,
+                "content_chars": len(content),
+                "source": source,
+            },
+        )
+
+    live_metadata = {
+        "live_run_id": live_run.live_run_id if live_run else None,
+        "generation_run_id": preview_generation_run_id,
+        "trace_id": request_id,
+    }
     job_keywords = job.get("job_keywords")
     job_keywords_hash = job.get("job_keywords_hash")
     content_hash = _hash_job_content(job["content"])
-    if not job_keywords or job_keywords_hash != content_hash:
+    with timer.track("job_keywords", "cache_check"):
+        needs_job_keywords = not job_keywords or job_keywords_hash != content_hash
+    if needs_job_keywords:
         with timer.track("job_keywords", "extract"):
             _set_stage(stage_state, "load_job_keywords")
-            job_keywords = await extract_job_keywords(job["content"])
+            job_keywords = await extract_job_keywords(
+                job["content"],
+                event_sink=emit_live if live_run else None,
+                live_metadata=live_metadata,
+            )
         with timer.track("job_keywords", "persist"):
             _set_stage(stage_state, "persist_job_keywords")
             try:
@@ -1723,6 +1990,7 @@ async def _improve_preview_flow(
                     request.job_id,
                     e,
                 )
+        await emit_jd_intel_stream("extracted", job_keywords)
     else:
         now = datetime.now(timezone.utc)
         timer.add_entry(
@@ -1733,14 +2001,18 @@ async def _improve_preview_flow(
             duration_ms=0,
             metadata={"cache_hit": True},
         )
+        await emit_jd_intel_stream("cache", job_keywords)
     with timer.track("tailoring", "generate_full_resume"):
         tailoring_result = await _generate_tailored_resume_data(
             resume=resume,
             job=job,
             job_keywords=job_keywords,
-            language=language,
             prompt_id=prompt_id,
+            custom_prompt_instructions=request.custom_prompt_instructions,
             stage_state=stage_state,
+            event_sink=emit_live if live_run else None,
+            live_metadata=live_metadata,
+            timing_recorder=timer,
         )
     improved_data = tailoring_result.resume_data
     response_warnings = list(tailoring_result.warnings)
@@ -1824,40 +2096,72 @@ async def _improve_preview_flow(
             location=target_location,
             theme_settings=theme_settings.to_storage_dict(),
         )
-    with timer.track("generation_run", "create_preview_run"):
-        preview_run = db.create_generation_run(
-            run_kind="application_pack_preview",
-            status="completed",
-            source_resume_id=request.resume_id,
-            job_id=request.job_id,
-            application_pack_id=application_pack["pack_id"],
-            prompt_id=prompt_id,
-            request_payload={"prompt_id": prompt_id, "llm_trace_id": request_id},
-            result_payload={
-                "llm_summary": llm_summary,
-                "preview_hash": preview_hash,
-                "diff_summary": diff_summary.model_dump() if diff_summary else None,
-                "change_manifest": [change.model_dump() for change in tailoring_result.change_manifest],
-                "declared_changes": [change.model_dump() for change in tailoring_result.declared_changes],
-                "rejected_declared_changes": [
-                    change.model_dump() for change in tailoring_result.rejected_declared_changes
-                ],
-                "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
-                "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
-                "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
-                "final_resume_data": improved_data,
-                "auxiliary": {
-                    "title": generated_title,
-                    "cover_letter": cover_letter,
-                    "outreach_message": outreach_message,
+    preview_result_payload = {
+        "llm_summary": llm_summary,
+        "preview_hash": preview_hash,
+        "diff_summary": diff_summary.model_dump() if diff_summary else None,
+        "change_manifest": [change.model_dump() for change in tailoring_result.change_manifest],
+        "declared_changes": [change.model_dump() for change in tailoring_result.declared_changes],
+        "rejected_declared_changes": [
+            change.model_dump() for change in tailoring_result.rejected_declared_changes
+        ],
+        "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
+        "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
+        "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
+        "skills_observability": tailoring_result.skills_observability,
+        "final_resume_data": improved_data,
+        "auxiliary": {
+            "title": generated_title,
+            "cover_letter": cover_letter,
+            "outreach_message": outreach_message,
+        },
+    }
+    with timer.track(
+        "generation_run",
+        "create_preview_run" if preview_generation_run_id is None else "update_preview_run",
+    ):
+        if preview_generation_run_id is None:
+            preview_run = db.create_generation_run(
+                run_kind="application_pack_preview",
+                status="completed",
+                source_resume_id=request.resume_id,
+                job_id=request.job_id,
+                application_pack_id=application_pack["pack_id"],
+                prompt_id=prompt_id,
+                request_payload={"prompt_id": prompt_id, "llm_trace_id": request_id},
+                result_payload=preview_result_payload,
+                warnings=response_warnings,
+            )
+        else:
+            preview_run = db.update_generation_run(
+                preview_generation_run_id,
+                {
+                    "status": "running",
+                    "source_resume_id": request.resume_id,
+                    "job_id": request.job_id,
+                    "application_pack_id": application_pack["pack_id"],
+                    "prompt_id": prompt_id,
+                    "request_payload": {
+                        "prompt_id": prompt_id,
+                        "llm_trace_id": request_id,
+                        "live_run_id": live_run.live_run_id if live_run else None,
+                    },
+                    "result_payload": preview_result_payload,
+                    "warnings": response_warnings,
                 },
-            },
-            warnings=response_warnings,
-        )
+            )
+            if not preview_run:
+                raise RuntimeError("Failed to update live preview generation run.")
     artifacts: list[dict[str, Any]] = []
     try:
         with timer.track("rendercv", "render_and_store_preview_artifacts"):
             _set_stage(stage_state, "render_preview_artifacts")
+            if live_run is not None:
+                await live_generation_registry.emit(
+                    live_run.live_run_id,
+                    "artifact.started",
+                    {"kind": "resume_preview_bundle"},
+                )
             bundle = render_resume_bundle(
                 improved_data,
                 theme_settings,
@@ -1869,6 +2173,16 @@ async def _improve_preview_flow(
                 application_pack_id=application_pack["pack_id"],
                 generation_run_id=preview_run["generation_run_id"],
             )
+            if live_run is not None:
+                await live_generation_registry.emit(
+                    live_run.live_run_id,
+                    "artifact.completed",
+                    {
+                        "kind": "resume_preview_bundle",
+                        "artifact_count": len(artifacts),
+                        "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
+                    },
+                )
     except RenderCVRenderError as e:
         response_warnings.append(f"RenderCV preview failed: {str(e)}")
 
@@ -1882,6 +2196,8 @@ async def _improve_preview_flow(
     db.update_generation_run(
         preview_run["generation_run_id"],
         {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc),
             "warnings": response_warnings,
             "result_payload": {
                 "llm_summary": llm_summary,
@@ -1895,6 +2211,7 @@ async def _improve_preview_flow(
                 "cleanup_changes": [change.model_dump() for change in tailoring_result.cleanup_changes],
                 "change_breakdown": tailoring_result.stage_breakdown.model_dump(),
                 "raw_llm_resume_data": tailoring_result.raw_llm_resume_data,
+                "skills_observability": tailoring_result.skills_observability,
                 "final_resume_data": improved_data,
                 "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
                 "auxiliary": {
@@ -1905,6 +2222,11 @@ async def _improve_preview_flow(
                 "pipeline_timing": pipeline_timing.model_dump(),
             },
         },
+    )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        generation_run_id=preview_run["generation_run_id"],
+        label=_test_run_label_from_job(job) or generated_title,
     )
 
     return ImproveResumeResponse(
@@ -1939,6 +2261,7 @@ async def _improve_preview_flow(
             refinement_attempted=refinement_attempted,
             refinement_successful=refinement_successful,
             pipeline_timing=pipeline_timing,
+            skills_observability=tailoring_result.skills_observability,
         ),
     )
 
@@ -1978,6 +2301,8 @@ async def improve_resume_confirm_endpoint(
             )
             if isinstance(job_keywords_for_validation, dict):
                 location = job_keywords_for_validation.get("location")
+                if not isinstance(location, str):
+                    location = jd_metadata_from_blob(job_keywords_for_validation).get("location")
                 if isinstance(location, str) and location.strip():
                     allowed_mismatches.add("location")
             _validate_confirm_payload(
@@ -2066,7 +2391,17 @@ async def improve_resume_confirm_endpoint(
             if isinstance(resume.get("outreach_message"), str)
             else None
         )
-        llm_summary = db.summarize_llm_calls(trace_id=request_id)
+        preview_trace_id = None
+        if request.generation_run_id:
+            preview_run = db.get_generation_run(request.generation_run_id)
+            preview_request_payload = (
+                preview_run.get("request_payload") if isinstance(preview_run, dict) else None
+            )
+            if isinstance(preview_request_payload, dict):
+                raw_preview_trace_id = preview_request_payload.get("llm_trace_id")
+                if isinstance(raw_preview_trace_id, str) and raw_preview_trace_id.strip():
+                    preview_trace_id = raw_preview_trace_id.strip()
+        llm_summary = db.summarize_llm_calls(trace_id=preview_trace_id or request_id)
         job = _backfill_job_target_metadata(
             job_id=request.job_id,
             job=job,
@@ -2132,6 +2467,21 @@ async def improve_resume_confirm_endpoint(
                 tailored_resume["resume_id"], {"application_pack_id": application_pack_id}
             )
 
+        trace_resume_context = {
+            **_resume_trace_metadata(tailored_resume, resume_id=tailored_resume["resume_id"]),
+            **_resume_trace_metadata(
+                tailored_resume,
+                resume_id=tailored_resume["resume_id"],
+                prefix="tailored",
+            ),
+            **_resume_trace_metadata(resume, resume_id=request.resume_id, prefix="source"),
+            "job_id": request.job_id,
+            "application_pack_id": application_pack_id,
+        }
+        if preview_trace_id:
+            db.merge_llm_call_context_for_trace(preview_trace_id, trace_resume_context)
+        db.merge_llm_call_context_for_trace(request_id, trace_resume_context)
+
         confirm_run = db.create_generation_run(
             run_kind="application_pack_confirm",
             status="completed",
@@ -2142,11 +2492,13 @@ async def improve_resume_confirm_endpoint(
             request_payload={
                 "preview_generation_run_id": request.generation_run_id,
                 "application_pack_id": application_pack_id,
-                "llm_trace_id": request_id,
+                "llm_trace_id": preview_trace_id,
+                "confirm_request_id": request_id,
             },
             result_payload={
                 "llm_summary": llm_summary,
                 "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                "detailed_changes": [item.model_dump() for item in (detailed_changes or [])],
                 "change_manifest": change_manifest,
                 "declared_changes": preview_tailoring_payload.get("declared_changes", []),
                 "rejected_declared_changes": preview_tailoring_payload.get(
@@ -2155,6 +2507,11 @@ async def improve_resume_confirm_endpoint(
                 "cleanup_changes": preview_tailoring_payload.get("cleanup_changes", []),
                 "change_breakdown": change_breakdown,
                 "raw_llm_resume_data": preview_tailoring_payload.get("raw_llm_resume_data"),
+                "skills_observability": (
+                    preview_tailoring_payload["skills_observability"]
+                    if isinstance(preview_tailoring_payload.get("skills_observability"), dict)
+                    else None
+                ),
                 "final_resume_data": improved_data,
                 "auxiliary": {
                     "title": title,
@@ -2196,6 +2553,7 @@ async def improve_resume_confirm_endpoint(
                 "result_payload": {
                     "llm_summary": llm_summary,
                     "diff_summary": diff_summary.model_dump() if diff_summary else None,
+                    "detailed_changes": [item.model_dump() for item in (detailed_changes or [])],
                     "change_manifest": change_manifest,
                     "declared_changes": preview_tailoring_payload.get("declared_changes", []),
                     "rejected_declared_changes": preview_tailoring_payload.get(
@@ -2204,6 +2562,11 @@ async def improve_resume_confirm_endpoint(
                     "cleanup_changes": preview_tailoring_payload.get("cleanup_changes", []),
                     "change_breakdown": change_breakdown,
                     "raw_llm_resume_data": preview_tailoring_payload.get("raw_llm_resume_data"),
+                    "skills_observability": (
+                        preview_tailoring_payload["skills_observability"]
+                        if isinstance(preview_tailoring_payload.get("skills_observability"), dict)
+                        else None
+                    ),
                     "final_resume_data": improved_data,
                     "artifact_ids": [artifact["artifact_id"] for artifact in artifacts],
                     "auxiliary": {
@@ -2235,6 +2598,11 @@ async def improve_resume_confirm_endpoint(
                 detailed_changes=detailed_changes,
                 change_manifest=change_manifest,
                 change_breakdown=change_breakdown,
+                skills_observability=(
+                    preview_tailoring_payload["skills_observability"]
+                    if isinstance(preview_tailoring_payload.get("skills_observability"), dict)
+                    else None
+                ),
                 warnings=response_warnings,
             ),
         )
@@ -2279,7 +2647,6 @@ async def improve_resume_endpoint(
     if not job:
         raise HTTPException(status_code=404, detail="Job description not found")
 
-    language = get_content_language()
     stage_state = {"stage": "load_job_keywords"}
     detail = "Failed to improve resume. Please try again."
     request_id = str(uuid4())
@@ -2288,17 +2655,21 @@ async def improve_resume_endpoint(
         with llm_trace_scope(
             request_id,
             "resumes.improve",
-            {"resume_id": request.resume_id, "job_id": request.job_id},
+            {
+                **_resume_trace_metadata(resume, resume_id=request.resume_id),
+                **_resume_trace_metadata(resume, resume_id=request.resume_id, prefix="source"),
+                "job_id": request.job_id,
+            },
         ):
             job_keywords = await extract_job_keywords(job["content"])
 
-        # Generate improved resume in the configured language
         prompt_id = _resolve_prompt_id(request.prompt_id)
         with llm_trace_scope(
             request_id,
             "resumes.improve",
             {
-                "resume_id": request.resume_id,
+                **_resume_trace_metadata(resume, resume_id=request.resume_id),
+                **_resume_trace_metadata(resume, resume_id=request.resume_id, prefix="source"),
                 "job_id": request.job_id,
                 "prompt_id": prompt_id,
             },
@@ -2307,8 +2678,8 @@ async def improve_resume_endpoint(
                 resume=resume,
                 job=job,
                 job_keywords=job_keywords,
-                language=language,
                 prompt_id=prompt_id,
+                custom_prompt_instructions=request.custom_prompt_instructions,
                 stage_state=stage_state,
             )
             improved_data = tailoring_result.resume_data
@@ -2397,6 +2768,7 @@ async def improve_resume_endpoint(
                 warnings=response_warnings,
                 refinement_attempted=refinement_attempted,
                 refinement_successful=refinement_successful,
+                skills_observability=tailoring_result.skills_observability,
             ),
         )
 
@@ -2553,7 +2925,7 @@ async def download_resume_pdf_with_config(
 async def download_resume_pdf(
     resume_id: str,
     template: str = Query("swiss-single"),
-    pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
+    pageSize: str = Query("A4", pattern="^(A4|LETTER|FREEFLOW)$"),
     marginTop: int = Query(10, ge=5, le=25),
     marginBottom: int = Query(10, ge=5, le=25),
     marginLeft: int = Query(10, ge=5, le=25),
@@ -2675,7 +3047,7 @@ async def render_resume_preview_with_config(
 async def render_resume_preview(
     resume_id: str,
     template: str = Query("swiss-single"),
-    pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
+    pageSize: str = Query("A4", pattern="^(A4|LETTER|FREEFLOW)$"),
     marginTop: int = Query(10, ge=5, le=25),
     marginBottom: int = Query(10, ge=5, le=25),
     marginLeft: int = Query(10, ge=5, le=25),
@@ -2788,7 +3160,7 @@ async def retry_processing(resume_id: str) -> ResumeUploadResponse:
     with llm_trace_scope(
         request_id,
         "resumes.retry_processing",
-        {"resume_id": resume_id},
+        _resume_trace_metadata(resume, resume_id=resume_id),
     ):
         try:
             processed_data = await parse_resume_to_json(markdown_content)
@@ -2912,16 +3284,27 @@ async def generate_auxiliary_package_endpoint(
 ) -> GenerateAuxiliaryPackageResponse:
     """Generate cover letter + outreach in one explicit merged action."""
 
-    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+    resume, resume_data, job, _language = _load_tailored_resume_generation_context(
         resume_id,
         feature_name="CL + message package",
     )
+    job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
+    request_id = str(uuid4())
     try:
-        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
-            resume_data,
-            job["content"],
-            language,
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.generate_auxiliary_package",
+            {
+                **_resume_trace_metadata(resume, resume_id=resume_id),
+                **_resume_trace_metadata(resume, resume_id=resume_id, prefix="tailored"),
+                "job_id": job.get("job_id"),
+            },
+        ):
+            cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+                resume_data,
+                job["content"],
+                job_keywords=job_kw,
+            )
     except Exception as e:
         logger.error("CL + message package generation failed: %s", e)
         raise HTTPException(
@@ -2935,6 +3318,10 @@ async def generate_auxiliary_package_endpoint(
             "cover_letter": cover_letter_content,
             "outreach_message": outreach_content,
         },
+    )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        label=_test_run_label_from_job(job, "auxiliary"),
     )
     return GenerateAuxiliaryPackageResponse(
         cover_letter=cover_letter_content,
@@ -2954,18 +3341,29 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
     - The resume must be a tailored resume (has parent_id)
     - The resume must have an associated job context in the improvements table
     """
-    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+    resume, resume_data, job, _language = _load_tailored_resume_generation_context(
         resume_id,
         feature_name="Cover letter",
     )
+    job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
 
     # Generate the shared auxiliary package once and return the requested field.
+    request_id = str(uuid4())
     try:
-        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
-            resume_data,
-            job["content"],
-            language,
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.generate_cover_letter",
+            {
+                **_resume_trace_metadata(resume, resume_id=resume_id),
+                **_resume_trace_metadata(resume, resume_id=resume_id, prefix="tailored"),
+                "job_id": job.get("job_id"),
+            },
+        ):
+            cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+                resume_data,
+                job["content"],
+                job_keywords=job_kw,
+            )
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
         raise HTTPException(
@@ -2980,6 +3378,10 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
             "cover_letter": cover_letter_content,
             "outreach_message": outreach_content,
         },
+    )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        label=_test_run_label_from_job(job, "cover_letter"),
     )
 
     return GenerateContentResponse(
@@ -2997,18 +3399,29 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     - The resume must be a tailored resume (has parent_id)
     - The resume must have an associated job context in the improvements table
     """
-    _resume, resume_data, job, language = _load_tailored_resume_generation_context(
+    resume, resume_data, job, _language = _load_tailored_resume_generation_context(
         resume_id,
         feature_name="Outreach message",
     )
+    job_kw = job.get("job_keywords") if isinstance(job.get("job_keywords"), dict) else None
 
     # Generate the shared auxiliary package once and return the requested field.
+    request_id = str(uuid4())
     try:
-        cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
-            resume_data,
-            job["content"],
-            language,
-        )
+        with llm_trace_scope(
+            request_id,
+            "resumes.generate_outreach",
+            {
+                **_resume_trace_metadata(resume, resume_id=resume_id),
+                **_resume_trace_metadata(resume, resume_id=resume_id, prefix="tailored"),
+                "job_id": job.get("job_id"),
+            },
+        ):
+            cover_letter_content, outreach_content = await generate_cover_letter_and_outreach(
+                resume_data,
+                job["content"],
+                job_keywords=job_kw,
+            )
     except Exception as e:
         logger.error(f"Outreach message generation failed: {e}")
         raise HTTPException(
@@ -3024,10 +3437,303 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
             "outreach_message": outreach_content,
         },
     )
+    _export_test_run_best_effort(
+        trace_id=request_id,
+        label=_test_run_label_from_job(job, "outreach"),
+    )
 
     return GenerateContentResponse(
         content=outreach_content,
         message="Outreach message generated successfully",
+    )
+
+
+def _artifact_public_url(artifact_id: str) -> str:
+    return f"/api/v1/artifacts/{artifact_id}"
+
+
+def _artifacts_from_confirm_payload(payload: dict[str, Any]) -> list[ArtifactSummary]:
+    artifact_ids = payload.get("artifact_ids")
+    summaries: list[ArtifactSummary] = []
+    if not isinstance(artifact_ids, list):
+        return summaries
+
+    for raw_id in artifact_ids:
+        if not isinstance(raw_id, str):
+            continue
+        record = db.get_artifact(raw_id)
+        if not record:
+            continue
+
+        summaries.append(
+            ArtifactSummary(
+                artifact_id=record["artifact_id"],
+                kind=record["kind"],
+                mime_type=record["mime_type"],
+                file_name=record["file_name"],
+                url=_artifact_public_url(record["artifact_id"]),
+                metadata=record.get("metadata"),
+            )
+        )
+
+    return summaries
+
+
+def _parse_resume_field_diff_list(raw: Any) -> list[ResumeFieldDiff]:
+    if not isinstance(raw, list):
+        return []
+
+    parsed: list[ResumeFieldDiff] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            parsed.append(ResumeFieldDiff.model_validate(item))
+        except ValidationError:
+            continue
+
+    return parsed
+
+
+def _parse_resume_change_manifest(raw: Any) -> list[ResumeChange]:
+    if not isinstance(raw, list):
+        return []
+
+    parsed: list[ResumeChange] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            parsed.append(ResumeChange.model_validate(item))
+        except ValidationError:
+            continue
+
+    return parsed
+
+
+def _maybe_resume_diff_summary(raw: Any) -> ResumeDiffSummary | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return ResumeDiffSummary.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def _maybe_tailoring_stage_breakdown(raw: Any) -> TailoringStageBreakdown | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return TailoringStageBreakdown.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def _maybe_pipeline_timing_summary(raw: Any) -> PipelineTimingSummary | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return PipelineTimingSummary.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def _run_matches_generation_filter(
+    run: dict[str, Any] | None,
+    expected_generation_run_id: str | None,
+) -> bool:
+    """Return true when a confirm run belongs to the requested generation unit."""
+
+    if not expected_generation_run_id:
+        return True
+    if not isinstance(run, dict):
+        return False
+    expected = expected_generation_run_id.strip()
+    if not expected:
+        return True
+    if run.get("generation_run_id") == expected:
+        return True
+    request_payload = run.get("request_payload")
+    if isinstance(request_payload, dict):
+        preview_id = request_payload.get("preview_generation_run_id")
+        return isinstance(preview_id, str) and preview_id.strip() == expected
+    return False
+
+
+def _build_jd_tailor_diff_data(
+    *,
+    tailored_resume: dict[str, Any],
+    generation_run_id: str | None = None,
+) -> tuple[JdTailorDiffData | None, str | None]:
+    """Return tailoring diff snapshot for a JD-tailored resume, if available."""
+
+    parent_id = tailored_resume.get("parent_id")
+    if not isinstance(parent_id, str) or not parent_id.strip():
+        return None, "not_tailored_resume"
+
+    master = db.get_resume(parent_id)
+    if not master:
+        return None, "master_resume_missing"
+
+    confirm_run = db.get_latest_generation_run(
+        run_kind="application_pack_confirm",
+        status="completed",
+        tailored_resume_id=tailored_resume.get("resume_id"),
+    )
+
+    expected_generation_run_id = (
+        generation_run_id.strip()
+        if isinstance(generation_run_id, str) and generation_run_id.strip()
+        else None
+    )
+    if expected_generation_run_id and not _run_matches_generation_filter(
+        confirm_run,
+        expected_generation_run_id,
+    ):
+        return None, "generation_run_mismatch"
+
+    payload: dict[str, Any] = {}
+    generation_run_id: str | None = None
+
+    if confirm_run:
+        generation_run_id = confirm_run.get("generation_run_id")
+        result_payload = confirm_run.get("result_payload")
+        if isinstance(result_payload, dict):
+            payload = result_payload
+
+    if not isinstance(generation_run_id, str):
+        generation_run_id = None
+
+    if generation_run_id and isinstance(payload.get("final_resume_data"), dict):
+        diff_summary = _maybe_resume_diff_summary(payload.get("diff_summary"))
+        detailed_stored = _parse_resume_field_diff_list(payload.get("detailed_changes"))
+        change_manifest = _parse_resume_change_manifest(payload.get("change_manifest"))
+        change_breakdown = _maybe_tailoring_stage_breakdown(payload.get("change_breakdown"))
+        pipeline_timing = _maybe_pipeline_timing_summary(payload.get("pipeline_timing"))
+
+        artifacts = _artifacts_from_confirm_payload(payload)
+
+        final_snapshot = payload.get("final_resume_data")
+        canon_final = _canonicalize_improved_resume_data(final_snapshot)
+        recalc_summary, detailed_recalc, calc_error = _calculate_diff_from_resume(master, canon_final)
+        if calc_error:
+            logger.warning(
+                "Could not recreate tailoring diff (%s tailored=%s)",
+                calc_error,
+                tailored_resume.get("resume_id"),
+            )
+
+        if detailed_stored:
+            detailed_changes_final = detailed_stored
+            diff_source_confirm: Literal[
+                "stored_detailed_changes",
+                "recomputed_confirmation_snapshot",
+            ] = "stored_detailed_changes"
+        elif detailed_recalc:
+            detailed_changes_final = detailed_recalc
+            diff_source_confirm = "recomputed_confirmation_snapshot"
+        else:
+            detailed_changes_final = []
+            diff_source_confirm = "recomputed_confirmation_snapshot"
+
+        diff_summary_final = diff_summary if diff_summary is not None else recalc_summary
+
+        skills_obs_payload = payload.get("skills_observability")
+        skills_obs_final = skills_obs_payload if isinstance(skills_obs_payload, dict) else None
+
+        return (
+            JdTailorDiffData(
+                generation_run_id=generation_run_id,
+                diff_source=diff_source_confirm,
+                diff_summary=diff_summary_final,
+                detailed_changes=detailed_changes_final,
+                change_manifest=change_manifest,
+                change_breakdown=change_breakdown,
+                pipeline_timing=pipeline_timing,
+                artifacts=artifacts,
+                skills_observability=skills_obs_final,
+            ),
+            None,
+        )
+
+    processed = tailored_resume.get("processed_data")
+    if isinstance(processed, dict):
+        canon_tailored = _canonicalize_improved_resume_data(processed)
+        summary, detailed_live, calc_error = _calculate_diff_from_resume(master, canon_tailored)
+        if calc_error:
+            return None, f"diff_calculation_failed:{calc_error}"
+
+        legacy_run = db.get_improvement_by_tailored_resume(tailored_resume.get("resume_id", ""))
+
+        inferred_run_id = None
+        if legacy_run:
+            inferred_run_id = legacy_run.get("generation_run_id")
+
+        if not isinstance(inferred_run_id, str):
+            inferred_run_id = f"livediff:{tailored_resume.get('resume_id')}"
+
+        master_snapshot = _get_original_resume_data(master)
+        canonical_manifest_changes = []
+        if master_snapshot:
+            canonical_manifest_changes = build_change_manifest(master_snapshot, processed)
+
+        return (
+            JdTailorDiffData(
+                generation_run_id=inferred_run_id,
+                diff_source="live_vs_master",
+                diff_summary=summary,
+                detailed_changes=detailed_live or [],
+                change_manifest=list(canonical_manifest_changes),
+                change_breakdown=None,
+                pipeline_timing=None,
+                artifacts=[],
+            ),
+            None,
+        )
+
+    return None, "missing_structured_resume"
+
+
+@router.get(
+    "/{resume_id}/jd-tailor-diff",
+    response_model=JdTailorDiffResponse,
+    summary="Tailoring diff snapshot for reference",
+)
+async def get_jd_tailor_diff_snapshot(
+    resume_id: str,
+    generation_run_id: str | None = None,
+) -> JdTailorDiffResponse:
+    """Expose the JD tailoring diff for the builder after confirmation.
+
+    Confirmed application packs persist diff metadata on the finalize generation run.
+    When line-level ``detailed_changes`` are missing from older snapshots, values are
+    recomputed against the master's structured data vs the persisted confirmation JSON.
+    If no finalize run exists, the API falls back to a live structural diff versus the
+    master resume (labeled via ``live_vs_master``).
+    """
+
+    resume = db.get_resume(resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    bundle, unavailable = _build_jd_tailor_diff_data(
+        tailored_resume=resume,
+        generation_run_id=generation_run_id,
+    )
+
+    request_id_str = str(uuid4())
+    if bundle:
+        return JdTailorDiffResponse(request_id=request_id_str, data=bundle)
+
+    logger.info(
+        "JD tailor diff unavailable for resume %s: %s",
+        resume_id,
+        unavailable,
+    )
+    return JdTailorDiffResponse(
+        request_id=request_id_str,
+        data=None,
+        unavailable_reason=unavailable,
     )
 
 

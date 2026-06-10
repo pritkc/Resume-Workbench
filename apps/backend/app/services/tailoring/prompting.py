@@ -4,42 +4,60 @@ from __future__ import annotations
 
 import json
 import logging
+from hashlib import sha256
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
-from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, get_prompt
+from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT, get_prompt
 from app.prompts.tailoring_blocks import TAILORING_MODE_STRATEGY
 
-from app.services.tailoring.analysis import jd_intelligence_to_prompt_json
+from app.services.tailoring.jd_intel_blob import jd_intel_to_prompt_json
 from app.services.tailoring.models import (
-    JDIntelligence,
     TailoringResponseContract,
     TailoringResumePayload,
 )
+from app.services.tailoring.section_format import jd_intel_text_from_blob
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class TailoringPromptContext:
     prompt_id: str
-    output_language: str
     response_contract_json: str
-    job_intelligence_json: str
+    output_template: str
+    extract_jd_intel_output_json: str
+    jd_intel_text: str
+    jd_intel_blob: dict[str, Any]
     original_resume_json: str
-    retry_hint: str
+    retry_hint: str | None
+    prompt_hash: str
     system_prompt: str
     user_prompt: str
     used_structured_resume_input: bool
+
+
+def validate_prompt_canaries(
+    user_prompt: str,
+    canaries: tuple[str, ...] | None = None,
+) -> None:
+    if canaries is None:
+        return
+    missing = [canary for canary in canaries if canary not in user_prompt]
+    if missing:
+        raise RuntimeError(
+            "Tailoring prompt is missing required current-rule canaries: "
+            + ", ".join(missing)
+        )
 
 
 def assemble_tailoring_system_prompt(mode: str) -> str:
     mod = get_prompt("tailor_resume_full" if mode == "full" else "tailor_resume_lite")
     system, _ = mod.build_messages(
         original_resume="{}",
-        job_intelligence="{}",
+        jd_intel_blob={},
         response_contract="{}",
-        output_language="English",
+        output_template="{}",
+        jd_intel="{}",
     )
     return system
 
@@ -47,30 +65,31 @@ def assemble_tailoring_system_prompt(mode: str) -> str:
 def render_tailoring_user_prompt(
     *,
     mode_id: str,
-    job_intelligence_json: str,
+    jd_intel_blob: dict[str, Any],
     original_resume_json: str,
     response_contract_json: str,
-    output_language: str,
+    output_template: str | None = None,
+    jd_intel_text: str | None = None,
+    custom_prompt_instructions: str | None = None,
 ) -> str:
     mod = get_prompt("tailor_resume_full" if mode_id == "full" else "tailor_resume_lite")
     _, user = mod.build_messages(
         original_resume=original_resume_json,
-        job_intelligence=job_intelligence_json,
+        jd_intel_blob=jd_intel_blob,
         response_contract=response_contract_json,
-        output_language=output_language,
+        output_template=output_template or response_contract_json,
+        jd_intel=jd_intel_text if jd_intel_text is not None else jd_intel_text_from_blob(jd_intel_blob),
+        custom_prompt_instructions=custom_prompt_instructions,
     )
     return user
 
 
-def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> str:
+def build_tailoring_retry_hint(response_contract: TailoringResponseContract) -> str | None:
+    _ = response_contract
     return (
-        'Output a JSON object with keys "summary", "experience", "projects", "skills", "bold_keywords". '
-        "summary: one sentence. "
-        "experience/projects: object keyed by 0-based entry index with a bullets sub-object. "
-        "skills: array of {label, values} objects. "
-        "bold_keywords: array of 10-20 keyword strings. "
-        "Do not include personalInfo, sectionMeta, education, id, company, location, or dates. "
-        "Start with { and end with }."
+        "Return raw section-header text only. Include SUMMARY and BOLD KEYWORDS. "
+        "Use [RETAIN] only as a whole scalar cell or skill chip placeholder; "
+        "never mix [RETAIN] with added scalar text. Do not return JSON."
     )
 
 
@@ -86,22 +105,34 @@ def _resolve_mode(prompt_id: str | None) -> str:
     return selected
 
 
+def render_custom_prompt_instructions(custom_prompt_instructions: str | None) -> str:
+    if custom_prompt_instructions is None:
+        return ""
+    stripped = custom_prompt_instructions.strip()
+    if not stripped:
+        return ""
+    return (
+        "CUSTOM HIGH-PRIORITY INSTRUCTIONS:\n"
+        "If present, these instructions override all other tailoring instructions for this run if conflicting with them.\n"
+        f"{stripped}\n"
+    )
+
+
 def build_prompt_context(
     *,
     prompt_id: str | None,
-    language: str,
-    jd_intelligence: JDIntelligence,
+    jd_intel_blob: dict[str, Any],
     response_contract: TailoringResponseContract,
     resume_payload: TailoringResumePayload | None,
     original_resume_markdown: str,
+    original_resume_data: dict[str, Any] | None = None,
+    custom_prompt_instructions: str | None = None,
 ) -> TailoringPromptContext:
-    from app.prompts._constants import get_language_name
-
+    _ = original_resume_data
     selected_mode = _resolve_mode(prompt_id)
-    output_language = get_language_name(language)
 
     resume_input = (
-        json.dumps(resume_payload.model_dump(), separators=(",", ":"), ensure_ascii=True)
+        json.dumps(resume_payload.to_llm_prompt_dict(), separators=(",", ":"), ensure_ascii=True)
         if resume_payload is not None
         else original_resume_markdown
     )
@@ -110,23 +141,29 @@ def build_prompt_context(
         separators=(",", ":"),
         ensure_ascii=True,
     )
-    job_json = jd_intelligence_to_prompt_json(jd_intelligence)
+    output_template = response_contract.to_section_template()
+    job_json = jd_intel_to_prompt_json(jd_intel_blob)
+    jd_intel_text = jd_intel_text_from_blob(jd_intel_blob)
 
     mod = get_prompt("tailor_resume_full" if selected_mode == "full" else "tailor_resume_lite")
     system_prompt, user_prompt = mod.build_messages(
         original_resume=resume_input,
-        job_intelligence=job_json,
+        jd_intel_blob=jd_intel_blob,
         response_contract=response_contract_json,
-        output_language=output_language,
+        output_template=output_template,
+        jd_intel=jd_intel_text,
+        custom_prompt_instructions=custom_prompt_instructions,
     )
-
     return TailoringPromptContext(
         prompt_id=selected_mode,
-        output_language=output_language,
         response_contract_json=response_contract_json,
-        job_intelligence_json=job_json,
+        output_template=output_template,
+        extract_jd_intel_output_json=job_json,
+        jd_intel_text=jd_intel_text,
+        jd_intel_blob=jd_intel_blob,
         original_resume_json=resume_input,
         retry_hint=build_tailoring_retry_hint(response_contract),
+        prompt_hash=sha256(user_prompt.encode()).hexdigest()[:12],
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         used_structured_resume_input=resume_payload is not None,
@@ -153,7 +190,7 @@ DEFAULT_TAILORING_PIPELINE: list[PipelineStep] = [
         name="jd_intelligence",
         build_messages=None,
         enabled=False,
-        operation="job_extract_keywords",
+        operation=LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT,
         max_tokens=4096,
     ),
     PipelineStep(

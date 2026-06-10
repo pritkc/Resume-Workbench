@@ -26,15 +26,6 @@ def _collect_dict_keys(entries: list[Any]) -> list[str]:
     return ordered_keys
 
 
-def _mode_rules(prompt_id: str) -> list[str]:
-    if prompt_id == "lite":
-        return [
-            "Keep description arrays the same length.",
-            "Do not change indexed bullet counts in workExperience or personalProjects.",
-        ]
-    return ["May add at most one bullet per work/project entry."]
-
-
 def _immutable_fields(entry_keys: list[str], editable_fields: set[str]) -> list[str]:
     return [key for key in entry_keys if key not in editable_fields]
 
@@ -68,6 +59,29 @@ def _build_custom_section_contract(
     return TailoringSectionContract(type=section_type)
 
 
+def compute_adaptive_max_tokens(contract: TailoringResponseContract, mode: str) -> int:
+    """Compute an output cap based on empirical resume cell count.
+
+    Formula: max(floor, min(8000, total_cells * 34 * 1.25 * 1.40))
+    - 34 tok/cell: empirical from calibration test run
+    - 1.25×: pretty-print overhead vs minified
+    - 1.40×: safety headroom
+    """
+    n_exp = len(contract.experience_bullet_counts)
+    n_proj = len(contract.project_bullet_counts)
+    n_skill_groups = len(contract.skill_group_value_counts)
+
+    exp_bullets = sum(contract.experience_bullet_counts)
+    proj_bullets = sum(contract.project_bullet_counts)
+    skill_values = sum(contract.skill_group_value_counts)
+
+    section_headers = n_exp * 2 + n_proj * 2 + n_skill_groups + 2
+    total_cells = exp_bullets + proj_bullets + skill_values + section_headers
+
+    floor = 6000 if mode == "full" else 4096
+    return max(floor, min(8000, int(total_cells * 34 * 1.25 * 1.40)))
+
+
 def build_response_contract(
     resume_payload: TailoringResumePayload | None,
     *,
@@ -81,7 +95,7 @@ def build_response_contract(
         "workExperience": TailoringSectionContract(
             type="array",
             entry_count=0,
-            editable_fields=["summary", "description"],
+            editable_fields=["tech_stacks", "description"],
             immutable_fields=["id", "position", "title", "company", "location", "start_date", "end_date", "date", "years"],
         ),
         "personalProjects": TailoringSectionContract(
@@ -92,11 +106,6 @@ def build_response_contract(
         ),
         "skills": TailoringSectionContract(
             type="object",
-            rules=[
-                "Return concise skills as label + values only.",
-                "Keep 3-6 groups max, with clear labels and no duplicates across groups.",
-                "Retain the most role-relevant core skills and remove clearly irrelevant items.",
-            ],
             sections={
                 "groups": TailoringSectionContract(
                     type="array",
@@ -111,11 +120,6 @@ def build_response_contract(
         ),
         "changes": TailoringSectionContract(
             type="array",
-            rules=[
-                "Include one change record per actual edit when possible.",
-                "Use indexed paths like workExperience[0].description[1].",
-                "Never include blocked paths like personalInfo or education.",
-            ],
         ),
     }
 
@@ -123,7 +127,6 @@ def build_response_contract(
         return TailoringResponseContract(
             prompt_mode=prompt_id,
             top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
-            mode_rules=_mode_rules(prompt_id),
             sections=sections,
         )
 
@@ -132,8 +135,8 @@ def build_response_contract(
     sections["workExperience"] = TailoringSectionContract(
         type="array",
         entry_count=len(work_entries),
-        immutable_fields=_immutable_fields(work_keys, {"summary", "description"}),
-        editable_fields=["summary", "description"],
+        immutable_fields=_immutable_fields(work_keys, {"tech_stacks", "description"}),
+        editable_fields=["tech_stacks", "description"],
     )
 
     project_entries = resume_payload.personalProjects
@@ -147,14 +150,18 @@ def build_response_contract(
 
     skills = resume_payload.skills.model_dump()
     groups = skills.get("groups", [])
+    skill_group_value_counts = (
+        [len(g.values) for g in resume_payload.skills.groups] if resume_payload.skills.groups else []
+    )
+    skill_group_ids: list[str] = []
+    for g in resume_payload.skills.groups:
+        gid = str(g.id or "").strip()
+        if not gid:
+            gid = f"__index_{len(skill_group_ids)}"
+        skill_group_ids.append(gid)
     sections["skills"] = TailoringSectionContract(
         type="object",
         entry_count=len(groups) if isinstance(groups, list) else 0,
-        rules=[
-            "Return concise skills as label + values only.",
-            "Keep 3-6 groups max, with clear labels and no duplicates across groups.",
-            "Retain the most role-relevant core skills and remove clearly irrelevant items.",
-        ],
         sections={
             "groups": TailoringSectionContract(
                 type="array",
@@ -178,12 +185,21 @@ def build_response_contract(
     return TailoringResponseContract(
         prompt_mode=prompt_id,
         top_level_keys=list(TAILORING_RESPONSE_TOP_LEVEL_KEYS),
-        mode_rules=_mode_rules(prompt_id),
         sections=sections,
         experience_entries=[e.company for e in work_entries],
         experience_bullet_counts=[len(e.description) for e in work_entries],
         experience_positions=[e.position or e.title for e in work_entries],
+        experience_tech_stacks=[e.tech_stacks or "" for e in work_entries],
+        direct_jd_bullet_budget=[
+            2 if index == 0 and len(entry.description) > 2 else 1
+            for index, entry in enumerate(work_entries)
+        ],
+        preserve_story_min=[max(1, len(e.description) - (2 if index == 0 else 1)) for index, e in enumerate(work_entries)],
         project_entries=[e.name for e in project_entries],
         project_bullet_counts=[len(e.description) for e in project_entries],
         project_tech_stacks=[e.tech_stacks or "" for e in project_entries],
+        skill_group_ids=skill_group_ids,
+        skill_group_value_counts=skill_group_value_counts,
+        max_changed_projects=2,
+        project_rename_allowed=False,
     )

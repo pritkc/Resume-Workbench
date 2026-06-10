@@ -1,11 +1,12 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 import { LLMTraceViewer } from '@/components/observability/llm-trace-viewer';
-import { Activity, ArrowLeft, Radar } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 type PageProps = {
   searchParams?: Promise<{
     trace_id?: string;
+    resume_code?: string;
+    resume_id?: string;
     request_scope?: string;
   }>;
 };
@@ -13,70 +14,81 @@ type PageProps = {
 export default async function LLMTracesPage({ searchParams }: PageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const traceId = resolvedSearchParams?.trace_id ?? null;
+  const resumeCode = resolvedSearchParams?.resume_code ?? null;
+  const resumeId = resolvedSearchParams?.resume_id ?? null;
   const requestScope = resolvedSearchParams?.request_scope ?? null;
 
   return (
-    <div
-      className="min-h-screen bg-[#F6F5EE] p-6 md:p-10"
-      style={{
-        backgroundImage:
-          'linear-gradient(rgba(29, 78, 216, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 78, 216, 0.08) 1px, transparent 1px)',
-        backgroundSize: '36px 36px',
-      }}
-    >
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="border border-black bg-white p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.08)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <Radar className="h-5 w-5" />
-                <p className="font-mono text-xs font-bold uppercase tracking-[0.25em] text-blue-700">
-                  LLM Observatory
-                </p>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto max-w-[min(100%,118rem)] px-3 py-4 sm:px-5">
+        <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <Link
+                href="/settings"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-200/80 hover:text-slate-800"
+                aria-label="Back to settings"
+                title="Back to settings"
+              >
+                <ArrowLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+              </Link>
+              <h1 className="truncate text-base font-medium text-slate-900">LLM traces</h1>
+            </div>
+            {(traceId || resumeCode || resumeId || requestScope) && (
+              <div className="flex flex-wrap gap-1.5 pl-10 sm:pl-0">
+                {traceId ? (
+                  <span
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
+                    title={traceId}
+                  >
+                    trace: {traceId}
+                  </span>
+                ) : null}
+                {resumeCode ? (
+                  <span
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
+                    title={resumeCode}
+                  >
+                    resume code: {resumeCode}
+                  </span>
+                ) : null}
+                {resumeId ? (
+                  <span
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
+                    title={resumeId}
+                  >
+                    resume id: {resumeId}
+                  </span>
+                ) : null}
+                {requestScope ? (
+                  <span
+                    className="max-w-full truncate rounded-md border border-slate-200 bg-card px-2 py-1 font-mono text-[11px] text-slate-700"
+                    title={requestScope}
+                  >
+                    scope: {requestScope}
+                  </span>
+                ) : null}
               </div>
-              <h1 className="mt-3 font-serif text-4xl font-bold uppercase tracking-tight">
-                Trace Every Model Call
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm text-gray-600">
-                Use this page as the internal live logger. It can watch the newest calls across the
-                system, focus on one request scope like preview generation, or inspect a single
-                request by pasting its trace ID.
-              </p>
-              {(traceId || requestScope) && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {traceId && (
-                    <span className="border border-black bg-[#F8F7F1] px-3 py-2 font-mono text-xs uppercase tracking-wider">
-                      trace {traceId}
-                    </span>
-                  )}
-                  {requestScope && (
-                    <span className="border border-black bg-[#F8F7F1] px-3 py-2 font-mono text-xs uppercase tracking-wider">
-                      scope {requestScope}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link href="/tailor">
-                <Button variant="outline" className="gap-2">
-                  <Activity className="h-4 w-4" />
-                  Tailor
-                </Button>
-              </Link>
-              <Link href="/settings">
-                <Button variant="outline" className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Settings
-                </Button>
-              </Link>
-            </div>
+            )}
           </div>
-        </div>
+
+          <details className="max-w-xs text-right text-xs text-slate-500 sm:max-w-sm">
+            <summary className="cursor-pointer list-none marker:hidden hover:text-slate-700 [&::-webkit-details-marker]:hidden">
+              <span className="border-b border-dotted border-slate-300">About this page</span>
+            </summary>
+            <div className="mt-1 rounded-md border border-slate-200 bg-card p-2 text-left text-[11px] leading-snug text-slate-600">
+              <p className="m-0">
+                Internal live logger for model calls: newest calls system-wide, filtered by request
+                scope, or a single flow via trace ID.
+              </p>
+            </div>
+          </details>
+        </header>
 
         <LLMTraceViewer
           initialTraceId={traceId}
+          initialResumeCode={resumeCode}
+          initialResumeId={resumeId}
           initialRequestScope={requestScope}
           defaultAutoRefresh={true}
         />

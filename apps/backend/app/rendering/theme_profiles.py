@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 import json
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Any, Literal
 
 
@@ -21,7 +23,7 @@ ThemeId = Literal[
     "ember",
     "ink",
 ]
-PageSize = Literal["A4", "LETTER"]
+PageSize = Literal["A4", "LETTER", "FREEFLOW"]
 DensityProfile = Literal["compact", "balanced", "spacious"]
 AccentColor = Literal["blue", "green", "orange", "red"]
 
@@ -83,7 +85,8 @@ _ACCENT_COLORS: dict[AccentColor, str] = {
     "red": "rgb(220, 38, 38)",
 }
 _FIXED_LINK_COLOR = "rgb(0, 79, 144)"
-_APP_RUNTIME_SETTING_KEYS = {"show_summary_heading"}
+_APP_RUNTIME_SETTING_KEYS = {"show_summary_heading", "resume_workbench_style"}
+_CALIBRI_FALLBACK_FONT = "Arial"
 
 _DENSITY_MAP: dict[DensityProfile, dict[str, str]] = {
     "compact": {
@@ -147,7 +150,11 @@ def _normalize_theme_id(value: Any) -> ThemeId:
 
 
 def _normalize_page_size(value: Any) -> PageSize:
-    return "LETTER" if value == "LETTER" else "A4"
+    if value == "LETTER":
+        return "LETTER"
+    if value == "FREEFLOW":
+        return "FREEFLOW"
+    return "A4"
 
 
 def _normalize_density(value: Any) -> DensityProfile:
@@ -246,6 +253,63 @@ def _enforce_fixed_link_color(design: dict[str, Any]) -> dict[str, Any]:
         colors = {}
         design["colors"] = colors
     colors["links"] = _FIXED_LINK_COLOR
+    return design
+
+
+@lru_cache(maxsize=16)
+def _font_family_available(font_family: str) -> bool:
+    normalized = " ".join(font_family.split()).strip()
+    if not normalized:
+        return False
+
+    fc_match = shutil.which("fc-match")
+    if fc_match:
+        try:
+            result = subprocess.run(
+                [fc_match, normalized],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            result = None
+        if result and result.returncode == 0:
+            return normalized.casefold() in result.stdout.casefold()
+
+    candidates = [
+        Path("/Library/Fonts") / f"{normalized}.ttf",
+        Path("/Library/Fonts") / f"{normalized}.otf",
+        Path("/Library/Fonts/Microsoft") / f"{normalized}.ttf",
+        Path("/Library/Fonts/Microsoft") / f"{normalized}.otf",
+        Path.home() / "Library/Fonts" / f"{normalized}.ttf",
+        Path.home() / "Library/Fonts" / f"{normalized}.otf",
+        Path("/System/Library/Fonts/Supplemental") / f"{normalized}.ttf",
+        Path("/System/Library/Fonts/Supplemental") / f"{normalized}.otf",
+    ]
+    return any(path.exists() for path in candidates)
+
+
+def _resolve_font_family(font_family: Any) -> Any:
+    if not isinstance(font_family, str):
+        return font_family
+    normalized = " ".join(font_family.split()).strip()
+    if normalized.casefold() != "calibri":
+        return font_family
+    if _font_family_available("Calibri"):
+        return font_family
+    return _CALIBRI_FALLBACK_FONT
+
+
+def _apply_safe_font_fallbacks(design: dict[str, Any]) -> dict[str, Any]:
+    typography = design.get("typography")
+    if not isinstance(typography, dict):
+        return design
+    font_family = typography.get("font_family")
+    if not isinstance(font_family, dict):
+        return design
+    for key, value in list(font_family.items()):
+        font_family[key] = _resolve_font_family(value)
     return design
 
 
@@ -382,9 +446,13 @@ def _resolve_theme_profile_state(
     active_profile = profile or ThemeProfileSettings()
     design = _deep_merge(get_theme_design_baseline(theme_id), active_profile.design)
 
-    if active_profile.page_size:
+    if active_profile.page_size in ("A4", "LETTER"):
         page = design.setdefault("page", {})
         page["size"] = "a4" if active_profile.page_size == "A4" else "us-letter"
+    elif active_profile.page_size == "FREEFLOW":
+        page = design.setdefault("page", {})
+        if page.get("size") not in ("a4", "us-letter"):
+            page["size"] = "a4"
 
     if active_profile.margins_mm:
         page = design.setdefault("page", {})
@@ -417,9 +485,11 @@ def _resolve_theme_profile_state(
             colors[key] = accent
 
     page = design.get("page") if isinstance(design.get("page"), dict) else {}
-    page_size: PageSize = (
-        "LETTER" if page.get("size") == "us-letter" else "A4"
-    )
+    physical = "us-letter" if page.get("size") == "us-letter" else "a4"
+    if active_profile.page_size == "FREEFLOW":
+        page_size: PageSize = "FREEFLOW"
+    else:
+        page_size = "LETTER" if physical == "us-letter" else "A4"
     margins_mm = {
         "top": _dimension_to_mm(page.get("top_margin"), DEFAULT_MARGINS_MM["top"]),
         "bottom": _dimension_to_mm(page.get("bottom_margin"), DEFAULT_MARGINS_MM["bottom"]),
@@ -438,7 +508,7 @@ def _resolve_theme_profile_state(
     )
 
     design["theme"] = theme_id
-    page["size"] = "a4" if page_size == "A4" else "us-letter"
+    page["size"] = physical
     header = design.setdefault("header", {})
     header_connections = header.setdefault("connections", {})
     header_connections["show_icons"] = show_contact_icons
@@ -461,10 +531,14 @@ def _build_sparse_design_from_profile(
     active_profile = profile or ThemeProfileSettings()
     design: dict[str, Any] = {"theme": theme_id}
 
-    if active_profile.page_size:
+    if active_profile.page_size in ("A4", "LETTER"):
         design.setdefault("page", {})["size"] = (
             "a4" if active_profile.page_size == "A4" else "us-letter"
         )
+    elif active_profile.page_size == "FREEFLOW":
+        p = design.setdefault("page", {})
+        if p.get("size") not in ("a4", "us-letter"):
+            p["size"] = "a4"
 
     if active_profile.margins_mm:
         page = design.setdefault("page", {})
@@ -501,7 +575,8 @@ def _build_sparse_design_from_profile(
         design = _deep_merge(design, active_profile.design)
 
     design["theme"] = theme_id
-    return _enforce_fixed_link_color(design)
+    _enforce_fixed_link_color(design)
+    return _apply_safe_font_fallbacks(design)
 
 
 @dataclass(frozen=True)
@@ -765,7 +840,9 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
         resolved = _resolve_theme_profile_state(
             settings.theme_id, settings.theme_profiles.get(settings.theme_id)
         )
-        resolved_design = _enforce_fixed_link_color(deepcopy(resolved["design"]))
+        resolved_design = _apply_safe_font_fallbacks(
+            _enforce_fixed_link_color(deepcopy(resolved["design"]))
+        )
         return _strip_unknown_template_keys(resolved_design)
 
     density = _LEGACY_DENSITY_MAP[settings.density_profile]
@@ -773,7 +850,11 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
     legacy_design: dict[str, Any] = {
         "theme": settings.theme_id,
         "page": {
-            "size": "a4" if settings.page_size == "A4" else "us-letter",
+            "size": (
+                "us-letter"
+                if settings.page_size == "LETTER"
+                else "a4"
+            ),
             "top_margin": _mm_to_inches(settings.margins_mm["top"]),
             "bottom_margin": _mm_to_inches(settings.margins_mm["bottom"]),
             "left_margin": _mm_to_inches(settings.margins_mm["left"]),
@@ -815,6 +896,7 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
         merged = _deep_merge(merged, settings.design)
     merged["theme"] = settings.theme_id
     _enforce_fixed_link_color(merged)
+    _apply_safe_font_fallbacks(merged)
     return _strip_unknown_template_keys(merged)
 
 
@@ -868,11 +950,23 @@ def theme_settings_from_rendercv_sections(
         else {}
     )
 
-    page_size: PageSize = (
-        "LETTER"
-        if page.get("size") == "us-letter"
-        else ("A4" if page.get("size") == "a4" else base.page_size)
-    )
+    raw_size = page.get("size")
+    if raw_size in ("us-letter", "a4"):
+        physical = raw_size
+    else:
+        base_page = base.design.get("page", {}) if isinstance(base.design.get("page"), dict) else {}
+        physical = "us-letter" if base_page.get("size") == "us-letter" else "a4"
+
+    if base.page_size == "FREEFLOW":
+        base_page = base.design.get("page", {}) if isinstance(base.design.get("page"), dict) else {}
+        base_physical = "us-letter" if base_page.get("size") == "us-letter" else "a4"
+        page_size: PageSize = (
+            "FREEFLOW"
+            if physical == base_physical
+            else ("LETTER" if physical == "us-letter" else "A4")
+        )
+    else:
+        page_size = "LETTER" if physical == "us-letter" else "A4"
     margins_mm = {
         "top": _dimension_to_mm(page.get("top_margin"), base.margins_mm["top"]),
         "bottom": _dimension_to_mm(page.get("bottom_margin"), base.margins_mm["bottom"]),

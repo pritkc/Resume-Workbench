@@ -56,20 +56,20 @@ function SortableValueRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="group/svrow flex min-h-[26px] items-center gap-1 rounded-none border border-black/20 bg-white px-1 py-0.5"
+      className="group/svrow inline-flex min-h-0 items-center gap-0.5 rounded-none border-0 bg-transparent px-0 py-0"
     >
       <div
         {...attributes}
         {...listeners}
-        className="flex shrink-0 cursor-grab touch-none items-center justify-center rounded-none px-0.5 py-0.5 text-black/35 opacity-70 transition-opacity hover:text-black/60 active:cursor-grabbing group-hover/svrow:opacity-100"
+        className="flex shrink-0 cursor-grab touch-none items-center justify-center rounded-none px-0.5 py-0.5 text-muted-foreground opacity-70 transition-opacity hover:text-muted-foreground active:cursor-grabbing group-hover/svrow:opacity-100"
         title={gripTitle}
       >
         <GripVertical className="h-3.5 w-3.5" />
       </div>
-      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-black">{label}</span>
+      <span className="min-w-0 truncate font-serif text-[12px] text-foreground">{label}</span>
       <button
         type="button"
-        className="shrink-0 text-black/30 opacity-70 transition-opacity hover:text-red-600 group-hover/svrow:opacity-100"
+        className="shrink-0 text-muted-foreground opacity-70 transition-opacity hover:text-red-600 group-hover/svrow:opacity-100"
         aria-label={removeAriaLabel}
         onClick={onRemove}
       >
@@ -99,7 +99,6 @@ export const SkillGroupValuesDnd: React.FC<SkillGroupValuesDndProps> = ({
   removeAriaLabel,
   gripTitle,
 }) => {
-  const instanceId = React.useId();
   const [rowIds, reorderRowIds] = useHighlightRowIds(values.length);
 
   const sensors = useSensors(
@@ -125,22 +124,24 @@ export const SkillGroupValuesDnd: React.FC<SkillGroupValuesDndProps> = ({
 
   return (
     <DndContext
-      id={`skill-values-${scopeId}-${instanceId}`}
+      id={`skill-values-${scopeId}`}
       sensors={sensors}
       collisionDetection={resumeSortableCollision}
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
           {values.map((val, idx) => (
-            <SortableValueRow
-              key={rowIds[idx] ?? `${scopeId}-v-${idx}`}
-              id={rowIds[idx]!}
-              label={val}
-              onRemove={() => onRemove(idx)}
-              removeAriaLabel={removeAriaLabel}
-              gripTitle={gripTitle}
-            />
+            <React.Fragment key={rowIds[idx] ?? `${scopeId}-v-${idx}`}>
+              {idx > 0 ? <span className="text-muted-foreground/50">, </span> : null}
+              <SortableValueRow
+                id={rowIds[idx]!}
+                label={val}
+                onRemove={() => onRemove(idx)}
+                removeAriaLabel={removeAriaLabel}
+                gripTitle={gripTitle}
+              />
+            </React.Fragment>
           ))}
         </div>
       </SortableContext>

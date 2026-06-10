@@ -35,7 +35,7 @@ export const SortableHighlightRow: React.FC<SortableHighlightRowProps> = ({ id, 
         className="absolute -left-0.5 top-0 z-[11] flex h-full w-2.5 cursor-grab touch-none items-start justify-center pt-1 opacity-0 transition-opacity active:cursor-grabbing group-hover/hlrow:opacity-100"
         title="Drag to reorder bullet"
       >
-        <GripVertical className="h-3.5 w-3.5 text-black/35 transition-colors hover:text-black/65" />
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground transition-colors hover:text-muted-foreground" />
       </div>
       <div className="pl-2">{children}</div>
     </div>

@@ -1,20 +1,21 @@
 """Version and option constants for LLM prompts."""
 
+# Persisted on ``llm_calls.operation`` for JD extraction.
+LLM_OPERATION_EXTRACT_JD_INTEL_OUTPUT = "extract_jd_intel_output"
+
 PROMPT_VERSIONS = {
-    "tailoring_system": "v5.0",
-    "tailoring_contract": "v5.0",
-    "tailoring_craft": "v5.0",
-    "tailoring_user": "v5.0",
-    "jd_intelligence_system": "v2.1",
-    "jd_intelligence_user": "v2.1",
+    "tailoring_system": "v5.3",
+    "tailoring_contract": "v5.5",
+    "tailoring_craft": "v5.2",
+    "tailoring_user": "v5.4",
+    "jd_intelligence_system": "v3.0",
+    "jd_intelligence_user": "v3.2",
     "parse_resume": "v2.2",
-    "extract_keywords": "v2.0",
-    "cover_letter": "v2.0",
-    "outreach": "v2.0",
-    "cover_letter_outreach": "v1.0",
-    "application_questions_generate": "v1.0",
-    "critique_resume": "v1.0",
-    "rewrite_resume": "v1.0",
+    "extract_keywords": "v3.3",
+    "cover_letter_outreach": "v1.1",
+    "application_questions_generate": "v1.1",
+    "critique_resume": "v1.2",
+    "rewrite_resume": "v1.2",
     "enrichment_analyze": "v1.1",
     "enrichment_enhance": "v1.1",
     "enrichment_regenerate_item": "v1.1",
@@ -50,3 +51,23 @@ IMPROVE_PROMPT_OPTIONS = [
 ]
 
 DEFAULT_IMPROVE_PROMPT_ID = "full"
+
+# Programmatic filter: tools excluded from tech_stacks, bold_keywords, and skill values
+# regardless of whether the JD names them. Kept here so prompt_policy.py can derive
+# is_basic_resume_term() without hardcoding names inside model-facing prompt text.
+BASIC_RESUME_TOOLS: frozenset[str] = frozenset({
+    "excel", "microsoft excel",
+    "spreadsheet", "spreadsheets",
+    "google sheets",
+    "microsoft office", "ms office",
+    "word", "microsoft word",
+    "powerpoint", "microsoft powerpoint",
+    "outlook", "microsoft outlook",
+    "email", "e-mail",
+    "slack",
+    "teams", "microsoft teams",
+    "jira",
+    "confluence",
+    "notion",
+    "miro",
+})

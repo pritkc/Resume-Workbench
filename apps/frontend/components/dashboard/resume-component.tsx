@@ -53,7 +53,7 @@ export interface Experience {
   end_date?: string | null;
   date?: string;
   years?: string;
-  summary?: string | null;
+  techStack?: string | null;
   description?: string[];
   highlights?: string[];
 }
@@ -76,7 +76,7 @@ export interface Education {
 export interface Project {
   id: number;
   name?: string;
-  summary?: string | null;
+  techStack?: string | null;
   role?: string;
   date?: string;
   years?: string;
@@ -84,6 +84,8 @@ export interface Project {
   website?: string;
   description?: string[];
   highlights?: string[];
+  /** When false, kept in the builder but omitted from on-screen resume and PDF. */
+  includeInResume?: boolean;
 }
 
 export interface SkillGroup {
@@ -215,7 +217,7 @@ const Resume: React.FC<ResumeProps> = ({
 
   return (
     <div
-      className={`${baseStyles['resume-body']} bg-white text-black w-full mx-auto resume-template-${mergedSettings.template}`}
+      className={`${baseStyles['resume-body']} bg-card text-foreground w-full mx-auto resume-template-${mergedSettings.template}`}
       style={cssVars}
     >
       {mergedSettings.template === 'swiss-single' && (

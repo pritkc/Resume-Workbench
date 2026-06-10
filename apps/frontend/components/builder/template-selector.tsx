@@ -44,8 +44,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ value, onCha
           onClick={() => onChange(template.id)}
           className={`group flex flex-col items-center border-2 p-2 transition-all ${
             value === template.id
-              ? 'border-black bg-white shadow-[3px_3px_0px_0px_#000]'
-              : 'border-black/25 bg-white hover:border-black hover:bg-[#F0F0E8] hover:shadow-[2px_2px_0px_0px_#000]'
+              ? 'border-border bg-card shadow-[3px_3px_0px_0px_#000]'
+              : 'border-border bg-card hover:border-primary hover:bg-background hover:shadow-[2px_2px_0px_0px_#000]'
           }`}
           title={templateLabels[template.id].description}
         >
@@ -57,7 +57,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ value, onCha
           {/* Template Name */}
           <span
             className={`font-mono text-[10px] font-bold uppercase tracking-wider ${
-              value === template.id ? 'text-black' : 'text-black/50'
+              value === template.id ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
             {templateLabels[template.id].name}
@@ -81,13 +81,13 @@ interface TemplateThumbnailProps {
 
 export const TemplateThumbnail: React.FC<TemplateThumbnailProps> = ({ type, isActive }) => {
   const lineColor = isActive ? 'bg-black' : 'bg-black/35';
-  const borderColor = isActive ? 'border-black' : 'border-black/30';
+  const borderColor = isActive ? 'border-border' : 'border-border';
   const accentColor = isActive ? 'bg-black' : 'bg-black/25';
 
   if (type === 'swiss-single') {
     // Single column thumbnail
     return (
-      <div className={`w-14 h-18 border ${borderColor} bg-white p-1.5 flex flex-col gap-1`}>
+      <div className={`w-14 h-18 border ${borderColor} bg-card p-1.5 flex flex-col gap-1`}>
         {/* Header */}
         <div className={`h-2 ${lineColor} w-full`}></div>
         <div className={`h-0.5 ${lineColor} w-3/4`}></div>
@@ -108,7 +108,7 @@ export const TemplateThumbnail: React.FC<TemplateThumbnailProps> = ({ type, isAc
   if (type === 'modern') {
     // Modern template thumbnail - with accent color highlights
     return (
-      <div className={`w-14 h-18 border ${borderColor} bg-white p-1.5 flex flex-col gap-1`}>
+      <div className={`w-14 h-18 border ${borderColor} bg-card p-1.5 flex flex-col gap-1`}>
         {/* Header with accent underline */}
         <div className="flex flex-col items-center gap-0.5">
           <div className={`h-2 ${lineColor} w-3/4`}></div>
@@ -131,7 +131,7 @@ export const TemplateThumbnail: React.FC<TemplateThumbnailProps> = ({ type, isAc
   if (type === 'modern-two-column') {
     // Modern two-column template thumbnail - accent colors + two columns
     return (
-      <div className={`w-14 h-18 border ${borderColor} bg-white p-1.5 flex flex-col gap-1`}>
+      <div className={`w-14 h-18 border ${borderColor} bg-card p-1.5 flex flex-col gap-1`}>
         {/* Header with accent underline */}
         <div className="flex flex-col items-center gap-0.5">
           <div className={`h-1.5 ${lineColor} w-3/4`}></div>
@@ -165,7 +165,7 @@ export const TemplateThumbnail: React.FC<TemplateThumbnailProps> = ({ type, isAc
 
   // Two column thumbnail (swiss-two-column)
   return (
-    <div className={`w-14 h-18 border ${borderColor} bg-white p-1.5 flex flex-col gap-1`}>
+    <div className={`w-14 h-18 border ${borderColor} bg-card p-1.5 flex flex-col gap-1`}>
       {/* Header - centered */}
       <div className="flex flex-col items-center gap-0.5">
         <div className={`h-1.5 ${lineColor} w-3/4`}></div>

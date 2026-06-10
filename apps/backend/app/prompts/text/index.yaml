@@ -1,0 +1,18 @@
+# Shipped prompt index — keep in sync with app.prompts.VALID_STEPS
+steps:
+  - parse_resume
+  - extract_jd_intel
+  - tailor_resume_full
+  - tailor_resume_lite
+  - critique_resume
+  - rewrite_resume
+  - cover_letter
+  - answer_questions
+output_file_schema_rules:
+  - resume_diff_output
+  - resume_content_rules
+enrichment:
+  - analyze
+  - enhance
+  - regenerate_item
+  - regenerate_group

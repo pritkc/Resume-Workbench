@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dropdown } from '@/components/ui/dropdown';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import {
   Save,
   Key,
@@ -51,6 +52,7 @@ import {
   Clock,
   Trash2,
   AlertTriangle,
+  Sun,
 } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -80,12 +82,12 @@ const CLIPROXY_OWNED_BY_EMPTY = '__owned_by_empty__';
 
 /** Monochrome toggles — aligned with builder / Retro density. */
 const segmentBtn =
-  'border border-black/15 bg-white px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-black/60 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] transition-colors hover:border-black/25 hover:text-black disabled:cursor-not-allowed disabled:opacity-50';
-const segmentBtnOn = 'border-black/40 bg-black/[0.05] font-semibold text-black';
+  'border border-border bg-card px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground shadow-[0_1px_0_0_rgba(0,0,0,0.05)] transition-colors hover:border-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
+const segmentBtnOn = 'border-primary/50 bg-accent font-semibold text-foreground';
 
-const settingsLabelClass = 'font-mono text-[10px] uppercase tracking-wider text-black/50';
+const settingsLabelClass = 'font-mono text-[10px] uppercase tracking-wider text-muted-foreground';
 const settingsInputClass =
-  'h-7 rounded-none border border-black/30 bg-white px-2 font-mono text-sm focus-visible:border-black focus-visible:ring-0';
+  'h-7 rounded-none border border-border bg-card px-2 font-mono text-sm focus-visible:border-primary focus-visible:ring-0';
 
 const unwrapCodeBlock = (value?: string | null): string | null => {
   if (!value) return null;
@@ -755,12 +757,12 @@ export default function SettingsPage() {
   const sectionCardClass = 'entry-card-editor space-y-1.5';
 
   return (
-    <div className="min-h-screen overflow-y-auto bg-[#E8E8E0] p-2 md:p-3">
-      <div className="mx-auto w-full max-w-6xl border border-black/15 bg-[#F0F0E8] shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
+    <div className="min-h-screen overflow-y-auto bg-muted p-2 md:p-3">
+      <div className="mx-auto w-full max-w-6xl border border-border bg-background shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
         {/* Header — builder-aligned shell */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/15 bg-white px-2 py-1.5 md:px-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-2 py-1.5 md:px-2.5">
           <div className="min-w-0">
-            <h1 className="font-mono text-xs font-semibold uppercase tracking-widest text-black">
+            <h1 className="font-mono text-xs font-semibold uppercase tracking-widest text-foreground">
               {t('settings.title')}
             </h1>
           </div>
@@ -768,7 +770,7 @@ export default function SettingsPage() {
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 shrink-0 border border-black/30 p-0 text-black/60 hover:border-black hover:text-black"
+              className="h-6 w-6 shrink-0 border border-border p-0 text-muted-foreground hover:border-primary hover:text-foreground"
               aria-label={t('common.back')}
               title={t('common.back')}
             >
@@ -797,14 +799,14 @@ export default function SettingsPage() {
 
           {/* System Status Panel */}
           <section className="space-y-1.5 xl:col-span-12">
-            <div className="flex items-center justify-between gap-2 border-b border-black/15 pb-1">
+            <div className="flex items-center justify-between gap-2 border-b border-border pb-1">
               <div className="flex min-w-0 items-center gap-2">
-                <Activity className="h-3.5 w-3.5 shrink-0 text-black/45" />
-                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
+                <Activity className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
                   {t('settings.systemStatus.title')}
                 </h2>
                 {lastFetched ? (
-                  <span className="hidden items-center gap-0.5 font-mono text-[9px] text-black/35 sm:inline-flex">
+                  <span className="hidden items-center gap-0.5 font-mono text-[9px] text-muted-foreground sm:inline-flex">
                     <Clock className="h-3 w-3" />
                     {formatLastFetched()}
                   </span>
@@ -825,14 +827,14 @@ export default function SettingsPage() {
 
             {statusLoading ? (
               <div className="entry-card-editor flex items-center justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-black/30" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : !systemStatus ? (
               <div className="flex flex-col items-center justify-center gap-2 border border-dashed border-red-300/80 bg-red-50/50 px-2 py-4">
                 <p className="font-mono text-[10px] font-semibold uppercase text-red-700">
                   {t('settings.systemStatus.unableToConnect')}
                 </p>
-                <p className="text-center font-mono text-[9px] text-black/50">
+                <p className="text-center font-mono text-[9px] text-muted-foreground">
                   {t('settings.systemStatus.expectedAt', { apiUrl: API_URL })}
                 </p>
                 <Button
@@ -849,24 +851,26 @@ export default function SettingsPage() {
             ) : (
               <div className="entry-card-editor">
                 <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                  <div className="min-w-0 border border-border bg-card/90 p-1.5">
                     <div className="mb-0.5 flex items-center gap-1">
-                      <Server className="h-3 w-3 shrink-0 text-black/40" />
-                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                      <Server className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-[9px] uppercase text-muted-foreground">
                         {t('settings.statusCards.llm')}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <LlmStatusIcon className={`h-3.5 w-3.5 shrink-0 ${llmStatusIndicator.iconClassName}`} />
+                      <LlmStatusIcon
+                        className={`h-3.5 w-3.5 shrink-0 ${llmStatusIndicator.iconClassName}`}
+                      />
                       <span className="truncate font-mono text-[11px] font-semibold leading-tight">
                         {llmStatusIndicator.label}
                       </span>
                     </div>
                   </div>
-                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                  <div className="min-w-0 border border-border bg-card/90 p-1.5">
                     <div className="mb-0.5 flex items-center gap-1">
-                      <Database className="h-3 w-3 shrink-0 text-black/40" />
-                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                      <Database className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-[9px] uppercase text-muted-foreground">
                         {t('settings.statusCards.database')}
                       </span>
                     </div>
@@ -877,10 +881,10 @@ export default function SettingsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                  <div className="min-w-0 border border-border bg-card/90 p-1.5">
                     <div className="mb-0.5 flex items-center gap-1">
-                      <FileText className="h-3 w-3 shrink-0 text-black/40" />
-                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                      <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-[9px] uppercase text-muted-foreground">
                         {t('settings.statusCards.resumes')}
                       </span>
                     </div>
@@ -888,10 +892,10 @@ export default function SettingsPage() {
                       {systemStatus.database_stats.total_resumes}
                     </span>
                   </div>
-                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                  <div className="min-w-0 border border-border bg-card/90 p-1.5">
                     <div className="mb-0.5 flex items-center gap-1">
-                      <Briefcase className="h-3 w-3 shrink-0 text-black/40" />
-                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                      <Briefcase className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-[9px] uppercase text-muted-foreground">
                         {t('settings.statusCards.jobs')}
                       </span>
                     </div>
@@ -899,10 +903,10 @@ export default function SettingsPage() {
                       {systemStatus.database_stats.total_jobs}
                     </span>
                   </div>
-                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                  <div className="min-w-0 border border-border bg-card/90 p-1.5">
                     <div className="mb-0.5 flex items-center gap-1">
-                      <Sparkles className="h-3 w-3 shrink-0 text-black/40" />
-                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                      <Sparkles className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-[9px] uppercase text-muted-foreground">
                         {t('settings.statusCards.improvements')}
                       </span>
                     </div>
@@ -910,10 +914,10 @@ export default function SettingsPage() {
                       {systemStatus.database_stats.total_improvements}
                     </span>
                   </div>
-                  <div className="min-w-0 border border-black/10 bg-white/90 p-1.5">
+                  <div className="min-w-0 border border-border bg-card/90 p-1.5">
                     <div className="mb-0.5 flex items-center gap-1">
-                      <FileText className="h-3 w-3 shrink-0 text-black/40" />
-                      <span className="truncate font-mono text-[9px] uppercase text-black/45">
+                      <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-[9px] uppercase text-muted-foreground">
                         {t('settings.statusCards.masterResume')}
                       </span>
                     </div>
@@ -942,9 +946,9 @@ export default function SettingsPage() {
 
           {/* LLM Configuration — primary column on xl */}
           <section className="space-y-1.5 xl:col-span-7">
-            <div className="flex items-center gap-1.5 border-b border-black/15 pb-1">
-              <Key className="h-3.5 w-3.5 shrink-0 text-black/45" />
-              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
+            <div className="flex items-center gap-1.5 border-b border-border pb-1">
+              <Key className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
                 {t('settings.llmConfigurationTitle')}
               </h2>
             </div>
@@ -1008,7 +1012,7 @@ export default function SettingsPage() {
                     <Label htmlFor="apiKey" className={settingsLabelClass}>
                       {t('settings.llmConfiguration.apiKeyLabel')}{' '}
                       {!requiresApiKey && (
-                        <span className="font-normal text-black/35">
+                        <span className="font-normal text-muted-foreground">
                           {t('settings.llmConfiguration.apiKeyOptionalForOllama')}
                         </span>
                       )}
@@ -1249,7 +1253,7 @@ export default function SettingsPage() {
                             </Button>
                             <button
                               onClick={() => handleDeleteCLIProxyProfile(profile.name)}
-                              className="border border-black bg-white px-1.5 py-1 text-[10px] font-mono hover:bg-red-50"
+                              className="border border-border bg-card px-1.5 py-1 text-[10px] font-mono hover:bg-red-50"
                               type="button"
                             >
                               x
@@ -1333,7 +1337,7 @@ export default function SettingsPage() {
                         : t('settings.llmConfiguration.connectionFailed')}
                     </span>
                   </div>
-                  <p className="font-mono text-[11px] text-black/55">
+                  <p className="font-mono text-[11px] text-muted-foreground">
                     {t('settings.llmConfiguration.connectionDetails', {
                       provider: healthCheck.provider,
                       model: healthCheck.model,
@@ -1349,10 +1353,10 @@ export default function SettingsPage() {
                     <div className="mt-2 space-y-2">
                       {healthDetailItems.map((item) => (
                         <div key={item.key}>
-                          <p className="font-mono text-[10px] uppercase tracking-wider text-black/45">
+                          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                             {item.label}
                           </p>
-                          <pre className="mt-0.5 max-h-48 overflow-auto whitespace-pre-wrap rounded-none border border-black/20 bg-white p-2 font-mono text-[11px] text-black/80">
+                          <pre className="mt-0.5 max-h-48 overflow-auto whitespace-pre-wrap rounded-none border border-border bg-card p-2 font-mono text-[11px] text-foreground/80">
                             {item.value}
                           </pre>
                         </div>
@@ -1367,9 +1371,24 @@ export default function SettingsPage() {
           {/* Prompt, locale, observability, danger — sidebar on xl */}
           <div className="space-y-1.5 xl:col-span-5">
             <section className="space-y-1.5">
-              <div className="flex items-center gap-1.5 border-b border-black/15 pb-1">
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-black/45" />
-                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
+              <div className="flex items-center gap-1.5 border-b border-border pb-1">
+                <Sun className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                  {t('settings.theme')}
+                </h2>
+              </div>
+              <div className={sectionCardClass}>
+                <p className="font-mono text-[10px] leading-snug text-muted-foreground">
+                  {t('settings.themeDescription')}
+                </p>
+                <ThemeToggle variant="segmented" />
+              </div>
+            </section>
+
+            <section className="space-y-1.5">
+              <div className="flex items-center gap-1.5 border-b border-border pb-1">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
                   {t('settings.promptSettings.title')}
                 </h2>
               </div>
@@ -1383,17 +1402,17 @@ export default function SettingsPage() {
                   disabled={promptConfigLoading}
                   density="compact"
                 />
-                <p className="font-mono text-[10px] leading-snug text-black/45">
+                <p className="font-mono text-[10px] leading-snug text-muted-foreground">
                   {t('settings.appEnglishOnly')}
                 </p>
-                <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-black/10 pt-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-border pt-1.5">
                   <label
-                    className="flex min-w-0 cursor-pointer items-center gap-1.5 font-mono text-[10px] text-black/75"
+                    className="flex min-w-0 cursor-pointer items-center gap-1.5 font-mono text-[10px] text-foreground/75"
                     title={t('settings.critiquePipeline.description')}
                   >
                     <input
                       type="checkbox"
-                      className="h-3.5 w-3.5 shrink-0 accent-black"
+                      className="h-3.5 w-3.5 shrink-0 accent-[var(--primary)]"
                       checked={critiqueEnabled}
                       disabled={critiqueLoading}
                       onChange={async (e) => {
@@ -1412,7 +1431,11 @@ export default function SettingsPage() {
                     <span className="truncate">{t('settings.critiquePipeline.toggle')}</span>
                   </label>
                   <Link href="/settings/prompt-catalog">
-                    <Button variant="builderOutline" size="xs" className="h-6 gap-1 px-2 text-[10px]">
+                    <Button
+                      variant="builderOutline"
+                      size="xs"
+                      className="h-6 gap-1 px-2 text-[10px]"
+                    >
                       <FileText className="h-3 w-3" />
                       {t('settings.promptCatalog.openCatalog')}
                     </Button>
@@ -1422,14 +1445,19 @@ export default function SettingsPage() {
             </section>
 
             <section className="space-y-1.5">
-              <div className="flex items-center gap-1.5 border-b border-black/15 pb-1">
-                <Activity className="h-3.5 w-3.5 shrink-0 text-black/45" />
-                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-black">
+              <div className="flex items-center gap-1.5 border-b border-border pb-1">
+                <Activity className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
                   LLM observability
                 </h2>
               </div>
               <div className="entry-card-editor flex flex-wrap gap-1">
-                <Link href="/llm-traces" className="min-w-0 flex-1 sm:flex-none">
+                <Link
+                  href="/llm-traces"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 flex-1 sm:flex-none"
+                >
                   <Button
                     variant="builderOutline"
                     size="xs"
@@ -1440,7 +1468,12 @@ export default function SettingsPage() {
                     Traces
                   </Button>
                 </Link>
-                <Link href="/run-timing" className="min-w-0 flex-1 sm:flex-none">
+                <Link
+                  href="/run-timing"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 flex-1 sm:flex-none"
+                >
                   <Button
                     variant="builderOutline"
                     size="xs"
@@ -1500,24 +1533,24 @@ export default function SettingsPage() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-black/10 bg-white/90 px-2 py-1 text-[11px] text-black/60 no-print md:px-2.5">
+        <div className="flex items-center justify-between border-t border-border bg-card/90 px-2 py-1 text-[11px] text-muted-foreground no-print md:px-2.5">
           <div className="flex items-center gap-1.5">
             <Image
               src="/logo.svg"
-              alt="Resume Matcher"
+              alt="Resume Workbench"
               width={14}
               height={14}
               className="h-3.5 w-3.5 opacity-80"
             />
-            <span className="font-mono text-[10px] text-black/45">
+            <span className="font-mono text-[10px] text-muted-foreground">
               {getVersionString().toUpperCase()}
             </span>
           </div>
           <div className="flex items-center gap-2">
             {statusLoading ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin text-black/40" />
-                <span className="font-mono text-[10px] text-black/45">
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                <span className="font-mono text-[10px] text-muted-foreground">
                   {t('settings.footer.status.checking')}
                 </span>
               </>
@@ -1535,7 +1568,7 @@ export default function SettingsPage() {
                 </span>
               </>
             ) : (
-              <span className="font-mono text-[10px] text-black/45">
+              <span className="font-mono text-[10px] text-muted-foreground">
                 {t('settings.footer.status.offline')}
               </span>
             )}

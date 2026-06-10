@@ -17,14 +17,14 @@ export function OutreachPreview({ content, className }: OutreachPreviewProps) {
   return (
     <div
       className={cn(
-        'border border-black bg-white',
+        'border border-border bg-card',
         'shadow-[2px_2px_0px_0px_#000000]',
         'overflow-hidden',
         className
       )}
     >
       {/* Preview Header */}
-      <div className="border-b border-black bg-[#F5F5F0] px-3 py-2.5">
+      <div className="border-b border-border bg-card px-3 py-2.5">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Linkedin className="w-4 h-4 text-[#0077B5]" />
@@ -33,7 +33,7 @@ export function OutreachPreview({ content, className }: OutreachPreviewProps) {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Mail className="w-4 h-4 text-gray-600" />
+            <Mail className="w-4 h-4 text-muted-foreground" />
             <span className="font-mono text-xs uppercase">
               {t('outreach.preview.channels.email')}
             </span>
@@ -46,7 +46,7 @@ export function OutreachPreview({ content, className }: OutreachPreviewProps) {
         {content ? (
           <div className="space-y-4">
             {/* Message Bubble Style */}
-            <div className="border border-black bg-[#F5F5F0] p-3 shadow-[2px_2px_0px_0px_#000000]">
+            <div className="border border-border bg-card p-3 shadow-sm">
               <p className="font-sans text-sm leading-relaxed whitespace-pre-wrap">{content}</p>
             </div>
 

@@ -32,12 +32,14 @@ apps/backend/app/
 └── services/
 ```
 
+Shipped LLM prompt **bodies** live under `prompts/text/` (`.txt` files); `prompts/*.py` wires `build_messages` and overrides.
+
 ## Router Surface
 
 | Router | Purpose |
 |--------|---------|
 | `health.py` | health and status |
-| `config.py` | LLM config, language, prompt defaults, generation defaults, API keys, reset |
+| `config.py` | LLM config, language, prompt defaults, generation defaults, critique toggle, model overrides, API keys, reset |
 | `jobs.py` | job-description upload and retrieval |
 | `resumes.py` | upload, draft normalize/save, tailor flows, RenderCV preview/PDF, title and auxiliary content |
 | `application_packs.py` | preview/confirm wrappers and pack listing |
@@ -72,7 +74,7 @@ Important relationships:
 | Module | Responsibility |
 |--------|----------------|
 | `services/parser.py` | PDF/DOCX -> markdown -> structured resume JSON |
-| `services/tailoring/*` | typed single-prompt tailoring pipeline: job analysis, prompt contract shaping, orchestration, preservation, local verifier, and local diff summaries |
+| `services/tailoring/*` | compact-diff tailoring pipeline: job analysis, prompt contract shaping, orchestration, optional critique/rewrite, compact application, preservation, local verifier, change manifests, and local diff summaries |
 | `services/improver.py` | compatibility facade that re-exports the tailoring entrypoints and helper APIs |
 | `services/refiner.py` | local AI-phrase cleanup and master-alignment helpers; older keyword-injection prompt retained but not used in the active tailoring path |
 | `services/cover_letter.py` | cover letter, outreach, and local title generation using compact auxiliary prompt inputs |

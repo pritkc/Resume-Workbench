@@ -73,6 +73,8 @@ class Job(TimestampMixin, Base):
     job_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     job_keywords: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     job_keywords_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    char_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     preview_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     preview_prompt_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     preview_hashes: Mapped[dict[str, Any] | list[str] | None] = mapped_column(JSON, nullable=True)

@@ -67,6 +67,7 @@ class TestListLLMCalls:
                     "trace_id": "trace-123",
                     "request_scope": "resumes.improve_preview",
                     "operation": "resume_generate_diffs",
+                    "resume_code": "ABC123",
                     "success": "true",
                     "limit": "25",
                 },
@@ -83,6 +84,8 @@ class TestListLLMCalls:
             request_scope="resumes.improve_preview",
             operation="resume_generate_diffs",
             success=True,
+            resume_id=None,
+            resume_code="ABC123",
             limit=25,
         )
 
@@ -121,7 +124,7 @@ class TestSummarizeLLMCalls:
         async with client:
             response = await client.get(
                 "/api/v1/llm/calls/summary",
-                params={"trace_id": "trace-123"},
+                params={"trace_id": "trace-123", "resume_id": "res-123"},
             )
 
         assert response.status_code == 200
@@ -133,6 +136,8 @@ class TestSummarizeLLMCalls:
         mock_db.summarize_llm_calls.assert_called_once_with(
             trace_id="trace-123",
             request_scope=None,
+            resume_id="res-123",
+            resume_code=None,
         )
 
 
@@ -194,6 +199,46 @@ class TestListGenerationRunTiming:
             limit=20,
         )
 
+    @patch("app.routers.llm.db")
+    async def test_list_generation_run_timing_can_filter_exact_run(self, mock_db, client):
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "run-exact-123",
+            "run_kind": "application_pack_preview",
+            "status": "completed",
+            "prompt_id": "resume_full_generation",
+            "application_pack_id": "pack-123",
+            "original_resume_id": "res-master",
+            "tailored_resume_id": "res-tailored",
+            "job_id": "job-123",
+            "created_at": "2026-04-14T20:00:00Z",
+            "completed_at": "2026-04-14T20:00:11Z",
+            "result_payload": {
+                "pipeline_timing": {
+                    "total_duration_ms": 11_000,
+                    "entries": [{"host_event": "llm", "duration_ms": 8_000}],
+                },
+                "llm_summary": {"total_calls": 1, "total_tokens": 900},
+            },
+        }
+
+        async with client:
+            response = await client.get(
+                "/api/v1/llm/runs/timing",
+                params={
+                    "generation_run_id": " run-exact-123 ",
+                    "run_kind": "ignored",
+                    "status": "ignored",
+                    "limit": "20",
+                },
+            )
+
+        assert response.status_code == 200
+        row = response.json()["data"][0]
+        assert row["generation_run_id"] == "run-exact-123"
+        assert row["total_duration_ms"] == 11_000
+        mock_db.get_generation_run.assert_called_once_with("run-exact-123")
+        mock_db.list_generation_runs.assert_not_called()
+
 
 class TestListGenerationRunTimingDetailed:
     """GET /api/v1/llm/runs/timing-detailed"""
@@ -241,3 +286,35 @@ class TestListGenerationRunTimingDetailed:
             status=None,
             limit=10,
         )
+
+    @patch("app.routers.llm.db")
+    async def test_list_generation_run_timing_detailed_can_filter_exact_run(self, mock_db, client):
+        mock_db.get_generation_run.return_value = {
+            "generation_run_id": "run-exact-123",
+            "run_kind": "application_pack_preview",
+            "status": "completed",
+            "result_payload": {
+                "pipeline_timing": {
+                    "entries": [
+                        {"host_event": "jd", "sub_event": "extract", "duration_ms": 2_000},
+                        {"host_event": "llm", "sub_event": "resume_generate_full", "duration_ms": 8_000},
+                    ]
+                },
+                "llm_summary": {"total_calls": 2, "total_tokens": 1900},
+            },
+        }
+
+        async with client:
+            response = await client.get(
+                "/api/v1/llm/runs/timing-detailed",
+                params={"generation_run_id": "run-exact-123", "limit": "10"},
+            )
+
+        assert response.status_code == 200
+        row = response.json()["data"][0]
+        assert row["generation_run_id"] == "run-exact-123"
+        assert row["total_duration_ms"] == 10_000
+        assert row["process_timings"][0]["process_key"] == "llm / resume_generate_full"
+        assert row["process_timings"][1]["process_key"] == "jd / extract"
+        mock_db.get_generation_run.assert_called_once_with("run-exact-123")
+        mock_db.list_generation_runs.assert_not_called()

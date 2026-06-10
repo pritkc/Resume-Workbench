@@ -1,7 +1,7 @@
 [project]
-name = "rm-backend"
+name = "resume-workbench-backend"
 version = "1.0.0"
-description = "Resume Matcher Backend API"
+description = "Resume Workbench backend API"
 requires-python = ">=3.13"
 dependencies = [
     "alembic==1.17.1",

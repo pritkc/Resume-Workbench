@@ -21,7 +21,7 @@ export interface CoverLetterPreviewProps {
   /** Personal info for header */
   personalInfo: CoverLetterPersonalInfo;
   /** Page size for styling */
-  pageSize?: 'A4' | 'LETTER';
+  pageSize?: 'A4' | 'LETTER' | 'FREEFLOW';
   /** Additional class names */
   className?: string;
 }
@@ -43,27 +43,23 @@ export function CoverLetterPreview({
   const paragraphs = content.split('\n\n').filter((p) => p.trim().length > 0);
 
   return (
-    <div
-      className={cn(
-        'border border-black bg-white',
-        'shadow-[2px_2px_0px_0px_#000000]',
-        'overflow-hidden',
-        className
-      )}
-    >
+    <div className={cn('border border-border bg-card shadow-sm', 'overflow-hidden', className)}>
       {/* Letter Content */}
       <div
-        className={cn('p-5 md:p-6', pageSize === 'A4' ? 'min-h-[297mm]' : 'min-h-[11in]')}
+        className={cn(
+          'p-5 md:p-6',
+          pageSize === 'A4' || pageSize === 'FREEFLOW' ? 'min-h-[297mm]' : 'min-h-[11in]'
+        )}
         style={{
-          maxWidth: pageSize === 'A4' ? '210mm' : '8.5in',
+          maxWidth: pageSize === 'A4' || pageSize === 'FREEFLOW' ? '210mm' : '8.5in',
         }}
       >
         {/* Header - Personal Info */}
-        <header className="mb-6 border-b border-black pb-3">
+        <header className="mb-6 border-b border-border pb-3">
           <h1 className="font-serif text-2xl font-bold tracking-tight">
             {personalInfo.name || t('coverLetter.preview.defaultName')}
           </h1>
-          <div className="mt-2 font-mono text-xs text-gray-600 flex flex-wrap gap-x-4 gap-y-1">
+          <div className="mt-2 font-mono text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
             {personalInfo.email && <span>{personalInfo.email}</span>}
             {personalInfo.phone && <span>{personalInfo.phone}</span>}
             {personalInfo.location && <span>{personalInfo.location}</span>}
@@ -73,19 +69,19 @@ export function CoverLetterPreview({
 
         {/* Date */}
         <div className="mb-6">
-          <p className="font-mono text-sm text-gray-600">{today}</p>
+          <p className="font-mono text-sm text-muted-foreground">{today}</p>
         </div>
 
         {/* Body */}
         <div className="space-y-4">
           {paragraphs.length > 0 ? (
             paragraphs.map((para, idx) => (
-              <p key={idx} className="font-serif text-base leading-relaxed text-gray-800">
+              <p key={idx} className="font-serif text-base leading-relaxed text-foreground/90">
                 {para}
               </p>
             ))
           ) : (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-12 text-muted-foreground">
               <p className="font-mono text-sm">{t('coverLetter.preview.emptyTitle')}</p>
               <p className="font-mono text-xs mt-2">{t('coverLetter.preview.emptyDescription')}</p>
             </div>

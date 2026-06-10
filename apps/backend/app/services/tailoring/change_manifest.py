@@ -9,16 +9,21 @@ from typing import Any
 
 from app.schemas import ResumeChange, TailoringStageBreakdown
 from app.services.additional_groups import normalize_skill_groups
+from app.services.tailoring.diffing import _find_original_entry_for_improved_index
+from app.services.tailoring.models import TailoringLLMResponseV2
 
 _PATH_SEGMENT_RE = re.compile(r"([a-zA-Z_]+)(?:\[(\d+)\])?")
 _METRIC_RE = re.compile(r"\$?\b\d+(?:\.\d+)?(?:[kKmMbBxX%])?\b")
 _ALLOWED_PATH_PATTERNS = (
     re.compile(r"^summary$"),
-    re.compile(r"^workExperience\[\d+\]\.summary$"),
+    re.compile(r"^workExperience\[\d+\]\.(?:position|title)$"),
+    re.compile(r"^workExperience\[\d+\]\.(?:techStack|summary|tech_stacks)$"),
     re.compile(r"^workExperience\[\d+\]\.description(\[\d+\])?$"),
-    re.compile(r"^personalProjects\[\d+\]\.(?:summary|tech_stacks)$"),
+    re.compile(r"^personalProjects\[\d+\]\.name$"),
+    re.compile(r"^personalProjects\[\d+\]\.(?:techStack|summary|tech_stacks)$"),
     re.compile(r"^personalProjects\[\d+\]\.description(\[\d+\])?$"),
     re.compile(r"^skills\.groups$"),
+    re.compile(r"^bold_keywords$"),
     re.compile(r"^customSections\.[^.]+\.text$"),
     re.compile(r"^customSections\.[^.]+\.items\[\d+\]\.description(\[\d+\])?$"),
 )
@@ -32,6 +37,29 @@ def _clean_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _first_role_text(entry: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = _clean_text(entry.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _format_bold_keywords_for_manifest(data: dict[str, Any]) -> str:
+    raw = data.get("bold_keywords")
+    if not isinstance(raw, list):
+        return ""
+    parts = [_clean_text(item) for item in raw if _clean_text(item)]
+    parts.sort(key=str.casefold)
+    return ", ".join(parts)
+
+
+def _stack_line(entry: dict[str, Any] | None) -> str:
+    if entry is None or not isinstance(entry, dict):
+        return ""
+    return _clean_text(entry.get("techStack") or entry.get("summary") or entry.get("tech_stacks"))
+
+
 def _text_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -42,9 +70,12 @@ def _description_list(entry: Any) -> list[str]:
     if not isinstance(entry, dict):
         return []
     description = _text_list(entry.get("description"))
-    if description:
-        return description
-    return _text_list(entry.get("highlights"))
+    if not description:
+        description = _text_list(entry.get("highlights"))
+    stack = _clean_text(entry.get("techStack") or entry.get("summary") or entry.get("tech_stacks"))
+    while stack and description and _clean_text(description[0]) == stack:
+        description = description[1:]
+    return description
 
 
 def _append_summary_change(
@@ -182,15 +213,39 @@ def build_change_manifest(
             if not isinstance(original_entry, dict) or not isinstance(updated_entry, dict):
                 continue
             base_path = f"{section_key}[{index}]"
-            # personalProjects uses 'tech_stacks' in LLM payloads (mapped back to 'summary')
-            orig_summary = original_entry.get("summary") or original_entry.get("tech_stacks")
-            updated_summary = updated_entry.get("summary") or updated_entry.get("tech_stacks")
+            if section_key == "workExperience":
+                _append_summary_change(
+                    changes,
+                    path=f"{base_path}.position",
+                    original=original_entry.get("position") or original_entry.get("title"),
+                    updated=updated_entry.get("position") or updated_entry.get("title"),
+                    reason="Updated role title for job alignment.",
+                )
+            if section_key == "personalProjects":
+                _append_summary_change(
+                    changes,
+                    path=f"{base_path}.name",
+                    original=original_entry.get("name"),
+                    updated=updated_entry.get("name"),
+                    reason="Updated project title for job alignment.",
+                )
+            # Work + projects: per-entry tooling line (stored as techStack on resume JSON).
+            orig_stack = original_entry.get("techStack") or original_entry.get("summary")
+            updated_stack = updated_entry.get("techStack") or updated_entry.get("summary")
             _append_summary_change(
                 changes,
-                path=f"{base_path}.summary",
-                original=orig_summary,
-                updated=updated_summary,
-                reason="Updated section summary for job alignment.",
+                path=f"{base_path}.techStack",
+                original=orig_stack,
+                updated=updated_stack,
+                reason=(
+                    "Updated role tech stack for job alignment."
+                    if section_key == "workExperience"
+                    else (
+                        "Updated project tech stack for job alignment."
+                        if section_key == "personalProjects"
+                        else "Updated section summary for job alignment."
+                    )
+                ),
             )
             _append_list_changes(
                 changes,
@@ -245,7 +300,291 @@ def build_change_manifest(
                         reason="Updated custom section bullets for job alignment.",
                     )
 
+    orig_kw = _format_bold_keywords_for_manifest(original)
+    new_kw = _format_bold_keywords_for_manifest(updated)
+    if orig_kw != new_kw:
+        changes.append(
+            ResumeChange(
+                path="bold_keywords",
+                action="replace",
+                original=orig_kw or None,
+                value=new_kw,
+                reason="Adjusted ATS/render bold keywords for the target job.",
+            )
+        )
+
     return changes
+
+
+def _skills_tailored_reason(resp: TailoringLLMResponseV2) -> str | None:
+    if not resp.skills:
+        return None
+    parts: list[str] = []
+    for group in resp.skills:
+        lw = getattr(getattr(group, "label", None), "why", None)
+        if isinstance(lw, str) and lw.strip():
+            parts.append(lw.strip())
+    text = "; ".join(parts)
+    return text if text else None
+
+
+def _tailored_reason_for_manifest_path(path: str, resp: TailoringLLMResponseV2) -> str | None:
+    if path == "summary":
+        return resp.summary.why if resp.summary else None
+    if path == "bold_keywords":
+        return resp.bold_keywords_why
+
+    m = re.match(r"^workExperience\[(\d+)\]\.position$", path)
+    if m:
+        ent = resp.experience.get(m.group(1))
+        if ent and ent.position:
+            return ent.position.why
+        return None
+
+    m = re.match(r"^workExperience\[(\d+)\]\.techStack$", path)
+    if m:
+        ent = resp.experience.get(m.group(1))
+        if ent and ent.tech_stacks:
+            return ent.tech_stacks.why
+        return None
+
+    m = re.match(r"^workExperience\[(\d+)\]\.description\[(\d+)\]$", path)
+    if m:
+        ent = resp.experience.get(m.group(1))
+        if not ent:
+            return None
+        cell = ent.bullets.get(m.group(2))
+        return cell.why if cell else None
+
+    m = re.match(r"^personalProjects\[(\d+)\]\.name$", path)
+    if m:
+        ent = resp.projects.get(m.group(1))
+        if ent and ent.name:
+            return ent.name.why
+        return None
+
+    m = re.match(r"^personalProjects\[(\d+)\]\.techStack$", path)
+    if m:
+        ent = resp.projects.get(m.group(1))
+        if ent and ent.tech_stacks:
+            return ent.tech_stacks.why
+        return None
+
+    m = re.match(r"^personalProjects\[(\d+)\]\.description\[(\d+)\]$", path)
+    if m:
+        ent = resp.projects.get(m.group(1))
+        if not ent:
+            return None
+        cell = ent.bullets.get(m.group(2))
+        return cell.why if cell else None
+
+    if path == "skills.groups":
+        return _skills_tailored_reason(resp)
+    return None
+
+
+def enrich_change_manifest_with_tailored_cells(
+    changes: list[ResumeChange],
+    llm_response: TailoringLLMResponseV2,
+) -> list[ResumeChange]:
+    """Replace generic manifest reasons with per-cell ``why`` strings when paths align."""
+
+    enriched: list[ResumeChange] = []
+    for change in changes:
+        reason = _tailored_reason_for_manifest_path(path=change.path, resp=llm_response)
+        if reason:
+            enriched.append(change.model_copy(update={"reason": reason}))
+        else:
+            enriched.append(change)
+    return enriched
+
+
+def supplement_change_manifest_with_unchanged_cell_rationales(
+    changes: list[ResumeChange],
+    llm_response: TailoringLLMResponseV2,
+    original: dict[str, Any],
+    applied: dict[str, Any],
+) -> list[ResumeChange]:
+    """Append manifest paths where applied text equals original but a tailored cell carries a rationale.
+
+    ``build_change_manifest`` omits paths with no textual delta; reviewers still want the model note.
+    """
+
+    paths = {c.path for c in changes}
+    additions: list[ResumeChange] = []
+
+    def add_if_absent(path: str, row: ResumeChange) -> None:
+        if path in paths:
+            return
+        additions.append(row)
+        paths.add(path)
+
+    summary_cell = llm_response.summary
+    if summary_cell is not None:
+        o_s = _clean_text(original.get("summary"))
+        a_s = _clean_text(applied.get("summary"))
+        if o_s == a_s and o_s:
+            add_if_absent(
+                "summary",
+                ResumeChange(
+                    path="summary",
+                    action="replace",
+                    original=o_s,
+                    value=a_s,
+                    reason=summary_cell.why,
+                ),
+            )
+
+    keywords_text = ", ".join(
+        _clean_text(item) for item in llm_response.bold_keywords if _clean_text(item)
+    )
+    if keywords_text or llm_response.bold_keywords_why:
+        add_if_absent(
+            "bold_keywords",
+            ResumeChange(
+                path="bold_keywords",
+                action="replace",
+                original=None,
+                value=keywords_text,
+                reason=llm_response.bold_keywords_why or "Selected bold keywords for target job.",
+            ),
+        )
+
+    orig_exp = original.get("workExperience") or []
+    app_exp = applied.get("workExperience") or []
+    if isinstance(orig_exp, list) and isinstance(app_exp, list):
+        for key, ent in llm_response.experience.items():
+            if key is None or not key.isdigit():
+                continue
+            idx = int(key)
+            impr = app_exp[idx] if idx < len(app_exp) else None
+            if not isinstance(impr, dict):
+                continue
+            orig_e = _find_original_entry_for_improved_index(orig_exp, app_exp, idx)
+            if orig_e is None or not isinstance(orig_e, dict):
+                continue
+
+            pos_path = f"workExperience[{idx}].position"
+            if ent.position is not None:
+                o_t = _first_role_text(orig_e, "position", "title")
+                a_t = _first_role_text(impr, "position", "title")
+                if o_t == a_t and o_t:
+                    add_if_absent(
+                        pos_path,
+                        ResumeChange(
+                            path=pos_path,
+                            action="replace",
+                            original=o_t,
+                            value=a_t,
+                            reason=ent.position.why,
+                        ),
+                    )
+
+            ts_path = f"workExperience[{idx}].techStack"
+            if ent.tech_stacks is not None:
+                o_ts = _stack_line(orig_e)
+                a_ts = _stack_line(impr)
+                if o_ts == a_ts:
+                    add_if_absent(
+                        ts_path,
+                        ResumeChange(
+                            path=ts_path,
+                            action="replace",
+                            original=o_ts or None,
+                            value=a_ts or "",
+                            reason=ent.tech_stacks.why,
+                        ),
+                    )
+
+            orig_bullets = _description_list(orig_e)
+            app_bullets = _description_list(impr)
+            for bid, cell in ent.bullets.items():
+                if not bid.isdigit():
+                    continue
+                bi = int(bid)
+                path_b = f"workExperience[{idx}].description[{bi}]"
+                o_b = orig_bullets[bi] if bi < len(orig_bullets) else ""
+                a_b = app_bullets[bi] if bi < len(app_bullets) else ""
+                if o_b == a_b and o_b:
+                    add_if_absent(
+                        path_b,
+                        ResumeChange(
+                            path=path_b,
+                            action="replace",
+                            original=o_b,
+                            value=a_b,
+                            reason=cell.why,
+                        ),
+                    )
+
+    orig_proj = original.get("personalProjects") or []
+    app_proj = applied.get("personalProjects") or []
+    if isinstance(orig_proj, list) and isinstance(app_proj, list):
+        for key, ent in llm_response.projects.items():
+            if key is None or not key.isdigit():
+                continue
+            idx = int(key)
+            impr = app_proj[idx] if idx < len(app_proj) else None
+            if not isinstance(impr, dict):
+                continue
+            orig_e = _find_original_entry_for_improved_index(orig_proj, app_proj, idx)
+            if orig_e is None or not isinstance(orig_e, dict):
+                continue
+
+            name_path = f"personalProjects[{idx}].name"
+            if ent.name is not None:
+                o_n = _clean_text(orig_e.get("name"))
+                a_n = _clean_text(impr.get("name"))
+                if o_n == a_n and o_n:
+                    add_if_absent(
+                        name_path,
+                        ResumeChange(
+                            path=name_path,
+                            action="replace",
+                            original=o_n,
+                            value=a_n,
+                            reason=ent.name.why,
+                        ),
+                    )
+
+            ts_path = f"personalProjects[{idx}].techStack"
+            if ent.tech_stacks is not None:
+                o_ts = _stack_line(orig_e)
+                a_ts = _stack_line(impr)
+                if o_ts == a_ts:
+                    add_if_absent(
+                        ts_path,
+                        ResumeChange(
+                            path=ts_path,
+                            action="replace",
+                            original=o_ts or None,
+                            value=a_ts or "",
+                            reason=ent.tech_stacks.why,
+                        ),
+                    )
+
+            orig_bullets = _description_list(orig_e)
+            app_bullets = _description_list(impr)
+            for bid, cell in ent.bullets.items():
+                if not bid.isdigit():
+                    continue
+                bi = int(bid)
+                path_b = f"personalProjects[{idx}].description[{bi}]"
+                o_b = orig_bullets[bi] if bi < len(orig_bullets) else ""
+                a_b = app_bullets[bi] if bi < len(app_bullets) else ""
+                if o_b == a_b and o_b:
+                    add_if_absent(
+                        path_b,
+                        ResumeChange(
+                            path=path_b,
+                            action="replace",
+                            original=o_b,
+                            value=a_b,
+                            reason=cell.why,
+                        ),
+                    )
+
+    return changes + additions
 
 
 def _is_allowed_path(path: str) -> bool:

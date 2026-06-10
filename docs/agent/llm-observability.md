@@ -26,10 +26,10 @@ Current request scopes in active resume flows:
 - `resumes.upload`
 - `resumes.retry_processing`
 - `resumes.improve_preview`
-- `resumes.improve_confirm`
 - `resumes.improve`
+- `application_packs.questions.answer`
 
-Enrichment calls currently emit `operation` data, but they do not yet set a route-level `request_scope`.
+Confirm currently does not run LLM work and does not set a route-level trace scope. Enrichment and on-demand cover-letter/outreach calls emit `operation` data, but they do not yet set a route-level `request_scope`.
 
 ## API Endpoints
 
@@ -37,6 +37,8 @@ Enrichment calls currently emit `operation` data, but they do not yet set a rout
 |----------|---------|
 | `GET /api/v1/llm/calls` | list call records with filters |
 | `GET /api/v1/llm/calls/summary` | aggregate tokens, cost, and per-operation totals |
+| `GET /api/v1/llm/runs/timing` | list generation-run timing summaries |
+| `GET /api/v1/llm/runs/timing-detailed` | list generation-run timing with detailed entries |
 
 Supported filters on `GET /llm/calls`:
 
@@ -78,16 +80,17 @@ If content storage is disabled, previews will be empty even though call metadata
 1. capture the `request_id` returned by preview
 2. open `/llm-traces?trace_id=<request_id>&request_scope=resumes.improve_preview`
 3. inspect:
-   - `job_extract_keywords`
-   - `resume_generate_full`
-   - optional `cover_letter_generate`
-   - optional `outreach_generate`
+   - `extract_jd_intel_output` (stores arbitrary JD JSON on the job; shape follows `extract_jd_intel` prompts; same name as **`$extract_jd_intel_output`** in tailoring user templates — see `apps/backend/app/prompts/text/README.md`; legacy traces may show `job_extract_keywords`)
+   - `resume_generate_full` (primary compact diff; `request_context.compact_diff_validation` may be attached to this row)
+   - optional `critique_resume` and `rewrite_resume` when full-mode critique is enabled (`rewrite_resume` can also get `compact_diff_validation`)
+
+The Tailor preview/confirm path does **not** generate cover letter or outreach today. Those traces appear only after the builder calls one of the explicit auxiliary-generation endpoints, and they normally have `operation=cover_letter_outreach_generate` without a route-level request scope.
 
 Historical traces from older runs may still show:
 
 - `resume_generate_diffs`
 - `resume_refine_keyword_injection`
-- text-generation rows for `outreach_generate` / `cover_letter_generate` that were marked successful even with `finish_reason=length` before the truncation-safe `complete()` fix
+- older text-generation rows (legacy operation names) that were marked successful even with `finish_reason=length` before the truncation-safe `complete()` fix
 
 ### Prompt-specific regressions
 

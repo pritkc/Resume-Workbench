@@ -253,7 +253,7 @@ export function AdditionalQuestionsPanel({
   const isBusy = generationState === 'loading' || generationState === 'generating';
 
   return (
-    <div className="space-y-2 border border-black/15 bg-white p-2.5">
+    <div className="space-y-2 border border-border bg-card p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[13px] font-semibold text-gray-900">{title}</p>
         <div className="flex items-center gap-1.5">
@@ -275,7 +275,7 @@ export function AdditionalQuestionsPanel({
       </div>
 
       {disabled && (
-        <div className="border border-dashed border-black/20 bg-gray-50/80 px-2.5 py-1.5 text-[12px] text-gray-600">
+        <div className="border border-dashed border-border bg-gray-50/80 px-2.5 py-1.5 text-[12px] text-gray-600">
           {disabledReason || 'Generate a resume preview first to enable custom questions.'}
         </div>
       )}
@@ -291,7 +291,7 @@ export function AdditionalQuestionsPanel({
           <div className="space-y-1.5">
             <Textarea
               placeholder="Paste one question per line..."
-              className="min-h-[96px] resize-y rounded-none border border-black/15 bg-white font-mono text-[13px] focus:border-blue-700 focus:ring-0"
+              className="min-h-[96px] resize-y rounded-none border border-border bg-card font-mono text-[13px] focus:border-primary focus:ring-0"
               value={questionsText}
               onChange={(event) => setQuestionsText(event.target.value)}
               disabled={isBusy}
@@ -339,7 +339,7 @@ export function AdditionalQuestionsPanel({
           )}
 
           {warnings.length > 0 && (
-            <div className="border border-black/10 bg-gray-50/80 p-2">
+            <div className="border border-border bg-gray-50/80 p-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                 Warnings
               </p>
@@ -354,7 +354,7 @@ export function AdditionalQuestionsPanel({
           {answers.length > 0 && (
             <div className="space-y-2">
               {answers.map((item) => (
-                <div key={item.question_id} className="border border-black/15 bg-gray-50/50 p-2">
+                <div key={item.question_id} className="border border-border bg-gray-50/50 p-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                     Question
                   </p>
@@ -364,7 +364,7 @@ export function AdditionalQuestionsPanel({
                     Answer
                   </p>
                   <Textarea
-                    className="mt-1 min-h-[80px] rounded-none border border-black/15 bg-white text-[13px] focus:border-blue-700 focus:ring-0"
+                    className="mt-1 min-h-[80px] rounded-none border border-border bg-card text-[13px] focus:border-primary focus:ring-0"
                     value={item.answer}
                     disabled={generationState !== 'idle'}
                     onChange={(event) => {
@@ -385,11 +385,11 @@ export function AdditionalQuestionsPanel({
                   />
 
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-sm border border-black/10 bg-white px-1.5 py-0.5 text-[10px] text-gray-700">
+                    <span className="rounded-sm border border-border bg-card px-1.5 py-0.5 text-[10px] text-gray-700">
                       confidence: {item.confidence}
                     </span>
                     {item.is_user_edited && (
-                      <span className="rounded-sm border border-black/10 bg-white px-1.5 py-0.5 text-[10px] text-gray-700">
+                      <span className="rounded-sm border border-border bg-card px-1.5 py-0.5 text-[10px] text-gray-700">
                         edited
                       </span>
                     )}

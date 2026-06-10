@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +69,12 @@ def _serialize_resume(record: Resume) -> dict[str, Any]:
     }
 
 
+def _jd_content_hash(content: str) -> str:
+    """SHA-256 of whitespace-normalised JD text. Stable across equivalent pastes."""
+    normalised = re.sub(r"\s+", " ", content).strip()
+    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
+
+
 def _serialize_job(record: Job) -> dict[str, Any]:
     return {
         "job_id": record.job_id,
@@ -78,6 +86,8 @@ def _serialize_job(record: Job) -> dict[str, Any]:
         "job_metadata": record.job_metadata,
         "job_keywords": record.job_keywords,
         "job_keywords_hash": record.job_keywords_hash,
+        "content_hash": record.content_hash,
+        "char_count": record.char_count,
         "preview_hash": record.preview_hash,
         "preview_prompt_id": record.preview_prompt_id,
         "preview_hashes": record.preview_hashes,
@@ -364,6 +374,8 @@ class Database:
                 role=role,
                 location=location,
                 job_metadata=job_metadata,
+                content_hash=_jd_content_hash(content),
+                char_count=len(content),
             )
             return _serialize_job(record)
 
@@ -563,6 +575,15 @@ class Database:
             )
             return [_serialize_generation_run(record) for record in records]
 
+    def map_llm_trace_ids_for_resume_ids(self, resume_ids: list[str]) -> dict[str, str]:
+        """Resolve ``llm_trace_id`` from generation runs keyed by ``tailored_resume_id``."""
+        if not resume_ids:
+            return {}
+        with self._session() as session:
+            return generation_run_repo.map_llm_trace_ids_for_tailored_resume_ids(
+                session, resume_ids
+            )
+
     def get_latest_generation_run(
         self,
         *,
@@ -655,6 +676,8 @@ class Database:
         request_scope: str | None = None,
         operation: str | None = None,
         success: bool | None = None,
+        resume_id: str | None = None,
+        resume_code: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         with self._session() as session:
@@ -665,6 +688,8 @@ class Database:
                 request_scope=request_scope,
                 operation=operation,
                 success=success,
+                resume_id=resume_id,
+                resume_code=resume_code,
                 limit=limit,
             )
             return [_serialize_llm_call(record) for record in records]
@@ -674,12 +699,43 @@ class Database:
         *,
         trace_id: str | None = None,
         request_scope: str | None = None,
+        resume_id: str | None = None,
+        resume_code: str | None = None,
     ) -> dict[str, Any]:
         with self._session() as session:
             return llm_call_repo.summarize_llm_calls(
                 session,
                 trace_id=trace_id,
                 request_scope=request_scope,
+                resume_id=resume_id,
+                resume_code=resume_code,
+            )
+
+    def merge_llm_call_context_for_trace(
+        self,
+        trace_id: str,
+        context_updates: dict[str, Any],
+    ) -> int:
+        with self._session() as session:
+            return llm_call_repo.merge_context_for_trace(
+                session,
+                trace_id=trace_id,
+                context_updates=context_updates,
+            )
+
+    def attach_compact_diff_validation_to_latest_llm_call(
+        self,
+        *,
+        trace_id: str,
+        operation: str,
+        envelope_validation: dict[str, Any],
+    ) -> bool:
+        with self._session() as session:
+            return llm_call_repo.attach_compact_diff_validation_to_latest_call(
+                session,
+                trace_id=trace_id,
+                operation=operation,
+                envelope_validation=envelope_validation,
             )
 
     def get_stats(self) -> dict[str, Any]:

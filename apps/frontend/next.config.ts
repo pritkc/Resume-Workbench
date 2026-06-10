@@ -1,9 +1,16 @@
 import type { NextConfig } from 'next';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN || 'http://127.0.0.1:8000';
+const FRONTEND_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: FRONTEND_ROOT,
+  turbopack: {
+    root: FRONTEND_ROOT,
+  },
   experimental: {
     turbopackUseSystemTlsCerts: true,
     proxyTimeout: 240_000,

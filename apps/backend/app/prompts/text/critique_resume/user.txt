@@ -1,0 +1,13 @@
+ORIGINAL RESUME:
+$original_resume
+
+TAILORED DIFF:
+$tailor_resume_full_output
+
+JD INTELLIGENCE:
+$extract_jd_intel_output
+
+JD CHECKLIST:
+- Technical terms to check, not force: $extract_jd_intel_output.resume_technical_keywords
+- Responsibility themes as neutral coverage hooks: $extract_jd_intel_output.responsibility_themes
+- Level ceiling for scope calibration: $extract_jd_intel_output.calibration.level_expectations

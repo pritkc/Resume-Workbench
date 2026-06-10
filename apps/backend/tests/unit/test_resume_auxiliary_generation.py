@@ -15,8 +15,7 @@ async def test_generate_auxiliary_messages_prefers_combined_request() -> None:
                 improved_data={"personalInfo": {"name": "Jane Doe"}},
                 job_content="Senior Backend Engineer at Acme",
                 job_keywords=None,
-                language="en",
-                include_cover_letter=True,
+                                include_cover_letter=True,
                 include_outreach_message=True,
             )
         )
@@ -40,8 +39,7 @@ async def test_generate_auxiliary_messages_returns_warning_when_package_fails() 
                 improved_data={"personalInfo": {"name": "Jane Doe"}},
                 job_content="Senior Backend Engineer at Acme",
                 job_keywords=None,
-                language="en",
-                include_cover_letter=True,
+                                include_cover_letter=True,
                 include_outreach_message=True,
             )
         )
@@ -64,8 +62,7 @@ async def test_generate_auxiliary_messages_respects_include_flags() -> None:
                 improved_data={"personalInfo": {"name": "Jane Doe"}},
                 job_content="Senior Backend Engineer at Acme",
                 job_keywords=None,
-                language="en",
-                include_cover_letter=True,
+                                include_cover_letter=True,
                 include_outreach_message=False,
             )
         )
@@ -97,8 +94,7 @@ async def test_resolve_confirm_auxiliary_messages_drops_disabled_preview_outputs
                 improved_data={"personalInfo": {"name": "Jane Doe"}},
                 job_content="Senior Backend Engineer at Acme",
                 job_keywords=None,
-                language="en",
-                include_cover_letter=False,
+                                include_cover_letter=False,
                 include_outreach_message=False,
             )
         )

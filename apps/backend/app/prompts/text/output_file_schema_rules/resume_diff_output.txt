@@ -1,0 +1,120 @@
+PRECEDENCE:
+- PRIMARY RUN RULES in the system message can set run-specific emphasis; this file owns JSON shape, locks, calibration, and writing policy.
+
+--- OUTPUT CONTRACT ---
+
+OUTPUT FORMAT:
+- Return valid JSON only. No markdown, prose, comments, or fences. Start with { and end with }.
+- Minify output: compact JSON — no pretty-printing, avoid line breaks inside objects/arrays unless a string literal requires them; pack skills ``values[]`` on one line when possible (shorter payloads).
+- Full/default tailoring modes require top-level keys: "summary", "experience", "projects", "skills", "bold_keywords".
+- Lite mode may return a partial diff and may still parse legacy bare strings, but TailoredCell objects are preferred.
+
+TAILORED CELL:
+- Editable scalar and bullet cells use {"value": <string|null>, "why": <string>}.
+- "value": final resume text; null means retain source text unchanged. Never use an "unchanged" flag.
+- "why": required, non-empty, plain-language rationale for the edit or retention. Explain JD mapping, trade-offs, uncertainty, and evidence when useful. Do not put markdown fences in strings.
+
+FULL ENVELOPE:
+- Emit the complete grid for every contract-listed experience row, project row, skills group/value, the summary cell, and bold_keywords.
+- Experience keys are stringified 0-based indices "0".."N-1" matching RESPONSE CONTRACT order. Each entry includes "position", "tech_stacks", and "bullets" with every bullet index "0".."M-1".
+- Project keys follow the same rule. Each entry includes "name", "tech_stacks", and every source bullet index.
+- Do not add, combine, drop, or renumber bullet indices unless RESPONSE CONTRACT explicitly allows it.
+- Retained cells still appear with "value": null and a useful "why".
+- Skills are an array of groups: {"label": {"value", "why"}, "values": [<string|null>, ...]}. ``skills[k]`` is the k-th row in RESPONSE CONTRACT.skills ``value_counts`` order; lengths must match ``value_counts[k]``. null in ``values[j]`` retains the j-th chip. Prefer that compact ``values[]`` array; optional legacy keyed form "values": {"0": {"value"}, …}. Single ``label.why`` must briefly cover every chip in **positional order** (retain vs edit vs add-for-JD — one dense prose line joined with semicolons, not separate lines).
+- bold_keywords is an array of 6-10 short high-visibility technical ATS terms from final resume content.
+
+SHAPES:
+- Experience: {"0": {"position": {"value": "...", "why": "..."}, "tech_stacks": {"value": null, "why": "..."}, "bullets": {"0": {"value": "...", "why": "..."}}}}
+- Projects: {"0": {"name": {"value": null, "why": "..."}, "tech_stacks": {"value": "...", "why": "..."}, "bullets": {"0": {"value": null, "why": "..."}}}}
+- Original resume name bridge: workExperience -> experience; personalProjects -> projects; description/highlights arrays -> bullets objects.
+
+LOCKS:
+- Never emit locked fields: id, company, location, start_date, end_date, date, years, github, website, customSections.
+- Do not alter company names, dates, locations, schools, GPA, base factual claims, or source-owned identifiers.
+- Experience editable fields: position, tech_stacks, bullets.
+- Project editable fields: name, tech_stacks, bullets.
+- Position may append only a truthful comma-separated scope/platform/domain qualifier after the original title. Do not rename, insert words into, or replace the base title.
+- Project names may receive only minor clarification; never add JD-flavored parentheticals like "(Process Automation)", "(Compliance Workflow)", or "(Data Analysis)".
+
+--- SIGNAL STRATEGY ---
+
+CORE LENS:
+- The source resume is the candidate superset; the JD is a prioritization lens.
+- Show a broad tech-role profile first, then selected JD-aligned evidence. Do not rebuild every section around the posting.
+- Map to JD themes through candidate mechanisms, systems, tools, and outcomes. Avoid 1:1 paraphrases of JD responsibilities.
+- A keyword once in the right evidence beats repetition across summary, stacks, bullets, skills, and bold_keywords.
+- Keep direct JD terms to the few bullets where they are natural; do not make every section repeat the same JD nouns.
+
+ATS AND KEYWORDS:
+- Use exact ATS terms only when high-signal, technical, and supported by the candidate story.
+- Place the strongest supported terms early in the summary and strongest bullets.
+- Never keyword-stuff, write hollow ATS bait, or add basic office/chat/project tools to summary, bullets, tech_stacks, skills, or bold_keywords.
+- BOLD_KEYWORDS: use 1-3 word terms only; prefer tools, languages, platforms, frameworks, data methods, and product systems; avoid sentences, soft skills, and generic domain phrases.
+- Do not include basic tools, generic role/domain labels, responsibility phrases, or weak umbrella terms in bold_keywords.
+- Examples of low-signal bold terms to exclude: Data Analysis, Process Mapping, Workflow Visualization, Process Optimization.
+- Also exclude: methodology and process labels (SDLC, Agile, Scrum, CI/CD pipeline, test automation), generic infrastructure categories (Relational Databases, Cloud Storage, Distributed Systems, Message Queue), and competency phrases (Test Case Design, Project Management, Stakeholder Communication, Defect Tracking). When the JD names no high-signal tools, draw bold_keywords only from tools, languages, and platforms present in the resume evidence.
+
+TECH STACKS:
+- tech_stacks values contain only named tools, languages, platforms, frameworks, or products.
+- Include tools used in the source evidence or required by the rewritten action; do not add JD-only tools because the JD names them.
+- Do not promote tools from tech_stacks into bullet text unless the source bullet names the tool or the action logically requires it.
+- Exclude from tech_stacks any tool that is an assumed baseline for the role's level and domain. Ask: would a technical recruiter scanning resumes for this posting find this tool a differentiator, or an expected given? Productivity suites, generic project trackers, collaboration apps, and commodity document tools are excluded regardless of whether the JD names them.
+
+SKILLS:
+- Target 4-5 dense groups only when the source skills support them; do not pad.
+- Preserve strong engineering/data skills as the profile backbone; put JD-critical credible groups first.
+- Add only a few JD-specific values across the skills section unless already present.
+- Skill values must be specific tools, products, methods, or technologies, not responsibility phrases.
+- Retain adjacent evidenced skills even when they are not JD-critical; avoid turning skills into a JD mirror.
+- Do not emit group ids; alignment is RESPONSE CONTRACT ordering only. Explain all chips inside ``label.why`` compactly — no rationale fields on individual ``values[]`` entries.
+
+--- WRITING POLICY ---
+
+SUMMARY:
+- One sentence, target 105-135 characters, with a compact role thesis: identity + strongest transferable capability + outcome area.
+- Start from the candidate's real technical identity, not the JD title.
+- Mention at most one JD-specific domain/tool. No "X years of experience" framing; avoid the years-count format.
+- Good: "Data engineer building ETL/ELT pipelines, semantic layers, and cloud warehouse models for analytics teams."
+- Bad: "Data engineer with many years of experience in data engineering."
+
+BULLETS:
+- One idea per bullet, usually 1-2 lines: strong verb -> mechanism/scope -> observable outcome.
+- Keep technical density. Remove filler business nouns before removing technical detail.
+- Lead each role with the strongest concrete story, not a stack dump.
+- Each role should show different dimensions of impact, such as latency, reliability, automation, data quality, product behavior, compliance, migration, or cost.
+- Vary verbs and sentence shapes. Avoid repeated opener/metric/outcome patterns.
+- Use compact metrics where credible: h/wk, min, ms, sec, ranges, or before/after state.
+- Tie metrics to candidate action and system context. No naked percentages without mechanism.
+- If exact mechanism is unknown, describe the before/after state honestly.
+- Lightly preserve original interview stories; rewrite only the cells needed for fit.
+
+PORTFOLIO PROJECTS:
+- Edit at most the most relevant projects unless the response contract or run rules say otherwise.
+- Keep names stable, preserve source bullet count, and avoid converting projects into generic JD examples.
+- If a stack names a frontend framework, include a real UI outcome in at least one bullet.
+- If a stack names MLOps or tracking tooling, describe what was tracked, why reproducibility mattered, and what artifact resulted.
+
+CLAIM CALIBRATION:
+- Prefer strong, plausible claims that fit the source trajectory and would survive a phone screen.
+- Use real figures or honest approximations with ~, ranges, or before/after language. Do not invent precision.
+- Tools and technologies must fit the candidate timeline and normal production use for that period.
+- Calibrate scope to level and tenure: use "contributed to", "helped", "with the team", "partnered with", or owned-slice language when sole ownership is not evidenced.
+- Do not claim org-wide architecture, sole product ownership, or impossible wins unless explicitly supported.
+
+--- BANNED PATTERNS ---
+
+OPENERS (never use as primary verb):
+spearheaded, leveraged, orchestrated, utilized, facilitated, pioneered, revolutionized, masterminded, improved, enhanced, streamlined
+
+JARGON (never use):
+synergy, robust, scalable, holistic, proactive, cutting-edge, state-of-the-art, dynamic, innovative, visionary, seamless, game-changer, thought leader, best-in-class, impactful
+
+PHRASES (never use):
+proven track record, results-driven, results-oriented, team player, passionate about, self-starter, detail-oriented, go-getter, stakeholder alignment, responsible for [duty list], in order to, as part of an effort to, so as to enhance/improve, deeply committed to
+
+PATTERNS (never):
+- Em dash anywhere in output.
+- Dangling participial chains at bullet endings.
+- Adjective pileups or inflated scope for short tenures.
+- Multiple bullets in one role with the same outcome type.
+- Impossible wins unsupported by source evidence.

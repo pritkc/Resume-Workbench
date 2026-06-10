@@ -1,8 +1,10 @@
 """Service tests for cover letter and outreach helpers."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 from app.services.cover_letter import (
+    _build_message_prompt_inputs,
     build_job_target_title,
     extract_job_target_metadata,
     parse_combined_message_response,
@@ -198,18 +200,39 @@ class TestCandidatePromptProfile:
         assert len(prompt_json) < 900
 
 
+class TestCoverLetterPromptInputs:
+    def test_includes_tailored_resume_json(self, sample_resume, sample_job_description):
+        inputs = _build_message_prompt_inputs(sample_resume, sample_job_description)
+        assert "tailored_resume" in inputs
+        body = json.loads(inputs["tailored_resume"])
+        assert "summary" in body or "personalInfo" in body
+
+    def test_job_keywords_refine_job_target(self, sample_resume):
+        jd = "Join our platform team."
+        inputs = _build_message_prompt_inputs(
+            sample_resume,
+            jd,
+            job_keywords={
+                "role": {"title": "Backend Engineer", "seniority": "junior"},
+                "company": {"name": "Pylon Labs"},
+            },
+        )
+        target = json.loads(inputs["job_target"])
+        assert target.get("role") == "Backend Engineer"
+        assert target.get("company") == "Pylon Labs"
+
+
 class TestGeneratedMessages:
     @patch("app.services.cover_letter.complete", new_callable=AsyncMock)
-    async def test_combined_generation_uses_single_json_call(
+    async def test_combined_generation_uses_single_text_call(
         self, mock_complete, sample_resume, sample_job_description
     ):
         mock_complete.return_value = """
-<<COVER_LETTER>>
+=== COVER LETTER ===
 Thanks for considering my application.
-<<END_COVER_LETTER>>
-<<OUTREACH_MESSAGE>>
+
+=== OUTREACH MESSAGE ===
 Open to a quick intro call this week?
-<<END_OUTREACH_MESSAGE>>
 """.strip()
 
         cover_letter, outreach = await generate_cover_letter_and_outreach(
@@ -220,12 +243,16 @@ Open to a quick intro call this week?
         kwargs = mock_complete.call_args.kwargs
         prompt = kwargs["prompt"]
         assert "JOB TARGET (JSON):" in prompt
-        assert "CANDIDATE PROFILE (JSON):" in prompt
+        assert "JD INTELLIGENCE:" in prompt
+        assert "RESUME (JSON" in prompt
+        assert "=== COVER LETTER ===" in prompt
+        assert "=== OUTREACH MESSAGE ===" in prompt
+        assert "personalInfo" in prompt or "summary" in prompt
         assert kwargs["operation"] == "cover_letter_outreach_generate"
-        assert kwargs["max_tokens"] == 2600
+        assert kwargs["max_tokens"] == 800
         assert kwargs["retries"] == 2
-        assert kwargs["retry_max_tokens"] == 3200
-        assert kwargs["metadata"]["candidate_profile_chars"] < 900
+        assert kwargs["retry_max_tokens"] == 1200
+        assert kwargs["metadata"].get("tailored_resume_chars", 0) > 0
         assert cover_letter == "Thanks for considering my application."
         assert outreach == "Open to a quick intro call this week?"
 
@@ -237,7 +264,11 @@ Open to a quick intro call this week?
 
         outreach = await generate_outreach_message(sample_resume, sample_job_description)
 
-        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description, "en")
+        mock_combined.assert_awaited_once_with(
+            sample_resume,
+            sample_job_description,
+            job_keywords=None,
+        )
         assert outreach == "Worth a quick chat?"
 
     @patch("app.services.cover_letter.generate_cover_letter_and_outreach", new_callable=AsyncMock)
@@ -248,7 +279,11 @@ Open to a quick intro call this week?
 
         cover_letter = await generate_cover_letter(sample_resume, sample_job_description)
 
-        mock_combined.assert_awaited_once_with(sample_resume, sample_job_description, "en")
+        mock_combined.assert_awaited_once_with(
+            sample_resume,
+            sample_job_description,
+            job_keywords=None,
+        )
         assert cover_letter == "Thanks for your time."
 
     def test_combined_parser_accepts_json_fallback(self):
@@ -258,3 +293,32 @@ Open to a quick intro call this week?
 
         assert cover_letter == "Thanks for your time."
         assert outreach == "Worth a quick chat?"
+
+    def test_combined_parser_accepts_legacy_tag_fallback(self):
+        cover_letter, outreach = parse_combined_message_response(
+            """
+<<COVER_LETTER>>
+Thanks for your time.
+<<END_COVER_LETTER>>
+<<OUTREACH_MESSAGE>>
+Worth a quick chat?
+<<END_OUTREACH_MESSAGE>>
+""".strip()
+        )
+
+        assert cover_letter == "Thanks for your time."
+        assert outreach == "Worth a quick chat?"
+
+    def test_combined_parser_prefers_section_header_format(self):
+        cover_letter, outreach = parse_combined_message_response(
+            """
+=== COVER LETTER ===
+Thanks for considering my application.
+
+=== OUTREACH MESSAGE ===
+Open to a quick intro call this week?
+""".strip()
+        )
+
+        assert cover_letter == "Thanks for considering my application."
+        assert outreach == "Open to a quick intro call this week?"

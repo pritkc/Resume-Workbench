@@ -10,8 +10,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.schemas import ApplicationQuestionAnswer, TailoringStageBreakdown
+from app.schemas import ApplicationQuestionAnswer, ImproveResumeData, ImproveResumeResponse, TailoringStageBreakdown
 from app.services.additional_groups import normalize_additional_groups
+from app.services.tailoring.section_format import section_jd_wrapper
 
 
 @pytest.fixture
@@ -66,6 +67,7 @@ def _fake_tailoring_result(
         cleanup_changes=[],
         stage_breakdown=TailoringStageBreakdown(),
         bold_keywords=bold_keywords or [],
+        skills_observability=None,
     )
 
 
@@ -169,6 +171,92 @@ async def test_preview_generates_application_pack_metadata(sample_resume: dict, 
     }
     generate_auxiliary.assert_not_awaited()
     assert "pipeline_timing" in update_run_payload["result_payload"]
+
+
+@pytest.mark.asyncio
+async def test_live_preview_streams_events_and_returns_result(sample_resume: dict, client):
+    final_response = ImproveResumeResponse(
+        request_id="trace-live-123",
+        data=ImproveResumeData(
+            request_id="trace-live-123",
+            resume_id=None,
+            application_pack_id="pack-live-123",
+            generation_run_id="run-live-123",
+            job_id="job-123",
+            resume_preview=sample_resume,
+            improvements=[],
+        ),
+    )
+
+    async def fake_preview_flow(**kwargs):
+        live_run = kwargs["live_run"]
+        from app.services.live_generation import live_generation_registry
+
+        await live_generation_registry.emit(
+            live_run.live_run_id,
+            "stage.started",
+            {"stage_label": "tailoring / generate_full_resume"},
+        )
+        await live_generation_registry.emit(
+            live_run.live_run_id,
+            "llm.started",
+            {
+                "operation": "resume_generate_full",
+                "model_name": "fake-model",
+                "prompt_id": "full",
+            },
+        )
+        await live_generation_registry.emit(
+            live_run.live_run_id,
+            "section.updated",
+            {
+                "section_id": "summary",
+                "section": "SUMMARY",
+                "content": "Tailored summary",
+            },
+        )
+        return final_response
+
+    with (
+        patch("app.routers.application_packs.db") as mock_db,
+        patch(
+            "app.routers.application_packs._improve_preview_flow",
+            new=AsyncMock(side_effect=fake_preview_flow),
+        ),
+    ):
+        mock_db.get_resume.return_value = _fake_resume_record(sample_resume)
+        mock_db.get_job.return_value = {"job_id": "job-123", "content": "Senior Backend Engineer"}
+        mock_db.create_generation_run.return_value = {
+            "generation_run_id": "run-live-123",
+            "result_payload": {},
+        }
+        mock_db.update_generation_run.return_value = {
+            "generation_run_id": "run-live-123",
+            "result_payload": {},
+        }
+
+        start_response = await client.post(
+            "/api/v1/application-packs/preview/live",
+            json={"resume_id": "res-123", "job_id": "job-123", "prompt_id": "full"},
+        )
+        assert start_response.status_code == 200
+        live_run_id = start_response.json()["data"]["live_run_id"]
+
+        events_response = await client.get(
+            f"/api/v1/application-packs/preview/live/{live_run_id}/events"
+        )
+        assert events_response.status_code == 200
+        event_text = events_response.text
+        assert "run.started" in event_text
+        assert "llm.started" in event_text
+        assert "section.updated" in event_text
+        assert "run.completed" in event_text
+
+        result_response = await client.get(
+            f"/api/v1/application-packs/preview/live/{live_run_id}/result"
+        )
+        assert result_response.status_code == 200
+        assert result_response.json()["data"]["application_pack_id"] == "pack-live-123"
 
 
 @pytest.mark.asyncio
@@ -297,12 +385,24 @@ async def test_preview_uses_primary_full_generation(
 async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict, client):
     improved = copy.deepcopy(sample_resume)
     improved["summary"] = "Round-tripped tailored summary"
+    improved["personalInfo"]["location"] = "San Jose, CA"
     improved.pop("sectionMeta", None)
     improved.pop("customSections", None)
 
     job_record = {
         "job_id": "job-123",
         "content": "Senior Backend Engineer",
+        "job_keywords": section_jd_wrapper(
+            """
+=== JD METADATA ===
+ROLE: Senior Backend Engineer
+COMPANY: TechCorp
+LOCATION: San Jose, CA
+
+=== JD INTEL ===
+HOOKS: build APIs
+"""
+        ),
         "preview_hashes": {},
     }
     application_pack = {
@@ -318,7 +418,7 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         patch("app.routers.resumes.db") as mock_db,
         patch(
             "app.routers.resumes.extract_job_keywords",
-            new=AsyncMock(return_value={"keywords": ["FastAPI"]}),
+            new=AsyncMock(return_value=job_record["job_keywords"]),
         ),
         patch(
             "app.routers.resumes.generate_tailored_resume",
@@ -367,6 +467,7 @@ async def test_confirm_accepts_round_tripped_preview_payload(sample_resume: dict
         mock_db.update_application_pack.return_value = application_pack
         mock_db.get_generation_run.return_value = {
             "generation_run_id": "preview-run-123",
+            "request_payload": {"llm_trace_id": "trace-preview-123"},
             "result_payload": {
                 "auxiliary": {
                     "title": "Tailored Title",
@@ -461,6 +562,7 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
         }
         mock_db.get_generation_run.return_value = {
             "generation_run_id": "preview-run-123",
+            "request_payload": {"llm_trace_id": "trace-preview-123"},
             "result_payload": {
                 "auxiliary": {
                     "title": "Tailored Title",
@@ -493,6 +595,11 @@ async def test_confirm_persists_tailored_resume_and_pack_metadata(sample_resume:
     assert data["generation_run_id"] == "confirm-run-123"
     assert data["artifacts"][0]["artifact_id"] == "art-final-1"
     generate_auxiliary.assert_not_awaited()
+    mock_db.summarize_llm_calls.assert_called_with(trace_id="trace-preview-123")
+    confirm_run_payload = mock_db.create_generation_run.call_args.kwargs["request_payload"]
+    assert confirm_run_payload["llm_trace_id"] == "trace-preview-123"
+    assert confirm_run_payload["confirm_request_id"]
+    assert confirm_run_payload["confirm_request_id"] != "trace-preview-123"
     update_run_payload = mock_db.update_generation_run.call_args.args[1]
     assert update_run_payload["result_payload"]["auxiliary"] == {
         "title": "Tailored Title",

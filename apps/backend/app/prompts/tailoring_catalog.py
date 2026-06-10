@@ -5,10 +5,12 @@ from __future__ import annotations
 import re
 
 from app.prompts.tailoring_blocks import (
+    TAILORING_CONTENT_RULES_BLOCK,
     TAILORING_CONTRACT_BLOCK,
     TAILORING_CRAFT_BLOCK,
     TAILORING_MODE_STRATEGY,
-    TAILORING_USER_SHELL,
+    TAILORING_USER_SHELL_FULL,
+    TAILORING_USER_SHELL_LITE,
 )
 from app.schemas.models import PromptCatalogSection
 
@@ -95,15 +97,9 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
 
     runtime_children = [
         PromptCatalogSection(
-            id="tailoring_rt_mode_id",
-            label="{mode_id}",
-            content="Tailoring intensity key: full | lite.",
-            policy="runtime_injected",
-        ),
-        PromptCatalogSection(
             id="tailoring_rt_job_intel",
-            label="{job_intelligence}",
-            content="JSON from JD analysis (role, keywords, themes, etc.).",
+            label="{jd_intel}",
+            content="Section-header JD INTEL text, or compact legacy JSON text for older cached rows.",
             policy="runtime_injected",
         ),
         PromptCatalogSection(
@@ -114,50 +110,69 @@ def build_resume_tailoring_catalog_sections() -> list[PromptCatalogSection]:
         ),
         PromptCatalogSection(
             id="tailoring_rt_contract",
-            label="{response_contract}",
-            content="JSON contract describing allowed response shape for this resume.",
+            label="{output_template}",
+            content="Section-header output template generated from the current resume contract.",
             policy="runtime_injected",
         ),
         PromptCatalogSection(
-            id="tailoring_rt_language",
-            label="{output_language}",
-            content="Human-readable language name from the user's content-language setting.",
+            id="tailoring_rt_content_rules",
+            label="{content_rules}",
+            content="Section-header-compatible resume content rules: locks, ATS, skills, writing policy, claim calibration, and banned patterns.",
+            policy="runtime_injected",
+        ),
+        PromptCatalogSection(
+            id="tailoring_rt_resume_diff_rules",
+            label="{resume_diff_rules}",
+            content="Legacy compact JSON schema retained for fallback compatibility.",
             policy="runtime_injected",
         ),
     ]
 
     return [
         PromptCatalogSection(
-            id="tailoring_contract_block",
-            label="Contract block (calibrated)",
-            note="Output schema and JSON rules. Change rarely — requires tests.",
-            policy="system",
-            children=contract_children,
-        ),
-        PromptCatalogSection(
             id="tailoring_craft_block",
-            label="Craft block (experimental)",
-            note="Voice, ATS, writing quality rules. Safe to iterate.",
+            label="Craft block (role, voice, ATS, tailoring approach)",
+            note="PRIMARY RUN RULES — full tailor only. Primary tailoring fills a section-header output template.",
             policy="user_editable_future",
             children=craft_children,
         ),
         PromptCatalogSection(
             id="tailoring_mode_strategies",
             label="Mode strategies",
-            note="One mode strategy is selected per run.",
+            note='Full mode has no "TAILORING MODE:" slice in shipped system.txt (empty here). Lite: text/tailor_resume_lite/system.txt from TAILORING MODE: onward.',
             policy="user_editable_future",
             children=mode_children,
         ),
         PromptCatalogSection(
+            id="tailoring_contract_block",
+            label="Resume output template",
+            note="Injected at runtime as $output_template. The model returns section-header text, which the backend parses into the compact diff.",
+            policy="user_editable_future",
+            children=contract_children,
+        ),
+        PromptCatalogSection(
+            id="tailoring_content_rules_block",
+            label="Resume content rules",
+            note="Injected at runtime as $content_rules. Restores the original non-JSON writing, ATS, locks, calibration, and banned-pattern guidance for section-header output.",
+            policy="user_editable_future",
+            content=TAILORING_CONTENT_RULES_BLOCK,
+        ),
+        PromptCatalogSection(
             id="tailoring_user_message",
-            label="User message template",
-            note="Template with runtime slots. Structure shared across runs.",
+            label="User message templates",
+            note="Full vs lite use different shipped shells. Full: text/tailor_resume_full/user.txt · Lite: text/tailor_resume_lite/user.txt",
             policy="user_editable_future",
             children=[
                 PromptCatalogSection(
-                    id="tailoring_user_template",
-                    label="User shell template",
-                    content=TAILORING_USER_SHELL,
+                    id="tailoring_user_template_full",
+                    label="User shell (full tailor)",
+                    content=TAILORING_USER_SHELL_FULL,
+                    policy="user_editable_future",
+                ),
+                PromptCatalogSection(
+                    id="tailoring_user_template_lite",
+                    label="User shell (lite tailor)",
+                    content=TAILORING_USER_SHELL_LITE,
                     policy="user_editable_future",
                 ),
                 PromptCatalogSection(

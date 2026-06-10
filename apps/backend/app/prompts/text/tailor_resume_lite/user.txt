@@ -1,0 +1,35 @@
+$custom_prompt_instructions
+
+Tailor this resume with conservative edits. Keep job titles and overall structure stable.
+
+LITE-RUN EDIT SCOPE:
+- Prefer [RETAIN] unless a cell clearly improves fit, clarity, or render quality.
+- Touch at most one bullet per role.
+- Keep projects mostly stable.
+- Keep skills broad and credible; do not overfit to the JD.
+
+JD INTELLIGENCE:
+$jd_intel
+
+CONTENT RULES:
+$content_rules
+
+MASTER RESUME:
+$original_resume
+
+OUTPUT TEMPLATE:
+$output_template
+
+OUTPUT RULES:
+- Return plain section-header text only. No markdown fences, no JSON, no commentary.
+- Headers: === SUMMARY ===, === EXPERIENCE n ===, === PROJECT n ===, === SKILLS ===, === BOLD KEYWORDS ===.
+- Labels: WHY, POSITION, STACK, NAME, B#, B#-WHY, G#, G#-WHY.
+- Write [RETAIN] to keep an unchanged cell. Do not copy original unchanged text.
+- For scalar cells (POSITION, STACK, NAME, B#), [RETAIN] must be the entire value or absent; never mix [RETAIN] with added text.
+- SUMMARY and BOLD KEYWORDS must always be present; each should include one short WHY line for QA.
+- You may omit a whole EXPERIENCE or PROJECT section only when every cell in that section is retained.
+- Preserve listed indexes only. Do not add, drop, combine, or renumber bullets or skill positions.
+- For comma-separated scalar cells like STACK, write the complete final value without [RETAIN] when changing it.
+- For skills, output every G# group in OUTPUT TEMPLATE order. Format G#: final label | final comma-separated values. Keep original skill text when retaining; remove original skills only when remotely useless to the role.
+- Add one short G#-WHY for each skill group explaining retain/edit decisions.
+- BOLD KEYWORDS: 6-10 comma-separated ATS terms; tools, languages, platforms, methods only.

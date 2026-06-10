@@ -2,9 +2,8 @@
 
 import React, { useCallback, useState } from 'react';
 import { Clipboard, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
-/** Character count + copy for monospace prompt fields (composer, shared rules, etc.). */
+/** Character count + minimal copy control for prompt fields. */
 export function CopyCharBar({
   text,
   t,
@@ -27,24 +26,20 @@ export function CopyCharBar({
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
-      <span className="font-mono text-[9px] tabular-nums text-gray-500">
-        {t('settings.promptCatalog.composerCharCount', { count: n })}
-      </span>
-      <Button
+      <span className="font-mono text-[10px] tabular-nums text-slate-400">{n}</span>
+      <button
         type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="h-5 w-5 shrink-0 p-0 font-mono text-[8px]"
         onClick={() => void copy()}
         title={t('settings.promptCatalog.copyField')}
         aria-label={t('settings.promptCatalog.copyField')}
+        className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
       >
         {copied ? (
-          <Check className="h-3 w-3 text-green-700" aria-hidden />
+          <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={1.75} aria-hidden />
         ) : (
-          <Clipboard className="h-3 w-3" aria-hidden />
+          <Clipboard className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
         )}
-      </Button>
+      </button>
     </div>
   );
 }

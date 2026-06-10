@@ -44,7 +44,7 @@ export function GeneratePrompt({
           className
         )}
       >
-        <div className="mb-3 flex h-9 w-9 items-center justify-center border border-black/10 bg-gray-50">
+        <div className="mb-3 flex h-9 w-9 items-center justify-center border border-border bg-gray-50">
           <Icon className="h-4 w-4 text-gray-400" aria-hidden />
         </div>
         <h3 className="mb-1 text-[13px] font-semibold text-gray-800">
@@ -72,7 +72,7 @@ export function GeneratePrompt({
         className
       )}
     >
-      <div className="mb-3 flex h-9 w-9 items-center justify-center border border-blue-700/30 bg-blue-50/80">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center border border-primary/30 bg-blue-50/80">
         <Icon className="h-4 w-4 text-blue-800" aria-hidden />
       </div>
       <h3 className="mb-1 text-[13px] font-semibold text-gray-900">

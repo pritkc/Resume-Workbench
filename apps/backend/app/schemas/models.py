@@ -113,6 +113,45 @@ def _split_description_lines(value: str) -> list[str]:
     return items
 
 
+def _work_entry_tech_stack_text(data: dict[str, Any]) -> str | None:
+    """Coalesce per-role tech stack from canonical and legacy keys."""
+    return _coerce_optional_text(
+        data.get("techStack")
+        or data.get("tech_stack")
+        or data.get("tech_stacks")
+        or data.get("summary")
+    )
+
+
+def _project_tech_stack_text(data: dict[str, Any]) -> str | None:
+    """Coalesce per-project tech stack from canonical and legacy keys."""
+    return _coerce_optional_text(
+        data.get("techStack")
+        or data.get("tech_stack")
+        or data.get("tech_stacks")
+        or data.get("summary")
+        or data.get("role")
+    )
+
+
+def _strip_leading_duplicate_stack_line(
+    stack: str | None, highlights: list[str]
+) -> list[str]:
+    """Remove leading highlight rows that duplicate the tech-stack line (LLM/form noise)."""
+    if not stack or not highlights:
+        return highlights
+    needle = stack.strip()
+    if not needle:
+        return highlights
+    result = list(highlights)
+    while result:
+        head = _coerce_text(result[0]).strip()
+        if not head or head != needle:
+            break
+        result.pop(0)
+    return result
+
+
 def _coerce_string_list(value: Any) -> list[str]:
     """Coerce nested/string values into a list of strings."""
     if value is None:
@@ -364,7 +403,7 @@ class Experience(BaseModel):
     end_date: str | None = None
     date: str = ""
     years: str = ""
-    summary: str | None = None
+    techStack: str | None = None
     description: list[str] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
 
@@ -389,8 +428,10 @@ class Experience(BaseModel):
         data["date"] = date
         data["years"] = _coerce_text(data.get("years") or date)
 
-        summary = _coerce_optional_text(data.get("summary"))
-        data["summary"] = summary
+        stack = _work_entry_tech_stack_text(data)
+        for legacy_key in ("techStack", "tech_stack", "tech_stacks", "summary"):
+            data.pop(legacy_key, None)
+        data["techStack"] = stack
 
         legacy_description = data.get("description")
         legacy_highlights = data.get("highlights")
@@ -402,13 +443,15 @@ class Experience(BaseModel):
                 legacy_description = highlights
 
         legacy_description_list = _coerce_string_list(legacy_description)
-        if summary and legacy_description_list and legacy_description_list[0] == summary:
+        if stack and legacy_description_list and legacy_description_list[0] == stack:
             highlights = legacy_description_list[1:]
         elif legacy_highlights is None and legacy_description_list:
             highlights = legacy_description_list
 
+        highlights = _strip_leading_duplicate_stack_line(stack, highlights)
+
         data["highlights"] = highlights
-        data["description"] = [summary, *highlights] if summary else list(highlights)
+        data["description"] = [stack, *highlights] if stack else list(highlights)
         return data
 
     @field_validator("description", mode="before")
@@ -423,9 +466,9 @@ class Experience(BaseModel):
     def _normalize_highlights(cls, value: Any) -> list[str]:
         return _coerce_highlights_list(value)
 
-    @field_validator("summary", mode="before")
+    @field_validator("techStack", mode="before")
     @classmethod
-    def _normalize_summary(cls, value: Any) -> str | None:
+    def _normalize_tech_stack(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
 
 
@@ -504,7 +547,7 @@ class Project(BaseModel):
 
     id: int = 0
     name: str = ""
-    summary: str | None = None
+    techStack: str | None = None
     role: str = ""
     date: str = ""
     years: str = ""
@@ -512,6 +555,10 @@ class Project(BaseModel):
     website: str | None = None
     description: list[str] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
+    includeInResume: bool = Field(
+        default=True,
+        description="When false, project is kept in the builder but omitted from preview and PDF.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -521,15 +568,12 @@ class Project(BaseModel):
 
         data = copy.deepcopy(value)
 
-        # Accept 'tech_stacks' from the LLM-facing tailoring layer as alias for 'summary'
-        if "tech_stacks" in data and "summary" not in data:
-            data["summary"] = data.pop("tech_stacks")
-        elif "tech_stacks" in data:
-            data.pop("tech_stacks")
+        stack = _project_tech_stack_text(data)
+        for legacy_key in ("techStack", "tech_stack", "tech_stacks", "summary"):
+            data.pop(legacy_key, None)
 
-        summary = _coerce_optional_text(data.get("summary") or data.get("role"))
-        data["summary"] = summary
-        data["role"] = _coerce_text(data.get("role") or summary)
+        data["techStack"] = stack
+        data["role"] = _coerce_text(data.get("role") or stack)
 
         date = _coerce_text(data.get("date") or data.get("years"))
         data["date"] = date
@@ -541,8 +585,11 @@ class Project(BaseModel):
             highlights = _coerce_highlights_list(raw_hl)
         else:
             highlights = _coerce_highlights_list(raw_desc)
+        highlights = _strip_leading_duplicate_stack_line(stack, highlights)
         data["highlights"] = highlights
         data["description"] = highlights
+        if "include_in_resume" in data and "includeInResume" not in data:
+            data["includeInResume"] = bool(data.pop("include_in_resume"))
         return data
 
     @field_validator("description", mode="before")
@@ -555,10 +602,23 @@ class Project(BaseModel):
     def _normalize_highlights(cls, value: Any) -> list[str]:
         return _coerce_highlights_list(value)
 
-    @field_validator("summary", mode="before")
+    @field_validator("techStack", mode="before")
     @classmethod
-    def _normalize_summary(cls, value: Any) -> str | None:
+    def _normalize_tech_stack(cls, value: Any) -> str | None:
         return _coerce_optional_text(value)
+
+    @field_validator("includeInResume", mode="before")
+    @classmethod
+    def _normalize_include_in_resume(cls, value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            return value.strip().lower() not in {"false", "0", "no", "off"}
+        return True
 
 
 class SkillGroup(BaseModel):
@@ -754,6 +814,22 @@ def normalize_resume_data(data: dict[str, Any]) -> dict[str, Any]:
         data["sectionMeta"] = migrated_meta
     if "customSections" not in data:
         data["customSections"] = {}
+
+    for exp in data.get("workExperience") or []:
+        if not isinstance(exp, dict):
+            continue
+        if exp.get("techStack") is None and "summary" in exp:
+            exp["techStack"] = exp.pop("summary")
+        else:
+            exp.pop("summary", None)
+    for proj in data.get("personalProjects") or []:
+        if not isinstance(proj, dict):
+            continue
+        if proj.get("techStack") is None and "summary" in proj:
+            proj["techStack"] = proj.pop("summary")
+        else:
+            proj.pop("summary", None)
+
     return data
 
 
@@ -821,6 +897,8 @@ class ResumeFetchData(BaseModel):
     parent_id: str | None = None  # For determining if resume is tailored
     title: str | None = None
     application_pack_id: str | None = None
+    generation_run_id: str | None = None
+    llm_trace_id: str | None = None
     theme_settings: RenderThemeSettings | None = None
 
 
@@ -848,6 +926,7 @@ class ResumeSummary(BaseModel):
     target_company: str | None = None
     target_role: str | None = None
     target_location: str | None = None
+    llm_trace_id: str | None = None
 
 
 class ResumeListResponse(BaseModel):
@@ -1089,9 +1168,20 @@ class ImproveResumeRequest(BaseModel):
     resume_id: str
     job_id: str
     prompt_id: str | None = None
+    custom_prompt_instructions: str | None = Field(default=None, max_length=4000)
     include_cover_letter: bool | None = None
     include_outreach_message: bool | None = None
     theme_settings: RenderThemeSettings | None = None
+
+    @field_validator("custom_prompt_instructions", mode="before")
+    @classmethod
+    def normalize_custom_prompt_instructions(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        return stripped or None
 
 
 class ImprovementSuggestion(BaseModel):
@@ -1115,6 +1205,8 @@ class ResumeFieldDiff(BaseModel):
         "education",
         "project",
         "project_title",
+        "personal_info",
+        "bold_keywords",
     ]
     change_type: Literal["added", "removed", "modified"]
     original_value: str | None = None
@@ -1183,7 +1275,7 @@ class ArtifactSummary(BaseModel):
 class RenderThemeProfileSettings(BaseModel):
     """Sparse per-theme design overrides stored for the builder."""
 
-    page_size: Literal["A4", "LETTER"] | None = None
+    page_size: Literal["A4", "LETTER", "FREEFLOW"] | None = None
     density_profile: Literal["compact", "balanced", "spacious"] | None = None
     accent_color: Literal["blue", "green", "orange", "red"] | None = None
     show_contact_icons: bool | None = None
@@ -1210,7 +1302,7 @@ class RenderThemeSettings(BaseModel):
         "ember",
         "ink",
     ] = "classic"
-    page_size: Literal["A4", "LETTER"] = "A4"
+    page_size: Literal["A4", "LETTER", "FREEFLOW"] = "A4"
     density_profile: Literal["compact", "balanced", "spacious"] = "balanced"
     bold_keywords: bool = False
     accent_color: Literal["blue", "green", "orange", "red"] = "blue"
@@ -1327,6 +1419,11 @@ class ImproveResumeData(BaseModel):
     change_manifest: list[ResumeChange] | None = None
     change_breakdown: TailoringStageBreakdown | None = None
 
+    skills_observability: dict[str, Any] | None = Field(
+        default=None,
+        description="Sparse skills QA/training projection (not used for rendering).",
+    )
+
     # Refinement metadata (multi-pass refinement stats)
     refinement_stats: "RefinementStats | None" = None
 
@@ -1345,6 +1442,54 @@ class ImproveResumeResponse(BaseModel):
 
     request_id: str
     data: ImproveResumeData
+
+
+class LivePreviewStartData(BaseModel):
+    """Identifiers returned when a live preview run is accepted."""
+
+    live_run_id: str
+    generation_run_id: str
+    trace_id: str
+    status: Literal["running"] = "running"
+
+
+class LivePreviewStartResponse(BaseModel):
+    """Response for starting a live application-pack preview."""
+
+    request_id: str
+    data: LivePreviewStartData
+
+
+class JdTailorDiffData(BaseModel):
+    """Persisted tailoring diff surfaced in the resume builder."""
+
+    generation_run_id: str
+    diff_source: Literal[
+        "stored_detailed_changes",
+        "recomputed_confirmation_snapshot",
+        "live_vs_master",
+    ]
+    diff_summary: ResumeDiffSummary | None = None
+    detailed_changes: list[ResumeFieldDiff] = Field(default_factory=list)
+    change_manifest: list[ResumeChange] = Field(default_factory=list)
+    change_breakdown: TailoringStageBreakdown | None = None
+    pipeline_timing: PipelineTimingSummary | None = None
+    artifacts: list[ArtifactSummary] = Field(default_factory=list)
+    skills_observability: dict[str, Any] | None = Field(
+        default=None,
+        description="Sparse skills QA/training projection when stored on confirmation run.",
+    )
+
+
+class JdTailorDiffResponse(BaseModel):
+    """Tailoring diff lookup for JD-generated (tailored) resumes."""
+
+    request_id: str
+    data: JdTailorDiffData | None = None
+    unavailable_reason: str | None = Field(
+        default=None,
+        description="Why data is absent (non-tailored resume, missing structured data, etc.).",
+    )
 
 
 class ImproveResumeConfirmRequest(BaseModel):
@@ -1518,7 +1663,15 @@ class PromptManagerEntry(BaseModel):
     step_name: str
     label: str
     version: str
-    file_path: str
+    file_path: str = Field(description="Primary step module (assembly, overrides, and step-local copy).")
+    system_prompt_files: list[str] = Field(
+        default_factory=list,
+        description="Repo paths where shipped system prompt text is authored (read in order).",
+    )
+    user_prompt_file: str = Field(
+        default="",
+        description="Repo path where the shipped user / data template is authored.",
+    )
     pipeline: Literal["full", "lite", "standalone"]
     pipeline_order: int
     receives_from: list[str]
@@ -1548,6 +1701,7 @@ class SharedRuleEntry(BaseModel):
 
     name: str
     label: str
+    rules_source_file: str = Field(default="", description="Repo path of the shipped default rules module.")
     rules: str
     rules_is_override: bool
     rules_default: str
@@ -1632,6 +1786,27 @@ class PromptCatalogEntry(BaseModel):
     user_prompt: str | None = None
     notes: str | None = None
     sections: list[PromptCatalogSection] | None = None
+
+
+class MasterResumePreviewResponse(BaseModel):
+    """Serialized master resume as used for tailoring `$original_resume` (size-capped)."""
+
+    serialized_original_resume: str = ""
+    truncated: bool = False
+
+
+class ResponseContractModePreview(BaseModel):
+    """One mode's ``$response_contract`` JSON as passed to the model (size-capped)."""
+
+    serialized: str = ""
+    truncated: bool = False
+
+
+class ResponseContractPreviewResponse(BaseModel):
+    """Full vs lite response-contract JSON for the catalog (same master resume as tailoring)."""
+
+    full: ResponseContractModePreview = Field(default_factory=ResponseContractModePreview)
+    lite: ResponseContractModePreview = Field(default_factory=ResponseContractModePreview)
 
 
 class PromptCatalogResponse(BaseModel):

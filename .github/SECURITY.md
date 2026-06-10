@@ -1,9 +1,24 @@
-# Responsible Disclosure
+# Security Policy
 
-## Reporting a Vulnerability
+## Supported version
 
-Resume-Matcher strives to stay ahead of security vulnerabilities but would love to get the community's help in making us aware of the ones we miss.
+Security fixes target the current default branch.
 
-Please contact a maintainer to report security vulnerabilities and exploits.
+## Reporting a vulnerability
 
-We will acknowledge legitimate reports and address them according to their severity.
+Do not open a public issue containing exploit details, credentials, private resumes, or personal data.
+
+Use the repository's **Security → Report a vulnerability** private advisory form:
+
+https://github.com/pritkc/Resume-Workbench/security/advisories/new
+
+Include:
+
+- affected commit or version
+- reproduction steps
+- expected impact
+- a minimal proof of concept using fictional data
+
+## Deployment scope
+
+Resume Workbench is designed for local or trusted self-hosted use. A public internet deployment requires authentication, HTTPS, network controls, rate limiting, and secret management that are not enabled by default.

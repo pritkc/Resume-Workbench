@@ -45,7 +45,7 @@ export const DraggableListItem: React.FC<DraggableListItemProps> = ({ id, childr
         className="absolute -left-0.5 top-0 z-10 flex h-full w-2.5 cursor-grab touch-none items-start justify-center pt-1 opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100"
         title="Drag to reorder"
       >
-        <GripVertical className="h-4 w-4 text-black/40 transition-colors hover:text-black/70" />
+        <GripVertical className="h-4 w-4 text-muted-foreground transition-colors hover:text-muted-foreground" />
       </div>
 
       <div className="pl-1">{children}</div>

@@ -1,29 +1,7 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-/**
- * Swiss International Style Button Component
- *
- * Design Principles:
- * - Hard shadows (no blur) that create depth
- * - Square corners (rounded-none) - Brutalist aesthetic
- * - High contrast black borders
- * - Hover: translate + shadow removal creates "press" effect
- * - Clear semantic variants for different actions
- */
-
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  /**
-   * Visual variant determining color and purpose:
-   * - `default`: Hyper Blue (#1D4ED8) - Primary actions (save, submit, create)
-   * - `destructive`: Alert Red (#DC2626) - Destructive actions (delete, remove)
-   * - `success`: Signal Green (#15803D) - Positive actions (download, confirm, complete)
-   * - `warning`: Alert Orange (#F97316) - Caution actions (reset, clear, undo)
-   * - `outline`: Transparent + black border - Secondary actions (cancel, back)
-   * - `secondary`: Panel Grey (#E5E5E0) - Tertiary actions
-   * - `ghost`: No background - Subtle actions (icon buttons, navigation)
-   * - `link`: Text only with underline - Inline links
-   */
   variant?:
     | 'default'
     | 'destructive'
@@ -33,159 +11,89 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
     | 'secondary'
     | 'ghost'
     | 'link'
-    /** Builder shell: single primary CTA (download) — black fill */
     | 'builderCta'
-    /** Builder shell: save / secondary — monochrome outline */
     | 'builderOutline';
-  /**
-   * Button size:
-   * - `default`: Standard button (h-10)
-   * - `sm`: Small button (h-8)
-   * - `xs`: Compact button (h-7)
-   * - `lg`: Large button (h-12)
-   * - `icon`: Square icon button (h-9 w-9)
-   * - `icon-sm`: Compact square icon button (h-7 w-7)
-   */
   size?: 'default' | 'sm' | 'xs' | 'lg' | 'icon' | 'icon-sm';
+}
+
+export type ButtonVariant = NonNullable<ButtonProps['variant']>;
+export type ButtonSize = NonNullable<ButtonProps['size']>;
+
+export function buttonClassNames({
+  className,
+  variant = 'default',
+  size = 'default',
+}: {
+  className?: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+}) {
+  const baseStyles = cn(
+    'inline-flex items-center justify-center gap-2',
+    'whitespace-nowrap text-sm font-medium font-mono uppercase tracking-wide',
+    'transition-colors duration-150 ease-out',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+    'disabled:pointer-events-none disabled:opacity-50',
+    "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0",
+    'rounded-none'
+  );
+
+  const variants = {
+    default: cn('border border-primary bg-primary text-primary-foreground', 'hover:bg-primary/90'),
+    destructive: cn(
+      'border border-destructive bg-destructive text-destructive-foreground',
+      'hover:bg-destructive/90'
+    ),
+    success: cn(
+      'border border-green-700 bg-green-700 text-white',
+      'hover:bg-green-800 dark:border-green-600 dark:bg-green-600 dark:hover:bg-green-500'
+    ),
+    warning: cn('border border-orange-500 bg-orange-500 text-white', 'hover:bg-orange-600'),
+    outline: cn(
+      'border border-border bg-background text-foreground',
+      'hover:bg-accent hover:text-accent-foreground'
+    ),
+    secondary: cn(
+      'border border-border bg-secondary text-secondary-foreground',
+      'hover:bg-secondary/80'
+    ),
+    ghost: cn(
+      'border-none bg-transparent text-foreground shadow-none',
+      'hover:bg-accent hover:text-accent-foreground'
+    ),
+    link: cn(
+      'border-none bg-transparent text-primary shadow-none',
+      'underline-offset-4 hover:underline',
+      'p-0 h-auto'
+    ),
+    builderCta: cn(
+      'border border-primary bg-primary text-primary-foreground',
+      'text-[11px] font-mono uppercase tracking-wider',
+      'hover:bg-primary/90'
+    ),
+    builderOutline: cn(
+      'border border-border bg-card text-foreground',
+      'text-[11px] font-mono uppercase tracking-wider',
+      'shadow-none hover:bg-accent'
+    ),
+  };
+
+  const sizes = {
+    default: 'h-9 px-4 py-2',
+    sm: 'h-8 px-3 py-1 text-xs',
+    xs: 'h-7 px-2.5 py-1 text-[11px]',
+    lg: 'h-12 px-8 py-3 text-base',
+    icon: 'h-9 w-9 p-0',
+    'icon-sm': 'h-7 w-7 p-0',
+  };
+
+  return cn(baseStyles, variants[variant], sizes[size], className);
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'default', size = 'default', ...props }, ref) => {
-    // Base styles applied to ALL buttons
-    // Swiss Design: clean, functional, high contrast
-    const baseStyles = cn(
-      // Layout & Typography
-      'inline-flex items-center justify-center gap-2',
-      'whitespace-nowrap text-sm font-medium font-mono uppercase tracking-wide',
-      // Transitions
-      'transition-all duration-150 ease-out',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
-      variant === 'builderCta' || variant === 'builderOutline'
-        ? 'focus-visible:ring-black'
-        : 'focus-visible:ring-blue-700',
-      // Disabled state
-      'disabled:pointer-events-none disabled:opacity-50',
-      // SVG icon sizing
-      "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0",
-      // Swiss Design: NO rounded corners
-      'rounded-none'
-    );
-
-    // Variant styles - each has distinct purpose and color
-    const variants = {
-      // PRIMARY - Hyper Blue (#1D4ED8 / blue-700)
-      // Use for: Save, Submit, Create, Primary CTA
-      default: cn(
-        'bg-blue-700 text-white',
-        'border border-black',
-        'shadow-[2px_2px_0px_0px_#000000]',
-        'hover:bg-blue-800',
-        'hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none',
-        'active:translate-y-[2px] active:translate-x-[2px]'
-      ),
-
-      // DESTRUCTIVE - Alert Red (#DC2626 / red-600)
-      // Use for: Delete, Remove, Destroy, Dangerous actions
-      destructive: cn(
-        'bg-red-600 text-white',
-        'border border-black',
-        'shadow-[2px_2px_0px_0px_#000000]',
-        'hover:bg-red-700',
-        'hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none',
-        'active:translate-y-[2px] active:translate-x-[2px]'
-      ),
-
-      // SUCCESS - Signal Green (#15803D / green-700)
-      // Use for: Download, Confirm, Complete, Positive actions
-      success: cn(
-        'bg-green-700 text-white',
-        'border border-black',
-        'shadow-[2px_2px_0px_0px_#000000]',
-        'hover:bg-green-800',
-        'hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none',
-        'active:translate-y-[2px] active:translate-x-[2px]'
-      ),
-
-      // WARNING - Alert Orange (#F97316 / orange-500)
-      // Use for: Reset, Clear, Undo, Caution actions
-      warning: cn(
-        'bg-orange-500 text-white',
-        'border border-black',
-        'shadow-[2px_2px_0px_0px_#000000]',
-        'hover:bg-orange-600',
-        'hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none',
-        'active:translate-y-[2px] active:translate-x-[2px]'
-      ),
-
-      // OUTLINE - Canvas background with black border
-      // Use for: Cancel, Back, Secondary actions, Navigation
-      outline: cn(
-        'bg-[#F0F0E8] text-black',
-        'border border-black',
-        'shadow-[2px_2px_0px_0px_#000000]',
-        'hover:bg-[#E5E5E0]',
-        'hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none',
-        'active:translate-y-[2px] active:translate-x-[2px]'
-      ),
-
-      // SECONDARY - Panel Grey (#E5E5E0)
-      // Use for: Less prominent actions, Toolbar buttons
-      secondary: cn(
-        'bg-[#E5E5E0] text-black',
-        'border border-black',
-        'shadow-[2px_2px_0px_0px_#000000]',
-        'hover:bg-[#D8D8D2]',
-        'hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none',
-        'active:translate-y-[2px] active:translate-x-[2px]'
-      ),
-
-      // GHOST - No background, minimal styling
-      // Use for: Icon buttons, Subtle navigation, Toolbars
-      ghost: cn(
-        'bg-transparent text-black',
-        'border-none shadow-none',
-        'hover:bg-gray-100',
-        'active:bg-gray-200'
-      ),
-
-      // LINK - Text only with underline
-      // Use for: Inline links, Text navigation
-      link: cn(
-        'bg-transparent text-blue-700',
-        'border-none shadow-none',
-        'underline-offset-4 hover:underline',
-        'p-0 h-auto'
-      ),
-
-      builderCta: cn(
-        'border-2 border-black bg-black text-white',
-        'text-[11px] font-mono uppercase tracking-wider',
-        'shadow-[2px_2px_0_#000000]',
-        'hover:translate-x-px hover:translate-y-px hover:shadow-none'
-      ),
-
-      builderOutline: cn(
-        'border border-black bg-white text-black',
-        'text-[11px] font-mono uppercase tracking-wider',
-        'shadow-none hover:bg-black/[0.04]'
-      ),
-    };
-
-    // Size styles
-    const sizes = {
-      default: 'h-9 px-4 py-2',
-      sm: 'h-8 px-3 py-1 text-xs',
-      xs: 'h-7 px-2.5 py-1 text-[11px]',
-      lg: 'h-12 px-8 py-3 text-base',
-      icon: 'h-9 w-9 p-0',
-      'icon-sm': 'h-7 w-7 p-0',
-    };
-
-    const variantClass = variants[variant];
-    const sizeClass = sizes[size];
-
     return (
-      <button ref={ref} className={cn(baseStyles, variantClass, sizeClass, className)} {...props} />
+      <button ref={ref} className={buttonClassNames({ variant, size, className })} {...props} />
     );
   }
 );
