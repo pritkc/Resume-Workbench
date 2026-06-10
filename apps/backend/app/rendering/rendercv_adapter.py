@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import re
+from html.parser import HTMLParser
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
@@ -129,6 +130,87 @@ def _clean_text(value: str | None) -> str | None:
     return stripped or None
 
 
+class _RichTextMarkdownParser(HTMLParser):
+    """Convert the builder's limited rich-text HTML into RenderCV markdown."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.open_tags: list[tuple[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in {"strong", "b"}:
+            self.parts.append("**")
+            self.open_tags.append(("strong", None))
+            return
+        if tag in {"em", "i"}:
+            self.parts.append("*")
+            self.open_tags.append(("em", None))
+            return
+        if tag == "a":
+            href = _safe_markdown_href(dict(attrs).get("href"))
+            if href:
+                self.parts.append("[")
+            self.open_tags.append(("a", href))
+            return
+        if tag in {"br", "div", "p"} and self.parts and not self.parts[-1].endswith((" ", "\n")):
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        target = "strong" if tag in {"strong", "b"} else "em" if tag in {"em", "i"} else tag
+        for index in range(len(self.open_tags) - 1, -1, -1):
+            open_tag, href = self.open_tags[index]
+            if open_tag != target:
+                continue
+            del self.open_tags[index]
+            if target == "strong":
+                self.parts.append("**")
+            elif target == "em":
+                self.parts.append("*")
+            elif target == "a" and href:
+                self.parts.append(f"]({href})")
+            return
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def finish(self) -> str:
+        for tag, href in reversed(self.open_tags):
+            if tag == "strong":
+                self.parts.append("**")
+            elif tag == "em":
+                self.parts.append("*")
+            elif tag == "a" and href:
+                self.parts.append(f"]({href})")
+        return "".join(self.parts)
+
+
+def _safe_markdown_href(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    if cleaned.startswith(("http://", "https://", "mailto:", "tel:")):
+        return cleaned
+    return None
+
+
+def _rich_text_to_rendercv_markdown(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
+        return None
+    if not _HTML_TAG_RE.search(cleaned):
+        return cleaned
+
+    parser = _RichTextMarkdownParser()
+    parser.feed(cleaned)
+    parser.close()
+    converted = parser.finish()
+    converted = re.sub(r"\s+", " ", converted).strip()
+    return converted or None
+
+
 def _clean_summary_text(value: str | None) -> str | None:
     cleaned = _clean_text(value)
     if cleaned is None:
@@ -136,8 +218,11 @@ def _clean_summary_text(value: str | None) -> str | None:
     wrapper = _SUMMARY_ALIGN_WRAPPER_RE.match(cleaned)
     if wrapper:
         cleaned = wrapper.group("body").strip()
-    cleaned = re.sub(r"\s+", " ", _HTML_TAG_RE.sub("", cleaned)).strip()
-    return cleaned or None
+    return _rich_text_to_rendercv_markdown(cleaned)
+
+
+def _clean_rich_text(value: str | None) -> str | None:
+    return _rich_text_to_rendercv_markdown(value)
 
 
 def summary_alignment_for_rendering(value: str | None) -> SummaryAlignment | None:
@@ -477,7 +562,7 @@ def _format_tech_stack_summary(
     *,
     include_label: bool,
 ) -> str:
-    cleaned = _clean_text(stack)
+    cleaned = _clean_rich_text(stack)
     if not cleaned:
         return ""
 
@@ -554,7 +639,7 @@ def _experience_entries(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in entries:
-        stack = _clean_text(
+        stack = _clean_rich_text(
             item.get("techStack") or item.get("tech_stacks") or item.get("summary")
         )
         formatted_stack = _format_tech_stack_summary(
@@ -573,7 +658,7 @@ def _experience_entries(
                 "location": _clean_text(item.get("location")),
                 "summary": formatted_stack,
                 "highlights": [
-                    _bold_keywords_in_bullet(point, bold_keywords)
+                    _bold_keywords_in_bullet(_clean_rich_text(point) or "", bold_keywords)
                     for point in bullets
                     if point
                 ],
@@ -590,11 +675,11 @@ def _education_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "degree": _clean_text(item.get("degree")),
             **_entry_date_fields(item),
             "location": _clean_text(item.get("location")),
-            "summary": _clean_text(item.get("summary") or item.get("description")),
+            "summary": _clean_rich_text(item.get("summary") or item.get("description")),
             "highlights": [
-                point
+                cleaned_point
                 for point in (item.get("highlights") or [])
-                if point
+                if (cleaned_point := _clean_rich_text(point))
             ],
         }
         for item in entries
@@ -630,7 +715,7 @@ def _project_entries(
             link_tokens.append(f"\\[[live]({website})\\]")
         if link_tokens:
             name = f"{name} | {' '.join(link_tokens)}"
-        stack = _clean_text(
+        stack = _clean_rich_text(
             item.get("tech_stacks")
             or item.get("techStack")
             or item.get("summary")
@@ -650,7 +735,11 @@ def _project_entries(
                 "date": _clean_text(item.get("date") or item.get("years")),
                 "tech_stacks": formatted_stack,
                 "summary": formatted_stack,
-                "highlights": [_bold_keywords_in_bullet(point, bold_keywords) for point in bullets if point],
+                "highlights": [
+                    _bold_keywords_in_bullet(_clean_rich_text(point) or "", bold_keywords)
+                    for point in bullets
+                    if point
+                ],
             }
         )
     return project_rows
@@ -692,7 +781,7 @@ def _custom_sections(
         raw_section_type = raw_section.get("sectionType")
         section_type = _clean_text(getattr(raw_section_type, "value", raw_section_type))
         if section_type == "text":
-            text_value = _clean_text(raw_section.get("text"))
+            text_value = _clean_rich_text(raw_section.get("text"))
             if text_value:
                 sections[title] = [text_value]
             continue
@@ -710,7 +799,7 @@ def _custom_sections(
                 pieces = [
                     _clean_text(item.get("title")),
                     _clean_text(item.get("subtitle")),
-                    _clean_text(item.get("description")),
+                    _clean_rich_text(item.get("description")),
                     _clean_text(item.get("years")),
                 ]
                 line = " — ".join(piece for piece in pieces if piece)
@@ -873,20 +962,20 @@ def _text_list(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, str):
-        cleaned = _clean_text(value)
+        cleaned = _clean_rich_text(value)
         return [cleaned] if cleaned else []
     if isinstance(value, list):
         items: list[str] = []
         for entry in value:
             if isinstance(entry, str):
-                cleaned = _clean_text(entry)
+                cleaned = _clean_rich_text(entry)
                 if cleaned:
                     items.append(cleaned)
             elif isinstance(entry, dict):
-                bullet = _clean_text(entry.get("bullet"))
-                summary = _clean_text(entry.get("summary"))
-                details = _clean_text(entry.get("details"))
-                title = _clean_text(entry.get("title"))
+                bullet = _clean_rich_text(entry.get("bullet"))
+                summary = _clean_rich_text(entry.get("summary"))
+                details = _clean_rich_text(entry.get("details"))
+                title = _clean_rich_text(entry.get("title"))
                 line = bullet or summary or details or title
                 if line:
                     items.append(line)

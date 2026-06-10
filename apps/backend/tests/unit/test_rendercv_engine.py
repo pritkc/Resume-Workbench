@@ -332,7 +332,7 @@ def test_rendercv_engine_applies_summary_alignment_to_typst(
     )
 
     typst = bundle.typst_path.read_text(encoding="utf-8")
-    assert "Centered summary content for preview." in typst
+    assert "#strong[Centered summary] content for preview." in typst
     assert "#set align(center)" in typst
     assert "#set par(justify: false)" in typst
     assert "data-summary-align" not in typst

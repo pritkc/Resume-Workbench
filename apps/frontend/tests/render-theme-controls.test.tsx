@@ -7,20 +7,21 @@ describe('RenderThemeControls', () => {
   it('renders grouped design controls and keeps theme profile retired', () => {
     render(<RenderThemeControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: 'Layout' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Style' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Advanced' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Layout' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Style' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Advanced' })).not.toBeInTheDocument();
     expect(screen.queryByText('Theme Profile')).not.toBeInTheDocument();
 
     expect(screen.getByText('Page')).toBeInTheDocument();
     expect(screen.getByText('Margins')).toBeInTheDocument();
+    expect(screen.getByText('Typography')).toBeInTheDocument();
+    expect(screen.getByText('Date & Time Strings')).toBeInTheDocument();
   }, 15_000);
 
-  it('updates workbench entry accent colors from style bucket', () => {
+  it('updates workbench entry accent colors from the single design page', () => {
     const onChange = vi.fn();
     render(<RenderThemeControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Style' }));
     expect(screen.getByText('Typography')).toBeInTheDocument();
     expect(screen.getByText(/Entry Accents/)).toBeInTheDocument();
     expect(screen.getByText('Role Title')).toBeInTheDocument();
@@ -70,7 +71,6 @@ describe('RenderThemeControls', () => {
   it('opens advanced template sections by default', () => {
     render(<RenderThemeControls settings={DEFAULT_RENDER_THEME_SETTINGS} onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
     expect(screen.getByRole('button', { name: /Education Entry/i })).toHaveAttribute(
       'aria-expanded',
       'true'

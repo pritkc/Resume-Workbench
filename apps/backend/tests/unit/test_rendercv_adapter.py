@@ -325,7 +325,7 @@ def test_rendercv_adapter_keeps_summary_content_and_strips_summary_heading_runti
     assert "show_summary_heading" not in payload.get("settings", {})
 
 
-def test_rendercv_adapter_strips_browser_only_summary_formatting(
+def test_rendercv_adapter_converts_summary_rich_text_to_rendercv_markdown(
     sample_resume_copy: dict,
 ) -> None:
     sample_resume_copy["summary"] = (
@@ -338,9 +338,53 @@ def test_rendercv_adapter_strips_browser_only_summary_formatting(
     )
 
     assert payload["cv"]["sections"]["summary"] == [
-        "Platform engineer focused on reliability."
+        "**Platform engineer** focused on reliability."
     ]
     assert summary_alignment_for_rendering(sample_resume_copy["summary"]) == "center"
+
+
+def test_rendercv_adapter_converts_builder_rich_text_without_leaking_tags() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Eng",
+                "company": "Acme",
+                "techStack": "<strong>Python</strong>, AWS",
+                "description": [
+                    "Built <strong>FastAPI</strong> services without exposing </strong> tags"
+                ],
+            }
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Demo",
+                "techStack": "React, <strong>TypeScript</strong>",
+                "description": ["Shipped <strong>typed UI</strong> preview"],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    experience = payload["cv"]["sections"]["experience"][0]
+    project = payload["cv"]["sections"]["projects"][0]
+
+    rendered_values = [
+        experience["summary"],
+        *experience["highlights"],
+        project["summary"],
+        *project["highlights"],
+    ]
+    assert "**Python**" in experience["summary"]
+    assert "**FastAPI**" in experience["highlights"][0]
+    assert "**TypeScript**" in project["summary"]
+    assert "**typed UI**" in project["highlights"][0]
+    assert not any("<strong>" in value or "</strong>" in value for value in rendered_values)
 
 
 def test_rendercv_adapter_honors_summary_section_visibility_from_section_meta(
