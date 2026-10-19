@@ -14,10 +14,10 @@ import {
   gotoWithRetry,
   installArtifactMocks,
   jobDescriptionResponse,
+  installLivePreviewMocks,
   masterResumeId,
   masterResumeResponse,
   pngArtifact,
-  previewResult,
   statusPayload,
   tailoredResumeId,
   tailoredResumeResponse,
@@ -66,6 +66,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
   let storedModelOverrides: Record<string, string | null> = {};
 
   const sharedRuleDeleteCalls: string[] = [];
+  let sharedRulesReset = false;
   let catalogFetchCount = 0;
 
   const uploadBodies: unknown[] = [];
@@ -135,7 +136,6 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
       return;
     }
     catalogFetchCount += 1;
-    const firstLoad = catalogFetchCount === 1;
     await fulfillJson(route, {
       prompts: [],
       entries: [managerEntryMock],
@@ -143,8 +143,8 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
         {
           name: "resume_diff",
           label: "Resume diff",
-          rules: firstLoad ? "OVERRIDDEN_SHARED_RULES" : "DEFAULT_SHARED_RULES",
-          rules_is_override: firstLoad,
+          rules: sharedRulesReset ? "DEFAULT_SHARED_RULES" : "OVERRIDDEN_SHARED_RULES",
+          rules_is_override: !sharedRulesReset,
           rules_default: "DEFAULT_SHARED_RULES",
           used_by: ["tailor_resume_full"],
         },
@@ -157,6 +157,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
     const name = decodeURIComponent(url.split("/").pop() ?? "");
     if (route.request().method() === "DELETE") {
       sharedRuleDeleteCalls.push(name);
+      sharedRulesReset = true;
       await fulfillJson(route, {
         success: true,
         rules_name: name,
@@ -233,12 +234,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
     await fulfillJson(route, { job_id: ["job-123"] });
   });
 
-  await page.route("**/api/v1/application-packs/preview", async (route) => {
-    previewBodies.push(
-      route.request().postDataJSON() as Record<string, unknown>,
-    );
-    await fulfillJson(route, previewResult);
-  });
+  await installLivePreviewMocks(page, (payload) => previewBodies.push(payload));
 
   await page.route("**/api/v1/application-packs/confirm", async (route) => {
     confirmBodies.push(
@@ -306,7 +302,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
   await expect(page.getByRole("textbox", { name: "Resume diff" })).toHaveValue(
     "OVERRIDDEN_SHARED_RULES",
   );
-  await page.getByRole("button", { name: "Reset to shipped" }).last().click();
+  await page.getByRole("button", { name: "Reset to shipped" }).first().click();
   await expect.poll(() => sharedRuleDeleteCalls).toEqual(["resume_diff"]);
   await expect(page.getByRole("textbox", { name: "Resume diff" })).toHaveValue(
     "DEFAULT_SHARED_RULES",

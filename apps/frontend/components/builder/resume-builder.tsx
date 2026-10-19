@@ -501,8 +501,10 @@ const ResumeBuilderContent = () => {
       setThemeSettings(snapshot.themeSettings);
       setRawYamlSections(snapshot.rawYamlSections);
       setYamlNeedsSync(snapshot.yamlNeedsSync);
-      setEditorMode(snapshot.editorMode);
-      setEditorSection(snapshot.editorSection);
+      // Undo restores resume content. Keep the current editor view so a YAML
+      // edit does not send the user back to the visual form.
+      setEditorMode(editorModeRef.current);
+      setEditorSection(editorSectionRef.current);
       setRawYamlIssue(null);
       setAutosaveError(null);
 

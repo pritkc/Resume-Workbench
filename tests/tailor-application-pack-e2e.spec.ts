@@ -6,11 +6,11 @@ import {
   frontendBaseUrl,
   gotoWithRetry,
   installArtifactMocks,
+  installLivePreviewMocks,
   jobDescriptionResponse,
   masterResumeId,
   masterResumeResponse,
   pngArtifact,
-  previewResult,
   statusPayload,
   tailoredResumeId,
   tailoredResumeResponse,
@@ -94,12 +94,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
     uploadBodies.push(route.request().postDataJSON());
     await fulfillJson(route, { job_id: ["job-123"] });
   });
-  await page.route("**/api/v1/application-packs/preview", async (route) => {
-    previewBodies.push(
-      route.request().postDataJSON() as Record<string, unknown>,
-    );
-    await fulfillJson(route, previewResult);
-  });
+  await installLivePreviewMocks(page, (payload) => previewBodies.push(payload));
   await page.route("**/api/v1/application-packs/confirm", async (route) => {
     confirmBodies.push(
       route.request().postDataJSON() as Record<string, unknown>,

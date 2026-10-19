@@ -214,6 +214,51 @@ export async function fulfillJson(route: Route, data: unknown, status = 200) {
   });
 }
 
+export async function installLivePreviewMocks(
+  page: Page,
+  onStart?: (payload: Record<string, unknown>) => void,
+) {
+  const liveRunId = "live-run-e2e";
+  await page.route(/\/api\/v1\/application-packs\/preview\/live\/?(?:\?.*)?$/, async (route) => {
+    onStart?.(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfillJson(route, {
+      request_id: "req-live-preview-start",
+      data: {
+        live_run_id: liveRunId,
+        generation_run_id: "generation-run-e2e",
+        trace_id: "trace-e2e",
+        status: "running",
+      },
+    });
+  });
+  await page.route(
+    new RegExp(`/api/v1/application-packs/preview/live/${liveRunId}/events(?:\\?.*)?$`),
+    async (route) => {
+      const event = {
+        event_id: "event-live-complete",
+        sequence: 1,
+        live_run_id: liveRunId,
+        generation_run_id: "generation-run-e2e",
+        trace_id: "trace-e2e",
+        type: "run.completed",
+        at: "2026-04-05T12:00:00Z",
+        data: {},
+      };
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+        body: `event: run.completed\ndata: ${JSON.stringify(event)}\n\n`,
+      });
+    },
+  );
+  await page.route(
+    new RegExp(`/api/v1/application-packs/preview/live/${liveRunId}/result(?:\\?.*)?$`),
+    async (route) => {
+      await fulfillJson(route, previewResult);
+    },
+  );
+}
+
 export async function installArtifactMocks(page: Page) {
   const previewSvg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="600" height="840" viewBox="0 0 600 840">

@@ -97,9 +97,11 @@ test.describe("resume URL redirect and builder journey", () => {
 
     await page.getByRole("link", { name: /back to dashboard/i }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByText(/master resume/i)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Master Resume" }).first(),
+    ).toBeVisible();
 
-    await page.getByText(/master resume/i).first().click();
+    await page.getByRole("link", { name: "Master Resume" }).first().click();
     await expect(page).toHaveURL(new RegExp(`/builder\\?id=${masterResumeId}$`));
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("button", { name: "YAML", exact: true })).toBeVisible();
