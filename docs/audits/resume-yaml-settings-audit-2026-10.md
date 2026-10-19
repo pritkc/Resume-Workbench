@@ -171,3 +171,126 @@ Evidence: `apps/backend/app/rendering/rendercv_adapter.py:645-678`, `:709-755`, 
 5. Prevent stale preview responses and control preview artifact growth.
 6. Make settings load failures visible and make config writes atomic.
 7. Decide reset semantics and the supported raw YAML field contract.
+
+## Implementation and verification guide
+
+Use this section as a handoff checklist. The line numbers above refer to revision `f466dee`; locate the functions by name if the code has moved. Treat each numbered item as complete only after its manual check and a regression test pass. Check the saved database state or reload the page after each edit: a correct-looking preview alone does not prove that data survived.
+
+### Safe test setup
+
+1. Use a development checkout and a separate Postgres database, such as `resume_workbench_audit`. Point `DATABASE_URL` at that database before running Alembic or the API. Set `DATA_DIR`, `ARTIFACT_DIR`, and `RENDERCV_WORK_DIR` to an audit-only directory. Keep these paths separate from the user's normal database and files. The repository's [quick start](../../README.md#quick-start) gives the standard backend and frontend commands. Check the selected database name in the API environment before any migration or reset.
+2. Create two disposable resumes, A and B, in the local UI. Give them visibly different names, summary text, projects, and custom sections. Use one browser profile for cross-resume tests; use a clean profile when testing behavior that must not depend on old localStorage.
+3. For race tests, use browser network throttling or a local request delay. Do not infer ordering from normal network speed. Record the request order, response order, final UI, and persisted row.
+4. After each fix, verify both Visual → YAML → Visual and YAML → Visual → YAML paths, refresh the page, and download the PDF when the finding affects rendering. Use a copy of the hosted resume for final acceptance; do not run reset or destructive tests against the hosted account.
+
+### 1. Isolate drafts by resume ID
+
+**Change:** In `resume-builder.tsx`, put resume ID in every editor storage key, including structured draft, raw YAML, and theme settings. Keep a separate key for a genuinely new resume. Clear the old resume's in-memory YAML when the ID changes. Treat an existing-resume load or YAML normalization error as a blocked editor state: show the error, preserve the user's unsaved data for that same ID, and prevent autosave to a different ID. If legacy global keys must be migrated, accept them only when ownership can be proved; otherwise leave them unused.
+
+**Manual check:** Edit A's YAML, open B in the same browser, and switch B between Visual and YAML. B must show only B's content. Simulate a failed fetch or malformed custom-section conversion while opening B; B must show an error and must never save A's data. Reload both resumes and compare their stored names, projects, and custom sections. Add a UI regression test that changes IDs with localStorage populated.
+
+### 2. Reject stale resume loads
+
+**Change:** Give each load in the `resumeId` effect an `AbortController` or monotonically increasing request token. Reset all resume-scoped state, including cover letter and outreach fields, when the ID changes. Apply a response only if its token and resume ID still match the active editor. Keep save callbacks bound to the loaded resume identity.
+
+**Manual check:** Delay A's GET, navigate to B, then let A's GET finish. B must retain B's name, theme, YAML, cover letter, and outreach text. Repeat with an empty cover letter in B. Inspect network traffic to confirm no PATCH writes A's content to B. Add an automated deferred-response test for both response orders.
+
+### 3. Make autosave ordering enforceable
+
+**Change:** Serialize client saves for one resume and keep the newest pending draft. Add a server revision/version to the draft PATCH path so an older write receives a conflict instead of replacing a newer row. Increment and check the revision atomically in the database. Apply saved baselines and “All changes saved” only for the acknowledged current revision. Cancellation alone is insufficient because the server may already be writing.
+
+**Manual check:** In the browser, delay save 1 and make a second edit; the client must queue the newer draft and finish with the second edit saved. At the API level, send two revisions concurrently and make the older one finish last; it must receive a conflict and leave the newer database row intact. Refresh and verify the second edit remains. Repeat with an intentional client conflict and confirm the editor keeps unsaved content and offers retry. Add API and UI tests for both response orders.
+
+### 4. Ignore stale preview responses
+
+**Change:** In `render-preview-panel.tsx`, abort or invalidate the previous request when `draftRequest` or theme changes. Keep a request sequence or draft hash and update the displayed artifact only for the latest request. Ensure an old error cannot replace a newer successful preview.
+
+**Manual check:** Make draft A slow and draft B fast. Confirm B stays visible after A finishes. Repeat when A fails and B succeeds, and when the user changes theme during rendering. Add a component test with deferred responses.
+
+### 5. Stop live-preview artifact growth
+
+**Change:** Separate temporary draft previews from durable exports in the preview endpoint and `store_rendercv_bundle`. Use request-scoped files with expiry, or replace one preview artifact set transactionally. Do not append permanent artifact rows for every keystroke. Keep actual downloaded exports available under a defined retention rule. Check that concurrent previews cannot make a returned artifact URL point at overwritten bytes.
+
+**Manual check:** Count artifact rows for one disposable resume, make 20 edits/theme changes, and count again. The count must stay bounded by the chosen retention rule. Open an older preview URL during a newer render and confirm it serves the correct version or expires cleanly. Download a PDF and confirm the durable artifact still works. Add a repository/API test for repeated previews.
+
+### 6. Show settings load failures
+
+**Change:** Keep load status and error per config section in `settings/page.tsx`. Do not convert a failed request into an apparently loaded default. Disable that section's Save action until it loads, and provide Retry. Preserve successful sections if one endpoint fails.
+
+**Manual check:** In local browser tools, make one config GET return 500 while other GETs succeed. The failed section must show an error and block Save; successful sections must remain usable. Restore the endpoint, select Retry, and confirm the stored value appears before saving. Add a UI test with one rejected request.
+
+### 7. Make config writes atomic and coordinated
+
+**Change:** In `config.py`, put the full read/modify/write operation under a lock that works across backend workers, or move settings into transactional database storage. For file storage, write a temporary file in the same directory and atomically replace the target; define backup and invalid-JSON recovery behavior. Apply this to every endpoint that writes the same config file, not only LLM settings.
+
+**Manual check:** From two local clients, save different settings at the same time many times. Both final values must survive, and every intermediate read must parse valid JSON. Interrupt a writer before replacement in an isolated config directory; the previous file must remain valid. Add a concurrency test and a malformed-file recovery test.
+
+### 8. Clear all editor storage on reset
+
+**Change:** Define resume-scoped storage keys in one shared module. After a successful reset, remove structured drafts, raw YAML, theme drafts, and any per-resume variants. Do not clear them before the server confirms success. Include legacy global keys in cleanup.
+
+**Manual check:** In the isolated environment, edit YAML and theme, reset through Settings, then create a new resume. No old YAML, theme, or content may reappear. Simulate a failed reset and verify the current draft remains. Add a UI storage test. Never run this check on the hosted account.
+
+### 9. Make reset semantics explicit
+
+**Change:** Decide whether `data/config.json`, provider keys, prompts, and language settings are part of “all data.” If they are, clear them in the backend reset operation and update the UI. If they are intentionally retained, name exactly what remains in the confirmation dialog and success message. Keep the backend response consistent with that decision.
+
+**Manual check:** In an isolated config directory, set a recognizable non-secret provider value, run reset, and inspect both Settings and the config file. Verify the result matches the dialog. Check the English text and every maintained translation. Do not use a real API key in this test.
+
+### 10. Align the Playwright CI port
+
+**Change:** Make `playwright.config.ts`, `tests/playwright-fixtures.ts`, the root `test:e2e` script, and `.github/workflows/playwright.yml` use one frontend URL. Prefer one shared default or make CI invoke the root script. Do not depend on another process listening on port 3000.
+
+**Manual check:** Stop every local frontend, then run the exact CI Playwright command in a clean environment. Confirm the fixture reaches the server started by Playwright on port 3100 and a simple builder test passes. Add a workflow check that fails if the configured URL and server port diverge.
+
+### 11. Define the raw YAML contract
+
+**Change:** Choose one product contract: preserve supported RenderCV fields outside `ResumeData`, or reject unsupported fields before saving with an exact YAML path. Build a field-by-field mapping for personal details, every section entry type, design, locale, and settings. Do not silently drop a field after the save status says success. Keep unknown app metadata separate from RenderCV data.
+
+**Manual check:** On a disposable resume, add one advanced field at a time in YAML, save, switch to Visual, return to YAML, reload, and compare values. A supported field must survive unchanged; an unsupported field must produce a clear error before any write. Add a table-driven round-trip test for every declared supported field.
+
+### 12. Respect visibility for every section
+
+**Change:** In `resume_to_rendercv_payload`, compute a visibility map from `sectionMeta` before building default or custom sections. The fallback may add a populated section only when metadata is absent, not when metadata says `isVisible=false`. Apply the same rule to Experience, Education, Projects, Skills, and custom sections. Keep hidden data in the editor and database.
+
+**Manual check:** Hide each section type in turn on a local resume, then inspect YAML, live preview, and downloaded PDF. The hidden section must not render, while its editor data remains after reload and after changing YAML in another section. Show it again and confirm its original content returns. Add an adapter test for default and custom hidden sections.
+
+### 13. Preserve hidden projects through YAML edits
+
+**Change:** Treat renderable YAML as a view of the full project list. Keep hidden projects in the underlying model when YAML changes. Match visible projects by stable ID or another explicit identity; never copy `includeInResume` by array index. Define behavior for a visible project that the user deletes in YAML, and for newly added projects. Use the same identity rule for other filtered entry types if they have per-item visibility.
+
+**Manual check:** Create hidden project A and visible project B. Change only the summary in YAML, save, and reload. A must still exist and remain hidden; B must remain visible with its original content. Reorder B, add C, delete B, then toggle A visible and inspect preview/PDF. Add a round-trip test that begins with hidden items before visible items.
+
+### 14. Keep commas inside one skill value
+
+**Change:** Make the YAML skill representation lossless. Prefer a list of distinct values; if comma-delimited text remains supported, parse only unquoted top-level delimiters. Align the backend parser and visual skill input so a tag such as `AWS (Lambda, S3, RDS)` stays one value. Preserve existing simple comma lists during migration.
+
+**Manual check:** Enter `AWS (Lambda, S3, RDS)` as one skill in Visual, switch to YAML, save, reload, and confirm one tag remains. Repeat with a simple two-skill list, quoted commas, and an empty skill. Check preview and PDF. Add unit tests for the shared parsing contract.
+
+### 15. Honor an explicitly empty skills section
+
+**Change:** In `rendercv_cv_to_resume_data`, distinguish an absent `skills` key from a present empty list. A present `skills: []` must clear both normalized skill representations; an absent key may follow the documented fallback policy. Avoid using truthiness to decide whether to retain old skills.
+
+**Manual check:** Start with two skills, set `skills: []` in YAML, save, reload, and confirm Visual, YAML, preview, PDF, and stored data contain no skills. Then omit the key entirely and check the chosen contract. Add tests for absent, empty, and populated skill sections.
+
+### 16. Render custom item descriptions safely
+
+**Change:** In `_custom_sections`, handle `CustomSectionItem.description` as `list[str]`; pass each point through the rich-text conversion individually. Keep item title, dates, location, links, and highlights in a stable RenderCV representation. Update the reverse parser to restore the structured item instead of turning it into a string list. Catch unexpected entry shapes as a validation error with a section path, not an HTTP 500.
+
+**Manual check:** Create a custom item section with zero, one, and several description points. Confirm preview and PDF render, YAML opens, and Visual → YAML → Visual preserves all item fields after reload. Also submit an invalid description type and confirm a useful 422 response. Add adapter round-trip and endpoint tests.
+
+### 17. Preserve or reject multiple summary entries
+
+**Change:** Either extend the app model and visual editor to support several summary entries, or reject a YAML summary list with more than one entry before saving. The editor must not silently keep only `summary_items[0]`. If choosing rejection, report the `cv.sections.summary` path and leave the prior saved resume unchanged.
+
+**Manual check:** Add two summary entries in YAML. Under the support path, both must survive Visual/YAML switches, reload, preview, and PDF. Under the rejection path, Save must show a clear error and the database must retain the previous summary. Add conversion and endpoint tests for one, two, and empty entries.
+
+### 18. Surface malformed emphasis before export
+
+**Change:** Define which Markdown emphasis syntax the builder supports. Validate it at the rich-text/YAML boundary and identify the affected field when markers are unmatched. Do not silently remove user text or change intentional literal asterisks. If automatic normalization is chosen, show the corrected text in the editor before saving.
+
+**Manual check:** Put unmatched `**` in a summary and an experience bullet. The editor must flag the field or show a deliberate literal rendering; preview/PDF must not unexpectedly expose formatting markers. Also check valid bold text, escaped asterisks, and plain multiplication or wildcard text. Add converter tests for these cases.
+
+### Release check after fixes
+
+Run focused unit/API tests for the affected adapters and endpoints, the Playwright builder/settings flows, and a local browser pass using disposable resumes. Verify the saved row after reload, not only the transient UI. Confirm one experience and one project stack line in YAML and PDF so the earlier duplicate-stack fix remains intact. Review the artifact count after repeated previews. Only then deploy the application fixes and repeat non-destructive checks on a copy of the hosted resume. Document any deliberate YAML field limits and reset behavior in user-facing help.
