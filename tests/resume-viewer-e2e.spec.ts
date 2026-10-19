@@ -24,7 +24,7 @@ test.describe("resume URL redirect and builder journey", () => {
       await fulfillJson(route, statusPayload());
     });
     await page.route(
-      /\/api\/v1\/resumes\/list\?include_master=true(?:&.*)?$/,
+      /\/api\/v1\/resumes\/list\?include_active=true(?:&.*)?$/,
       async (route) => {
         await fulfillJson(route, {
           data: [
@@ -91,7 +91,6 @@ test.describe("resume URL redirect and builder journey", () => {
     await expect(page).toHaveURL(
       new RegExp(`/builder\\?id=${masterResumeId}$`),
     );
-    await expect(page.getByText("RenderCV Preview")).toBeVisible();
     await expect(page.getByAltText("preview.png").first()).toBeVisible({
       timeout: 20_000,
     });
@@ -103,12 +102,12 @@ test.describe("resume URL redirect and builder journey", () => {
     await page.getByText(/master resume/i).first().click();
     await expect(page).toHaveURL(new RegExp(`/builder\\?id=${masterResumeId}$`));
     await page.waitForLoadState("networkidle");
-    await expect(page.getByRole("switch", { name: "Raw YAML" })).toBeVisible();
-    await expect(page.getByText(/resume content/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "YAML", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Full Name" })).toBeVisible();
 
     await page.getByRole("button", { name: /back to dashboard/i }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole("button", { name: /create resume/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /create resume/i })).toBeVisible();
 
     expect(browserProblems).toEqual({
       consoleMessages: [],

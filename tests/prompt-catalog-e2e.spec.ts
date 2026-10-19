@@ -103,9 +103,9 @@ test("prompt catalog page loads pipeline and shared rules", async ({ page }) => 
 
   await gotoWithRetry(page, `${frontendBaseUrl}/settings/prompt-catalog`);
   await expect(
-    page.getByRole("heading", { name: "LLM Prompt Catalog", exact: true }),
+    page.getByRole("heading", { name: "Prompts", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Shared rules", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Shared resume-diff rules", exact: true })).toBeVisible();
   await expect(page.getByText("Resume diff")).toBeVisible();
   await expect(page.getByText("OVERRIDDEN_RULES_BODY")).toBeVisible();
 
@@ -121,13 +121,13 @@ test("reset shared rules calls DELETE and refreshes catalog", async ({ page }) =
   const { deleteCalls } = await installPromptCatalogMocks(page, { trackDeletes: true });
 
   await gotoWithRetry(page, `${frontendBaseUrl}/settings/prompt-catalog`);
-  await expect(page.getByRole("button", { name: "Reset to default" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset to shipped" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Reset to default" }).click();
+  await page.getByRole("button", { name: "Reset to shipped" }).click();
 
   await expect.poll(() => deleteCalls.length).toBe(1);
   expect(deleteCalls[0]).toBe("resume_diff");
-  await expect(page.getByRole("button", { name: "Reset to default" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset to shipped" })).toHaveCount(0);
   await expect(page.getByText("DEFAULT_RULES_BODY")).toBeVisible();
 
   expect(browserProblems).toEqual({

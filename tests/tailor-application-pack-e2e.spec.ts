@@ -65,7 +65,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
       prompt_id: "keywords",
     });
   });
-  await page.route(/\/api\/v1\/resumes\/list\?include_master=true(?:&.*)?$/, async (route) => {
+  await page.route(/\/api\/v1\/resumes\/list\?include_active=true(?:&.*)?$/, async (route) => {
     await fulfillJson(route, {
       data: [
         {
@@ -152,7 +152,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
 
   await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);
   await page.waitForLoadState("networkidle");
-  const createResumeCard = page.getByRole("button", { name: /create resume/i });
+  const createResumeCard = page.getByRole("link", { name: /create resume/i });
   await expect(createResumeCard).toBeEnabled();
   await gotoWithRetry(page, `${frontendBaseUrl}/tailor`);
 
@@ -166,7 +166,6 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   await expect(page).toHaveURL(
     new RegExp(`/builder\\?id=${tailoredResumeId}$`),
   );
-  await expect(page.getByText("RenderCV Preview")).toBeVisible();
   await expect(page.getByAltText("preview.png")).toBeVisible();
 
   await page.waitForLoadState("networkidle");

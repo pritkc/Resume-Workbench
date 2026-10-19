@@ -201,7 +201,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
     });
   });
 
-  await page.route(/\/api\/v1\/resumes\/list\?include_master=true(?:&.*)?$/, async (route) => {
+  await page.route(/\/api\/v1\/resumes\/list\?include_active=true(?:&.*)?$/, async (route) => {
     await fulfillJson(route, {
       data: [
         {
@@ -300,11 +300,11 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
   // --- Prompt catalog: critique toggle, shared rules reset, model override ---
   await gotoWithRetry(page, `${frontendBaseUrl}/settings/prompt-catalog`);
   await expect(
-    page.getByRole("heading", { name: "LLM Prompt Catalog", exact: true }),
+    page.getByRole("heading", { name: "Prompts", exact: true }),
   ).toBeVisible();
 
   await expect(page.getByText("OVERRIDDEN_SHARED_RULES")).toBeVisible();
-  await page.getByRole("button", { name: "Reset to default" }).click();
+  await page.getByRole("button", { name: "Reset to shipped" }).click();
   await expect.poll(() => sharedRuleDeleteCalls).toEqual(["resume_diff"]);
   await expect(page.getByText("DEFAULT_SHARED_RULES")).toBeVisible();
   expect(catalogFetchCount).toBeGreaterThanOrEqual(2);
@@ -331,7 +331,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
   await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);
   await page.waitForLoadState("networkidle");
   await expect(
-    page.getByRole("button", { name: /create resume/i }),
+    page.getByRole("link", { name: /create resume/i }),
   ).toBeEnabled();
   await gotoWithRetry(page, `${frontendBaseUrl}/tailor`);
   await page.locator("textarea").fill(SYNTHETIC_JD);
@@ -345,7 +345,6 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
   ).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: /^confirm & save$/i }).click();
   await expect(page).toHaveURL(new RegExp(`/builder\\?id=${tailoredResumeId}$`));
-  await expect(page.getByText("RenderCV Preview")).toBeVisible();
 
   await page.waitForLoadState("networkidle");
   await expect(page.getByText(/FastAPI Tailored Resume/i)).toBeVisible();
