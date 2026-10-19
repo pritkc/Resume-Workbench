@@ -156,11 +156,19 @@ Evidence: read-only inspection of the user's hosted CV YAML and preview; `apps/b
 
 Suggested fix: validate Markdown emphasis before export and point to the affected field, or normalize it through the rich-text editor so the user can correct it in place.
 
-## Existing duplicate-stack path reviewed
+### 19. YAML and visual modes can disagree about stack content — High
 
-The current adapter emits one RenderCV `summary` value for an experience or project stack. It removes a matching first bullet before emitting `highlights`. Parsing puts that summary back into the app model's stack field and keeps highlights separate. This path is designed to avoid duplicate stack lines. The audit did not establish a new defect in that specific conversion on the current revision.
+The manual local test entered the same experience stack with commas in a highlight and bullet separators (`•`) in the summary. The visual editor showed both rows, and the preview kept the duplicate because backend and frontend checks compared the strings literally. The project serializer emitted one canonical summary field, but the raw editor could still contain both `tech_stacks` and `summary` when the source YAML had both.
 
-Evidence: `apps/backend/app/rendering/rendercv_adapter.py:645-678`, `:709-755`, `:1302-1324`, `:1351-1375`.
+The same test found that switching from edited YAML to the visual editor did not parse the YAML into the form model. This showed stale values in the CV form. Switching back to YAML then regenerated it from that stale model and discarded the raw YAML edits.
+
+Suggested fix: compare stack rows by normalized item tokens across commas, semicolons, pipes, and bullet separators. When a user leaves raw YAML mode, normalize the current YAML through the backend and update the visual model, theme settings, and canonical YAML. Keep the raw editor open and show the validation path when parsing fails. Keep Undo and Redo in the active mode.
+
+Evidence: `apps/backend/app/rendering/rendercv_adapter.py` stack formatting and YAML conversion; `apps/frontend/lib/utils/rendercv-fields.ts` editor highlight filtering; `apps/frontend/components/builder/resume-builder.tsx` editor mode handling. A manual local browser pass reproduced both problems with disposable data.
+
+Implementation: backend and frontend now compare stack items after removing labels and formatting and normalizing common separators. The mode switch now parses raw YAML before showing the visual form. Invalid YAML stays in raw mode and keeps its line and column error. The switch stores the normalized data and updates the current history snapshot.
+
+Manual check: enter an experience stack in YAML plus the same items as a comma-separated highlight. Confirm that the CV form and preview show one stack row. Switch to YAML and confirm that a project uses one canonical `summary` field. Change the summary in YAML, switch to the visual editor, then switch back and confirm the edit remains. Enter invalid YAML and confirm the editor stays open with a location error. Edit YAML, use Undo and Redo, and confirm both actions keep YAML mode.
 
 ## Recommended order
 
@@ -303,17 +311,18 @@ Implementation is in the audit branch. Do not treat it as deployed until the pul
 - Findings 6–10: settings loads now block writes and provide retry on failure; config writes use a process lock and atomic replacement; reset removes all editor draft keys after server success; reset text says provider settings and API keys remain; Playwright uses port 3100. CI now starts an isolated Postgres service and backend before browser tests.
 - Findings 11–17: unsupported CV root, common entry, and custom-section entry fields now fail with a YAML path instead of being silently discarded. Supported custom-section entry fields have round-trip coverage. Design, locale, and settings sections remain in the stored theme profile and are emitted again by the YAML serializer. Findings 12–17 also have adapter and endpoint coverage for section visibility, hidden projects, comma-aware skills, explicit empty skills, custom item descriptions, and multiple summaries.
 - Finding 18: unmatched, unescaped `**` markers in summaries, common resume descriptions, and custom-section text, titles, subtitles, and descriptions now fail validation with a field path. Balanced but misplaced markers are not detected; literal or escaped markers remain allowed.
+- Finding 19: stack duplicate checks now match equivalent item lists across common separators in the preview and CV form. Switching from YAML to visual mode parses the current YAML into the form model. Invalid YAML stays in raw mode with its validation error.
 
 Verification on 2026-10-19:
 
-- Backend full suite: 591 passed; RenderCV adapter suite: 39 passed after the final YAML contract checks.
-- Frontend unit suite: 128 passed.
+- Backend full suite: 591 passed with `DATABASE_URL` set to the isolated audit database; RenderCV adapter suite: 39 passed.
+- Frontend unit suite: 130 passed across 20 test files.
 - Frontend lint and production build passed.
-- Ruff passed for all changed backend files after the final emphasis checks.
+- Ruff passed for all changed backend files.
 - Alembic upgraded the isolated `resume_workbench_audit_impl` database to head.
-- The local browser opened the builder at `http://127.0.0.1:3100/builder` and showed the blank-resume editor.
-
-- A local Playwright attempt built and started the frontend and isolated backend, but macOS denied Chromium's headless Mach port registration. The hosted Linux Playwright run is the browser-test gate for this branch.
-- Playwright E2E did not pass in this macOS sandbox. The first full run had 10 failing tests and 6 skipped tests. Some failures showed stale UI selectors and missing API setup. A focused rerun could not start Chromium because macOS denied the Chromium helper process (`bootstrap_check_in ... Permission denied`). CI now starts Postgres and the backend. Its first run confirmed that the existing E2E suite also had stale selectors and route mocks: the YAML toggle matched “Copy Full YAML”, the resume-list mocks used the old query name, and dashboard/settings/prompt tests expected old labels and roles. Those test expectations are now updated. A successful CI rerun is still required before release.
+- Manual local browser check: entered disposable experience and project stacks with mismatched separators. The experience and project preview each showed one stack row. The visual editor filtered the duplicate stack bullet. YAML regeneration emitted one canonical `summary` field per entry. A YAML summary edit appeared in the visual form and survived a switch back to YAML. Invalid YAML stayed in raw mode and showed its line and column. Undo and Redo kept YAML mode.
+- Local screenshot review used the full builder at 1280×720. The form and preview were both visible. The sample used a reserved test phone number and no hosted resume.
+- CI E2E run `39305274893` failed: 8 passed, 3 failed, and 6 skipped. The three failures are stale test assumptions: the critique checkbox is on Settings, not Prompt Catalog; the resume viewer test does not mock the draft-save endpoint; and the tailor test looks for the retired `COVER LETTER` button instead of the current Letters tab. The user asked to prioritize manual browser checks over additional custom Playwright work, so these test-fixture failures remain open and the PR check is red.
+- A first local browser attempt on port 3100 used a stopped backend. The final manual check used a fresh frontend on port 3101 and the isolated backend on port 8000. The earlier test-only Playwright run could not start Chromium in macOS; the manual browser check above used normal UI input.
 
 The test database `resume_workbench_audit_impl` contains only disposable audit test data. The hosted resume and production data were not changed.

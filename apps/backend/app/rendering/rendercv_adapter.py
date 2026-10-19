@@ -651,10 +651,15 @@ def _format_tech_stack_summary(
 
 def _is_duplicate_stack_line(value: str, stack: str, formatted_stack: str) -> bool:
     """Compare legacy description rows after converting rich text to Markdown."""
-    def comparable(text: str | None) -> str:
+    def comparable(text: str | None) -> tuple[str, ...]:
         normalized = _clean_rich_text(text) or _clean_text(text) or ""
         normalized = re.sub(r"[*_~`]", "", normalized)
-        return re.sub(r"\s+", " ", normalized).strip()
+        normalized = re.sub(r"^stack\s*:\s*", "", normalized, flags=re.IGNORECASE)
+        return tuple(
+            re.sub(r"\s+", " ", part).strip().casefold()
+            for part in re.split(r"\s*[,;|•·]\s*", normalized)
+            if part.strip()
+        )
 
     normalized_value = comparable(value)
     return normalized_value in {comparable(stack), comparable(formatted_stack)}

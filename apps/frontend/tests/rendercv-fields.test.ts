@@ -6,12 +6,14 @@ import {
   getEducationSummaryEditor,
   getExperienceExplicitDate,
   getExperienceExplicitDateEditor,
+  getExperienceHighlightsEditor,
   getExperiencePosition,
   getExperiencePositionEditor,
   getExperienceTechStack,
   getExperienceTechStackEditor,
   getProjectDate,
   getProjectDateEditor,
+  getProjectHighlightsEditor,
   getProjectTechStack,
   getProjectTechStackEditor,
 } from '@/lib/utils/rendercv-fields';
@@ -65,5 +67,23 @@ describe('rendercv field editor values', () => {
     expect(getProjectTechStackEditor({ techStack: '', role: 'Old stack' })).toBe('');
     expect(getExperiencePositionEditor({ position: '', title: 'Old title' })).toBe('');
     expect(getEducationExplicitDateEditor({ date: '', years: 'Old years' })).toBe('');
+  });
+
+  it('hides duplicate experience stack bullets when the separators differ', () => {
+    expect(
+      getExperienceHighlightsEditor({
+        techStack: '**Stack:** FastAPI • PostgreSQL • Docker',
+        highlights: ['**Stack:** FastAPI, PostgreSQL, Docker', 'Built reliable APIs'],
+      })
+    ).toEqual(['Built reliable APIs']);
+  });
+
+  it('hides duplicate project stack bullets when the separators differ', () => {
+    expect(
+      getProjectHighlightsEditor({
+        techStack: 'FastAPI • PostgreSQL • Docker',
+        highlights: ['FastAPI, PostgreSQL, Docker', 'Shipped a CLI tool'],
+      })
+    ).toEqual(['Shipped a CLI tool']);
   });
 });

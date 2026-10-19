@@ -1463,12 +1463,96 @@ const ResumeBuilderContent = () => {
         const synced = await syncRawYamlFromStructured();
         if (!synced) return;
       }
+
+      if (nextMode === 'visual' && editorModeRef.current === 'raw') {
+        const targetResumeId = resumeId;
+        setIsPreparingRawMode(true);
+        try {
+          const response = await normalizeResumeDraft({
+            resume_id: targetResumeId,
+            yaml_sections: rawYamlSectionsRef.current,
+            theme_settings: themeSettingsRef.current,
+          });
+          if (activeResumeIdRef.current !== targetResumeId) return;
+
+          const nextResumeData = (response.data.processed_resume ||
+            resumeDataRef.current) as ResumeData;
+          const nextThemeSettings = response.data.theme_settings
+            ? normalizeRenderThemeSettings(response.data.theme_settings)
+            : themeSettingsRef.current;
+          const nextRawYamlSections = response.yaml_sections;
+          const differsFromSaved =
+            JSON.stringify(nextResumeData) !== JSON.stringify(lastSavedDataRef.current) ||
+            JSON.stringify(nextThemeSettings) !==
+              JSON.stringify(lastSavedThemeSettingsRef.current) ||
+            JSON.stringify(nextRawYamlSections) !==
+              JSON.stringify(lastSavedRawYamlSectionsRef.current);
+
+          setResumeData(nextResumeData);
+          setThemeSettings(nextThemeSettings);
+          setRawYamlSections(nextRawYamlSections);
+          setYamlNeedsSync(false);
+          setRawYamlIssue(null);
+          if (differsFromSaved) {
+            // Invalidate any autosave that captured the old visual state before
+            // the YAML was normalized into the form model.
+            markDraftDirty('raw');
+          }
+          localStorage.setItem(
+            resumeStorageKey(STORAGE_KEY, targetResumeId),
+            JSON.stringify(nextResumeData)
+          );
+          localStorage.setItem(
+            resumeStorageKey(SETTINGS_STORAGE_KEY, targetResumeId),
+            JSON.stringify(nextThemeSettings)
+          );
+          localStorage.setItem(
+            resumeStorageKey(YAML_STORAGE_KEY, targetResumeId),
+            JSON.stringify(nextRawYamlSections)
+          );
+          replaceCurrentHistorySnapshot(
+            buildDraftSnapshot({
+              resumeData: nextResumeData,
+              themeSettings: nextThemeSettings,
+              rawYamlSections: nextRawYamlSections,
+              yamlNeedsSync: false,
+              editorMode: 'visual',
+            })
+          );
+        } catch (error) {
+          if (activeResumeIdRef.current !== targetResumeId) return;
+          const issue =
+            isDraftRequestError(error) && error.detail
+              ? error.detail
+              : {
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Failed to load the current YAML in the visual editor.',
+                };
+          setRawYamlIssue(issue);
+          if (issue.section) {
+            setEditorSection(issue.section as EditorSection);
+          }
+          return;
+        } finally {
+          setIsPreparingRawMode(false);
+        }
+      }
+
       setEditorMode(nextMode);
       if (nextMode === 'visual') {
         setRawYamlIssue(null);
       }
     },
-    [syncRawYamlFromStructured, yamlNeedsSync]
+    [
+      buildDraftSnapshot,
+      markDraftDirty,
+      replaceCurrentHistorySnapshot,
+      resumeId,
+      syncRawYamlFromStructured,
+      yamlNeedsSync,
+    ]
   );
 
   const handleSave = async () => {

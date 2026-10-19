@@ -329,7 +329,7 @@ def test_rendercv_adapter_strips_rich_stack_duplicates_and_emits_one_project_sta
                 "position": "Eng",
                 "company": "Acme",
                 "techStack": experience_stack,
-                "description": ["**Stack:** **Python** · FastAPI · PostgreSQL", "Built APIs"],
+                "description": ["**Stack:** Python, FastAPI, PostgreSQL", "Built APIs"],
                 "highlights": ["Built APIs"],
             }
         ],
@@ -339,7 +339,7 @@ def test_rendercv_adapter_strips_rich_stack_duplicates_and_emits_one_project_sta
                 "id": 1,
                 "name": "Demo",
                 "techStack": rich_stack,
-                "description": [rich_stack, "Shipped CLI"],
+                "description": ["**Python** • FastAPI • PostgreSQL", "Shipped CLI"],
                 "highlights": ["Shipped CLI"],
             }
         ],

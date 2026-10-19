@@ -293,12 +293,25 @@ function stripLeadingTechStackDuplicates(
   richStack: boolean
 ): string[] {
   if (!highlights.length) return highlights;
-  const stackPlain = richStack ? plainTextFromRich(stack) : cleanText(stack);
-  if (!stackPlain) return highlights;
+  const comparableTokens = (value: string): string[] => {
+    const plain = richStack ? plainTextFromRich(value) : cleanText(value);
+    const normalized = plain.replace(/[*_~`]/g, '').replace(/^stack\s*:\s*/i, '');
+    return normalized
+      .split(/\s*[,;|•·]\s*/)
+      .map((part) => part.replace(/\s+/g, ' ').trim().toLowerCase())
+      .filter(Boolean);
+  };
+  const stackTokens = comparableTokens(stack);
+  if (!stackTokens.length) return highlights;
   const out = [...highlights];
   while (out.length) {
-    const head = richStack ? plainTextFromRich(out[0]) : cleanText(out[0]);
-    if (!head || head !== stackPlain) break;
+    const headTokens = comparableTokens(out[0]);
+    if (
+      headTokens.length !== stackTokens.length ||
+      headTokens.some((token, i) => token !== stackTokens[i])
+    ) {
+      break;
+    }
     out.shift();
   }
   return out;
