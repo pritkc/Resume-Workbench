@@ -1,7 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 
 export const frontendBaseUrl =
-  process.env.E2E_FRONTEND_URL ?? "http://127.0.0.1:3000";
+  process.env.E2E_FRONTEND_URL ?? "http://127.0.0.1:3100";
 export const masterResumeId = "master-123";
 export const tailoredResumeId = "tailored-123";
 

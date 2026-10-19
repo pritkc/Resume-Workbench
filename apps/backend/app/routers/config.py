@@ -1,6 +1,11 @@
 """LLM configuration endpoints."""
 
+import asyncio
+import fcntl
 import json
+import os
+import tempfile
+from functools import wraps
 from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -212,7 +217,15 @@ def _load_config() -> dict:
     """Load config from file."""
     path = _get_config_path()
     if path.exists():
-        return json.loads(path.read_text())
+        try:
+            loaded = json.loads(path.read_text())
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Settings file {path} contains invalid JSON; restore a valid settings backup before saving."
+            ) from exc
+        if not isinstance(loaded, dict):
+            raise RuntimeError(f"Settings file {path} must contain a JSON object.")
+        return loaded
     return {}
 
 
@@ -220,8 +233,46 @@ def _save_config(config: dict) -> None:
     """Save config to file and invalidate the resume router's cache."""
     path = _get_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2))
+    fd, temporary_path = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            json.dump(config, output, indent=2)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary_path, path)
+    except Exception:
+        try:
+            os.unlink(temporary_path)
+        except FileNotFoundError:
+            pass
+        raise
     invalidate_config_cache()
+
+
+def _acquire_config_file_lock() -> int:
+    path = _get_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = os.open(path.with_suffix(path.suffix + ".lock"), os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    return lock_fd
+
+
+def _release_config_file_lock(lock_fd: int) -> None:
+    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    os.close(lock_fd)
+
+
+def _serialized_config_update(endpoint):
+    """Serialize read-modify-write settings endpoints across threads and workers."""
+    @wraps(endpoint)
+    async def wrapped(*args, **kwargs):
+        lock_fd = await asyncio.to_thread(_acquire_config_file_lock)
+        try:
+            return await endpoint(*args, **kwargs)
+        finally:
+            await asyncio.to_thread(_release_config_file_lock, lock_fd)
+
+    return wrapped
 
 
 def _mask_api_key(key: str) -> str:
@@ -375,6 +426,7 @@ async def get_llm_config_endpoint() -> LLMConfigResponse:
 
 
 @router.put("/llm-api-key", response_model=LLMConfigResponse)
+@_serialized_config_update
 async def update_llm_config(
     request: LLMConfigRequest,
 ) -> LLMConfigResponse:
@@ -637,6 +689,7 @@ async def get_feature_config() -> FeatureConfigResponse:
 
 
 @router.put("/features", response_model=FeatureConfigResponse)
+@_serialized_config_update
 async def update_feature_config(request: FeatureConfigRequest) -> FeatureConfigResponse:
     """Update feature configuration."""
     stored = _load_config()
@@ -663,6 +716,7 @@ async def get_generation_defaults() -> GenerationDefaultsResponse:
 
 
 @router.put("/generation-defaults", response_model=GenerationDefaultsResponse)
+@_serialized_config_update
 async def update_generation_defaults(
     request: GenerationDefaultsRequest,
 ) -> GenerationDefaultsResponse:
@@ -728,6 +782,7 @@ async def get_language_config() -> LanguageConfigResponse:
 
 
 @router.put("/language", response_model=LanguageConfigResponse)
+@_serialized_config_update
 async def update_language_config(
     request: LanguageConfigRequest,
 ) -> LanguageConfigResponse:
@@ -782,6 +837,7 @@ async def get_prompt_config() -> PromptConfigResponse:
 
 
 @router.put("/prompts", response_model=PromptConfigResponse)
+@_serialized_config_update
 async def update_prompt_config(
     request: PromptConfigRequest,
 ) -> PromptConfigResponse:
@@ -843,6 +899,7 @@ async def get_critique_config() -> CritiqueConfigResponse:
 
 
 @router.put("/critique", response_model=CritiqueConfigResponse)
+@_serialized_config_update
 async def put_critique_config(request: CritiqueConfigRequest) -> CritiqueConfigResponse:
     stored = _load_config()
     stored["enable_critique"] = request.enabled
@@ -866,6 +923,7 @@ async def get_model_overrides() -> ModelOverridesResponse:
 
 
 @router.put("/model-overrides", response_model=ModelOverridesResponse)
+@_serialized_config_update
 async def put_model_overrides(request: ModelOverridesRequest) -> ModelOverridesResponse:
     stored = _load_config()
     stored["model_overrides"] = dict(request.overrides)

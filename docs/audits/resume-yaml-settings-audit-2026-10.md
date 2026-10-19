@@ -294,3 +294,25 @@ Use this section as a handoff checklist. The line numbers above refer to revisio
 ### Release check after fixes
 
 Run focused unit/API tests for the affected adapters and endpoints, the Playwright builder/settings flows, and a local browser pass using disposable resumes. Verify the saved row after reload, not only the transient UI. Confirm one experience and one project stack line in YAML and PDF so the earlier duplicate-stack fix remains intact. Review the artifact count after repeated previews. Only then deploy the application fixes and repeat non-destructive checks on a copy of the hosted resume. Document any deliberate YAML field limits and reset behavior in user-facing help.
+
+## Implementation and release-check status
+
+Implementation is in the audit branch. Do not treat it as deployed until the pull request is merged and the hosted deployment completes.
+
+- Findings 1–5: fixed resume-scoped browser storage, stale-load guards, serialized autosaves with revision checks, stale-preview response guards, and bounded preview artifact replacement. The revision migration is `0006_resume_draft_revision.py`.
+- Findings 6–10: settings loads now block writes and provide retry on failure; config writes use a process lock and atomic replacement; reset removes all editor draft keys after server success; reset text says provider settings and API keys remain; Playwright uses port 3100. CI now starts an isolated Postgres service and backend before browser tests.
+- Findings 12–17: fixed hidden-section handling, hidden project preservation, comma-aware skill parsing, explicit empty skill handling, custom item conversion, and rejection of multiple summaries. Unsupported CV root and common entry fields now fail with a YAML path instead of being silently discarded.
+- Finding 18: unmatched, unescaped `**` markers in summaries and common resume descriptions now fail validation with a field path. This does not detect every balanced but misplaced marker. It also does not inspect all custom-section fields.
+- Finding 11 remains a defined subset, not full RenderCV schema coverage. The validator covers CV root keys and common entry keys. Theme-specific design keys and dynamic custom section fields still need a field-by-field preservation contract before the editor can safely claim full RenderCV YAML support.
+
+Verification on 2026-10-19:
+
+- Backend full suite: 587 passed.
+- Frontend unit suite: 128 passed.
+- Frontend lint and production build passed.
+- Ruff passed for all changed backend files after the final emphasis checks.
+- Alembic upgraded the isolated `resume_workbench_audit_impl` database to head.
+- The local browser opened the builder at `http://127.0.0.1:3100/builder` and showed the blank-resume editor.
+- Playwright E2E did not pass in this macOS sandbox. The first full run had 10 failing tests and 6 skipped tests. Some failures showed stale UI selectors and missing API setup. A focused rerun could not start Chromium because macOS denied the Chromium helper process (`bootstrap_check_in ... Permission denied`). The YAML selector checks were updated, and CI now starts Postgres and the backend. A successful CI run is still required before release.
+
+The test database `resume_workbench_audit_impl` contains only disposable audit test data. The hosted resume and production data were not changed.

@@ -174,6 +174,7 @@ interface ResumeResponse {
   request_id: string;
   data: {
     resume_id: string;
+    draft_revision?: number;
     resume_code?: string | null;
     raw_resume: {
       id: number | null;
@@ -355,6 +356,9 @@ export class DraftRequestError extends Error {
 
 export interface ResumeDraftRequest {
   resume_id?: string | null;
+  expected_revision?: number | null;
+  preview_session_id?: string | null;
+  preview_sequence?: number | null;
   processed_resume?: ProcessedResume;
   theme_settings?: RenderThemeSettings | null;
   yaml_sections?: RawYamlSections;
@@ -362,6 +366,7 @@ export interface ResumeDraftRequest {
 
 export interface ResumeDraftResponse {
   request_id: string;
+  draft_revision?: number;
   data: ResumeResponse['data'];
   yaml_sections: RawYamlSections;
 }

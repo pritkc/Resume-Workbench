@@ -64,6 +64,7 @@ def _serialize_resume(record: Resume) -> dict[str, Any]:
         "original_markdown": record.original_markdown,
         "theme_settings": record.theme_settings,
         "cv_metadata": record.cv_metadata,
+        "draft_revision": record.draft_revision,
         "created_at": _iso(record.created_at),
         "updated_at": _iso(record.updated_at),
     }
@@ -332,6 +333,15 @@ class Database:
             if record is None:
                 raise ValueError(f"Resume not found: {resume_id}")
             return _serialize_resume(record)
+
+    def update_resume_if_revision(
+        self, resume_id: str, expected_revision: int, updates: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        with self._session() as session:
+            record = resume_repo.update_resume_if_revision(
+                session, resume_id, expected_revision, updates
+            )
+            return _serialize_resume(record) if record else None
 
     def delete_resume(self, resume_id: str) -> bool:
         with self._session() as session:
@@ -637,6 +647,27 @@ class Database:
         with self._session() as session:
             record = artifact_repo.get_artifact(session, artifact_id)
             return _serialize_artifact(record) if record else None
+
+    def replace_draft_preview_artifacts(
+        self,
+        *,
+        resume_id: str,
+        session_id: str,
+        sequence: int,
+        artifacts: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        with self._session() as session:
+            try:
+                records, old_paths = artifact_repo.replace_draft_preview_artifacts(
+                    session,
+                    resume_id=resume_id,
+                    session_id=session_id,
+                    sequence=sequence,
+                    artifacts=artifacts,
+                )
+                return [_serialize_artifact(record) for record in records], old_paths
+            finally:
+                session.close()
 
     def create_improvement(
         self,

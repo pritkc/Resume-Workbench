@@ -111,6 +111,7 @@ import {
   parseCvMetadataYaml,
 } from '@/lib/cv-metadata';
 import { mergeBoldKeywordsIntoMetadataYaml } from '@/lib/metadata-theme-sync';
+import { resumeStorageKey } from '@/lib/builder/resume-storage';
 
 type TabId =
   | 'resume'
@@ -295,6 +296,11 @@ const ResumeBuilderContent = () => {
   );
   const searchParams = useSearchParams();
   const resumeId = searchParams.get('id');
+  const activeResumeIdRef = useRef(resumeId);
+  activeResumeIdRef.current = resumeId;
+  const loadedResumeIdRef = useRef<string | null>(null);
+  const draftRevisionRef = useRef(0);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const isResumePreviewReady = !resumeId || loadingState === 'loaded' || Boolean(improvedPreview);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const previewPanelRef = useRef<RenderPreviewPanelHandle | null>(null);
@@ -500,9 +506,18 @@ const ResumeBuilderContent = () => {
       setRawYamlIssue(null);
       setAutosaveError(null);
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot.resumeData));
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(snapshot.themeSettings));
-      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(snapshot.rawYamlSections));
+      localStorage.setItem(
+        resumeStorageKey(STORAGE_KEY, resumeId),
+        JSON.stringify(snapshot.resumeData)
+      );
+      localStorage.setItem(
+        resumeStorageKey(SETTINGS_STORAGE_KEY, resumeId),
+        JSON.stringify(snapshot.themeSettings)
+      );
+      localStorage.setItem(
+        resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+        JSON.stringify(snapshot.rawYamlSections)
+      );
 
       if (isSnapshotSaved(snapshot)) {
         setHasUnsavedChanges(false);
@@ -512,7 +527,7 @@ const ResumeBuilderContent = () => {
         setAutosaveState('dirty');
       }
     },
-    [isSnapshotSaved]
+    [isSnapshotSaved, resumeId]
   );
 
   const handleUndoHistory = useCallback(() => {
@@ -638,11 +653,13 @@ const ResumeBuilderContent = () => {
       const isRawSave = savedRawYamlSections != null;
       const nextRawYamlSections = isRawSave ? savedRawYamlSections : response.yaml_sections;
 
-      setLastSavedData(nextData);
-      setLastSavedThemeSettings(nextThemeSettings);
-      lastSavedRawYamlSectionsRef.current = nextRawYamlSections;
-
+      if (typeof response.draft_revision === 'number') {
+        draftRevisionRef.current = response.draft_revision;
+      }
       if (draftVersionRef.current === version) {
+        setLastSavedData(nextData);
+        setLastSavedThemeSettings(nextThemeSettings);
+        lastSavedRawYamlSectionsRef.current = nextRawYamlSections;
         setResumeData(nextData);
         setThemeSettings(nextThemeSettings);
         if (!isRawSave) {
@@ -651,9 +668,15 @@ const ResumeBuilderContent = () => {
         setRawYamlIssue(null);
         setYamlNeedsSync(false);
 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
-        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextThemeSettings));
-        localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextRawYamlSections));
+        localStorage.setItem(resumeStorageKey(STORAGE_KEY, resumeId), JSON.stringify(nextData));
+        localStorage.setItem(
+          resumeStorageKey(SETTINGS_STORAGE_KEY, resumeId),
+          JSON.stringify(nextThemeSettings)
+        );
+        localStorage.setItem(
+          resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+          JSON.stringify(nextRawYamlSections)
+        );
         setHasUnsavedChanges(false);
         setAutosaveState('saved');
         setAutosaveError(null);
@@ -669,7 +692,7 @@ const ResumeBuilderContent = () => {
         setAutosaveState('dirty');
       }
     },
-    [buildDraftSnapshot, replaceCurrentHistorySnapshot, resumeData, themeSettings]
+    [buildDraftSnapshot, replaceCurrentHistorySnapshot, resumeData, resumeId, themeSettings]
   );
 
   const structuredDraftRequest = useMemo<ResumeDraftRequest>(
@@ -724,7 +747,7 @@ const ResumeBuilderContent = () => {
     if (resumeId || hasUnsavedChanges || improvedPreview) {
       return;
     }
-    const savedDraft = localStorage.getItem(STORAGE_KEY);
+    const savedDraft = localStorage.getItem(resumeStorageKey(STORAGE_KEY, resumeId));
     if (savedDraft) {
       return;
     }
@@ -867,7 +890,7 @@ const ResumeBuilderContent = () => {
 
   // Load template settings from localStorage on mount
   useEffect(() => {
-    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const savedSettings = localStorage.getItem(resumeStorageKey(SETTINGS_STORAGE_KEY, resumeId));
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
@@ -877,20 +900,16 @@ const ResumeBuilderContent = () => {
       }
     }
 
-    const savedYaml = localStorage.getItem(YAML_STORAGE_KEY);
+    const savedYaml = localStorage.getItem(resumeStorageKey(YAML_STORAGE_KEY, resumeId));
     if (savedYaml) {
       try {
         setRawYamlSections(normalizeStoredRawYamlSections(JSON.parse(savedYaml)));
         setYamlNeedsSync(false);
       } catch {
-        localStorage.removeItem(YAML_STORAGE_KEY);
+        localStorage.removeItem(resumeStorageKey(YAML_STORAGE_KEY, resumeId));
       }
     }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(themeSettings));
-  }, [themeSettings]);
+  }, [resumeId]);
 
   useEffect(() => {
     if (!improvedData?.data?.theme_settings && !improvedData?.data?.bold_keywords?.length) {
@@ -927,13 +946,33 @@ const ResumeBuilderContent = () => {
   }, [autosaveState, hasUnsavedChanges]);
 
   useEffect(() => {
+    let cancelled = false;
     const loadResumeData = async () => {
       setLoadingState('loading');
+      loadedResumeIdRef.current = null;
+      if (resumeId) {
+        draftVersionRef.current += 1;
+        setResumeData(initialData);
+        setLastSavedData(initialData);
+        setThemeSettings(DEFAULT_RENDER_THEME_SETTINGS);
+        setLastSavedThemeSettings(DEFAULT_RENDER_THEME_SETTINGS);
+        setRawYamlSections(EMPTY_RAW_YAML);
+        setRawYamlIssue(null);
+        setCoverLetter('');
+        setOutreachMessage('');
+        setHasUnsavedChanges(false);
+        setAutosaveState('idle');
+        setAutosaveError(null);
+        setYamlNeedsSync(true);
+      }
 
       // Priority 1: Fetch from API if ID is in URL (most reliable)
       if (resumeId) {
         try {
           const data = await fetchResume(resumeId);
+          if (cancelled || activeResumeIdRef.current !== resumeId) return;
+          loadedResumeIdRef.current = resumeId;
+          draftRevisionRef.current = data.draft_revision ?? 0;
           // Track if this is a tailored resume (has parent_id)
           setIsTailoredResume(Boolean(data.parent_id));
           setApplicationPackId(data.application_pack_id ?? null);
@@ -948,12 +987,8 @@ const ResumeBuilderContent = () => {
             setLastSavedThemeSettings(normalizedThemeSettings);
           }
           // Load cover letter and outreach message if available
-          if (data.cover_letter) {
-            setCoverLetter(data.cover_letter);
-          }
-          if (data.outreach_message) {
-            setOutreachMessage(data.outreach_message);
-          }
+          setCoverLetter(data.cover_letter ?? '');
+          setOutreachMessage(data.outreach_message ?? '');
           // Prefer processed_resume if available
           if (data.processed_resume) {
             const nextResumeData = normalizeResumeSkills(data.processed_resume as ResumeData);
@@ -999,9 +1034,17 @@ const ResumeBuilderContent = () => {
             }
           }
         } catch (err) {
+          if (cancelled || activeResumeIdRef.current !== resumeId) return;
           console.error('Failed to load resume from API:', err);
+          setLoadingState('error');
+          setAutosaveState('error');
+          setAutosaveError(
+            err instanceof Error ? err.message : 'Failed to load this resume. Reload to retry.'
+          );
+          return;
         }
       }
+      if (cancelled) return;
 
       // Priority 2: Improved Data from Context (Tailor Flow)
       if (improvedPreview) {
@@ -1022,7 +1065,10 @@ const ResumeBuilderContent = () => {
           setOutreachMessage(improvedOutreach);
         }
         // Persist to localStorage as backup
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextResumeData));
+        localStorage.setItem(
+          resumeStorageKey(STORAGE_KEY, resumeId),
+          JSON.stringify(nextResumeData)
+        );
         setAutosaveState('saved');
         setYamlNeedsSync(true);
         seedHistory(
@@ -1038,7 +1084,7 @@ const ResumeBuilderContent = () => {
       }
 
       // Priority 3: Restore from localStorage (browser refresh recovery)
-      const savedDraft = localStorage.getItem(STORAGE_KEY);
+      const savedDraft = localStorage.getItem(resumeStorageKey(STORAGE_KEY, resumeId));
       if (savedDraft) {
         try {
           const parsed = normalizeResumeSkills(JSON.parse(savedDraft));
@@ -1059,15 +1105,19 @@ const ResumeBuilderContent = () => {
           setLoadingState('loaded');
           return;
         } catch {
-          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(resumeStorageKey(STORAGE_KEY, resumeId));
         }
       }
 
       // Fallback: Use initial data
       setLoadingState('loaded');
+      if (resumeId) loadedResumeIdRef.current = resumeId;
     };
 
     loadResumeData();
+    return () => {
+      cancelled = true;
+    };
   }, [
     buildDraftSnapshot,
     improvedCoverLetter,
@@ -1075,6 +1125,7 @@ const ResumeBuilderContent = () => {
     improvedOutreach,
     improvedPreview,
     improvedThemeSettings,
+    initialData,
     resumeId,
     seedHistory,
   ]);
@@ -1163,13 +1214,18 @@ const ResumeBuilderContent = () => {
   }, [activeTab, isTailoredResume]);
 
   const syncRawYamlFromStructured = useCallback(async () => {
+    const targetResumeId = resumeId;
     setIsPreparingRawMode(true);
     try {
       const response = await normalizeResumeDraft(structuredDraftRequest);
+      if (activeResumeIdRef.current !== targetResumeId) return false;
       setRawYamlSections(response.yaml_sections);
       setRawYamlIssue(null);
       setYamlNeedsSync(false);
-      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(response.yaml_sections));
+      localStorage.setItem(
+        resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+        JSON.stringify(response.yaml_sections)
+      );
       if (!hasUnsavedChangesRef.current) {
         lastSavedRawYamlSectionsRef.current = response.yaml_sections;
       }
@@ -1180,7 +1236,9 @@ const ResumeBuilderContent = () => {
           editorMode: 'raw',
         })
       );
+      return true;
     } catch (error) {
+      if (activeResumeIdRef.current !== targetResumeId) return false;
       const issue =
         isDraftRequestError(error) && error.detail
           ? error.detail
@@ -1194,82 +1252,111 @@ const ResumeBuilderContent = () => {
       if (issue.section) {
         setEditorSection(issue.section);
       }
+      return false;
     } finally {
       setIsPreparingRawMode(false);
     }
-  }, [buildDraftSnapshot, replaceCurrentHistorySnapshot, structuredDraftRequest]);
+  }, [buildDraftSnapshot, replaceCurrentHistorySnapshot, resumeId, structuredDraftRequest]);
 
   const persistDraft = useCallback(
     async ({ manual, version }: { manual: boolean; version: number }) => {
-      if (!resumeId) {
-        return false;
-      }
-
-      const payload =
-        editorMode === 'raw'
-          ? ({
-              resume_id: resumeId,
-              yaml_sections: rawYamlSections,
-              theme_settings: themeSettings,
-            } satisfies ResumeDraftRequest)
-          : structuredDraftRequest;
-
-      try {
-        if (manual) {
-          setIsSaving(true);
-        } else {
-          setAutosaveState('saving');
-          setAutosaveError(null);
-        }
-
-        const rawSectionsAtSave = editorMode === 'raw' ? rawYamlSections : undefined;
-        const response = await saveResumeDraft(resumeId, payload);
-        applyDraftResponse(response, version, rawSectionsAtSave);
-        return true;
-      } catch (error) {
-        const issue =
-          isDraftRequestError(error) && error.detail
-            ? error.detail
-            : {
-                message: error instanceof Error ? error.message : 'Failed to save draft.',
-              };
-        const message = issue.message;
-        if (!manual && draftVersionRef.current !== version) {
+      const targetResumeId = resumeId;
+      const operation = saveQueueRef.current.then(async () => {
+        if (
+          !targetResumeId ||
+          activeResumeIdRef.current !== targetResumeId ||
+          loadedResumeIdRef.current !== targetResumeId ||
+          (!manual && draftVersionRef.current !== version)
+        ) {
           return false;
         }
-        if (editorMode === 'raw') {
-          setRawYamlIssue(issue);
-          if (manual && issue.section) {
-            setEditorSection(issue.section);
+
+        const payloadBase =
+          editorMode === 'raw'
+            ? ({
+                resume_id: targetResumeId,
+                yaml_sections: rawYamlSections,
+                theme_settings: themeSettings,
+              } satisfies ResumeDraftRequest)
+            : structuredDraftRequest;
+        if (editorMode === 'raw' && (rawYamlIssue || yamlNeedsSync)) return false;
+        const payload: ResumeDraftRequest = {
+          ...payloadBase,
+          expected_revision: draftRevisionRef.current,
+        };
+
+        try {
+          if (manual) {
+            setIsSaving(true);
+          } else {
+            setAutosaveState('saving');
+            setAutosaveError(null);
           }
-          setAutosaveState('invalid');
-        } else {
-          setAutosaveState('error');
+
+          const rawSectionsAtSave = editorMode === 'raw' ? rawYamlSections : undefined;
+          const response = await saveResumeDraft(targetResumeId, payload);
+          if (activeResumeIdRef.current !== targetResumeId) return false;
+          applyDraftResponse(response, version, rawSectionsAtSave);
+          return true;
+        } catch (error) {
+          if (activeResumeIdRef.current !== targetResumeId) return false;
+          const issue =
+            isDraftRequestError(error) && error.detail
+              ? error.detail
+              : {
+                  message: error instanceof Error ? error.message : 'Failed to save draft.',
+                };
+          const message = issue.message;
+          if (isDraftRequestError(error) && error.status === 409) {
+            setAutosaveState('error');
+            setAutosaveError(message);
+            showNotification(message, 'danger');
+            return false;
+          }
+          if (!manual && draftVersionRef.current !== version) {
+            return false;
+          }
+          if (editorMode === 'raw') {
+            setRawYamlIssue(issue);
+            if (manual && issue.section) {
+              setEditorSection(issue.section);
+            }
+            setAutosaveState('invalid');
+          } else {
+            setAutosaveState('error');
+          }
+          setAutosaveError(message);
+          if (manual) {
+            showNotification(message, 'danger');
+          }
+          return false;
+        } finally {
+          if (manual) {
+            setIsSaving(false);
+          }
         }
-        setAutosaveError(message);
-        if (manual) {
-          showNotification(message, 'danger');
-        }
-        return false;
-      } finally {
-        if (manual) {
-          setIsSaving(false);
-        }
-      }
+      });
+      saveQueueRef.current = operation.then(
+        () => undefined,
+        () => undefined
+      );
+      return operation;
     },
     [
       applyDraftResponse,
       editorMode,
       rawYamlSections,
+      rawYamlIssue,
       resumeId,
       showNotification,
       structuredDraftRequest,
       themeSettings,
+      yamlNeedsSync,
     ]
   );
 
   useEffect(() => {
-    if (!resumeId || !hasUnsavedChanges) {
+    if (!resumeId || loadedResumeIdRef.current !== resumeId || !hasUnsavedChanges) {
       return;
     }
 
@@ -1294,7 +1381,7 @@ const ResumeBuilderContent = () => {
       const normalizedData = normalizeResumeSkills(newData);
       setResumeData(normalizedData);
       setRawYamlIssue(null);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedData));
+      localStorage.setItem(resumeStorageKey(STORAGE_KEY, resumeId), JSON.stringify(normalizedData));
       markDraftDirty('visual');
       queueHistoryCommit(
         buildDraftSnapshot({
@@ -1304,7 +1391,7 @@ const ResumeBuilderContent = () => {
         })
       );
     },
-    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit]
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit, resumeId]
   );
 
   const handleSettingsChange = useCallback(
@@ -1321,8 +1408,14 @@ const ResumeBuilderContent = () => {
       setThemeSettings(newSettings);
       setRawYamlSections(nextSections);
       setRawYamlIssue(null);
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
-      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
+      localStorage.setItem(
+        resumeStorageKey(SETTINGS_STORAGE_KEY, resumeId),
+        JSON.stringify(newSettings)
+      );
+      localStorage.setItem(
+        resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+        JSON.stringify(nextSections)
+      );
       markDraftDirty('visual');
       queueHistoryCommit(
         buildDraftSnapshot({
@@ -1333,7 +1426,7 @@ const ResumeBuilderContent = () => {
         })
       );
     },
-    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit]
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit, resumeId]
   );
 
   const handleRawYamlChange = useCallback(
@@ -1344,7 +1437,10 @@ const ResumeBuilderContent = () => {
       };
       setRawYamlSections(nextSections);
       setRawYamlIssue(null);
-      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
+      localStorage.setItem(
+        resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+        JSON.stringify(nextSections)
+      );
       markDraftDirty('raw', { hasRawIssue: false });
       queueHistoryCommit(
         buildDraftSnapshot({
@@ -1355,19 +1451,19 @@ const ResumeBuilderContent = () => {
         })
       );
     },
-    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit, rawYamlSections]
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit, rawYamlSections, resumeId]
   );
 
   const handleEditorModeChange = useCallback(
     async (checked: boolean) => {
       const nextMode: EditorMode = checked ? 'raw' : 'visual';
+      if (nextMode === 'raw' && yamlNeedsSync) {
+        const synced = await syncRawYamlFromStructured();
+        if (!synced) return;
+      }
       setEditorMode(nextMode);
       if (nextMode === 'visual') {
         setRawYamlIssue(null);
-      }
-
-      if (nextMode === 'raw' && yamlNeedsSync) {
-        await syncRawYamlFromStructured();
       }
     },
     [syncRawYamlFromStructured, yamlNeedsSync]
@@ -1393,8 +1489,11 @@ const ResumeBuilderContent = () => {
     setAutosaveState('saved');
     setAutosaveError(null);
     setYamlNeedsSync(true);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(lastSavedData));
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(lastSavedThemeSettings));
+    localStorage.setItem(resumeStorageKey(STORAGE_KEY, resumeId), JSON.stringify(lastSavedData));
+    localStorage.setItem(
+      resumeStorageKey(SETTINGS_STORAGE_KEY, resumeId),
+      JSON.stringify(lastSavedThemeSettings)
+    );
     if (editorMode === 'raw') {
       try {
         const response = await normalizeResumeDraft({
@@ -1404,7 +1503,10 @@ const ResumeBuilderContent = () => {
         });
         setRawYamlSections(response.yaml_sections);
         setYamlNeedsSync(false);
-        localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(response.yaml_sections));
+        localStorage.setItem(
+          resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+          JSON.stringify(response.yaml_sections)
+        );
         lastSavedRawYamlSectionsRef.current = response.yaml_sections;
         seedHistory(
           buildDraftSnapshot({
@@ -1579,10 +1681,16 @@ const ResumeBuilderContent = () => {
           settings: { ...themeSettings.settings, bold_keywords: parsed.bold_keywords },
         });
         setThemeSettings(nextTheme);
-        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextTheme));
+        localStorage.setItem(
+          resumeStorageKey(SETTINGS_STORAGE_KEY, resumeId),
+          JSON.stringify(nextTheme)
+        );
       }
       setRawYamlSections(nextSections);
-      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
+      localStorage.setItem(
+        resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+        JSON.stringify(nextSections)
+      );
 
       setRawYamlIssue(null);
       markDraftDirty('raw', { hasRawIssue: false });
@@ -1604,6 +1712,7 @@ const ResumeBuilderContent = () => {
     markDraftDirty,
     queueHistoryCommit,
     rawYamlSections,
+    resumeId,
     showNotification,
     t,
     themeSettings,
@@ -1616,8 +1725,14 @@ const ResumeBuilderContent = () => {
       setRawYamlSections(nextSections);
       setThemeSettings(nextTheme);
       setRawYamlIssue(null);
-      localStorage.setItem(YAML_STORAGE_KEY, JSON.stringify(nextSections));
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextTheme));
+      localStorage.setItem(
+        resumeStorageKey(YAML_STORAGE_KEY, resumeId),
+        JSON.stringify(nextSections)
+      );
+      localStorage.setItem(
+        resumeStorageKey(SETTINGS_STORAGE_KEY, resumeId),
+        JSON.stringify(nextTheme)
+      );
       markDraftDirty('visual');
       queueHistoryCommit(
         buildDraftSnapshot({
@@ -1629,7 +1744,7 @@ const ResumeBuilderContent = () => {
         })
       );
     },
-    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit]
+    [buildDraftSnapshot, markDraftDirty, queueHistoryCommit, resumeId]
   );
 
   const handleResyncYaml = useCallback(async () => {

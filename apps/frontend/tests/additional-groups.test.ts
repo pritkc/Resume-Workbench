@@ -3,8 +3,20 @@ import {
   getAdditionalGroupDisplayLabel,
   normalizeAdditionalGroups,
 } from '@/lib/utils/additional-groups';
+import { parseSkillDraftTokens } from '@/components/builder/forms/additional-groups-form';
 
 describe('additional group utils', () => {
+  it('keeps commas inside parentheses in one skill tag', () => {
+    expect(parseSkillDraftTokens('AWS (Lambda, S3, RDS), Docker')).toEqual([
+      'AWS (Lambda, S3, RDS)',
+      'Docker',
+    ]);
+  });
+
+  it('keeps quoted commas in one skill tag', () => {
+    expect(parseSkillDraftTokens('"C, C++", Python')).toEqual(['C, C++', 'Python']);
+  });
+
   it('preserves label spaces while editing', () => {
     const [group] = normalizeAdditionalGroups(
       {

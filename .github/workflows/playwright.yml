@@ -8,19 +8,61 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: resume_matcher
+          POSTGRES_PASSWORD: resume_matcher
+          POSTGRES_DB: resume_workbench_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U resume_matcher -d resume_workbench_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+    - uses: astral-sh/setup-uv@v6
     - name: Install dependencies
       run: npm ci
     - name: Install frontend dependencies
       run: npm ci --prefix apps/frontend
+    - name: Install backend dependencies
+      working-directory: apps/backend
+      run: uv sync --extra dev
+    - name: Apply database migrations
+      working-directory: apps/backend
+      env:
+        DATABASE_URL: postgresql+psycopg://resume_matcher:resume_matcher@127.0.0.1:5432/resume_workbench_e2e
+      run: uv run alembic upgrade head
+    - name: Start backend API
+      working-directory: apps/backend
+      env:
+        DATABASE_URL: postgresql+psycopg://resume_matcher:resume_matcher@127.0.0.1:5432/resume_workbench_e2e
+        DATA_DIR: /tmp/resume-workbench-e2e
+        ARTIFACT_DIR: /tmp/resume-workbench-e2e/artifacts
+        RENDERCV_WORK_DIR: /tmp/resume-workbench-e2e/rendercv
+      run: |
+        mkdir -p "$DATA_DIR/artifacts" "$DATA_DIR/rendercv"
+        uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/resume-workbench-api.log 2>&1 &
+        for attempt in $(seq 1 30); do
+          if curl --fail http://127.0.0.1:8000/api/v1/health >/dev/null; then exit 0; fi
+          sleep 2
+        done
+        cat /tmp/resume-workbench-api.log
+        exit 1
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Run Playwright tests
-      run: npx playwright test
+      run: npm run test:e2e
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:

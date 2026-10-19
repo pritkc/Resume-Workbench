@@ -733,7 +733,7 @@
     "clearApiKeys": "Clear API Keys",
     "clearApiKeysDescription": "Removes all stored API keys from the configuration. This action cannot be undone.",
     "resetDatabase": "Reset Database",
-    "resetDatabaseDescription": "Deletes ALL data including resumes, jobs, and generated content. This action cannot be undone.",
+    "resetDatabaseDescription": "Deletes resumes, jobs, uploaded files, artifacts, and generated content. Provider settings and API keys remain. This action cannot be undone.",
     "llmConfigurationTitle": "LLM Configuration",
     "providerLabel": "Provider",
     "statusCards": {
@@ -1092,6 +1092,6 @@
     "clearApiKeys": "Clear All API Keys?",
     "clearApiKeysDescription": "Are you sure you want to remove all API keys? You will need to re-enter them to use AI features.",
     "resetDatabase": "Reset Database and Clear All Data?",
-    "resetDatabaseDescription": "This will permanently delete ALL resumes, job descriptions, and generated content. This action is irreversible."
+    "resetDatabaseDescription": "This will permanently delete resumes, job descriptions, uploaded files, artifacts, and generated content. Provider settings and API keys will remain. This action is irreversible."
   }
 }

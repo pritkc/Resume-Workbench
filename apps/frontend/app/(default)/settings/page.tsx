@@ -25,6 +25,7 @@ import {
   type PromptOption,
 } from '@/lib/api/config';
 import { API_URL } from '@/lib/api/client';
+import { clearResumeDraftStorage } from '@/lib/builder/resume-storage';
 import { getVersionString } from '@/lib/config/version';
 import { useStatusCache } from '@/lib/context/status-cache';
 import { Button } from '@/components/ui/button';
@@ -117,6 +118,8 @@ const getHealthCheckMessage = (
 export default function SettingsPage() {
   const [status, setStatus] = useState<Status>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsLoadAttempt, setSettingsLoadAttempt] = useState(0);
 
   // LLM Config state
   const [aiRoute, setAiRoute] = useState<AIRoute>('direct_api');
@@ -278,13 +281,15 @@ export default function SettingsPage() {
   // Load LLM config and prompt config on mount
   useEffect(() => {
     let cancelled = false;
+    setSettingsLoaded(false);
+    setStatus('loading');
 
     async function loadConfig() {
       try {
         const [llmConfig, promptConfig, critiqueCfg] = await Promise.all([
-          fetchLlmConfig().catch(() => null),
-          fetchPromptConfig().catch(() => null),
-          fetchCritiqueConfig().catch(() => null),
+          fetchLlmConfig(),
+          fetchPromptConfig(),
+          fetchCritiqueConfig(),
         ]);
 
         if (cancelled) return;
@@ -339,11 +344,13 @@ export default function SettingsPage() {
         }
 
         setStatus('idle');
+        setSettingsLoaded(true);
       } catch (err) {
         console.error('Failed to load settings', err);
         if (!cancelled) {
           setError(t('settings.errors.unableToConnectBackend'));
           setStatus('error');
+          setSettingsLoaded(false);
         }
       }
     }
@@ -352,7 +359,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [settingsLoadAttempt, t]);
 
   // Handle provider change
   const handleProviderChange = (newProvider: LLMProvider) => {
@@ -523,6 +530,10 @@ export default function SettingsPage() {
 
   // Save configuration
   const handleSave = async () => {
+    if (!settingsLoaded) {
+      setError(t('settings.errors.unableToConnectBackend'));
+      return;
+    }
     setStatus('saving');
     setError(null);
     setHealthCheck(null);
@@ -649,6 +660,7 @@ export default function SettingsPage() {
   };
 
   const handlePromptConfigChange = async (value: string) => {
+    if (!settingsLoaded) return;
     setPromptConfigLoading(true);
     setError(null);
     try {
@@ -724,8 +736,7 @@ export default function SettingsPage() {
       // Clear all related localStorage keys
       localStorage.removeItem('master_resume_id');
       localStorage.removeItem('active_resume_id');
-      localStorage.removeItem('resume_builder_draft');
-      localStorage.removeItem('resume_builder_settings');
+      clearResumeDraftStorage(localStorage);
       localStorage.removeItem('resume_matcher_content_language');
       localStorage.removeItem('resume_matcher_ui_language');
 
@@ -1272,7 +1283,7 @@ export default function SettingsPage() {
                   variant="builderCta"
                   size="xs"
                   onClick={handleSave}
-                  disabled={status === 'saving' || status === 'loading'}
+                  disabled={!settingsLoaded || status === 'saving' || status === 'loading'}
                   className="min-w-[7rem] flex-1"
                 >
                   {status === 'saving' ? (
@@ -1293,7 +1304,7 @@ export default function SettingsPage() {
                   variant="builderOutline"
                   size="xs"
                   onClick={handleTestConnection}
-                  disabled={status === 'testing' || status === 'saving'}
+                  disabled={!settingsLoaded || status === 'testing' || status === 'saving'}
                   className="min-w-[7rem] flex-1 sm:flex-none"
                 >
                   {status === 'testing' ? (
@@ -1313,6 +1324,16 @@ export default function SettingsPage() {
                   <p className="font-mono text-[11px] text-red-600">
                     {t('settings.llmConfiguration.errorPrefix', { error })}
                   </p>
+                  {!settingsLoaded && (
+                    <Button
+                      variant="builderOutline"
+                      size="xs"
+                      className="mt-2"
+                      onClick={() => setSettingsLoadAttempt((attempt) => attempt + 1)}
+                    >
+                      {t('common.retry')}
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -1399,7 +1420,7 @@ export default function SettingsPage() {
                   value={defaultPromptId}
                   onChange={handlePromptConfigChange}
                   label={t('settings.promptSettings.title')}
-                  disabled={promptConfigLoading}
+                  disabled={!settingsLoaded || promptConfigLoading}
                   density="compact"
                 />
                 <p className="font-mono text-[10px] leading-snug text-muted-foreground">
@@ -1414,7 +1435,7 @@ export default function SettingsPage() {
                       type="checkbox"
                       className="h-3.5 w-3.5 shrink-0 accent-[var(--primary)]"
                       checked={critiqueEnabled}
-                      disabled={critiqueLoading}
+                      disabled={!settingsLoaded || critiqueLoading}
                       onChange={async (e) => {
                         const next = e.target.checked;
                         setCritiqueLoading(true);

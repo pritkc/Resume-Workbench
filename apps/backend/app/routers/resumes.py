@@ -29,6 +29,7 @@ from app.rendering.rendercv_adapter import (
     parse_rendercv_yaml_sections,
     rendercv_payload_to_yaml_sections,
     RenderCVYamlValidationError,
+    validate_markdown_emphasis_fields,
 )
 from app.rendering.rendercv_engine import RenderCVRenderError, render_resume_bundle
 from app.rendering.theme_profiles import (
@@ -758,10 +759,12 @@ def _build_resume_fetch_data(
     parent_id: str | None = None,
     title: str | None = None,
     application_pack_id: str | None = None,
+    draft_revision: int = 0,
 ) -> ResumeFetchData:
     created_at = raw_created_at or datetime.now(timezone.utc).isoformat()
     return ResumeFetchData(
         resume_id=resume_id,
+        draft_revision=draft_revision,
         resume_code=resume_code or derive_resume_code(resume_id),
         raw_resume=RawResume(
             id=None,
@@ -786,7 +789,8 @@ def _save_resume_payload(
     updated_data: dict[str, Any],
     theme_settings: RenderThemeProfile | None,
     cv_metadata: str | None = None,
-) -> dict[str, Any]:
+    expected_revision: int | None = None,
+) -> dict[str, Any] | None:
     updated_content = json.dumps(updated_data, indent=2)
     update_fields: dict[str, Any] = {
         "content": updated_content,
@@ -799,11 +803,12 @@ def _save_resume_payload(
     if cv_metadata is not None:
         update_fields["cv_metadata"] = cv_metadata
 
-    updated = db.update_resume(
-        resume_id,
-        update_fields,
+    updated = (
+        db.update_resume_if_revision(resume_id, expected_revision, update_fields)
+        if expected_revision is not None
+        else db.update_resume(resume_id, update_fields)
     )
-    if not updated:
+    if not updated and expected_revision is None:
         raise HTTPException(status_code=500, detail="Failed to update resume")
     return updated
 
@@ -917,6 +922,19 @@ def _normalize_draft_request(
         if path:
             detail["path"] = path
         raise HTTPException(status_code=422, detail=detail) from exc
+
+    try:
+        validate_markdown_emphasis_fields(normalized_resume_data)
+    except RenderCVYamlValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "type": "validation",
+                "message": str(exc),
+                "section": exc.section,
+                "path": exc.path,
+            },
+        ) from exc
 
     validated_resume = ResumeData.model_validate(
         normalize_resume_data(copy.deepcopy(normalized_resume_data))
@@ -1630,6 +1648,7 @@ async def get_resume(resume_id: str = Query(...)) -> ResumeFetchResponse:
         request_id=str(uuid4()),
         data=ResumeFetchData(
             resume_id=resume_id,
+            draft_revision=resume.get("draft_revision", 0),
             resume_code=_resume_code_from_record(resume, resume_id=resume_id),
             raw_resume=raw_resume,
             processed_resume=processed_resume,
@@ -1675,6 +1694,7 @@ async def normalize_resume_draft(
     draft_resume_id = request.resume_id or "draft"
     return ResumeDraftNormalizedResponse(
         request_id=str(uuid4()),
+        draft_revision=resume.get("draft_revision", 0) if resume else 0,
         data=_build_resume_fetch_data(
             resume_id=draft_resume_id,
             raw_content=json.dumps(normalized_data, indent=2),
@@ -1686,6 +1706,7 @@ async def normalize_resume_draft(
             parent_id=resume.get("parent_id") if resume else None,
             title=resume.get("title") if resume else None,
             application_pack_id=resume.get("application_pack_id") if resume else None,
+            draft_revision=resume.get("draft_revision", 0) if resume else 0,
         ),
         yaml_sections=yaml_sections,
     )
@@ -1721,7 +1742,12 @@ async def render_resume_draft_preview(
             theme_settings,
             identifier=(resume.get("title") if resume else None) or request.resume_id or "draft",
         )
-        artifacts = store_rendercv_bundle(bundle, resume_id=request.resume_id)
+        artifacts = store_rendercv_bundle(
+            bundle,
+            resume_id=request.resume_id,
+            draft_preview_session_id=request.preview_session_id or str(uuid4()),
+            draft_preview_sequence=request.preview_sequence or 0,
+        )
     except RenderCVRenderError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
@@ -2819,6 +2845,7 @@ async def update_resume_endpoint(
             parent_id=updated.get("parent_id"),
             title=updated.get("title"),
             application_pack_id=updated.get("application_pack_id"),
+            draft_revision=updated.get("draft_revision", 0),
         ),
     )
 
@@ -2847,10 +2874,21 @@ async def save_resume_draft(
         updated_data=normalized_data,
         theme_settings=theme_settings,
         cv_metadata=yaml_sections.metadata,
+        expected_revision=request.expected_revision,
     )
+
+    if updated is None:
+        latest = db.get_resume(resume_id)
+        if not latest:
+            raise HTTPException(status_code=404, detail="Resume not found")
+        raise HTTPException(
+            status_code=409,
+            detail="This resume changed in another session. Reload it before saving these edits.",
+        )
 
     return ResumeDraftNormalizedResponse(
         request_id=str(uuid4()),
+        draft_revision=updated.get("draft_revision", 0),
         data=_build_resume_fetch_data(
             resume_id=resume_id,
             raw_content=updated["content"],
@@ -2868,6 +2906,7 @@ async def save_resume_draft(
             parent_id=updated.get("parent_id"),
             title=updated.get("title"),
             application_pack_id=updated.get("application_pack_id"),
+            draft_revision=updated.get("draft_revision", 0),
         ),
         yaml_sections=yaml_sections,
     )

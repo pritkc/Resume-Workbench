@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.db.models import Resume
+from app.db.models import Resume, utcnow
 
 
 def create_resume(session: Session, **values: Any) -> Resume:
@@ -47,9 +47,33 @@ def update_resume(session: Session, resume_id: str, updates: dict[str, Any]) -> 
         return None
     for key, value in updates.items():
         setattr(record, key, value)
+    record.draft_revision += 1
     session.commit()
     session.refresh(record)
     return record
+
+
+def update_resume_if_revision(
+    session: Session,
+    resume_id: str,
+    expected_revision: int,
+    updates: dict[str, Any],
+) -> Resume | None:
+    values = {
+        **updates,
+        "draft_revision": expected_revision + 1,
+        "updated_at": utcnow(),
+    }
+    result = session.execute(
+        update(Resume)
+        .where(Resume.resume_id == resume_id, Resume.draft_revision == expected_revision)
+        .values(**values)
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        return None
+    session.commit()
+    return get_resume(session, resume_id)
 
 
 def delete_resume(session: Session, resume_id: str) -> bool:

@@ -5,9 +5,11 @@ import yaml
 
 from app.rendering.rendercv_adapter import (
     parse_rendercv_yaml_sections,
+    rendercv_cv_to_resume_data,
     rendercv_payload_to_yaml_sections,
     resume_to_rendercv_payload,
     summary_alignment_for_rendering,
+    validate_markdown_emphasis_fields,
 )
 from app.rendering.theme_profiles import RenderThemeSettings
 from app.schemas import ResumeData, normalize_resume_data
@@ -60,6 +62,136 @@ def test_rendercv_omits_projects_with_include_in_resume_false() -> None:
     projects = payload["cv"]["sections"]["projects"]
     assert len(projects) == 1
     assert projects[0]["name"] == "Visible Project"
+
+
+def test_hidden_default_and_custom_sections_stay_hidden_in_rendercv_payload() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "Summary",
+        "workExperience": [{"position": "Engineer", "company": "Co"}],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+        "customSections": {"custom_1": {"sectionType": "stringList", "strings": ["Hidden"]}},
+        "sectionMeta": [
+            {"id": "summary", "key": "summary", "displayName": "Summary", "isDefault": True, "isVisible": False, "order": 1},
+            {"id": "workExperience", "key": "workExperience", "displayName": "Experience", "isDefault": True, "isVisible": False, "order": 2},
+            {"id": "custom_1", "key": "custom_1", "displayName": "Custom", "isDefault": False, "isVisible": False, "order": 3},
+        ],
+    }
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    assert payload["cv"]["sections"] == {}
+
+
+def test_custom_item_description_lists_render_as_highlights_and_round_trip() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [],
+        "skills": {"groups": []},
+        "customSections": {
+            "custom_1": {
+                "sectionType": "itemList",
+                "items": [{"id": 1, "title": "Volunteer", "subtitle": "Lead", "location": "Remote", "years": "2024", "description": ["Built a program", "Managed 5 people"]}],
+            }
+        },
+        "sectionMeta": [{"id": "custom_1", "key": "custom_1", "displayName": "Community", "sectionType": "itemList", "isDefault": False, "isVisible": True, "order": 1}],
+    }
+    payload = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))
+    items = payload["cv"]["sections"]["Community"]
+    assert items == [{"title": "Volunteer", "summary": "Lead", "location": "Remote", "date": "2024", "highlights": ["Built a program", "Managed 5 people"]}]
+    parsed = parse_rendercv_yaml_sections(
+        {"cv": yaml.safe_dump({"cv": {"name": "Jane", "sections": {"Community": items}}})},
+        base_resume_data=resume,
+        base_theme_settings=RenderThemeSettings(theme_id="classic"),
+    )[0]
+    section = next(iter(parsed["customSections"].values()))
+    assert section["sectionType"] == "itemList"
+    assert section["items"][0]["description"] == ["Built a program", "Managed 5 people"]
+
+
+def test_explicit_empty_skills_clears_existing_skill_groups() -> None:
+    base = {"skills": {"groups": [{"id": "technicalSkills", "label": "Technical Skills", "values": ["Python"]}]}}
+    parsed = rendercv_cv_to_resume_data({"name": "Jane", "sections": {"skills": []}}, base_resume_data=base)
+    assert parsed["skills"]["groups"] == []
+
+
+def test_yaml_edit_preserves_hidden_projects_and_matches_visible_by_name() -> None:
+    base = {
+        "personalProjects": [
+            {"id": 1, "name": "Hidden A", "includeInResume": False, "description": ["Keep"]},
+            {"id": 2, "name": "Visible B", "includeInResume": True, "description": ["Old"]},
+        ],
+    }
+    parsed = rendercv_cv_to_resume_data(
+        {"name": "Jane", "sections": {"projects": [{"name": "Visible B", "highlights": ["Edited"]}]}},
+        base_resume_data=base,
+    )
+    projects = parsed["personalProjects"]
+    assert len(projects) == 2
+    assert projects[0]["name"] == "Visible B"
+    assert projects[0]["includeInResume"] is True
+    assert projects[0]["id"] == 2
+    assert projects[1]["name"] == "Hidden A"
+    assert projects[1]["includeInResume"] is False
+
+
+def test_skill_details_preserve_commas_inside_parentheses() -> None:
+    parsed = rendercv_cv_to_resume_data(
+        {"name": "Jane", "sections": {"skills": [{"label": "Technical Skills", "details": "AWS (Lambda, S3, RDS), Docker"}]}},
+        base_resume_data={},
+    )
+    assert parsed["skills"]["groups"][0]["values"] == ["AWS (Lambda, S3, RDS)", "Docker"]
+
+
+def test_multiple_summary_entries_are_rejected_with_yaml_path() -> None:
+    from app.rendering.rendercv_adapter import RenderCVYamlValidationError
+    import pytest
+
+    with pytest.raises(RenderCVYamlValidationError, match="one summary entry") as error:
+        rendercv_cv_to_resume_data({"name": "Jane", "sections": {"summary": ["First", "Second"]}})
+    assert error.value.path == ["cv", "sections", "summary"]
+
+
+def test_yaml_rejects_unknown_rendercv_cv_fields_before_saving() -> None:
+    import pytest
+    from app.rendering.rendercv_adapter import RenderCVYamlValidationError
+
+    with pytest.raises(RenderCVYamlValidationError, match="does not preserve this field"):
+        parse_rendercv_yaml_sections(
+            {"cv": "cv:\n  name: Jane\n  hidden_feature: true\n", "design": "design:\n  theme: classic\n"},
+            base_resume_data={},
+            base_theme_settings=RenderThemeSettings(theme_id="classic"),
+        )
+
+
+def test_markdown_emphasis_validation_accepts_valid_or_literal_stars() -> None:
+    for text in ("plain text", "2 * 3 = 6", "**valid bold**", r"literal \*\* markers"):
+        validate_markdown_emphasis_fields({"summary": text})
+
+
+def test_markdown_emphasis_validation_points_to_unmatched_summary_marker() -> None:
+    import pytest
+    from app.rendering.rendercv_adapter import RenderCVYamlValidationError
+
+    with pytest.raises(RenderCVYamlValidationError, match="Unmatched bold") as error:
+        validate_markdown_emphasis_fields({"summary": "Broken **bold"})
+
+    assert error.value.path == ["cv", "summary"]
+
+
+def test_markdown_emphasis_validation_points_to_unmatched_experience_bullet() -> None:
+    import pytest
+    from app.rendering.rendercv_adapter import RenderCVYamlValidationError
+
+    with pytest.raises(RenderCVYamlValidationError, match="workExperience.0.description.1") as error:
+        validate_markdown_emphasis_fields(
+            {"workExperience": [{"description": ["Valid", "Broken **bold"]}]}
+        )
+
+    assert error.value.path == ["cv", "workExperience", "0", "description", "1"]
 
 
 def test_project_highlights_drop_duplicate_tech_stack_row() -> None:

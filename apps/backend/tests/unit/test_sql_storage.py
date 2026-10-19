@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import Settings
 from app.database import Database
 from app.db.base import Base
+from app.db.repositories import artifacts as artifact_repo
 
 
 @contextmanager
@@ -82,6 +83,60 @@ def test_resume_and_job_crud_round_trip(tmp_path: Path) -> None:
         assert fetched_job is not None
         assert fetched_job["company"] == "Acme"
         assert fetched_job["role"] == "Backend Engineer"
+
+
+def test_draft_preview_artifacts_replace_and_ignore_late_sequences(tmp_path: Path) -> None:
+    with create_test_database(tmp_path) as database:
+        resume = database.create_resume(
+            content="# Jane Doe",
+            content_type="md",
+            filename="resume.md",
+            is_active=True,
+            processed_data={"summary": "Test"},
+            processing_status="ready",
+        )
+        resume_id = resume["resume_id"]
+
+        def artifact(path: str) -> dict:
+            return {
+                "kind": "resume_preview_png",
+                "mime_type": "image/png",
+                "file_name": Path(path).name,
+                "storage_path": path,
+                "resume_id": resume_id,
+                "metadata": {"page": 1},
+            }
+
+        first, removed = database.replace_draft_preview_artifacts(
+            resume_id=resume_id,
+            session_id="editor-a",
+            sequence=1,
+            artifacts=[artifact("/tmp/preview-1.png")],
+        )
+        assert len(first) == 1
+        assert removed == []
+
+        second, removed = database.replace_draft_preview_artifacts(
+            resume_id=resume_id,
+            session_id="editor-a",
+            sequence=2,
+            artifacts=[artifact("/tmp/preview-2.png")],
+        )
+        assert len(second) == 1
+        assert removed == ["/tmp/preview-1.png"]
+
+        stale, removed = database.replace_draft_preview_artifacts(
+            resume_id=resume_id,
+            session_id="editor-a",
+            sequence=1,
+            artifacts=[artifact("/tmp/stale.png")],
+        )
+        assert [row["storage_path"] for row in stale] == ["/tmp/preview-2.png"]
+        assert removed == []
+
+        with database._session() as session:
+            rows = artifact_repo.list_artifacts_for_resume(session, resume_id)
+        assert [row.storage_path for row in rows] == ["/tmp/preview-2.png"]
 
 
 def test_generation_runs_replace_legacy_improvements(tmp_path: Path) -> None:
