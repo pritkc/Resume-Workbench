@@ -102,6 +102,50 @@ def test_rendercv_experience_bullets_omit_stack_when_description_prefixed() -> N
     assert payload["cv"]["sections"]["experience"][0]["highlights"] == ["Built APIs"]
 
 
+def test_rendercv_adapter_strips_rich_stack_duplicates_and_emits_one_project_stack_field() -> None:
+    rich_stack = "<strong>Python</strong>, FastAPI, PostgreSQL"
+    experience_stack = "<strong>Stack:</strong> Python · FastAPI · PostgreSQL"
+    resume = {
+        "personalInfo": {"name": "Jane"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": 1,
+                "position": "Eng",
+                "company": "Acme",
+                "techStack": experience_stack,
+                "description": ["**Stack:** **Python** · FastAPI · PostgreSQL", "Built APIs"],
+                "highlights": ["Built APIs"],
+            }
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "Demo",
+                "techStack": rich_stack,
+                "description": [rich_stack, "Shipped CLI"],
+                "highlights": ["Shipped CLI"],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+
+    sections = rendercv_payload_to_yaml_sections(
+        resume,
+        RenderThemeSettings(theme_id="classic"),
+    )
+    cv_yaml = yaml.safe_load(sections["cv"])
+    experience = cv_yaml["cv"]["sections"]["experience"][0]
+    project = cv_yaml["cv"]["sections"]["projects"][0]
+
+    assert experience["summary"].count("Stack:") == 1
+    assert experience["highlights"] == ["Built APIs"]
+    assert project["summary"] == "**Python** • FastAPI • PostgreSQL"
+    assert project["highlights"] == ["Shipped CLI"]
+    assert "tech_stacks" not in project
+
+
 def test_rendercv_formats_work_stack_label_and_project_stack_separator() -> None:
     resume = {
         "personalInfo": {"name": "Jane"},
@@ -227,7 +271,7 @@ def test_rendercv_yaml_sections_emit_full_resolved_design(sample_resume: dict) -
     assert design["templates"]["education_entry"]["degree_column"] is None
 
 
-def test_rendercv_adapter_prefers_description_over_highlights(sample_resume_copy: dict) -> None:
+def test_rendercv_adapter_prefers_description_over_stale_highlights(sample_resume_copy: dict) -> None:
     sample_resume_copy["workExperience"][0]["description"] = [
         "Canonical tailored bullet",
         "Another canonical tailored bullet",
@@ -686,7 +730,6 @@ def test_rendercv_adapter_round_trip_preserves_rendercv_native_fields(
     assert payload["cv"]["sections"]["projects"][0] == {
         "name": "OpenAPI Generator",
         "date": "Mar 2021 - Present",
-        "tech_stacks": "Open-source API tooling project.",
         "summary": "Open-source API tooling project.",
         "highlights": ["500+ GitHub stars", "Used by 30+ engineering teams"],
     }
