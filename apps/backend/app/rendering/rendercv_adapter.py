@@ -579,6 +579,17 @@ def _format_tech_stack_summary(
     return cleaned
 
 
+def _is_duplicate_stack_line(value: str, stack: str, formatted_stack: str) -> bool:
+    """Compare legacy description rows after converting rich text to Markdown."""
+    def comparable(text: str | None) -> str:
+        normalized = _clean_rich_text(text) or _clean_text(text) or ""
+        normalized = re.sub(r"[*_~`]", "", normalized)
+        return re.sub(r"\s+", " ", normalized).strip()
+
+    normalized_value = comparable(value)
+    return normalized_value in {comparable(stack), comparable(formatted_stack)}
+
+
 def _bold_keyword_in_text(text: str, keyword: str) -> str:
     escaped = re.escape(keyword)
     pattern = re.compile(
@@ -648,7 +659,7 @@ def _experience_entries(
             include_label=True,
         )
         bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
-        while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
+        while stack and bullets and _is_duplicate_stack_line(bullets[0], stack, formatted_stack):
             bullets = bullets[1:]
         rows.append(
             {
@@ -727,13 +738,12 @@ def _project_entries(
             include_label=False,
         )
         bullets = coerce_string_list(item.get("description") or item.get("highlights") or [])
-        while stack and bullets and _clean_text(bullets[0]) in {stack, formatted_stack}:
+        while stack and bullets and _is_duplicate_stack_line(bullets[0], stack, formatted_stack):
             bullets = bullets[1:]
         project_rows.append(
             {
                 "name": name,
                 "date": _clean_text(item.get("date") or item.get("years")),
-                "tech_stacks": formatted_stack,
                 "summary": formatted_stack,
                 "highlights": [
                     _bold_keywords_in_bullet(_clean_rich_text(point) or "", bold_keywords)
