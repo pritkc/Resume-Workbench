@@ -58,6 +58,7 @@ class Resume(TimestampMixin, Base):
     original_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
     theme_settings: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     cv_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Job(TimestampMixin, Base):

@@ -6,11 +6,11 @@ import {
   frontendBaseUrl,
   gotoWithRetry,
   installArtifactMocks,
+  installLivePreviewMocks,
   jobDescriptionResponse,
   masterResumeId,
   masterResumeResponse,
   pngArtifact,
-  previewResult,
   statusPayload,
   tailoredResumeId,
   tailoredResumeResponse,
@@ -65,7 +65,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
       prompt_id: "keywords",
     });
   });
-  await page.route(/\/api\/v1\/resumes\/list\?include_master=true(?:&.*)?$/, async (route) => {
+  await page.route(/\/api\/v1\/resumes\/list\?include_active=true(?:&.*)?$/, async (route) => {
     await fulfillJson(route, {
       data: [
         {
@@ -94,12 +94,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
     uploadBodies.push(route.request().postDataJSON());
     await fulfillJson(route, { job_id: ["job-123"] });
   });
-  await page.route("**/api/v1/application-packs/preview", async (route) => {
-    previewBodies.push(
-      route.request().postDataJSON() as Record<string, unknown>,
-    );
-    await fulfillJson(route, previewResult);
-  });
+  await installLivePreviewMocks(page, (payload) => previewBodies.push(payload));
   await page.route("**/api/v1/application-packs/confirm", async (route) => {
     confirmBodies.push(
       route.request().postDataJSON() as Record<string, unknown>,
@@ -152,11 +147,11 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
 
   await gotoWithRetry(page, `${frontendBaseUrl}/dashboard`);
   await page.waitForLoadState("networkidle");
-  const createResumeCard = page.getByRole("button", { name: /create resume/i });
+  const createResumeCard = page.getByRole("link", { name: /create resume/i });
   await expect(createResumeCard).toBeEnabled();
   await gotoWithRetry(page, `${frontendBaseUrl}/tailor`);
 
-  await page.locator("textarea").fill(jobDescriptionResponse.content);
+  await page.getByRole("textbox", { name: /paste the job description/i }).fill(jobDescriptionResponse.content);
   await page.getByRole("button", { name: /generate tailored resume/i }).click();
 
   await expect(
@@ -166,7 +161,6 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   await expect(page).toHaveURL(
     new RegExp(`/builder\\?id=${tailoredResumeId}$`),
   );
-  await expect(page.getByText("RenderCV Preview")).toBeVisible();
   await expect(page.getByAltText("preview.png")).toBeVisible();
 
   await page.waitForLoadState("networkidle");
@@ -184,7 +178,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   await page.getByRole("button", { name: "JD MATCH", exact: true }).click();
   await expect(page.getByText(/about jd match/i)).toBeVisible();
 
-  await page.getByRole("button", { name: /back to dashboard/i }).click();
+  await page.getByRole("link", { name: /back to dashboard/i }).click();
   await expect(page).toHaveURL(new RegExp("/dashboard$"));
 
   expect(uploadBodies).toEqual([

@@ -30,11 +30,46 @@ import { InlineResumeField, ResumeCanvasAddLink } from '../inline-resume-field';
 import { DRAG_ACTIVATION_LIST_PX, resumeSortableCollision } from '@/lib/builder/drag-settings';
 
 /** Split pasted or typed draft text into individual skill tags (comma, semicolon, or line break). */
-function parseSkillDraftTokens(raw: string): string[] {
-  return raw
-    .split(/[,;\n\r]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+export function parseSkillDraftTokens(raw: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let nesting = 0;
+  let quote = '';
+  let escaped = false;
+  for (const char of raw) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      current += char;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      current += char;
+      if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if ('([{'.includes(char)) nesting += 1;
+    if (')]}'.includes(char)) nesting = Math.max(0, nesting - 1);
+    if ((char === ',' || char === ';' || char === '\n' || char === '\r') && nesting === 0) {
+      const token = current.trim().replace(/^("([\s\S]*)"|'([\s\S]*)')$/, '$2$3');
+      if (token) tokens.push(token);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  const token = current.trim().replace(/^("([\s\S]*)"|'([\s\S]*)')$/, '$2$3');
+  if (token) tokens.push(token);
+  return tokens;
 }
 
 interface AdditionalGroupsFormProps {

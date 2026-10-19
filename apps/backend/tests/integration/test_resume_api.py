@@ -636,6 +636,27 @@ class TestDraftResumeFlows:
         assert payload["data"]["processed_resume"]["summary"] == "Updated summary from YAML"
         assert state["processed_data"]["summary"] == "Updated summary from YAML"
 
+    @patch("app.routers.resumes.db")
+    async def test_save_resume_draft_rejects_stale_revision(
+        self, mock_db, client, mock_resume_record
+    ):
+        mock_db.get_resume.return_value = {**mock_resume_record, "draft_revision": 4}
+        mock_db.update_resume_if_revision.return_value = None
+
+        async with client:
+            resp = await client.patch(
+                "/api/v1/resumes/res-123/draft",
+                json={
+                    "resume_id": "res-123",
+                    "expected_revision": 3,
+                    "processed_resume": mock_resume_record["processed_data"],
+                },
+            )
+
+        assert resp.status_code == 409
+        assert "Reload it before saving" in resp.json()["detail"]
+        mock_db.update_resume_if_revision.assert_called_once()
+
     async def test_normalize_resume_draft_returns_section_and_line_for_invalid_yaml(
         self, client
     ):

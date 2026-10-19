@@ -56,6 +56,7 @@ htmlcov/
 
 # Backend local runtime state
 apps/backend/data/*.json
+apps/backend/data/*.json.lock
 !apps/backend/data/.gitkeep
 apps/backend/data/artifacts/
 apps/backend/data/rendercv/

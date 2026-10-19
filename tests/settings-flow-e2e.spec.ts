@@ -18,7 +18,7 @@ test("settings saves config, tests connection, and updates prompt defaults", asy
   await page.route(/\/api\/v1\/status(?:\?.*)?$/, async (route) => {
     await fulfillJson(route, statusPayload());
   });
-  await page.route(/\/api\/v1\/resumes\/list\?include_master=true(?:&.*)?$/, async (route) => {
+  await page.route(/\/api\/v1\/resumes\/list\?include_active=true(?:&.*)?$/, async (route) => {
     await fulfillJson(route, { data: [] });
   });
   await page.route(/\/api\/v1\/config\/llm-api-key\/?(?:\?.*)?$/, async (route) => {

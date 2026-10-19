@@ -1,6 +1,14 @@
 'use client';
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import {
   fetchDraftRenderPreview,
@@ -58,6 +66,8 @@ export const RenderPreviewPanel = forwardRef<RenderPreviewPanelHandle, RenderPre
     const [isLoading, setIsLoading] = useState(false);
     const [isPendingLoad, setIsPendingLoad] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const requestSequenceRef = useRef(0);
+    const previewSessionRef = useRef<string | null>(null);
 
     useEffect(() => {
       if (initialArtifacts.length > 0) {
@@ -71,20 +81,29 @@ export const RenderPreviewPanel = forwardRef<RenderPreviewPanelHandle, RenderPre
       if (!resumeId && !draftRequest) {
         return;
       }
+      const requestSequence = ++requestSequenceRef.current;
       try {
         setIsLoading(true);
         setIsPendingLoad(false);
         setError(null);
         const preview = draftRequest
-          ? await fetchDraftRenderPreview(draftRequest)
+          ? await fetchDraftRenderPreview({
+              ...draftRequest,
+              preview_session_id:
+                previewSessionRef.current ??
+                (previewSessionRef.current = globalThis.crypto.randomUUID()),
+              preview_sequence: requestSequence,
+            })
           : await fetchResumeRenderPreview(resumeId!, settings);
+        if (requestSequenceRef.current !== requestSequence) return;
         setArtifacts(preview.artifacts);
       } catch (loadError) {
+        if (requestSequenceRef.current !== requestSequence) return;
         const message =
           loadError instanceof Error ? loadError.message : 'Failed to load RenderCV preview.';
         setError(message);
       } finally {
-        setIsLoading(false);
+        if (requestSequenceRef.current === requestSequence) setIsLoading(false);
       }
     }, [draftRequest, resumeId, settings]);
 
@@ -108,7 +127,10 @@ export const RenderPreviewPanel = forwardRef<RenderPreviewPanelHandle, RenderPre
       const timeout = window.setTimeout(() => {
         void loadPreview();
       }, 450);
-      return () => window.clearTimeout(timeout);
+      return () => {
+        window.clearTimeout(timeout);
+        requestSequenceRef.current += 1;
+      };
     }, [draftRequest, loadPreview, refreshKey, resumeId, settings]);
 
     useEffect(() => {

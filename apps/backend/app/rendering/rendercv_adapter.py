@@ -9,6 +9,7 @@ from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
 import yaml
+from rendercv.schema.models.cv.cv import Cv
 
 from app.prompts.prompt_policy import low_signal_bold_keywords
 from app.services.additional_groups import (
@@ -128,6 +129,75 @@ def _clean_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def validate_markdown_emphasis_fields(resume_data: dict[str, Any]) -> None:
+    """Reject unmatched bold markers before they reach the RenderCV renderer."""
+    candidates: list[tuple[list[str], Any]] = [(["summary"], resume_data.get("summary"))]
+    for section_name in ("workExperience", "education", "personalProjects"):
+        entries = resume_data.get(section_name)
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            for field_name in ("description", "summary"):
+                value = entry.get(field_name)
+                if isinstance(value, list):
+                    candidates.extend(
+                        ([section_name, str(index), field_name, str(point_index)], point)
+                        for point_index, point in enumerate(value)
+                    )
+                else:
+                    candidates.append(([section_name, str(index), field_name], value))
+
+    custom_sections = resume_data.get("customSections")
+    if isinstance(custom_sections, dict):
+        for section_key, section in custom_sections.items():
+            if not isinstance(section, dict):
+                continue
+            section_type = getattr(section.get("sectionType"), "value", section.get("sectionType"))
+            if section_type == "text":
+                candidates.append((["customSections", str(section_key), "text"], section.get("text")))
+            elif section_type == "stringList":
+                strings = section.get("strings")
+                if isinstance(strings, list):
+                    candidates.extend(
+                        (["customSections", str(section_key), "strings", str(index)], value)
+                        for index, value in enumerate(strings)
+                    )
+            else:
+                items = section.get("items")
+                if not isinstance(items, list):
+                    continue
+                for item_index, item in enumerate(items):
+                    if not isinstance(item, dict):
+                        continue
+                    for field_name in ("title", "subtitle"):
+                        candidates.append(
+                            (["customSections", str(section_key), "items", str(item_index), field_name], item.get(field_name))
+                        )
+                    description = item.get("description")
+                    if isinstance(description, list):
+                        candidates.extend(
+                            (
+                                ["customSections", str(section_key), "items", str(item_index), "description", str(point_index)],
+                                value,
+                            )
+                            for point_index, value in enumerate(description)
+                        )
+
+    for path, value in candidates:
+        if not isinstance(value, str):
+            continue
+        unescaped = re.sub(r"\\\*", "", value)
+        if len(re.findall(r"\*\*", unescaped)) % 2:
+            dotted_path = ".".join(path)
+            raise RenderCVYamlValidationError(
+                f"Unmatched bold Markdown marker in `{dotted_path}`. Close the `**` marker or escape it as `\\*\\*`.",
+                section="cv",
+                path=["cv", *path],
+            )
 
 
 class _RichTextMarkdownParser(HTMLParser):
@@ -567,7 +637,7 @@ def _format_tech_stack_summary(
         return ""
 
     separator = _tech_stack_separator(theme_settings)
-    parts = [part.strip() for part in cleaned.split(",") if part.strip()]
+    parts = _split_csv(cleaned)
     if not _looks_like_tech_stack(cleaned, parts):
         return cleaned
     if len(parts) > 1:
@@ -581,10 +651,15 @@ def _format_tech_stack_summary(
 
 def _is_duplicate_stack_line(value: str, stack: str, formatted_stack: str) -> bool:
     """Compare legacy description rows after converting rich text to Markdown."""
-    def comparable(text: str | None) -> str:
+    def comparable(text: str | None) -> tuple[str, ...]:
         normalized = _clean_rich_text(text) or _clean_text(text) or ""
         normalized = re.sub(r"[*_~`]", "", normalized)
-        return re.sub(r"\s+", " ", normalized).strip()
+        normalized = re.sub(r"^stack\s*:\s*", "", normalized, flags=re.IGNORECASE)
+        return tuple(
+            re.sub(r"\s+", " ", part).strip().casefold()
+            for part in re.split(r"\s*[,;|•·]\s*", normalized)
+            if part.strip()
+        )
 
     normalized_value = comparable(value)
     return normalized_value in {comparable(stack), comparable(formatted_stack)}
@@ -706,6 +781,13 @@ def _project_included_in_resume(item: dict[str, Any]) -> bool:
     return True
 
 
+def _project_identity(value: Any) -> str:
+    """Build a stable matching key for a project across YAML edits."""
+    name = _clean_text(value if isinstance(value, str) else None) or ""
+    name, _github, _website = _parse_project_name_and_links(name)
+    return _NON_ALNUM_RE.sub("", (name or "").casefold())
+
+
 def _project_entries(
     entries: list[dict[str, Any]],
     *,
@@ -761,7 +843,7 @@ def _skills_sections(skills_section: dict[str, Any]) -> list[dict[str, str]]:
         label = _clean_text(str(group.get("label") or ""))
         values = [item for item in group.get("values") or [] if isinstance(item, str) and item.strip()]
         if label and values:
-            entries.append({"label": label, "details": ", ".join(values)})
+            entries.append({"label": label, "details": _join_csv(values)})
     return entries
 
 
@@ -772,8 +854,8 @@ def _bullet_entries(items: list[str]) -> list[dict[str, str]]:
 def _custom_sections(
     custom_sections: dict[str, Any],
     section_meta: list[dict[str, Any]] | None = None,
-) -> dict[str, list[dict[str, str]] | list[str]]:
-    sections: dict[str, list[dict[str, str]] | list[str]] = {}
+) -> dict[str, list[dict[str, Any]] | list[str]]:
+    sections: dict[str, list[dict[str, Any]] | list[str]] = {}
     display_name_by_key = {
         str(meta.get("key", "")).strip(): str(meta.get("displayName", "")).strip()
         for meta in section_meta or []
@@ -782,7 +864,7 @@ def _custom_sections(
     for key, raw_section in custom_sections.items():
         if not isinstance(raw_section, dict):
             continue
-        title = (
+        section_title = (
             raw_section.get("title")
             or raw_section.get("displayName")
             or display_name_by_key.get(key)
@@ -793,30 +875,43 @@ def _custom_sections(
         if section_type == "text":
             text_value = _clean_rich_text(raw_section.get("text"))
             if text_value:
-                sections[title] = [text_value]
+                sections[section_title] = [text_value]
             continue
         if section_type == "stringList":
             strings = _text_list(raw_section.get("strings"))
             if strings:
-                sections[title] = strings
+                sections[section_title] = strings
             continue
         items = raw_section.get("items") or []
-        normalized_items: list[str] = []
+        normalized_items: list[dict[str, Any] | str] = []
         for item in items:
             if isinstance(item, str):
                 normalized_items.append(item)
             elif isinstance(item, dict):
-                pieces = [
-                    _clean_text(item.get("title")),
-                    _clean_text(item.get("subtitle")),
-                    _clean_rich_text(item.get("description")),
-                    _clean_text(item.get("years")),
+                entry: dict[str, Any] = {}
+                item_title = _clean_text(item.get("title"))
+                subtitle = _clean_text(item.get("subtitle"))
+                location = _clean_text(item.get("location"))
+                date = _clean_text(item.get("years") or item.get("date"))
+                description = [
+                    cleaned
+                    for point in coerce_string_list(item.get("description"))
+                    if (cleaned := _clean_rich_text(point))
                 ]
-                line = " — ".join(piece for piece in pieces if piece)
-                if line:
-                    normalized_items.append(line)
+                if item_title:
+                    entry["title"] = item_title
+                if subtitle:
+                    entry["summary"] = subtitle
+                if location:
+                    entry["location"] = location
+                if date:
+                    entry["date"] = date
+                if description:
+                    entry["highlights"] = description
+                if entry:
+                    normalized_items.append(entry)
         if normalized_items:
-            sections[title] = normalized_items
+            sections[section_title] = normalized_items
     return sections
 
 
@@ -888,13 +983,33 @@ def resume_to_rendercv_payload(
         for render_key in _DEFAULT_RENDERCV_SECTION_KEYS:
             if render_key in sections:
                 continue
-            if render_key == "summary" and not summary_is_visible:
+            meta_id = next(
+                (sid for sid, target in _SECTION_META_ID_TO_RENDER_KEY.items() if target == render_key),
+                render_key,
+            )
+            has_visibility_declaration = any(
+                meta.get("isDefault", True)
+                and str(meta.get("id") or meta.get("key") or "").strip() == meta_id
+                for meta in sorted_meta
+            )
+            if has_visibility_declaration and not _is_section_visible(section_meta_raw, meta_id):
                 continue
             if render_key in blocks:
                 sections[render_key] = blocks[render_key]
 
         for section_title, values in custom_sections_map.items():
-            if section_title not in sections:
+            matching_meta = next(
+                (
+                    meta
+                    for meta in sorted_meta
+                    if not meta.get("isDefault", True)
+                    and str(meta.get("displayName") or "").strip() == section_title
+                ),
+                None,
+            )
+            if section_title not in sections and (
+                matching_meta is None or _coerce_bool(matching_meta.get("isVisible"), default=True)
+            ):
                 sections[section_title] = values
     else:
         if summary and summary_is_visible:
@@ -996,7 +1111,60 @@ def _text_list(value: Any) -> list[str]:
 def _split_csv(value: str | None) -> list[str]:
     if not value:
         return []
-    return [item.strip() for item in value.split(",") if item.strip()]
+    parts: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    escaped = False
+    nesting = 0
+    for char in value:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            current.append(char)
+            escaped = True
+            continue
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+            continue
+        if char in "([{":
+            nesting += 1
+        elif char in ")]}":
+            nesting = max(0, nesting - 1)
+        if char == "," and nesting == 0:
+            token = "".join(current).strip()
+            if token:
+                parts.append(_unquote_csv_token(token))
+            current = []
+        else:
+            current.append(char)
+    token = "".join(current).strip()
+    if token:
+        parts.append(_unquote_csv_token(token))
+    return parts
+
+
+def _unquote_csv_token(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1].replace("\\" + value[0], value[0]).replace("\\\\", "\\").strip()
+    return value
+
+
+def _join_csv(values: list[str]) -> str:
+    encoded: list[str] = []
+    for value in values:
+        cleaned = value.strip()
+        if "," in cleaned or '"' in cleaned:
+            cleaned = '"' + cleaned.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        encoded.append(cleaned)
+    return ", ".join(encoded)
 
 
 def _skill_entry_items(entry: dict[str, Any]) -> list[str]:
@@ -1244,6 +1412,13 @@ def rendercv_cv_to_resume_data(
         social_networks.append({"network": network, "username": username})
 
     summary_items = _text_list(sections.get("summary"))
+    if len(summary_items) > 1:
+        raise RenderCVYamlValidationError(
+            "The editor supports one summary entry. Combine the text into one entry before saving.",
+            section="cv",
+            path=["cv", "sections", "summary"],
+        )
+    has_explicit_skills = "skills" in sections
     skills_entries = sections.get("skills") if isinstance(sections.get("skills"), list) else []
     skill_groups: list[dict[str, Any]] = []
     existing_group_labels: set[str] = set()
@@ -1376,11 +1551,27 @@ def rendercv_cv_to_resume_data(
         )
 
     base_projects = (base_resume_data or {}).get("personalProjects") or []
-    for idx, proj in enumerate(projects):
-        if idx < len(base_projects) and isinstance(base_projects[idx], dict):
-            base_flag = base_projects[idx].get("includeInResume")
+    hidden_projects = [
+        copy.deepcopy(project)
+        for project in base_projects
+        if isinstance(project, dict) and not _project_included_in_resume(project)
+    ]
+    base_visible_by_name: dict[str, list[dict[str, Any]]] = {}
+    for project in base_projects:
+        if not isinstance(project, dict) or not _project_included_in_resume(project):
+            continue
+        identity = _project_identity(project.get("name"))
+        base_visible_by_name.setdefault(identity, []).append(project)
+    for proj in projects:
+        matches = base_visible_by_name.get(_project_identity(proj.get("name")), [])
+        base_project = matches.pop(0) if matches else None
+        if base_project is not None:
+            base_flag = base_project.get("includeInResume")
             if base_flag is not None:
                 proj["includeInResume"] = bool(base_flag)
+            if base_project.get("id") is not None:
+                proj["id"] = base_project["id"]
+    projects.extend(hidden_projects)
 
     custom_sections_payload = {
         title: values
@@ -1446,19 +1637,113 @@ def rendercv_cv_to_resume_data(
             "personalProjects": projects,
             "skills": normalize_skill_groups(
                 {"groups": skill_groups}
-                if skill_groups
-                else resume_data.get("skills") or resume_data.get("additional") or default_skills_section()
+                if has_explicit_skills or skill_groups
+                else resume_data.get("skills") or resume_data.get("additional") or default_skills_section(),
+                seed_defaults_if_empty=not has_explicit_skills,
             ),
             "additional": normalize_additional_groups(
                 {"groups": skill_groups}
-                if skill_groups
-                else resume_data.get("skills") or resume_data.get("additional") or default_skills_section()
+                if has_explicit_skills or skill_groups
+                else resume_data.get("skills") or resume_data.get("additional") or default_skills_section(),
+                seed_defaults_if_empty=not has_explicit_skills,
             ),
             "customSections": custom_sections,
             "sectionMeta": section_meta,
         }
     )
     return resume_data
+
+
+def _validate_supported_cv_yaml(cv_payload: dict[str, Any]) -> None:
+    """Reject CV fields that this adapter cannot retain in its app model."""
+    unknown_cv_fields = set(cv_payload) - set(Cv.model_fields)
+    if unknown_cv_fields:
+        key = sorted(unknown_cv_fields)[0]
+        raise RenderCVYamlValidationError(
+            f"Unsupported CV field `{key}`. This editor does not preserve this field.",
+            section="cv",
+            path=["cv", key],
+        )
+
+    sections = cv_payload.get("sections", {})
+    if sections is None:
+        return
+    if not isinstance(sections, dict):
+        raise RenderCVYamlValidationError(
+            "CV sections must be a mapping.", section="cv", path=["cv", "sections"]
+        )
+
+    supported_entry_fields = {
+        "experience": {"company", "position", "start_date", "end_date", "date", "location", "summary", "highlights"},
+        "education": {"institution", "area", "degree", "start_date", "end_date", "date", "location", "summary", "highlights"},
+        "projects": {"name", "date", "summary", "tech_stacks", "role", "highlights"},
+        "skills": {"label", "title", "details", "items", "values"},
+        "certifications": {"bullet", "summary", "details", "title"},
+        "awards": {"bullet", "summary", "details", "title"},
+    }
+    supported_custom_entry_fields = {
+        "title",
+        "name",
+        "company",
+        "institution",
+        "label",
+        "position",
+        "subtitle",
+        "summary",
+        "details",
+        "area",
+        "location",
+        "date",
+        "highlights",
+        "bullet",
+    }
+    for section_name, entries in sections.items():
+        fields = supported_entry_fields.get(section_name)
+        if section_name == "summary":
+            if not isinstance(entries, list):
+                raise RenderCVYamlValidationError(
+                    "The summary section must be a list of text entries.",
+                    section="cv",
+                    path=["cv", "sections", "summary"],
+                )
+            for index, entry in enumerate(entries):
+                if isinstance(entry, str):
+                    continue
+                if isinstance(entry, dict) and set(entry) == {"bullet"}:
+                    continue
+                raise RenderCVYamlValidationError(
+                    "The summary section supports text entries only.",
+                    section="cv",
+                    path=["cv", "sections", "summary", str(index)],
+                )
+            continue
+        custom_section = fields is None
+        if not isinstance(entries, list):
+            raise RenderCVYamlValidationError(
+                f"Section `{section_name}` must be a list. This editor does not preserve other section formats.",
+                section="cv",
+                path=["cv", "sections", section_name],
+            )
+        for index, entry in enumerate(entries):
+            if isinstance(entry, str) and (
+                custom_section or section_name in {"skills", "certifications", "awards"}
+            ):
+                continue
+            if not isinstance(entry, dict):
+                raise RenderCVYamlValidationError(
+                    f"Unsupported entry format in `{section_name}`. This editor does not preserve this value.",
+                    section="cv",
+                    path=["cv", "sections", section_name, str(index)],
+                )
+            accepted_fields = supported_custom_entry_fields if custom_section else fields
+            unknown = set(entry) - accepted_fields
+            if unknown:
+                key = sorted(unknown)[0]
+                raise RenderCVYamlValidationError(
+                    f"Unsupported field `{key}` in `{section_name}`. This editor does not preserve this field.",
+                    section="cv",
+                    path=["cv", "sections", section_name, str(index), key],
+                )
 
 
 def parse_rendercv_yaml_sections(
@@ -1508,6 +1793,8 @@ def parse_rendercv_yaml_sections(
     design_payload = load_section("design")
     locale_payload = load_section("locale")
     settings_payload = load_section("settings")
+
+    _validate_supported_cv_yaml(cv_payload)
 
     theme_settings = theme_settings_from_rendercv_sections(
         design=design_payload,

@@ -889,6 +889,7 @@ class ResumeFetchData(BaseModel):
     """Data payload for resume fetch response."""
 
     resume_id: str
+    draft_revision: int = 0
     resume_code: str | None = None
     raw_resume: RawResume
     processed_resume: ResumeData | None = None
@@ -1348,6 +1349,9 @@ class ResumeDraftRequest(BaseModel):
     """Draft payload for previewing, normalizing, or persisting unsaved changes."""
 
     resume_id: str | None = None
+    expected_revision: int | None = None
+    preview_session_id: str | None = Field(default=None, min_length=1, max_length=128)
+    preview_sequence: int | None = Field(default=None, ge=0)
     processed_resume: ResumeData | None = None
     theme_settings: RenderThemeSettings | None = None
     yaml_sections: RawYamlSections | None = None
@@ -1357,6 +1361,7 @@ class ResumeDraftNormalizedResponse(BaseModel):
     """Normalized structured + YAML draft response."""
 
     request_id: str
+    draft_revision: int = 0
     data: ResumeFetchData
     yaml_sections: RawYamlSections
 

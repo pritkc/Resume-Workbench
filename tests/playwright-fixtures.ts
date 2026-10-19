@@ -1,7 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 
 export const frontendBaseUrl =
-  process.env.E2E_FRONTEND_URL ?? "http://127.0.0.1:3000";
+  process.env.E2E_FRONTEND_URL ?? "http://127.0.0.1:3100";
 export const masterResumeId = "master-123";
 export const tailoredResumeId = "tailored-123";
 
@@ -212,6 +212,51 @@ export async function fulfillJson(route: Route, data: unknown, status = 200) {
     contentType: "application/json",
     body: JSON.stringify(data),
   });
+}
+
+export async function installLivePreviewMocks(
+  page: Page,
+  onStart?: (payload: Record<string, unknown>) => void,
+) {
+  const liveRunId = "live-run-e2e";
+  await page.route(/\/api\/v1\/application-packs\/preview\/live\/?(?:\?.*)?$/, async (route) => {
+    onStart?.(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfillJson(route, {
+      request_id: "req-live-preview-start",
+      data: {
+        live_run_id: liveRunId,
+        generation_run_id: "generation-run-e2e",
+        trace_id: "trace-e2e",
+        status: "running",
+      },
+    });
+  });
+  await page.route(
+    new RegExp(`/api/v1/application-packs/preview/live/${liveRunId}/events(?:\\?.*)?$`),
+    async (route) => {
+      const event = {
+        event_id: "event-live-complete",
+        sequence: 1,
+        live_run_id: liveRunId,
+        generation_run_id: "generation-run-e2e",
+        trace_id: "trace-e2e",
+        type: "run.completed",
+        at: "2026-04-05T12:00:00Z",
+        data: {},
+      };
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+        body: `event: run.completed\ndata: ${JSON.stringify(event)}\n\n`,
+      });
+    },
+  );
+  await page.route(
+    new RegExp(`/api/v1/application-packs/preview/live/${liveRunId}/result(?:\\?.*)?$`),
+    async (route) => {
+      await fulfillJson(route, previewResult);
+    },
+  );
 }
 
 export async function installArtifactMocks(page: Page) {

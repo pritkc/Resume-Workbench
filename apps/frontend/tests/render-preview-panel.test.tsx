@@ -119,8 +119,60 @@ describe('RenderPreviewPanel', () => {
 
     render(<RenderPreviewPanel settings={baseSettings} draftRequest={draftRequest} />);
 
-    await waitFor(() => expect(fetchDraftRenderPreview).toHaveBeenCalledWith(draftRequest));
+    await waitFor(() =>
+      expect(fetchDraftRenderPreview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...draftRequest,
+          preview_session_id: expect.any(String),
+          preview_sequence: expect.any(Number),
+        })
+      )
+    );
     expect(await screen.findByAltText('preview.png')).toBeInTheDocument();
+  });
+
+  it('does not let a late response replace the latest preview', async () => {
+    let resolveOld!: (value: { artifacts: ArtifactSummary[] }) => void;
+    let resolveNew!: (value: { artifacts: ArtifactSummary[] }) => void;
+    fetchDraftRenderPreview
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOld = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNew = resolve;
+          })
+      );
+    const draftA = { processed_resume: { summary: 'Old draft' } };
+    const draftB = { processed_resume: { summary: 'New draft' } };
+    const oldArtifact: ArtifactSummary = {
+      artifact_id: 'artifact-old',
+      kind: 'resume_preview_png',
+      mime_type: 'image/png',
+      file_name: 'old-preview.png',
+      url: '/api/v1/artifacts/artifact-old',
+    };
+    const newArtifact: ArtifactSummary = {
+      artifact_id: 'artifact-new',
+      kind: 'resume_preview_png',
+      mime_type: 'image/png',
+      file_name: 'new-preview.png',
+      url: '/api/v1/artifacts/artifact-new',
+    };
+    const { rerender } = render(<RenderPreviewPanel draftRequest={draftA} />);
+    await waitFor(() => expect(fetchDraftRenderPreview).toHaveBeenCalledTimes(1));
+
+    rerender(<RenderPreviewPanel draftRequest={draftB} />);
+    await waitFor(() => expect(fetchDraftRenderPreview).toHaveBeenCalledTimes(2));
+    resolveNew({ artifacts: [newArtifact] });
+    expect(await screen.findByAltText('new-preview.png')).toBeInTheDocument();
+    resolveOld({ artifacts: [oldArtifact] });
+    await waitFor(() => expect(screen.getByAltText('new-preview.png')).toBeInTheDocument());
+    expect(screen.queryByAltText('old-preview.png')).not.toBeInTheDocument();
   });
 
   it('does not render an internal preview header bar', async () => {
