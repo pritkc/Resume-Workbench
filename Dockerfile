@@ -73,6 +73,8 @@ COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
 # ============================================
 COPY apps/backend/pyproject.toml /app/backend/
 COPY apps/backend/app /app/backend/app
+COPY apps/backend/alembic.ini /app/backend/alembic.ini
+COPY apps/backend/alembic /app/backend/alembic
 
 WORKDIR /app/backend
 

@@ -101,6 +101,19 @@ Open [http://localhost:3000](http://localhost:3000), then configure an AI provid
 
 For Docker, provider options, troubleshooting, and production notes, use [SETUP.md](SETUP.md).
 
+### Oracle release
+
+Merging into `main` publishes `ghcr.io/pritkc/resume-workbench:latest`. The Oracle VM checks this image every ten minutes. Its updater backs up the database and files, runs Alembic migrations using the new image, pins the image digest, restarts the app, and verifies the active resume and PDF. It restores the prior app image if verification fails. Keep migrations compatible with the prior app version so that rollback remains possible.
+
+The host uses `/home/ubuntu/resume-workbench/compose.yml` and Cloudflare Tunnel. Do not replace that compose file with the local `docker-compose.yml`. When the updater changes, install the tracked [Oracle update script](infra/oracle/update.sh) on the VM through Tailscale:
+
+```bash
+scp -i ~/.ssh/oci infra/oracle/update.sh ubuntu@oci-main:/home/ubuntu/resume-workbench/update.sh
+ssh -i ~/.ssh/oci ubuntu@oci-main 'chmod +x /home/ubuntu/resume-workbench/update.sh'
+```
+
+After the image publish workflow succeeds, wait for the timer or run `sudo systemctl start resume-workbench-update.service` on the VM. Check `journalctl -u resume-workbench-update.service -n 40 --no-pager`, then run `/home/ubuntu/resume-workbench/verify.py`. Confirm that `APP_IMAGE` in the host `.env` has the new digest and that the database's `alembic_version` matches the latest migration. A failed update keeps or restores the previous app image; inspect the journal before retrying.
+
 ## Repository map
 
 ```text
