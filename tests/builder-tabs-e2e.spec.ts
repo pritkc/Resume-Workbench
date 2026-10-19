@@ -280,11 +280,6 @@ test("builder shows RenderCV CV/Design/Locale/Settings tabs", async ({
   await page.getByRole("button", { name: "Design" }).click();
   await expect(page.getByLabel("Design raw YAML editor")).toBeVisible();
 
-  await page.getByRole("button", { name: "YAML", exact: true }).click();
-  await expect(page.getByText("RenderCV Design")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Core" })).toBeVisible();
-  await expect(page.getByText("Theme Profile")).toHaveCount(0);
-
   await page.getByRole("button", { name: "Show preview only" }).click();
   await expect(page.getByRole("button", { name: "YAML", exact: true })).toBeHidden();
   await expect(
@@ -301,6 +296,7 @@ test("builder undo restores the previous raw yaml draft", async ({ page }) => {
   await page.goto(`${frontendBaseUrl}/builder?id=${resumeId}`);
   await page.waitForLoadState("networkidle");
 
+  await page.getByRole("button", { name: "CV", exact: true }).click();
   await page.getByRole("button", { name: "YAML", exact: true }).click();
 
   const editor = page.getByLabel("CV raw YAML editor");

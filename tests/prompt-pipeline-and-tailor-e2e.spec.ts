@@ -304,7 +304,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
   ).toBeVisible();
 
   await expect(page.getByText("OVERRIDDEN_SHARED_RULES")).toBeVisible();
-  await page.getByRole("button", { name: "Reset to shipped" }).click();
+  await page.getByRole("button", { name: "Reset to shipped" }).last().click();
   await expect.poll(() => sharedRuleDeleteCalls).toEqual(["resume_diff"]);
   await expect(page.getByText("DEFAULT_SHARED_RULES")).toBeVisible();
   expect(catalogFetchCount).toBeGreaterThanOrEqual(2);
@@ -334,7 +334,7 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
     page.getByRole("link", { name: /create resume/i }),
   ).toBeEnabled();
   await gotoWithRetry(page, `${frontendBaseUrl}/tailor`);
-  await page.locator("textarea").fill(SYNTHETIC_JD);
+  await page.getByRole("textbox", { name: /paste the job description/i }).fill(SYNTHETIC_JD);
   await expect(
     page.getByRole("button", { name: /generate tailored resume/i }),
   ).toBeEnabled({ timeout: 30_000 });

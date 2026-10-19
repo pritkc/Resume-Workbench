@@ -106,8 +106,8 @@ test("prompt catalog page loads pipeline and shared rules", async ({ page }) => 
     page.getByRole("heading", { name: "Prompts", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Shared resume-diff rules", exact: true })).toBeVisible();
-  await expect(page.getByText("Resume diff")).toBeVisible();
-  await expect(page.getByText("OVERRIDDEN_RULES_BODY")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Resume diff" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Resume diff" })).toHaveValue("OVERRIDDEN_RULES_BODY");
 
   expect(browserProblems).toEqual({
     consoleMessages: [],
@@ -128,7 +128,7 @@ test("reset shared rules calls DELETE and refreshes catalog", async ({ page }) =
   await expect.poll(() => deleteCalls.length).toBe(1);
   expect(deleteCalls[0]).toBe("resume_diff");
   await expect(page.getByRole("button", { name: "Reset to shipped" })).toHaveCount(0);
-  await expect(page.getByText("DEFAULT_RULES_BODY")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Resume diff" })).toHaveValue("DEFAULT_RULES_BODY");
 
   expect(browserProblems).toEqual({
     consoleMessages: [],

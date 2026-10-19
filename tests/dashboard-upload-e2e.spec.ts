@@ -101,7 +101,7 @@ test("dashboard upload sets the master resume and unlocks the main flow", async 
     })
     .toBe(uploadedResumeId);
 
-  await expect(page.getByText(/master resume/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Active resume" })).toBeVisible();
   await expect(
     page.getByRole("link", { name: /create resume/i }),
   ).toBeVisible();
@@ -218,12 +218,12 @@ test("dashboard filters and sorts tailored resumes in the row view", async ({
   await expect(page.getByText("Frontend Resume")).toBeVisible();
 
   await page
-    .getByPlaceholder(/search title, role, or company/i)
+    .getByPlaceholder("Search…")
     .fill("frontend");
   await expect(page.getByText("Frontend Resume")).toBeVisible();
   await expect(page.getByText("Backend Resume")).toHaveCount(0);
 
-  await page.getByPlaceholder(/search title, role, or company/i).fill("");
+  await page.getByPlaceholder("Search…").fill("");
   await page.locator("select").nth(0).selectOption("Acme");
   await expect(page.getByText("Backend Resume")).toBeVisible();
   await expect(page.getByText("Frontend Resume")).toHaveCount(0);

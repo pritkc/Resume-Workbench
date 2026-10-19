@@ -95,7 +95,7 @@ test.describe("resume URL redirect and builder journey", () => {
       timeout: 20_000,
     });
 
-    await page.getByRole("button", { name: /back to dashboard/i }).click();
+    await page.getByRole("link", { name: /back to dashboard/i }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByText(/master resume/i)).toBeVisible();
 
@@ -105,7 +105,7 @@ test.describe("resume URL redirect and builder journey", () => {
     await expect(page.getByRole("button", { name: "YAML", exact: true })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Full Name" })).toBeVisible();
 
-    await page.getByRole("button", { name: /back to dashboard/i }).click();
+    await page.getByRole("link", { name: /back to dashboard/i }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByRole("link", { name: /create resume/i })).toBeVisible();
 

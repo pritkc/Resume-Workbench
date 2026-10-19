@@ -156,7 +156,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   await expect(createResumeCard).toBeEnabled();
   await gotoWithRetry(page, `${frontendBaseUrl}/tailor`);
 
-  await page.locator("textarea").fill(jobDescriptionResponse.content);
+  await page.getByRole("textbox", { name: /paste the job description/i }).fill(jobDescriptionResponse.content);
   await page.getByRole("button", { name: /generate tailored resume/i }).click();
 
   await expect(
@@ -183,7 +183,7 @@ test("dashboard to tailor to tailored resume builder flow works with mocked AI s
   await page.getByRole("button", { name: "JD MATCH", exact: true }).click();
   await expect(page.getByText(/about jd match/i)).toBeVisible();
 
-  await page.getByRole("button", { name: /back to dashboard/i }).click();
+  await page.getByRole("link", { name: /back to dashboard/i }).click();
   await expect(page).toHaveURL(new RegExp("/dashboard$"));
 
   expect(uploadBodies).toEqual([
