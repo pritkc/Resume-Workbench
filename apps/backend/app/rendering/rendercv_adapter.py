@@ -151,6 +151,42 @@ def validate_markdown_emphasis_fields(resume_data: dict[str, Any]) -> None:
                 else:
                     candidates.append(([section_name, str(index), field_name], value))
 
+    custom_sections = resume_data.get("customSections")
+    if isinstance(custom_sections, dict):
+        for section_key, section in custom_sections.items():
+            if not isinstance(section, dict):
+                continue
+            section_type = getattr(section.get("sectionType"), "value", section.get("sectionType"))
+            if section_type == "text":
+                candidates.append((["customSections", str(section_key), "text"], section.get("text")))
+            elif section_type == "stringList":
+                strings = section.get("strings")
+                if isinstance(strings, list):
+                    candidates.extend(
+                        (["customSections", str(section_key), "strings", str(index)], value)
+                        for index, value in enumerate(strings)
+                    )
+            else:
+                items = section.get("items")
+                if not isinstance(items, list):
+                    continue
+                for item_index, item in enumerate(items):
+                    if not isinstance(item, dict):
+                        continue
+                    for field_name in ("title", "subtitle"):
+                        candidates.append(
+                            (["customSections", str(section_key), "items", str(item_index), field_name], item.get(field_name))
+                        )
+                    description = item.get("description")
+                    if isinstance(description, list):
+                        candidates.extend(
+                            (
+                                ["customSections", str(section_key), "items", str(item_index), "description", str(point_index)],
+                                value,
+                            )
+                            for point_index, value in enumerate(description)
+                        )
+
     for path, value in candidates:
         if not isinstance(value, str):
             continue
@@ -1640,22 +1676,62 @@ def _validate_supported_cv_yaml(cv_payload: dict[str, Any]) -> None:
         "certifications": {"bullet", "summary", "details", "title"},
         "awards": {"bullet", "summary", "details", "title"},
     }
+    supported_custom_entry_fields = {
+        "title",
+        "name",
+        "company",
+        "institution",
+        "label",
+        "position",
+        "subtitle",
+        "summary",
+        "details",
+        "area",
+        "location",
+        "date",
+        "highlights",
+        "bullet",
+    }
     for section_name, entries in sections.items():
         fields = supported_entry_fields.get(section_name)
-        if fields is None or section_name == "summary":
+        if section_name == "summary":
+            if not isinstance(entries, list):
+                raise RenderCVYamlValidationError(
+                    "The summary section must be a list of text entries.",
+                    section="cv",
+                    path=["cv", "sections", "summary"],
+                )
+            for index, entry in enumerate(entries):
+                if isinstance(entry, str):
+                    continue
+                if isinstance(entry, dict) and set(entry) == {"bullet"}:
+                    continue
+                raise RenderCVYamlValidationError(
+                    "The summary section supports text entries only.",
+                    section="cv",
+                    path=["cv", "sections", "summary", str(index)],
+                )
             continue
+        custom_section = fields is None
         if not isinstance(entries, list):
             raise RenderCVYamlValidationError(
-                f"Section `{section_name}` must be a list.",
+                f"Section `{section_name}` must be a list. This editor does not preserve other section formats.",
                 section="cv",
                 path=["cv", "sections", section_name],
             )
         for index, entry in enumerate(entries):
-            if isinstance(entry, str) and section_name in {"skills", "certifications", "awards"}:
+            if isinstance(entry, str) and (
+                custom_section or section_name in {"skills", "certifications", "awards"}
+            ):
                 continue
             if not isinstance(entry, dict):
-                continue
-            unknown = set(entry) - fields
+                raise RenderCVYamlValidationError(
+                    f"Unsupported entry format in `{section_name}`. This editor does not preserve this value.",
+                    section="cv",
+                    path=["cv", "sections", section_name, str(index)],
+                )
+            accepted_fields = supported_custom_entry_fields if custom_section else fields
+            unknown = set(entry) - accepted_fields
             if unknown:
                 key = sorted(unknown)[0]
                 raise RenderCVYamlValidationError(

@@ -303,10 +303,14 @@ test("prompt manager (critique, shared rules reset, model override) then full ta
     page.getByRole("heading", { name: "Prompts", exact: true }),
   ).toBeVisible();
 
-  await expect(page.getByText("OVERRIDDEN_SHARED_RULES")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Resume diff" })).toHaveValue(
+    "OVERRIDDEN_SHARED_RULES",
+  );
   await page.getByRole("button", { name: "Reset to shipped" }).last().click();
   await expect.poll(() => sharedRuleDeleteCalls).toEqual(["resume_diff"]);
-  await expect(page.getByText("DEFAULT_SHARED_RULES")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Resume diff" })).toHaveValue(
+    "DEFAULT_SHARED_RULES",
+  );
   expect(catalogFetchCount).toBeGreaterThanOrEqual(2);
 
   const critiqueToggle = page.locator("#critique-toggle");

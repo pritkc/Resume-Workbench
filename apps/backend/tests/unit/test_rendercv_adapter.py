@@ -155,6 +155,23 @@ def test_multiple_summary_entries_are_rejected_with_yaml_path() -> None:
     assert error.value.path == ["cv", "sections", "summary"]
 
 
+def test_unmapped_summary_entry_format_is_rejected_with_yaml_path() -> None:
+    import pytest
+    from app.rendering.rendercv_adapter import RenderCVYamlValidationError
+
+    with pytest.raises(RenderCVYamlValidationError, match="text entries only") as error:
+        parse_rendercv_yaml_sections(
+            {
+                "cv": "cv:\n  name: Jane\n  sections:\n    summary:\n      - title: Summary\n",
+                "design": "design:\n  theme: classic\n",
+            },
+            base_resume_data={},
+            base_theme_settings=RenderThemeSettings(theme_id="classic"),
+        )
+
+    assert error.value.path == ["cv", "sections", "summary", "0"]
+
+
 def test_yaml_rejects_unknown_rendercv_cv_fields_before_saving() -> None:
     import pytest
     from app.rendering.rendercv_adapter import RenderCVYamlValidationError
@@ -165,6 +182,53 @@ def test_yaml_rejects_unknown_rendercv_cv_fields_before_saving() -> None:
             base_resume_data={},
             base_theme_settings=RenderThemeSettings(theme_id="classic"),
         )
+
+
+def test_yaml_rejects_unmapped_custom_section_fields_with_path() -> None:
+    import pytest
+    from app.rendering.rendercv_adapter import RenderCVYamlValidationError
+
+    with pytest.raises(RenderCVYamlValidationError, match="does not preserve this field") as error:
+        parse_rendercv_yaml_sections(
+            {
+                "cv": (
+                    "cv:\n  name: Jane\n  sections:\n"
+                    "    Publications:\n      - title: Paper\n        doi: 10.1234/example\n"
+                ),
+                "design": "design:\n  theme: classic\n",
+            },
+            base_resume_data={},
+            base_theme_settings=RenderThemeSettings(theme_id="classic"),
+        )
+
+    assert error.value.path == ["cv", "sections", "Publications", "0", "doi"]
+
+
+def test_yaml_preserves_supported_custom_section_entry_fields() -> None:
+    parsed = rendercv_cv_to_resume_data(
+        {
+            "name": "Jane",
+            "sections": {
+                "Community Work": [
+                    {
+                        "title": "Mentor",
+                        "summary": "Early-career engineers",
+                        "location": "Remote",
+                        "date": "2024",
+                        "highlights": ["Held monthly sessions"],
+                    }
+                ]
+            },
+        },
+        base_resume_data={},
+    )
+
+    item = parsed["customSections"]["custom_1"]["items"][0]
+    assert item["title"] == "Mentor"
+    assert item["subtitle"] == "Early-career engineers"
+    assert item["location"] == "Remote"
+    assert item["years"] == "2024"
+    assert item["description"] == ["Held monthly sessions"]
 
 
 def test_markdown_emphasis_validation_accepts_valid_or_literal_stars() -> None:
@@ -180,6 +244,25 @@ def test_markdown_emphasis_validation_points_to_unmatched_summary_marker() -> No
         validate_markdown_emphasis_fields({"summary": "Broken **bold"})
 
     assert error.value.path == ["cv", "summary"]
+
+
+def test_markdown_emphasis_validation_checks_custom_section_descriptions() -> None:
+    import pytest
+    from app.rendering.rendercv_adapter import RenderCVYamlValidationError
+
+    with pytest.raises(RenderCVYamlValidationError, match="Unmatched bold") as error:
+        validate_markdown_emphasis_fields(
+            {
+                "customSections": {
+                    "custom_1": {
+                        "sectionType": "itemList",
+                        "items": [{"title": "Mentor", "description": ["Led ** sessions"]}],
+                    }
+                }
+            }
+        )
+
+    assert error.value.path == ["cv", "customSections", "custom_1", "items", "0", "description", "0"]
 
 
 def test_markdown_emphasis_validation_points_to_unmatched_experience_bullet() -> None:

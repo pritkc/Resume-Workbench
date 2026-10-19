@@ -6,7 +6,7 @@ Scope: resume loading, YAML conversion, autosave, live preview, settings persist
 
 ## Review method and limits
 
-The code review used the clean `origin/main` worktree. I then ran the frontend and backend locally against a new `resume_workbench_audit` database and tested synthetic resumes in the browser. I also inspected the user's hosted resume and settings page without changing hosted data. Findings 1 and 12–16 include live local reproduction. The remaining findings are code findings or read-only observations; they still need focused regression coverage before fixes ship.
+The code review used the clean `origin/main` worktree. The initial review used a separate audit database and synthetic resumes in a local browser. I also inspected the user's hosted resume and settings page without changing hosted data. Findings 1 and 12–16 include live local reproduction. The implementation added focused backend and frontend regression coverage. The hosted user's data remains unchanged.
 
 ## Findings
 
@@ -301,18 +301,19 @@ Implementation is in the audit branch. Do not treat it as deployed until the pul
 
 - Findings 1–5: fixed resume-scoped browser storage, stale-load guards, serialized autosaves with revision checks, stale-preview response guards, and bounded preview artifact replacement. The revision migration is `0006_resume_draft_revision.py`.
 - Findings 6–10: settings loads now block writes and provide retry on failure; config writes use a process lock and atomic replacement; reset removes all editor draft keys after server success; reset text says provider settings and API keys remain; Playwright uses port 3100. CI now starts an isolated Postgres service and backend before browser tests.
-- Findings 12–17: fixed hidden-section handling, hidden project preservation, comma-aware skill parsing, explicit empty skill handling, custom item conversion, and rejection of multiple summaries. Unsupported CV root and common entry fields now fail with a YAML path instead of being silently discarded.
-- Finding 18: unmatched, unescaped `**` markers in summaries and common resume descriptions now fail validation with a field path. This does not detect every balanced but misplaced marker. It also does not inspect all custom-section fields.
-- Finding 11 remains a defined subset, not full RenderCV schema coverage. The validator covers CV root keys and common entry keys. Theme-specific design keys and dynamic custom section fields still need a field-by-field preservation contract before the editor can safely claim full RenderCV YAML support.
+- Findings 11–17: unsupported CV root, common entry, and custom-section entry fields now fail with a YAML path instead of being silently discarded. Supported custom-section entry fields have round-trip coverage. Design, locale, and settings sections remain in the stored theme profile and are emitted again by the YAML serializer. Findings 12–17 also have adapter and endpoint coverage for section visibility, hidden projects, comma-aware skills, explicit empty skills, custom item descriptions, and multiple summaries.
+- Finding 18: unmatched, unescaped `**` markers in summaries, common resume descriptions, and custom-section text, titles, subtitles, and descriptions now fail validation with a field path. Balanced but misplaced markers are not detected; literal or escaped markers remain allowed.
 
 Verification on 2026-10-19:
 
-- Backend full suite: 587 passed.
+- Backend full suite: 591 passed; RenderCV adapter suite: 39 passed after the final YAML contract checks.
 - Frontend unit suite: 128 passed.
 - Frontend lint and production build passed.
 - Ruff passed for all changed backend files after the final emphasis checks.
 - Alembic upgraded the isolated `resume_workbench_audit_impl` database to head.
 - The local browser opened the builder at `http://127.0.0.1:3100/builder` and showed the blank-resume editor.
+
+- A local Playwright attempt built and started the frontend and isolated backend, but macOS denied Chromium's headless Mach port registration. The hosted Linux Playwright run is the browser-test gate for this branch.
 - Playwright E2E did not pass in this macOS sandbox. The first full run had 10 failing tests and 6 skipped tests. Some failures showed stale UI selectors and missing API setup. A focused rerun could not start Chromium because macOS denied the Chromium helper process (`bootstrap_check_in ... Permission denied`). CI now starts Postgres and the backend. Its first run confirmed that the existing E2E suite also had stale selectors and route mocks: the YAML toggle matched “Copy Full YAML”, the resume-list mocks used the old query name, and dashboard/settings/prompt tests expected old labels and roles. Those test expectations are now updated. A successful CI rerun is still required before release.
 
 The test database `resume_workbench_audit_impl` contains only disposable audit test data. The hosted resume and production data were not changed.
