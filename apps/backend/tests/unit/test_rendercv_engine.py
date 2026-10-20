@@ -10,6 +10,7 @@ from rendercv.renderer.pdf_png import get_package_path
 
 from app.rendering.rendercv_engine import (
     _WorkbenchEntryStyleTarget,
+    _patch_project_tech_stack_entries,
     _style_entry_calls_in_typst,
     render_resume_bundle,
 )
@@ -445,6 +446,101 @@ def test_rendercv_engine_matches_company_colors_when_entry_order_differs() -> No
 
     for name in ("Humana (Contract)", "SDSU CSRC", "GoFundMe", "Maersk (Contract)"):
         assert f"#text(fill: rgb(0, 79, 144))[#strong[{name}]]" in styled
+
+
+def test_rendercv_engine_styles_entries_after_escaped_quotes() -> None:
+    typst = r'''== Experience
+#regular-entry([#strong[Humana (Contract)] | Engineer], [Remote])
+#regular-entry(
+  [#strong[GoFundMe] | Engineer],
+  [Remote],
+  main-column-second-row: [
+    - Questions about \"is the data in?\" became self-serve.
+  ],
+)
+#regular-entry([#strong[Maersk (Contract)] | Engineer], [Remote])
+== Projects
+#regular-entry(
+  [#strong[VisionAid]],
+  [#summary[Python · PyTorch · Streamlit · Google Street View API · Folium]],
+  main-column-second-row: [- Built a compact project.],
+)
+'''
+    targets = [
+        _WorkbenchEntryStyleTarget(company=name, role="Engineer")
+        for name in ("Humana (Contract)", "GoFundMe", "Maersk (Contract)")
+    ]
+
+    styled = _style_entry_calls_in_typst(
+        typst, {"company": "rgb(0, 79, 144)"}, work_targets=targets
+    )
+    for name in ("Humana (Contract)", "GoFundMe", "Maersk (Contract)"):
+        assert f"#text(fill: rgb(0, 79, 144))[#strong[{name}]]" in styled
+
+    projects_patched = _patch_project_tech_stack_entries(typst)
+    assert "#resume-matcher-project-entry(" in projects_patched
+
+
+def test_rendercv_engine_renders_entries_after_escaped_quotes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+    resume = {
+        "personalInfo": {"name": "Test User", "email": "test@example.com"},
+        "summary": "",
+        "workExperience": [
+            {
+                "id": index,
+                "company": company,
+                "position": "Engineer",
+                "location": "Remote",
+                "date": "2024 - 2025",
+                "description": [description],
+            }
+            for index, (company, description) in enumerate(
+                (
+                    ("Humana (Contract)", "Built an API."),
+                    ("GoFundMe", 'Questions about "is the data in?" became self-serve.'),
+                    ("Maersk (Contract)", "Built a service."),
+                ),
+                start=1,
+            )
+        ],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "VisionAid",
+                "techStack": "Python · PyTorch · Streamlit · Google Street View API · Folium",
+                "description": ["Built a compact project."],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+    theme_settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "harvard",
+            "theme_profiles": {},
+            "settings": {
+                "resume_workbench_style": {
+                    "colors": {"company": "#004f90"},
+                }
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    bundle = render_resume_bundle(resume, theme_settings, identifier="escaped_quotes")
+
+    assert bundle.pdf_path is not None
+    typst = bundle.typst_path.read_text(encoding="utf-8")
+    for company in ("Humana (Contract)", "GoFundMe", "Maersk (Contract)"):
+        assert f"#text(fill: rgb(0, 79, 144))[#strong[{company}]]" in typst
+    assert "#resume-matcher-project-entry(" in typst
+    pdf_text = _extract_pdftotext(bundle.pdf_path)
+    assert "Python · PyTorch · Streamlit · Google Street View API · Folium" in pdf_text
+    assert "\n" not in pdf_text.split("Python · PyTorch", 1)[1].split("Folium", 1)[0]
 
 
 def test_rendercv_engine_applies_workbench_field_styles(

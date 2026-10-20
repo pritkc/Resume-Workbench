@@ -763,12 +763,14 @@ def _matching_typst_delimiter(text: str, open_index: int) -> int | None:
     escape = False
     for index in range(open_index + 1, len(text)):
         char = text[index]
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            escape = True
+            continue
         if in_string:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == '"':
+            if char == '"':
                 in_string = False
             continue
         if char == '"':
@@ -791,12 +793,14 @@ def _top_level_typst_commas(text: str) -> list[int]:
     in_string = False
     escape = False
     for index, char in enumerate(text):
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            escape = True
+            continue
         if in_string:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == '"':
+            if char == '"':
                 in_string = False
             continue
         if char == '"':
