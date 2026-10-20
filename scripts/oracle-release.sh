@@ -7,7 +7,9 @@ key="${ORACLE_SSH_KEY:-$HOME/.ssh/oci}"
 mode="${1:-release}"
 
 show_live_version() {
-  curl --location --fail --silent --show-error https://resumes.pritk.com/api/v1/status | python3 -c '
+  ssh -i "$key" "$host" \
+    'cd /home/ubuntu/resume-workbench && docker compose exec -T resume-workbench curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/status' \
+    | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
 print("Live application: v{} · {}".format(
