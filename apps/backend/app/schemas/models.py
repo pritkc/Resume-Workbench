@@ -1900,6 +1900,8 @@ class HealthResponse(BaseModel):
 
     status: str
     llm: dict[str, Any]
+    version: str
+    commit: str
 
 
 class StatusResponse(BaseModel):
@@ -1913,6 +1915,8 @@ class StatusResponse(BaseModel):
     llm_health_checked_at: str | None = None
     has_active_resume: bool
     database_stats: dict[str, Any]
+    version: str
+    commit: str
 
 
 class LLMCallRecord(BaseModel):

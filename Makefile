@@ -8,7 +8,7 @@ CLIPROXY_LOGS ?= $(CLIPROXY_DIR)/logs
 CLIPROXY_IMAGE ?= eceasy/cli-proxy-api:latest
 CLIPROXY_CONTAINER ?= cli-proxy-api
 
-.PHONY: cliproxy-init cliproxy-up cliproxy-down cliproxy-logs cliproxy-health
+.PHONY: cliproxy-init cliproxy-up cliproxy-down cliproxy-logs cliproxy-health oracle-release oracle-status
 
 cliproxy-init:
 	mkdir -p $(CLIPROXY_AUTH) $(CLIPROXY_LOGS)
@@ -37,3 +37,9 @@ cliproxy-logs:
 
 cliproxy-health:
 	CLIPROXY_REPO_CONFIG="$(PWD)/$(CLIPROXY_CONFIG)" bash scripts/cliproxy-health.sh
+
+oracle-release:
+	./scripts/oracle-release.sh release
+
+oracle-status:
+	./scripts/oracle-release.sh status

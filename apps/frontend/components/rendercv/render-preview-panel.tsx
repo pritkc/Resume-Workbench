@@ -13,6 +13,8 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import {
   fetchDraftRenderPreview,
   fetchResumeRenderPreview,
+  isDraftRequestError,
+  type DraftValidationDetail,
   type ResumeDraftRequest,
 } from '@/lib/api/resume';
 import {
@@ -65,7 +67,10 @@ export const RenderPreviewPanel = forwardRef<RenderPreviewPanelHandle, RenderPre
     const [artifacts, setArtifacts] = useState<ArtifactSummary[]>(initialArtifacts);
     const [isLoading, setIsLoading] = useState(false);
     const [isPendingLoad, setIsPendingLoad] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{
+      message: string;
+      detail?: DraftValidationDetail;
+    } | null>(null);
     const requestSequenceRef = useRef(0);
     const previewSessionRef = useRef<string | null>(null);
 
@@ -101,7 +106,10 @@ export const RenderPreviewPanel = forwardRef<RenderPreviewPanelHandle, RenderPre
         if (requestSequenceRef.current !== requestSequence) return;
         const message =
           loadError instanceof Error ? loadError.message : 'Failed to load RenderCV preview.';
-        setError(message);
+        setError({
+          message,
+          detail: isDraftRequestError(loadError) ? loadError.detail : undefined,
+        });
       } finally {
         if (requestSequenceRef.current === requestSequence) setIsLoading(false);
       }
@@ -139,7 +147,7 @@ export const RenderPreviewPanel = forwardRef<RenderPreviewPanelHandle, RenderPre
 
     const statusMessage = useMemo(() => {
       if (error) {
-        return error;
+        return error.message;
       }
       if (stale) {
         return 'Preview reflects the last saved resume until you save current edits.';
@@ -155,9 +163,31 @@ export const RenderPreviewPanel = forwardRef<RenderPreviewPanelHandle, RenderPre
     return (
       <div className="min-h-0">
         {statusMessage && (
-          <div className="mb-1.5 flex items-start gap-1.5 border border-border bg-muted px-2 py-1 font-sans text-[11px] leading-snug text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-            <span>{statusMessage}</span>
+          <div
+            className={
+              error
+                ? 'mb-1.5 flex items-start gap-2 border border-red-500 bg-red-50 px-2.5 py-2 font-sans text-[11px] leading-snug text-red-900 dark:bg-red-950/40 dark:text-red-100'
+                : 'mb-1.5 flex items-start gap-1.5 border border-border bg-muted px-2 py-1 font-sans text-[11px] leading-snug text-muted-foreground'
+            }
+            role={error ? 'alert' : 'status'}
+          >
+            <AlertTriangle
+              className={
+                error
+                  ? 'mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-300'
+                  : 'mt-0.5 h-3 w-3 shrink-0 text-muted-foreground'
+              }
+            />
+            <div className="min-w-0">
+              {error ? <p className="font-semibold">Preview could not be generated</p> : null}
+              <p className="break-words">{statusMessage}</p>
+              {error?.detail?.hint ? <p className="mt-1">{error.detail.hint}</p> : null}
+              {error?.detail?.requestId ? (
+                <p className="mt-1 font-mono text-[10px] opacity-75">
+                  Error ID: {error.detail.requestId}
+                </p>
+              ) : null}
+            </div>
           </div>
         )}
 

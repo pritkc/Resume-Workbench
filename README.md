@@ -105,6 +105,14 @@ For Docker, provider options, troubleshooting, and production notes, use [SETUP.
 
 Merging into `main` publishes `ghcr.io/pritkc/resume-workbench:latest`. The Oracle VM checks this image every ten minutes. Its updater backs up the database and files, runs Alembic migrations using the new image, pins the image digest, restarts the app, and verifies the active resume and PDF. It restores the prior app image if verification fails. Keep migrations compatible with the prior app version so that rollback remains possible.
 
+Use one command after the pull request is merged:
+
+```bash
+make oracle-release
+```
+
+The command waits for the Docker image, starts the Oracle updater, prints its log, and shows the live application version and commit. Use `make oracle-status` at any time to see the installed image, timer, version, and commit. The commands use `~/.ssh/oci` and `ubuntu@oci-main` by default. Set `ORACLE_SSH_KEY` or `ORACLE_HOST` if those values change.
+
 The host uses `/home/ubuntu/resume-workbench/compose.yml` and Cloudflare Tunnel. Do not replace that compose file with the local `docker-compose.yml`. When the updater changes, install the tracked [Oracle update script](infra/oracle/update.sh) on the VM through Tailscale:
 
 ```bash

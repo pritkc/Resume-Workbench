@@ -229,7 +229,31 @@ def _workbench_letter_spacing_settings(
 
 
 class RenderCVRenderError(RuntimeError):
-    pass
+    """A render failure with the stage and source position, when available."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str,
+        line: int | None = None,
+        column: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.line = line
+        self.column = column
+
+
+_RENDER_ERROR_LOCATION_RE = re.compile(r"(?:^|\s|:)(?P<line>\d+):(?P<column>\d+)(?:\s|$)")
+
+
+def _render_error_location(message: str) -> tuple[int | None, int | None]:
+    matches = list(_RENDER_ERROR_LOCATION_RE.finditer(message))
+    if not matches:
+        return None, None
+    match = matches[-1]
+    return int(match.group("line")), int(match.group("column"))
 
 
 @dataclass
@@ -249,6 +273,12 @@ class RenderCVBundle:
 class _WorkbenchEntryStyleTarget:
     company: str | None = None
     role: str | None = None
+
+
+@dataclass(frozen=True)
+class _TypstStyleResult:
+    text: str
+    experience_entries: int
 
 
 def _default_identifier(seed: str | None = None) -> str:
@@ -543,8 +573,21 @@ def _style_entry_calls_in_typst(
     *,
     work_targets: list[_WorkbenchEntryStyleTarget] | None = None,
 ) -> str:
+    return _style_entry_calls_with_report(
+        typst,
+        colors,
+        work_targets=work_targets,
+    ).text
+
+
+def _style_entry_calls_with_report(
+    typst: str,
+    colors: dict[str, str],
+    *,
+    work_targets: list[_WorkbenchEntryStyleTarget] | None = None,
+) -> _TypstStyleResult:
     if not colors:
-        return typst
+        return _TypstStyleResult(text=typst, experience_entries=0)
     output: list[str] = []
     cursor = 0
     call_prefixes = (_PROJECT_ENTRY_CALL, _REGULAR_ENTRY_CALL)
@@ -600,7 +643,10 @@ def _style_entry_calls_in_typst(
         )
         output.append(")")
         cursor = close_paren + 1
-    return "".join(output)
+    return _TypstStyleResult(
+        text="".join(output),
+        experience_entries=work_target_index,
+    )
 
 
 def _apply_workbench_field_styles_to_typst(
@@ -616,11 +662,20 @@ def _apply_workbench_field_styles_to_typst(
         original = typst_path.read_text(encoding="utf-8")
     except OSError:
         return
-    updated = _style_entry_calls_in_typst(
+    work_targets = _workbench_entry_style_targets(resume_data or {})
+    result = _style_entry_calls_with_report(
         original,
         colors,
-        work_targets=_workbench_entry_style_targets(resume_data or {}),
+        work_targets=work_targets,
     )
+    if (colors.get("company") or colors.get("role")) and (
+        result.experience_entries != len(work_targets)
+    ):
+        raise ValueError(
+            "Experience styling stopped early: "
+            f"processed {result.experience_entries} of {len(work_targets)} entries."
+        )
+    updated = result.text
     if updated != original:
         typst_path.write_text(updated, encoding="utf-8")
 
@@ -941,10 +996,11 @@ def _project_entry_call_body(call_body: str) -> str | None:
     return _move_inline_project_summary_to_right_column(call_body)
 
 
-def _patch_project_tech_stack_entries(typst: str) -> str:
+def _patch_project_tech_stack_entries_with_count(typst: str) -> tuple[str, int, int]:
     output: list[str] = []
     cursor = 0
     replacement_count = 0
+    project_entry_count = 0
     while True:
         start = typst.find(_REGULAR_ENTRY_CALL, cursor)
         if start == -1:
@@ -956,6 +1012,14 @@ def _patch_project_tech_stack_entries(typst: str) -> str:
             output.append(typst[cursor:])
             break
         call_body = typst[open_paren + 1:close_paren]
+        section_matches = list(_TYPST_SECTION_HEADING_RE.finditer(typst[:start]))
+        section_title = (
+            section_matches[-1].group("title").strip().casefold()
+            if section_matches
+            else ""
+        )
+        if section_title == "projects":
+            project_entry_count += 1
         output.append(typst[cursor:start])
         project_call_body = _project_entry_call_body(call_body)
         if project_call_body is not None:
@@ -970,19 +1034,45 @@ def _patch_project_tech_stack_entries(typst: str) -> str:
 
     updated = "".join(output)
     if replacement_count == 0 or _PROJECT_ENTRY_CALL in typst:
-        return updated
+        return updated, replacement_count, project_entry_count
     import_line_end = updated.find("\n", updated.find("#import "))
     if import_line_end == -1:
-        return updated
-    return updated[: import_line_end + 1] + _PROJECT_ENTRY_HELPER + updated[import_line_end + 1:]
+        return updated, replacement_count, project_entry_count
+    return (
+        updated[: import_line_end + 1] + _PROJECT_ENTRY_HELPER + updated[import_line_end + 1:],
+        replacement_count,
+        project_entry_count,
+    )
 
 
-def _apply_project_tech_stack_layout_to_typst(typst_path: Path) -> None:
+def _project_target_count(resume_data: dict[str, Any]) -> int:
+    projects = resume_data.get("personalProjects")
+    if not isinstance(projects, list):
+        return 0
+    return sum(
+        1
+        for project in projects
+        if isinstance(project, dict)
+        and project.get("includeInResume", True) is not False
+    )
+
+
+def _apply_project_tech_stack_layout_to_typst(
+    typst_path: Path,
+    *,
+    resume_data: dict[str, Any],
+) -> None:
     try:
         original = typst_path.read_text(encoding="utf-8")
     except OSError:
         return
-    updated = _patch_project_tech_stack_entries(original)
+    updated, _, project_entry_count = _patch_project_tech_stack_entries_with_count(original)
+    expected_count = _project_target_count(resume_data)
+    if project_entry_count != expected_count:
+        raise ValueError(
+            "Project layout processing stopped early: "
+            f"processed {project_entry_count} of {expected_count} entries."
+        )
     if updated != original:
         typst_path.write_text(updated, encoding="utf-8")
 
@@ -1011,6 +1101,7 @@ def render_resume_bundle(
     yaml_text = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
     yaml_path.write_text(yaml_text, encoding="utf-8")
 
+    stage = "model_validation"
     try:
         _, model = build_rendercv_dictionary_and_model(
             yaml_text,
@@ -1021,6 +1112,7 @@ def render_resume_bundle(
             markdown_path=str(markdown_path),
             html_path=str(html_path),
         )
+        stage = "typst_generation"
         generated_typst = generate_typst(model)
         if generated_typst is not None:
             _apply_summary_alignment_to_typst(
@@ -1033,7 +1125,10 @@ def render_resume_bundle(
                 heading_gap=_resolve_summary_heading_gap(payload),
             )
         if generated_typst is not None:
-            _apply_project_tech_stack_layout_to_typst(generated_typst)
+            _apply_project_tech_stack_layout_to_typst(
+                generated_typst,
+                resume_data=resume_data,
+            )
         if generated_typst is not None:
             _apply_workbench_field_styles_to_typst(
                 generated_typst,
@@ -1044,14 +1139,24 @@ def render_resume_bundle(
             _apply_workbench_letter_spacing_to_typst(generated_typst, theme_settings)
         if generated_typst is not None:
             _apply_freeflow_typst_patch(generated_typst, theme_settings)
+        stage = "pdf_generation"
         generated_pdf = _generate_pdf_with_ats_profile(
             model, generated_typst, theme_settings
         )
+        stage = "preview_generation"
         generated_pngs = generate_png(model, generated_typst) or []
+        stage = "text_export"
         generated_markdown = generate_markdown(model)
         generated_html = generate_html(model, generated_markdown)
     except Exception as exc:  # noqa: BLE001
-        raise RenderCVRenderError(str(exc)) from exc
+        message = str(exc) or exc.__class__.__name__
+        line, column = _render_error_location(message)
+        raise RenderCVRenderError(
+            message,
+            stage=stage,
+            line=line,
+            column=column,
+        ) from exc
 
     return RenderCVBundle(
         identifier=bundle_id,

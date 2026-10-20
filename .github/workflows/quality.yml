@@ -1,0 +1,45 @@
+name: Quality Checks
+
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  renderer-and-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install frontend dependencies
+        run: npm ci --prefix apps/frontend
+      - name: Run frontend unit tests
+        run: npm test --prefix apps/frontend
+      - name: Install backend dependencies
+        working-directory: apps/backend
+        run: uv sync --extra dev
+      - name: Install PDF text checker
+        run: sudo apt-get update && sudo apt-get install --yes poppler-utils
+      - name: Run renderer and API contract tests
+        working-directory: apps/backend
+        run: >-
+          uv run pytest
+          tests/unit/test_rendercv_adapter.py
+          tests/unit/test_rendercv_engine.py
+          tests/integration/test_health_api.py
+          tests/integration/test_resume_api.py

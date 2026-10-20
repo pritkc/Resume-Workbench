@@ -56,6 +56,8 @@ export interface SystemStatus {
   llm_health_checked_at?: string | null;
   has_active_resume: boolean;
   database_stats: DatabaseStats;
+  version: string;
+  commit: string;
 }
 
 export interface LLMHealthCheck {

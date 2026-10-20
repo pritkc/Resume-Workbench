@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.build_info import application_commit, application_version
 from app.database import db
 from app.llm import get_llm_config, get_llm_health_snapshot, is_llm_configured
 from app.schemas import HealthResponse, StatusResponse
@@ -26,6 +27,8 @@ async def health_check() -> HealthResponse:
             else "healthy"
         ),
         llm=llm_status,
+        version=application_version(),
+        commit=application_commit(),
     )
 
 
@@ -59,4 +62,6 @@ async def get_status() -> StatusResponse:
         llm_health_checked_at=llm_status.get("checked_at"),
         has_active_resume=db_stats["has_active_resume"],
         database_stats=db_stats,
+        version=application_version(),
+        commit=application_commit(),
     )

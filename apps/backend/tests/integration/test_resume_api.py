@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
+from app.rendering.rendercv_engine import RenderCVRenderError
 from app.services.resume_codes import derive_resume_code
 
 
@@ -586,6 +587,31 @@ class TestDraftResumeFlows:
         assert payload["resume_id"] == "draft"
         assert payload["pdf_artifact"]["artifact_id"] == "artifact-pdf"
         mock_render_bundle.assert_called_once()
+
+    @patch("app.routers.resumes.render_resume_bundle")
+    async def test_render_resume_draft_preview_returns_structured_render_error(
+        self, mock_render_bundle, client
+    ):
+        mock_render_bundle.side_effect = RenderCVRenderError(
+            "invalid length at resume.typ:42:7",
+            stage="pdf_generation",
+            line=42,
+            column=7,
+        )
+
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/draft/render-preview",
+                json={"processed_resume": {"personalInfo": {"name": "Jane Doe"}}},
+            )
+
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert detail["type"] == "render_error"
+        assert detail["stage"] == "pdf_generation"
+        assert detail["line"] == 42
+        assert detail["column"] == 7
+        assert detail["request_id"]
 
     @patch("app.routers.resumes.db")
     async def test_save_resume_draft_persists_yaml_changes(
