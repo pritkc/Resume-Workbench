@@ -7,7 +7,7 @@ key="${ORACLE_SSH_KEY:-$HOME/.ssh/oci}"
 mode="${1:-release}"
 
 show_live_version() {
-  curl --fail --silent --show-error https://resumes.pritk.com/api/v1/status | python3 -c '
+  curl --location --fail --silent --show-error https://resumes.pritk.com/api/v1/status | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
 print("Live application: v{} · {}".format(
