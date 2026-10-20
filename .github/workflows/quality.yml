@@ -33,6 +33,8 @@ jobs:
       - name: Install backend dependencies
         working-directory: apps/backend
         run: uv sync --extra dev
+      - name: Install PDF text checker
+        run: sudo apt-get update && sudo apt-get install --yes poppler-utils
       - name: Run renderer and API contract tests
         working-directory: apps/backend
         run: >-
