@@ -58,14 +58,13 @@ _PROJECT_ENTRY_CALL = "#resume-matcher-project-entry("
 _RENDERCV_VENDOR_IMPORT_LINE = f'#import "{_FREEFLOW_TYST_LIB_NAME}": *'
 _PROJECT_ENTRY_HELPER = r"""
 
-// Resume Workbench project headers: keep project names left and tech stacks right,
-// while giving tech stacks the extra room left by short project names.
+// Resume Workbench project headers: keep project names left and tech stacks right.
+// Reserve a compact name column so the stack can use the rest of the line.
 #let resume-matcher-project-entry(main-column, date-and-location-column, main-column-second-row: none) = {
   metadata("skip-content-area")
 
   context {
     let config = rendercv-config.get()
-    let entries-date-and-location-width = config.at("entries-date-and-location-width")
     let entries-highlights-bullet = config.at("entries-highlights-bullet")
     let entries-highlights-nested-bullet = config.at("entries-highlights-nested-bullet")
     let entries-highlights-space-between-items = config.at(
@@ -115,13 +114,7 @@ _PROJECT_ENTRY_HELPER = r"""
         if repr(main-column) != "[ ]" or repr(date-and-location-column) != "[ ]" {
           layout(size => {
             let project-header-gap = 0.25cm
-            let minimum-stack-width = calc.min(entries-date-and-location-width, size.width * 45%)
-            let max-main-width = size.width - minimum-stack-width - project-header-gap
-            let main-column-width = if max-main-width > 0cm {
-              calc.min(measure(main-column).width, max-main-width)
-            } else {
-              size.width * 50%
-            }
+            let main-column-width = calc.min(4.5cm, size.width * 40%)
             grid(
               columns: (main-column-width, 1fr),
               column-gutter: project-header-gap,
@@ -583,7 +576,16 @@ def _style_entry_calls_in_typst(
         is_company_entry = "experience" in section_title and not is_project_entry
         target = None
         if is_company_entry:
-            if work_target_index < len(work_targets):
+            first_arg_end = _top_level_typst_commas(call_body)
+            first_arg = call_body[:first_arg_end[0]] if first_arg_end else call_body
+            matching_targets = [
+                item
+                for item in work_targets
+                if item.company and item.company in first_arg
+            ]
+            if matching_targets:
+                target = max(matching_targets, key=lambda item: len(item.company or ""))
+            elif work_target_index < len(work_targets):
                 target = work_targets[work_target_index]
             work_target_index += 1
         output.append(typst[cursor:start])

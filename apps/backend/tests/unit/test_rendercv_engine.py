@@ -8,7 +8,11 @@ import subprocess
 import pytest
 from rendercv.renderer.pdf_png import get_package_path
 
-from app.rendering.rendercv_engine import render_resume_bundle
+from app.rendering.rendercv_engine import (
+    _WorkbenchEntryStyleTarget,
+    _style_entry_calls_in_typst,
+    render_resume_bundle,
+)
 from app.rendering.theme_profiles import RenderThemeSettings
 
 ATS_PROVEN_THEMES = [
@@ -383,10 +387,64 @@ def test_rendercv_engine_expands_project_stack_header_without_stack_label(
     assert "#resume-matcher-project-entry(" in typst
     assert "#regular-entry(" in typst
     assert "let project-header-gap = 0.25cm" in typst
-    assert "minimum-stack-width" in typst
+    assert "main-column-width = calc.min(4.5cm, size.width * 40%)" in typst
     assert "#strong[Stack:] Python • FastAPI" in typst
     assert "#summary[Python • FastAPI • PostgreSQL • React • Docker • Kubernetes • Terraform]" in typst
     assert "#strong[Stack:] Python • FastAPI • PostgreSQL" not in typst
+
+
+def test_rendercv_engine_uses_full_project_header_width(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+    resume = {
+        "personalInfo": {"name": "Test User", "email": "test@example.com"},
+        "summary": "",
+        "workExperience": [],
+        "education": [],
+        "personalProjects": [
+            {
+                "id": 1,
+                "name": "VisionAid",
+                "github": "https://github.com/example/visionaid",
+                "website": "https://example.com/visionaid",
+                "techStack": "Python · PyTorch · Streamlit · Google Street View API · Folium",
+                "description": ["Built a compact project."],
+            }
+        ],
+        "skills": {"groups": []},
+    }
+    bundle = render_resume_bundle(
+        resume,
+        RenderThemeSettings(theme_id="harvard"),
+        identifier="project_header_width",
+    )
+
+    assert bundle.pdf_path is not None
+    pdf_text = _extract_pdftotext(bundle.pdf_path)
+    assert "Python · PyTorch · Streamlit · Google Street View API · Folium" in pdf_text
+    assert "\n" not in pdf_text.split("Python · PyTorch", 1)[1].split("Folium", 1)[0]
+
+
+def test_rendercv_engine_matches_company_colors_when_entry_order_differs() -> None:
+    typst = """== Experience
+#regular-entry([#strong[Humana (Contract)] | Engineer], [Remote])
+#regular-entry([#strong[SDSU CSRC] | Engineer], [Remote])
+#regular-entry([#strong[GoFundMe] | Engineer], [Remote])
+#regular-entry([#strong[Maersk (Contract)] | Engineer], [Remote])
+"""
+    targets = [
+        _WorkbenchEntryStyleTarget(company=name, role="Engineer")
+        for name in ("Humana (Contract)", "SDSU CSRC", "Maersk (Contract)", "GoFundMe")
+    ]
+
+    styled = _style_entry_calls_in_typst(
+        typst, {"company": "rgb(0, 79, 144)"}, work_targets=targets
+    )
+
+    for name in ("Humana (Contract)", "SDSU CSRC", "GoFundMe", "Maersk (Contract)"):
+        assert f"#text(fill: rgb(0, 79, 144))[#strong[{name}]]" in styled
 
 
 def test_rendercv_engine_applies_workbench_field_styles(
