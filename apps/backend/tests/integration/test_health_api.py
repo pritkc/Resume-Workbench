@@ -33,6 +33,8 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "healthy"
+        assert data["version"]
+        assert data["commit"]
 
     @patch("app.routers.health.get_llm_health_snapshot")
     @patch("app.routers.health.get_llm_config")

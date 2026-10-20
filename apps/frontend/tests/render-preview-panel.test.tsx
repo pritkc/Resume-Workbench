@@ -14,6 +14,8 @@ const fetchDraftRenderPreview = vi.fn();
 vi.mock('@/lib/api/resume', () => ({
   fetchResumeRenderPreview: (...args: unknown[]) => fetchResumeRenderPreview(...args),
   fetchDraftRenderPreview: (...args: unknown[]) => fetchDraftRenderPreview(...args),
+  isDraftRequestError: (error: unknown) =>
+    error instanceof Error && error.name === 'DraftRequestError',
 }));
 
 const baseSettings: RenderThemeSettings = {
@@ -181,6 +183,28 @@ describe('RenderPreviewPanel', () => {
     await screen.findByAltText('preview.png');
 
     expect(screen.queryByText('Preview')).not.toBeInTheDocument();
+  });
+
+  it('shows a structured render error as a visible alert', async () => {
+    const error = Object.assign(new Error('CV • line 7: Invalid YAML.'), {
+      name: 'DraftRequestError',
+      status: 422,
+      detail: {
+        type: 'yaml_validation',
+        message: 'Invalid YAML.',
+        section: 'cv',
+        line: 7,
+        requestId: 'request-123',
+        hint: 'Correct the reported value, then refresh the preview.',
+      },
+    });
+    fetchDraftRenderPreview.mockRejectedValue(error);
+
+    render(<RenderPreviewPanel draftRequest={{ processed_resume: { summary: 'Draft' } }} />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Preview could not be generated');
+    expect(alert).toHaveTextContent('CV • line 7: Invalid YAML.');
   });
 
   it('keeps fetched artifacts after parent re-renders with empty initial artifacts', async () => {

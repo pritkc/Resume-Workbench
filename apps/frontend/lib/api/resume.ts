@@ -340,6 +340,9 @@ export interface DraftValidationDetail {
   line?: number | null;
   column?: number | null;
   path?: string[];
+  stage?: string;
+  requestId?: string;
+  hint?: string;
 }
 
 export class DraftRequestError extends Error {
@@ -408,6 +411,9 @@ function normalizeDraftValidationDetail(value: unknown): DraftValidationDetail |
     line: typeof raw.line === 'number' ? raw.line : null,
     column: typeof raw.column === 'number' ? raw.column : null,
     path,
+    stage: typeof raw.stage === 'string' ? raw.stage : undefined,
+    requestId: typeof raw.request_id === 'string' ? raw.request_id : undefined,
+    hint: typeof raw.hint === 'string' ? raw.hint : undefined,
   };
 }
 
@@ -476,6 +482,9 @@ export function formatDraftValidationDetail(detail?: DraftValidationDetail | nul
   }
   if (detail.path?.length) {
     locationParts.push(detail.path.join('.'));
+  }
+  if (detail.stage) {
+    locationParts.push(detail.stage.replaceAll('_', ' '));
   }
 
   return locationParts.length > 0

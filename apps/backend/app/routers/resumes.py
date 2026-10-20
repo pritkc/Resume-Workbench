@@ -1736,6 +1736,7 @@ async def render_resume_draft_preview(
         base_cv_metadata=base_cv_metadata,
     )
 
+    request_id = str(uuid4())
     try:
         bundle = render_resume_bundle(
             normalized_data,
@@ -1748,8 +1749,20 @@ async def render_resume_draft_preview(
             draft_preview_session_id=request.preview_session_id or str(uuid4()),
             draft_preview_sequence=request.preview_sequence or 0,
         )
-    except RenderCVRenderError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except RenderCVRenderError as exc:
+        logger.exception("Draft preview render failed. request_id=%s", request_id)
+        detail: dict[str, Any] = {
+            "type": "render_error",
+            "message": str(exc),
+            "stage": exc.stage,
+            "request_id": request_id,
+            "hint": "Correct the reported value, then refresh the preview.",
+        }
+        if exc.line is not None:
+            detail["line"] = exc.line
+        if exc.column is not None:
+            detail["column"] = exc.column
+        raise HTTPException(status_code=422, detail=detail) from exc
 
     preview_artifacts = [
         artifact for artifact in artifacts if artifact["kind"] == "resume_preview_png"

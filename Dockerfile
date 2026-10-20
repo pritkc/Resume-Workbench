@@ -31,13 +31,18 @@ RUN npm run build
 # ============================================
 FROM python:3.13-slim-bookworm
 
+ARG APP_VERSION=2.0.0
+ARG APP_COMMIT=development
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    APP_VERSION=${APP_VERSION} \
+    APP_COMMIT=${APP_COMMIT}
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
