@@ -59,7 +59,7 @@ _RENDERCV_VENDOR_IMPORT_LINE = f'#import "{_FREEFLOW_TYST_LIB_NAME}": *'
 _PROJECT_ENTRY_HELPER = r"""
 
 // Resume Workbench project headers: keep project names left and tech stacks right.
-// Reserve a compact name column so the stack can use the rest of the line.
+// Let the name use its natural width so links stay with the project name.
 #let resume-matcher-project-entry(main-column, date-and-location-column, main-column-second-row: none) = {
   metadata("skip-content-area")
 
@@ -114,9 +114,8 @@ _PROJECT_ENTRY_HELPER = r"""
         if repr(main-column) != "[ ]" or repr(date-and-location-column) != "[ ]" {
           layout(size => {
             let project-header-gap = 0.25cm
-            let main-column-width = calc.min(4.5cm, size.width * 40%)
             grid(
-              columns: (main-column-width, 1fr),
+              columns: (auto, 1fr),
               column-gutter: project-header-gap,
               align: (start-align, typography-date-and-location-column-alignment),
               main-column,

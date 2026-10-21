@@ -13,6 +13,7 @@ from app.rendering.rendercv_engine import (
     _style_entry_calls_in_typst,
     render_resume_bundle,
 )
+from app.rendering.rendercv_adapter import parse_rendercv_yaml_sections
 from app.rendering.theme_profiles import RenderThemeSettings
 
 ATS_PROVEN_THEMES = [
@@ -387,7 +388,7 @@ def test_rendercv_engine_expands_project_stack_header_without_stack_label(
     assert "#resume-matcher-project-entry(" in typst
     assert "#regular-entry(" in typst
     assert "let project-header-gap = 0.25cm" in typst
-    assert "main-column-width = calc.min(4.5cm, size.width * 40%)" in typst
+    assert "columns: (auto, 1fr)" in typst
     assert "#strong[Stack:] Python • FastAPI" in typst
     assert "#summary[Python • FastAPI • PostgreSQL • React • Docker • Kubernetes • Terraform]" in typst
     assert "#strong[Stack:] Python • FastAPI • PostgreSQL" not in typst
@@ -425,6 +426,36 @@ def test_rendercv_engine_uses_full_project_header_width(
     pdf_text = _extract_pdftotext(bundle.pdf_path)
     assert "Python · PyTorch · Streamlit · Google Street View API · Folium" in pdf_text
     assert "\n" not in pdf_text.split("Python · PyTorch", 1)[1].split("Folium", 1)[0]
+
+
+def test_live_resume_project_links_stay_on_one_line(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Render the affected project YAML with its captured design settings."""
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+    fixture_dir = Path(__file__).parents[1] / "fixtures"
+    exact_dir = Path(__file__).parents[4] / ".local/repros/project-live-link-wrap"
+    for source_dir in (fixture_dir, exact_dir):
+        if not source_dir.exists():
+            continue
+        sections = {
+            section: (source_dir / f"project-live-link-wrap.{section}.yaml").read_text()
+            for section in ("cv", "design", "locale", "settings")
+        }
+        resume, theme = parse_rendercv_yaml_sections(sections)
+
+        bundle = render_resume_bundle(
+            resume,
+            theme,
+            identifier=f"project_live_link_wrap_{source_dir.name}",
+        )
+        assert bundle.pdf_path is not None
+        lines = _extract_pdftotext(bundle.pdf_path).splitlines()
+        project_line = next(line for line in lines if "Resume Workbench" in line)
+        assert "[repo]" in project_line
+        assert "[live]" in project_line
+        assert "Next.js · FastAPI · PostgreSQL" in project_line
 
 
 def test_rendercv_engine_matches_company_colors_when_entry_order_differs() -> None:
