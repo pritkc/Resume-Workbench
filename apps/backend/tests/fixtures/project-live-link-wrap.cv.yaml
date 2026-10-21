@@ -1,0 +1,32 @@
+cv:
+  name: Test User
+  email: test@example.com
+  sections:
+    projects:
+    - name: VisionAid | \[[repo](https://github.com/pritkc/EncampmentVision-s)\] \[[live](https://vision-aid.streamlit.app/)\]
+      date: null
+      summary: Python · PyTorch · Streamlit · Google Street View API · Folium
+      highlights:
+      - Streamlit app that samples Street View imagery on a geographic grid, runs
+        Faster R-CNN inference for encampment-related objects, and plots detections
+        on an interactive map with CSV export
+    - name: First2Fetch | \[[repo](https://github.com/i0x1/First2Fetch)\] \[[live](https://i0x1.github.io/First2Fetch/)\]
+      date: null
+      summary: TypeScript · Electron · React · Supabase · PostgreSQL · Deno
+      highlights:
+      - Electron desktop app that schedules browser scans across saved job-board searches,
+        parses listings through Supabase Edge Functions, and organizes results in
+        a filterable inbox with labels and status tracking
+    - name: Resume Workbench | \[[repo](https://github.com/pritkc/Resume-Workbench)\]
+        \[[live](https://pritkc.github.io/Resume-Workbench/)\]
+      date: null
+      summary: Next.js · FastAPI · PostgreSQL · LiteLLM · RenderCV · Docker
+      highlights:
+      - Local-first app that parses uploaded resumes, tailors them to a job description
+        via LLM compact diffs, shows a reviewable before/after diff, and exports PDFs
+        through RenderCV after user confirmation
+    - name: MOLE | \[[repo](https://github.com/csrc-sdsu/mole)\] \[[live](https://mole-docs.readthedocs.io/en/main/)\]
+      date: null
+      summary: Python · Sphinx · Doxygen · GitHub Actions · Read the Docs
+      highlights:
+      - Unified C++/MATLAB PDE library docs into one Sphinx pipeline
