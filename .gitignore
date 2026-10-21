@@ -11,6 +11,7 @@
 temp/
 screenshots/
 artifacts/
+codespaces-backup/
 
 # Environment and local secrets
 .env

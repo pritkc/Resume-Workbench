@@ -12,7 +12,6 @@ const nextConfig: NextConfig = {
     root: FRONTEND_ROOT,
   },
   experimental: {
-    turbopackUseSystemTlsCerts: true,
     proxyTimeout: 240_000,
   },
   async rewrites() {

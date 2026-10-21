@@ -1,0 +1,32 @@
+{
+  "name": "Resume Workbench Codespace",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:4": {
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Resume Workbench",
+      "protocol": "http",
+      "visibility": "private",
+      "onAutoForward": "notify"
+    }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "postStartCommand": ".devcontainer/codespaces-start.sh --auto",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-azuretools.vscode-containers"]
+    }
+  }
+}

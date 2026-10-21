@@ -96,6 +96,71 @@ Open [http://localhost:3000](http://localhost:3000).
 
 The application container runs Next.js on port `3000` and FastAPI internally on port `8000`. PostgreSQL and generated artifacts use named Docker volumes.
 
+## GitHub Codespaces
+
+Codespaces support is additive. Local Docker still starts with the same command:
+
+```bash
+docker compose up --build
+```
+
+Create a Codespace from GitHub using the smallest machine that satisfies the repository dev container requirements. The dev container installs Docker and Docker Compose, forwards only port `3000`, and requests private port visibility by default. Keep the forwarded port private because the app contains resume content and provider configuration.
+
+Before starting the app, configure a private provider key. Preferred: create a GitHub Codespaces repository secret named `LLM_API_KEY`. You can also create an uncommitted root `.env` file inside the Codespace:
+
+```env
+LLM_API_KEY=replace-with-your-private-provider-key
+LLM_PROVIDER=openai
+```
+
+Do not commit `.env`. The repository ignores it.
+
+The Codespace attempts a safe auto-start after the dev container starts. If configuration is missing, it prints instructions and leaves the app stopped. To start manually after adding configuration:
+
+```bash
+.devcontainer/codespaces-start.sh
+```
+
+Open the private forwarded port `3000` from the Codespaces **Ports** tab. PostgreSQL is not forwarded by the Codespaces override.
+
+To stop the app without removing remote data:
+
+```bash
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.codespaces.yml stop
+```
+
+Then stop the Codespace from GitHub. Normal Codespace stop/start cycles keep the remote Docker volumes. Deleting the Codespace, rebuilding it from scratch, or removing its Docker data can remove the remote PostgreSQL and generated artifact volumes. These remote volumes are separate from your Mac's local Docker volumes.
+
+### Codespaces backup and restore
+
+Run backups before deleting or rebuilding a Codespace. These backup commands read from the running source containers and write backup files into the workspace:
+
+```bash
+mkdir -p codespaces-backup
+
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.codespaces.yml \
+  exec -T postgres pg_dump -U resume_matcher -d resume_matcher --format=custom \
+  > codespaces-backup/resume-workbench.dump
+
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.codespaces.yml \
+  cp resume-workbench:/app/backend/data/. codespaces-backup/backend-data
+```
+
+Restore only into a new, empty Codespace where you have not created replacement records yet:
+
+```bash
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.codespaces.yml up -d postgres
+
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.codespaces.yml \
+  exec -T postgres pg_restore -U resume_matcher -d resume_matcher --no-owner \
+  < codespaces-backup/resume-workbench.dump
+
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.codespaces.yml up -d resume-workbench
+
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.codespaces.yml \
+  cp codespaces-backup/backend-data/. resume-workbench:/app/backend/data
+```
+
 For a public deployment:
 
 1. Replace the default database password.

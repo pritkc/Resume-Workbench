@@ -1,0 +1,9 @@
+name: resume-workbench-codespaces
+
+services:
+  postgres:
+    container_name: resume-workbench-codespaces-postgres
+    ports: !reset []
+
+  resume-workbench:
+    container_name: resume-workbench-codespaces
