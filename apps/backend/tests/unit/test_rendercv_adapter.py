@@ -746,6 +746,24 @@ def test_rendercv_round_trip_parses_repo_only_project_name_once() -> None:
     assert rendered_name.count("[repo]") == 1
 
 
+def test_rendercv_does_not_repeat_repo_link_already_stored_in_project_name() -> None:
+    resume = {
+        "personalInfo": {"name": "Jane Doe"},
+        "personalProjects": [
+            {
+                "name": r"VisionAid | \[[repo](https://github.com/acme/visionaid)\]",
+                "github": "https://github.com/acme/visionaid",
+                "techStack": "Python · PyTorch",
+            }
+        ],
+    }
+
+    name = resume_to_rendercv_payload(resume, RenderThemeSettings(theme_id="classic"))[
+        "cv"
+    ]["sections"]["projects"][0]["name"]
+    assert name.count("[repo]") == 1
+
+
 def test_rendercv_round_trip_keeps_legacy_project_name_link() -> None:
     sections = {
         "cv": (

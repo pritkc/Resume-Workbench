@@ -798,9 +798,12 @@ def _project_entries(
     for item in entries:
         if not _project_included_in_resume(item):
             continue
-        name = _clean_text(item.get("name")) or "Project"
-        github = _ensure_absolute_url(_clean_text(item.get("github")))
-        website = _ensure_absolute_url(_clean_text(item.get("website")))
+        name, inline_github, inline_website = _parse_project_name_and_links(
+            item.get("name")
+        )
+        name = name or "Project"
+        github = _ensure_absolute_url(_clean_text(item.get("github"))) or inline_github
+        website = _ensure_absolute_url(_clean_text(item.get("website"))) or inline_website
         link_tokens: list[str] = []
         if github:
             link_tokens.append(f"\\[[repo]({github})\\]")

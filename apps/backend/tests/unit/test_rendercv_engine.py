@@ -487,6 +487,9 @@ def test_repo_only_project_has_one_link_in_pdf_and_no_hyphenation(
         "settings": "settings:\n  current_date: today\n",
     }
     resume, _ = parse_rendercv_yaml_sections(sections)
+    resume["personalProjects"][0]["name"] = (
+        r"VisionAid | \[[repo](https://github.com/acme/visionaid)\]"
+    )
     theme = RenderThemeSettings.from_payload(
         {"theme_id": theme_id, "theme_profiles": {theme_id: {"page_size": page_size}}},
         uses_theme_profiles=True,
