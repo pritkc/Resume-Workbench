@@ -62,6 +62,8 @@ Important behavior:
 - theme settings can be stored in a legacy flat format or the newer `theme_profiles` shape
 - query-param based resume PDF and preview endpoints still map old controls through `legacy_to_theme_settings()`
 - raw YAML edits are converted back into `RenderThemeSettings` through `theme_settings_from_rendercv_sections()`
+- PDF and preview rendering keep justified text but disable automatic word hyphenation; `build_design()` maps `justified` to RenderCV's `justified-with-no-hyphenation`
+- project names with inline `[repo]` and `[live]` links are parsed into distinct URL fields before PDF rendering, so each link appears once
 
 ## Draft Normalization Cycle
 

@@ -720,6 +720,52 @@ def test_rendercv_round_trip_parses_repo_and_live_links_from_project_name() -> N
     assert project["website"] == "https://openapi.acme.dev"
 
 
+def test_rendercv_round_trip_parses_repo_only_project_name_once() -> None:
+    sections = {
+        "cv": (
+            "cv:\n"
+            "  name: Jane Doe\n"
+            "  sections:\n"
+            "    projects:\n"
+            "      - name: Cloud-Native Event Stream & Order Service | \\[[repo](https://github.com/acme/orders)\\]\n"
+            "        summary: Python · FastAPI\n"
+        ),
+        "design": "design:\n  theme: classic\n",
+        "locale": "locale:\n  language: english\n",
+        "settings": "settings:\n  current_date: today\n",
+    }
+
+    resume, theme = parse_rendercv_yaml_sections(sections)
+    project = resume["personalProjects"][0]
+    assert project["name"] == "Cloud-Native Event Stream & Order Service"
+    assert project["github"] == "https://github.com/acme/orders"
+    assert project["website"] is None
+    rendered_name = resume_to_rendercv_payload(resume, theme)["cv"]["sections"][
+        "projects"
+    ][0]["name"]
+    assert rendered_name.count("[repo]") == 1
+
+
+def test_rendercv_round_trip_keeps_legacy_project_name_link() -> None:
+    sections = {
+        "cv": (
+            "cv:\n"
+            "  name: Jane Doe\n"
+            "  sections:\n"
+            "    projects:\n"
+            "      - name: '[Project site](https://example.com/project)'\n"
+        ),
+        "design": "design:\n  theme: classic\n",
+        "locale": "locale:\n  language: english\n",
+        "settings": "settings:\n  current_date: today\n",
+    }
+
+    resume, _ = parse_rendercv_yaml_sections(sections)
+    project = resume["personalProjects"][0]
+    assert project["name"] == "Project site"
+    assert project["website"] == "https://example.com/project"
+
+
 def test_rendercv_yaml_sections_preserve_custom_skill_group_labels(sample_resume: dict) -> None:
     sections = {
         "cv": (

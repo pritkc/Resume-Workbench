@@ -54,6 +54,23 @@ def test_build_design_uses_only_the_active_theme_profile() -> None:
     assert "education_entry" in design["templates"]
 
 
+def test_build_design_disables_hyphenation_for_justified_text() -> None:
+    settings = RenderThemeSettings.from_payload(
+        {
+            "theme_id": "classic",
+            "theme_profiles": {
+                "classic": {"design": {"typography": {"alignment": "justified"}}}
+            },
+        },
+        uses_theme_profiles=True,
+    )
+
+    assert (
+        build_design(settings)["typography"]["alignment"]
+        == "justified-with-no-hyphenation"
+    )
+
+
 def test_build_design_keeps_legacy_flat_payload_behavior() -> None:
     settings = RenderThemeSettings.from_payload(
         {

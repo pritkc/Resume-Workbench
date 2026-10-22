@@ -458,6 +458,53 @@ def test_live_resume_project_links_stay_on_one_line(
         assert "Next.js · FastAPI · PostgreSQL" in project_line
 
 
+@pytest.mark.parametrize(
+    "theme_id,page_size",
+    [("classic", "A4"), ("harvard", "A4"), ("classic", "FREEFLOW")],
+)
+def test_repo_only_project_has_one_link_in_pdf_and_no_hyphenation(
+    tmp_path: Path,
+    monkeypatch,
+    theme_id: str,
+    page_size: str,
+) -> None:
+    monkeypatch.setattr("app.rendering.rendercv_engine.settings.rendercv_work_dir", tmp_path)
+    sections = {
+        "cv": (
+            "cv:\n"
+            "  name: Jane Doe\n"
+            "  sections:\n"
+            "    projects:\n"
+            "      - name: VisionAid | \\[[repo](https://github.com/acme/visionaid)\\]\n"
+            "        summary: Python · PyTorch\n"
+            "        highlights:\n"
+            "          - Built an internationalization and interoperability tool.\n"
+            "      - name: Resume Workbench | \\[[repo](https://github.com/acme/workbench)\\] \\[[live](https://example.com)\\]\n"
+            "        summary: Python · FastAPI\n"
+        ),
+        "design": f"design:\n  theme: {theme_id}\n",
+        "locale": "locale:\n  language: english\n",
+        "settings": "settings:\n  current_date: today\n",
+    }
+    resume, _ = parse_rendercv_yaml_sections(sections)
+    theme = RenderThemeSettings.from_payload(
+        {"theme_id": theme_id, "theme_profiles": {theme_id: {"page_size": page_size}}},
+        uses_theme_profiles=True,
+    )
+    bundle = render_resume_bundle(resume, theme, identifier=f"repo_only_{theme_id}_{page_size}")
+
+    assert bundle.pdf_path is not None
+    pdf_text = _extract_pdftotext(bundle.pdf_path)
+    vision_line = next(line for line in pdf_text.splitlines() if "VisionAid" in line)
+    workbench_line = next(line for line in pdf_text.splitlines() if "Resume Workbench" in line)
+    assert vision_line.count("[repo]") == 1
+    assert "[live]" not in vision_line
+    assert workbench_line.count("[repo]") == 1
+    assert workbench_line.count("[live]") == 1
+    assert bundle.typst_path is not None
+    assert 'typography-alignment: "justified-with-no-hyphenation"' in bundle.typst_path.read_text()
+
+
 def test_rendercv_engine_matches_company_colors_when_entry_order_differs() -> None:
     typst = """== Experience
 #regular-entry([#strong[Humana (Contract)] | Engineer], [Remote])

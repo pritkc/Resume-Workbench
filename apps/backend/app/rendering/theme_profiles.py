@@ -843,7 +843,7 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
         resolved_design = _apply_safe_font_fallbacks(
             _enforce_fixed_link_color(deepcopy(resolved["design"]))
         )
-        return _strip_unknown_template_keys(resolved_design)
+        return _disable_justified_hyphenation(_strip_unknown_template_keys(resolved_design))
 
     density = _LEGACY_DENSITY_MAP[settings.density_profile]
     accent = _ACCENT_COLORS[settings.accent_color]
@@ -897,7 +897,15 @@ def build_design(settings: RenderThemeSettings) -> dict[str, object]:
     merged["theme"] = settings.theme_id
     _enforce_fixed_link_color(merged)
     _apply_safe_font_fallbacks(merged)
-    return _strip_unknown_template_keys(merged)
+    return _disable_justified_hyphenation(_strip_unknown_template_keys(merged))
+
+
+def _disable_justified_hyphenation(design: dict[str, Any]) -> dict[str, Any]:
+    """Keep justified layout while preventing RenderCV from splitting words."""
+    typography = design.setdefault("typography", {})
+    if typography.get("alignment", "justified") == "justified":
+        typography["alignment"] = "justified-with-no-hyphenation"
+    return design
 
 
 def build_locale(settings: RenderThemeSettings) -> dict[str, object] | None:

@@ -1530,9 +1530,9 @@ def rendercv_cv_to_resume_data(
         name, github, website = _parse_project_name_and_links(item.get("name"))
         if not website:
             legacy_name, legacy_website = _parse_markdown_link(item.get("name"))
-            if legacy_name:
-                name = legacy_name
             if legacy_website:
+                if legacy_name:
+                    name = legacy_name
                 website = _ensure_absolute_url(legacy_website)
         stack = _clean_text(item.get("tech_stacks") or item.get("summary"))
         projects.append(
